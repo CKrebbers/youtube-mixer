@@ -1,6 +1,7 @@
 import { read as readAction } from '../control/actions.js';
 import { meld } from './meldingen.js';
 import { zetTekst } from './dom.js';
+import { registreerRij } from './rijen.js';
 
 /*
  * De KOPTELEFOON-rij (docs/STUDIO.md §3): per track een cue-knop, het
@@ -48,6 +49,7 @@ export function opzetKoptelefoon({ engine }) {
     schrijf(OPEN, open ? '1' : '0');
   };
   knop.addEventListener('click', () => zet(isDicht()));
+  registreerRij('koptelefoon', { zet, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zet(true);
 
   // Wat er na herladen geldt; verschilt het van nu, dan brandt ⇄.

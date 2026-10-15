@@ -4,6 +4,7 @@ import { read as readAction } from '../control/actions.js';
 import { esc, zetTekst } from './dom.js';
 import { meld } from './meldingen.js';
 import { grTekst, grHoogte, houdGr, kiesWaarde, bewaarVorm, leesBewaard, sjabloonHerkomst, OPSLAG } from './master-weergave.js';
+import { registreerRij } from './rijen.js';
 
 /*
  * De MASTER-rij (docs/MASTER.md): effecten op het geheel en de limiter.
@@ -55,6 +56,7 @@ export function opzetMaster({ engine }) {
     schrijf(OPEN, open ? '1' : '0');
   };
   knop.addEventListener('click', () => zet(isDicht()));
+  registreerRij('master', { zet, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zet(true);
 
   const meldFouten = (r) => r?.fouten?.forEach((f) => console.warn('[master-rack]', f));

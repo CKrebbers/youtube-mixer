@@ -94,6 +94,45 @@
     .pl-kop span:nth-child(2),.pl-nr{display:none}
     .pl-titel small{white-space:normal}
   }
+  /* Spoor S9 (docs/PLAN-SET.md): snel klaarzetten, klaar voor de set, live bijmixen, sets. */
+  .pl-set{display:flex;align-items:center;gap:7px;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap;font-size:12px}
+  .pl-set select,.pl-set input{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:4px;font:inherit;padding:3px 5px}
+  .pl-set .pl-duur-set{width:86px}
+  .pl-set .pl-auto-tracks{width:64px}
+  .pl-set label{color:var(--klein)}
+  .pl-livebalk{display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid var(--line);background:#11161d;flex:0 0 auto;flex-wrap:wrap;font-size:13px}
+  .pl-livebalk .lv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:32ch}
+  .pl-livebalk .lv.nu{color:var(--a);font-weight:600}
+  .pl-livebalk .lv.volg{color:var(--text)}
+  .pl-livebalk .lv.daarna,.pl-livebalk .lv.eind,.pl-livebalk .lv.laag{color:var(--klein)}
+  .pl-livebalk .lv.buiten{color:var(--warn);font-weight:600}
+  .pl-livebalk .btn.on{border-color:var(--warn);color:var(--warn)}
+  .pl-klaar{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.06em;margin-left:4px}
+  .pl-klaar .k-ja{color:#5fd38a}.pl-klaar .k-half{color:var(--warn)}.pl-klaar .k-nee{color:var(--klein)}
+  .pl-go{font-size:10px;padding:0 5px;border-radius:8px;border:1px solid var(--line);color:var(--klein);cursor:pointer;margin-left:4px;user-select:none}
+  .pl-go.aan{color:var(--warn);border-color:var(--warn)}
+  .pl-lagen-tel{font-size:10px;padding:0 5px;border-radius:8px;border:1px solid #2d4a6a;color:var(--b);margin-left:4px}
+  .pl-bieb .pl-vink{margin-right:6px}
+  .pl-bieb .rij{display:flex;align-items:flex-start;gap:2px}
+  .pl-bieb .rij button{flex:1}
+  .pl-selectie{padding:0 12px 6px;color:var(--klein);font-size:11px;display:flex;gap:8px;align-items:center}
+  .pl-selectie a{color:var(--b);cursor:pointer}
+  .pl-lagen,.pl-sets{padding:6px 12px;border-top:1px solid var(--line);font-size:12px}
+  .pl-lagen h3,.pl-sets h3{padding:0 0 6px}
+  .pl-laag{display:flex;gap:4px;align-items:center;margin:3px 0;color:var(--text)}
+  .pl-laag span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pl-lagen select,.pl-lagen input,.pl-sets select,.pl-sets input{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:4px;font:inherit;padding:2px 4px}
+  .pl-lagen .vorm{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px;margin-top:4px}
+  .pl-lagen .vorm>*{min-width:0;width:100%;box-sizing:border-box}
+  /* De zijkolom scrolt als geheel: de bieb houdt altijd een stuk lijst. */
+  .pl-zij{overflow-y:auto}
+  .pl-bieb{flex:1 0 220px}
+  .pl-titel small.pl-tekens{display:flex;gap:4px;align-items:center;overflow:visible}
+  .pl-sets .lijst{max-height:120px;overflow:auto;margin:4px 0}
+  .pl-sets .lijst div{padding:2px 4px;border-radius:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pl-sets .lijst div.gekozen{background:var(--panel2);color:var(--a)}
+  .pl-sets .knoppen{display:flex;flex-wrap:wrap;gap:4px}
+  .pl-sets .btn.vraag{border-color:var(--warn);color:var(--warn)}
 </style>
 </head>
 <body>
@@ -115,6 +154,28 @@
   <button class="btn sm" data-actie="auto.langer">langer</button>
   <button class="btn sm" data-actie="auto.nu">nu</button>
 </header>
+<div class="pl-set">
+  <label>maak set van</label>
+  <select class="pl-bron" title="waar de nummers vandaan komen"><option value="selectie">de selectie rechts</option><option value="pastbij">"past bij" vanaf de gekozen stap</option><option value="library">de hele library</option></select>
+  <select class="pl-vorm" title="de volgorde"><option value="boog">boog (rustig, piek, iets terug)</option><option value="oplopend">oplopend</option><option value="zoals">zoals gekozen</option></select>
+  <input class="pl-duur-set" placeholder="90 · 1,5u · 01:30" title="hoe lang: minuten (90; een getal onder de 10 = uren, dus 1,5 = anderhalf uur), uren (2u), of tot hoe laat (01:30 = een kloktijd); leeg = zo lang als hij is" spellcheck="false">
+  <button class="btn sm pl-maakset" title="vervangt de stappen van dit plan (ongedaan maken met ctrl+z)">maak set</button>
+  <span class="pl-ruimte"></span>
+  <label title="de tracks waar de automaat op speelt; de rest is van jou (leeg = hij kiest zelf, maar nooit een track die jij gebruikt)">tracks auto</label>
+  <input class="pl-auto-tracks" placeholder="bv. 1,2" spellcheck="false">
+  <button class="btn sm pl-maakklaar" title="zet wat ontbreekt (stems, secties) in de bestaande rijen; niet op een speeldag, niet als er een deck speelt">maak klaar</button>
+  <span class="pl-klaar-info pl-info"></span>
+</div>
+<div class="pl-livebalk">
+  <span class="lv buiten" hidden>BUITEN PLAN</span>
+  <span class="lv nu">NU —</span><span class="lv volg">VOLGENDE —</span><span class="lv daarna">DAARNA —</span><span class="lv laag"></span><span class="lv eind"></span>
+  <span class="pl-ruimte"></span>
+  <button class="btn sm pl-go-knop" data-actie="plan.go" title="GO: de klaarstaande overgang nu">GO</button>
+  <button class="btn sm pl-buiten-knop" data-actie="plan.buiten" title="buiten het plan: de automaat laat los (nog eens = terug)">buiten plan</button>
+  <button class="btn sm" data-actie="plan.terug" title="terug naar het plan: wat nu klinkt wordt de hoofdtrack">terug</button>
+  <button class="btn sm" data-actie="plan.laag.nu" title="de volgende laag nu">laag nu</button>
+  <button class="btn sm" data-actie="plan.laag.skip" title="de volgende laag overslaan">laag weg</button>
+</div>
 <div class="pl-melding"><span class="pl-melding-tekst"></span><span class="pl-ruimte"></span></div>
 <section class="pl-strook"><canvas title="de set: klik = naar die stap · banden = de secties (kleur = groep), wit = gekozen in/uit"></canvas></section>
 <div class="pl-midden">
@@ -125,10 +186,34 @@
   <aside class="pl-zij">
     <h3>NUMMER ERBIJ</h3>
     <div class="pl-zoek"><input placeholder="zoek in de library…" spellcheck="false"></div>
+    <div class="pl-selectie"><select class="pl-krat" title="een categorie, tag, het filter van de library of een krat van de kaart: die nummers worden de selectie (in hun volgorde)"><option value="">uit…</option></select><span class="pl-sel-tel">selectie: 0</span><a class="pl-sel-alles">alles</a><a class="pl-sel-geen">geen</a></div>
     <div class="pl-bieb"></div>
+    <div class="pl-lagen"><h3>LAGEN VAN DE GEKOZEN STAP</h3><div class="lijst"></div>
+      <div class="vorm">
+        <select class="pl-laag-soort"><option value="nummer">nummer (gekozen rechts)</option><option value="sampler">sampler-pad</option><option value="patroon">patroon</option></select>
+        <input class="pl-laag-op" placeholder="op: sectie (3) of tijd (0:32)" title="waar in de stap: een sectienummer (bv. 3) of een tijd vanaf het begin van de stap (m:ss, bv. 0:32)">
+        <input class="pl-laag-deck" placeholder="track (leeg = vrij)" title="op welke track van jou (leeg = de eerste vrije)">
+        <select class="pl-laag-stem" title="alleen deze stem (de rest weg)"><option value="">heel</option><option value="vocals">zang</option><option value="inst">rest</option><option value="drums">drums</option><option value="bass">bas</option><option value="other">overig</option></select>
+        <input class="pl-laag-duur" placeholder="duur (s)" title="hoe lang; leeg = tot jij hem stopt">
+        <input class="pl-laag-nr" placeholder="pad / plek" title="sampler: pad 1–8; patroon: plek 1–5">
+        <select class="pl-laag-start"><option value="auto">start vanzelf</option><option value="jij">alleen klaarzetten</option></select>
+        <button class="btn sm pl-laag-erbij">+ laag</button>
+      </div>
+    </div>
+    <div class="pl-sets"><h3>SETS</h3>
+      <div class="lijst"></div>
+      <div class="knoppen">
+        <input class="pl-set-naam" placeholder="setnaam" spellcheck="false" style="width:110px">
+        <button class="btn sm pl-set-bewaar" title="bewaar als (met versie: nooit stil over een ander heen)">bewaar</button>
+        <button class="btn sm pl-set-laad" title="terugladen: plan, patronen, werkruimte (en de mixer als het vinkje aan staat). Er start niets">laad</button>
+        <button class="btn sm pl-set-kopie" title="dupliceren onder de naam links">kopie</button>
+        <button class="btn sm pl-set-hernoem" title="hernoemen naar de naam links">hernoem</button>
+        <label title="ook de mixer: welk nummer waar, standen, racks, pads (over een spelende track pas bij de tweede klik)"><input type="checkbox" class="pl-set-moment"> met mixer</label>
+      </div>
+    </div>
     <div class="pl-uitleg"><h3 style="padding:0 0 6px">UITLEG VAN DIT PLAN</h3><textarea spellcheck="false" placeholder="waar gaat deze set over?"></textarea></div>
     <div class="pl-hulp">
-      ↑ ↓ kiezen · alt+↑ ↓ verplaatsen · slepen aan ⋮⋮ · Del weg<br>
+      ↑ ↓ kiezen · alt+↑ ↓ verplaatsen · slepen aan ⋮⋮ · Del weg · 1–4 overgang (auto, blend, filter, overvloeien) · G wacht op GO<br>
       begin en duur: m:ss, leeg = de app kiest · in/uit: een sectie (alleen als het nummer een sectiekaart heeft): begin daar, en begin daar de overgang naar de volgende · overgang: wat je wilt; "wordt" is wat de app doet (de bewakers gaan voor)<br>
       ctrl+z / ctrl+shift+z · ctrl+s opslaan
     </div>

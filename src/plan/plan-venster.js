@@ -1,7 +1,9 @@
-import { normaliseerPlan, bewerk, verschil, SECTIE_VELDEN } from './plan-model.js';
+import { normaliseerPlan, bewerk, verschil, SECTIE_VELDEN, KENT, normaliseerTracks } from './plan-model.js';
+import { maakSet, pastBijKeten, leesDuur } from './klaarzetten.js';
 import { voorspel, toonKleur } from './tijdlijn.js';
 import { LABEL_TEKST } from '../engine/secties.js';
 import { tekenStrook as tekenOp, mmss } from './strook.js';
+import { filterNaarQuery } from '../library/indeling.js';
 
 /*
  * Het planvenster (plan.html): de hele programmering zien, inrichten en live
@@ -36,6 +38,8 @@ function leesTijd(t) {
   return delen.reduce((a, x) => a * 60 + x, 0);
 }
 const koppeling = () => { try { const o = window.opener; return o && !o.closed ? o.varvePlan ?? null : null; } catch (_) { return null; } };
+/** Het library-paneel van de mixer (spoor S11: "het filter van de library"), of null. */
+const mixerLibrary = () => { try { const o = window.opener; return o && !o.closed ? o.library ?? null : null; } catch (_) { return null; } };
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 /** "drop B", "B" voor een gewoon deel; werkt voor een stuk van de kaart en voor een keuze { sectie, label, groep }. */
 const sectieNaam = (x) => [LABEL_TEKST[x?.label] ?? x?.label ?? '', x?.groep ?? ''].filter(Boolean).join(' ');
@@ -48,6 +52,11 @@ const staat = {
   flits: new Set(), conflict: null,
   secties: new Map(),         // track-id → sectiekaart, of null (geen kaart)
   banden: [],                 // wat de strook tekende: [{ id, sectie, groep, x0, x1 }] (voor de console en de headless proef)
+  // Spoor S9 (docs/PLAN-SET.md): de selectie rechts, wat klaar is per nummer, de sets.
+  selectie: new Set(),        // track-id's die aangevinkt zijn (of uit een krat kwamen)
+  klaar: new Map(),           // track-id → { grid, toon, stems, secties, video } van POST /api/set/klaar
+  sets: [],                   // de lijst van GET /api/sets (of van de mixer)
+  gekozenSet: null,
 };
 
 // ---- server ----------------------------------------------------------------
@@ -132,8 +141,8 @@ async function opslaan({ versie = staat.versie } = {}) {
   const plan = { ...staat.plan, naam };
   const r = await fetch(`/api/plannen/${encodeURIComponent(naam)}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    // `kent`: dit venster kent in/uit; zonder zet de server ze terug (een oud venster, server/plannen.js).
-    body: JSON.stringify({ plan, versie: nieuweNaam ? null : versie, kent: SECTIE_VELDEN }),
+    // `kent`: dit venster kent in/uit, go, lagen en tracks; zonder zet de server ze terug (een oud venster, server/plannen.js).
+    body: JSON.stringify({ plan, versie: nieuweNaam ? null : versie, kent: KENT }),
   });
   const d = await r.json().catch(() => ({}));
   if (r.status === 409) {
@@ -243,6 +252,10 @@ function render() {
   if (terugFocus?.klasse) document.querySelector(`.pl-rij[data-id="${CSS.escape(terugFocus.id)}"] .${terugFocus.klasse}`)?.focus();
   tekenStrook();
   vulBieb();
+  haalKlaar();
+  tekenLagen();
+  const at = $('.pl-auto-tracks');
+  if (document.activeElement !== at) at.value = staat.plan.tracks?.auto?.join(',') ?? '';
 }
 
 function tussen(r) {
@@ -270,7 +283,9 @@ function rij(r, i) {
     <span class="pl-nr">${i + 1}</span>
     <span class="pl-titel" title="${esc(r.titel)}">${esc(r.titel)}${r.ontbreekt ? ' (niet in de library)'
       : `<small>${mmss(r.start)} in de set · stuk ${mmss(r.van)}–${mmss(r.tot)}${r.duurNummer ? ` van ${mmss(r.duurNummer)}` : ''}${
-        s.in ? ` · in ${s.in.sectie} ${esc(sectieNaam(s.in))}` : ''}${s.uit ? ` · uit ${s.uit.sectie} ${esc(sectieNaam(s.uit))}` : ''}</small>`}</span>
+        s.in ? ` · in ${s.in.sectie} ${esc(sectieNaam(s.in))}` : ''}${s.uit ? ` · uit ${s.uit.sectie} ${esc(sectieNaam(s.uit))}` : ''}</small><small class="pl-tekens">${
+        klaarTekens(s.track)}<span class="pl-go${s.go === 'wacht' ? ' aan' : ''}" title="wacht op GO: de automaat zet deze stap klaar, maar begint pas na GO (of op het laatste moment: nooit stilte). G = aan/uit">GO</span>${
+        s.lagen?.length ? `<span class="pl-lagen-tel" title="${esc(s.lagen.map(laagTekst).join('\n'))}">+${s.lagen.length} laag</span>` : ''}</small>`}</span>
     <span class="pl-toon ${r.toonZeker ? '' : 'pl-onzeker'}" title="${r.camelot ? `Camelot ${r.camelot}` : ''}${r.toonZeker ? '' : ' (onzeker)'}">${esc(r.toon ?? '–')}${r.toon && !r.toonZeker ? '?' : ''}</span>
     <span class="${r.gridZeker ? '' : 'pl-onzeker'}" title="${r.gridZeker ? 'grid zeker' : 'grid onzeker: geen blend'}">${r.bpm ? Math.round(r.bpm) : '–'}${r.bpm && !r.gridZeker ? '?' : ''}</span>
     <span class="pl-tijd">
@@ -337,6 +352,7 @@ function rij(r, i) {
   });
   el.querySelector('.pl-waarom').addEventListener('change', (e) => zet({ waarom: e.target.value }));
   el.querySelector('.pl-weg').addEventListener('click', () => wijzig({ soort: 'weg', id: s.id }));
+  el.querySelector('.pl-go')?.addEventListener('click', (e) => { e.stopPropagation(); zet({ go: s.go === 'wacht' ? null : 'wacht' }); });
 
   // Slepen aan de greep: een regel verplaatsen.
   el.querySelector('.pl-greep').addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', s.id); e.dataTransfer.effectAllowed = 'move'; });
@@ -400,6 +416,7 @@ function kies(id, scroll = true) {
   for (const el of document.querySelectorAll('.pl-rij')) el.classList.toggle('gekozen', el.dataset.id === id);
   if (scroll) document.querySelector(`.pl-rij[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' });
   tekenStrook();
+  tekenLagen();
 }
 
 // ---- de library-lijst rechts -------------------------------------------------------
@@ -411,7 +428,20 @@ function vulBieb() {
   const inPlan = new Set(staat.plan.stappen.map((s) => s.track));
   const lijst = staat.bieb.filter((t) => !z || (t.titel || '').toLowerCase().includes(z)).slice(0, 200);
   el.innerHTML = '';
+  $('.pl-sel-tel').textContent = `selectie: ${staat.selectie.size}`;
   for (const t of lijst) {
+    const rij = document.createElement('div');
+    rij.className = 'rij';
+    const vink = document.createElement('input');
+    vink.type = 'checkbox';
+    vink.className = 'pl-vink';
+    vink.checked = staat.selectie.has(t.id);
+    vink.title = 'in de selectie (voor "maak set van de selectie")';
+    vink.addEventListener('change', () => {
+      if (vink.checked) { staat.selectie.add(t.id); staat.laatstAangevinkt = t.id; } else staat.selectie.delete(t.id);
+      $('.pl-sel-tel').textContent = `selectie: ${staat.selectie.size}`;
+    });
+    rij.append(vink);
     const b = document.createElement('button');
     const toon = t.toon?.stukken?.[0]?.toonsoort ?? '–';
     const bpm = t.grid?.stukken?.[0]?.bpm;
@@ -423,7 +453,8 @@ function vulBieb() {
       const nieuw = staat.plan.stappen.find((s) => !voor.has(s.id));
       if (nieuw) kies(nieuw.id);
     });
-    el.append(b);
+    rij.append(b);
+    el.append(rij);
   }
 }
 
@@ -465,6 +496,7 @@ function volgLive() {
     : s.aan ? `auto ${({ wacht: 'kiest', laden: 'laadt', klaar: 'klaar', bezig: 'mixt', overgenomen: 'jij mixt' })[s.fase] ?? s.fase}` : 'verbonden · auto uit';
   autoKnop.textContent = s.aan ? 'auto aan' : 'auto uit';
   autoKnop.classList.toggle('on', s.aan);
+  tekenLive(k, s);
   if (!ditPlan || !s.aan) { live = null; zetRijen(null); return; }
   zetRijen(auto, s);
 }
@@ -587,6 +619,10 @@ window.addEventListener('keydown', (e) => {
     const j = Math.min(st.length - 1, Math.max(0, (i < 0 ? 0 : i + stap)));
     if (st[j]) kies(st[j].id);
   }
+  // Spoor S9: snel per stap de overgang (1–4) en GO (G).
+  const SNEL = { 1: 'auto', 2: 'blend', 3: 'filter', 4: 'ambient' };
+  if (!mod && !e.altKey && i >= 0 && SNEL[e.key]) { e.preventDefault(); wijzig({ soort: 'zet', id: st[i].id, velden: { overgang: SNEL[e.key] } }); return; }
+  if (!mod && !e.altKey && i >= 0 && e.key.toLowerCase() === 'g') { e.preventDefault(); wijzig({ soort: 'zet', id: st[i].id, velden: { go: st[i].go === 'wacht' ? null : 'wacht' } }); return; }
   if ((e.key === 'Delete' || e.key === 'Backspace') && i >= 0) {
     e.preventDefault();
     const volgende = st[i + 1]?.id ?? st[i - 1]?.id ?? null;
@@ -595,6 +631,333 @@ window.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('beforeunload', (e) => { if (gewijzigd()) { e.preventDefault(); e.returnValue = ''; } });
+
+// ---- spoor S9: snel klaarzetten, klaar voor de set, lagen, sets, live (docs/PLAN-SET.md) ----------
+
+const STEM_NAAM = { vocals: 'zang', inst: 'rest', drums: 'drums', bass: 'bas', other: 'overig' };
+/** Een laag als tekst: "acapella (zang) op sectie 3 · track 5 · 64 s". */
+function laagTekst(l) {
+  const wat = l.soort === 'nummer' ? `${staat.tracks.get(l.track)?.titel ?? l.track}${l.stem ? ` (${STEM_NAAM[l.stem] ?? l.stem})` : ''}`
+    : l.soort === 'sampler' ? `sampler-pad ${l.pad}` : `patroon ${l.plek}`;
+  const op = Number.isInteger(l.op?.sectie) ? `op sectie ${l.op.sectie}${l.op.label ? ` ${sectieNaam(l.op)}` : ''}` : `op ${mmss(l.op?.sec ?? 0)}`;
+  return [wat, op, l.deck ? `track ${l.deck}` : null, l.duur ? `${Math.round(l.duur)} s` : null, l.start === 'jij' ? 'jij start' : null].filter(Boolean).join(' · ');
+}
+
+/** De vijf tekens van "klaar": G grid, T toon, S stems, § secties, V video (groen, oranje, grijs). */
+function klaarTekens(id) {
+  const k = staat.klaar.get(id);
+  if (!k) return '';
+  if (k.bestaat === false) return ' <span class="pl-klaar"><span class="k-nee">niet in de library</span></span>';
+  const t = (teken, soort, titel) => `<span class="k-${soort}" title="${esc(titel)}">${teken}</span>`;
+  const g = k.grid === 'zeker' ? 'ja' : k.grid === 'deels' ? 'half' : 'nee';
+  const to = k.toon === 'zeker' ? 'ja' : k.toon === 'deels' || k.toon === 'gok' ? 'half' : 'nee';
+  const st = Number.isInteger(k.stems) ? 'ja' : k.stems === 'rij' ? 'half' : 'nee';
+  const se = k.secties === 'ja' ? 'ja' : k.secties === 'oud' ? 'half' : 'nee';
+  return ` <span class="pl-klaar">${t('G', g, `grid: ${k.grid}`)}${t('T', to, `toon: ${k.toon}`)}${t('S', st, `stems: ${k.stems ?? 'geen'}`)}${t('§', se, `secties: ${k.secties}`)}${t('V', k.video ? 'ja' : 'nee', k.video ? 'video' : 'geen video')}</span>`;
+}
+
+let klaarSleutel = '', klaarBezig = false;
+/** POST /api/set/klaar voor de nummers van het plan, alleen als die lijst veranderde (of `opnieuw`). */
+async function haalKlaar({ opnieuw = false } = {}) {
+  const ids = [...new Set(staat.plan.stappen.flatMap((x) => [x.track, ...(x.lagen || []).filter((l) => l.soort === 'nummer').map((l) => l.track)]))];
+  const sl = ids.join(',');
+  if (klaarBezig || (!opnieuw && sl === klaarSleutel) || !ids.length) return;
+  klaarSleutel = sl;
+  klaarBezig = true;
+  try {
+    const r = await fetch('/api/set/klaar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+    const d = await r.json().catch(() => null);
+    if (r.ok && d?.nummers) {
+      for (const k of d.nummers) staat.klaar.set(k.id, k);
+      const n = d.nummers.filter((k) => k.bestaat !== false);
+      const mist = n.filter((k) => !Number.isInteger(k.stems) || k.secties !== 'ja').length;
+      $('.pl-klaar-info').textContent = n.length ? `${n.length - mist}/${n.length} klaar${d.secties?.wacht ? ` · secties: nog ${d.secties.wacht}` : ''}` : '';
+      klaarBezig = false;
+      render();
+      return;
+    }
+  } catch (_) { /* geen server: geen tekens */ }
+  klaarBezig = false;
+}
+
+$('.pl-maakklaar').addEventListener('click', async () => {
+  const ids = [...new Set(staat.plan.stappen.map((x) => x.track))];
+  if (!ids.length) { melding('het plan is nog leeg'); return; }
+  const r = await fetch('/api/set/klaarmaken', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { melding(`maak klaar: ${d.fout || r.status}`); return; }
+  const delen = [];
+  if (d.stems?.gestart?.length) delen.push(`${d.stems.gestart.length} nummers de stems-rij in`);
+  if (d.stems?.fout) delen.push(`stems niet: ${d.stems.fout}`);
+  if (d.secties?.gepland) delen.push(`${d.secties.gepland} nummers krijgen secties`);
+  wisLater(melding(`maak klaar: ${delen.join(' · ') || 'alles was al klaar'}`), 8000);
+  setTimeout(() => haalKlaar({ opnieuw: true }), 1500);
+});
+
+/**
+ * De bronnen voor de selectie: de kratten van de kaart (wat binnen is), en (spoor S11,
+ * docs/LIBRARY-TAGS.md §3) de eigen categorieën, de slimme, de tags en het filter dat nu in de
+ * library van de mixer staat. Kiezen = de selectie wordt die nummers, in hun volgorde.
+ */
+async function vulKratten() {
+  const sel = $('.pl-krat');
+  const groep = (label) => { const g = document.createElement('optgroup'); g.label = label; sel.append(g); return g; };
+  const optie = (g, value, tekst) => { const o = document.createElement('option'); o.value = value; o.textContent = tekst; g.append(o); };
+  try {
+    const r = await fetch('/api/indeling/stand');
+    const d = r.ok ? await r.json() : null;
+    if (mixerLibrary()?.indeling) optie(groep('library'), 'lib', 'het filter van de library nu');
+    if (d?.categorieen?.length) {
+      const g = groep('categorieën');
+      for (const c of d.categorieen) optie(g, `cat:${c.id}`, `${c.soort === 'slim' ? '✦ ' : ''}${c.naam} (${c.aantal ?? '?'})`);
+    }
+    if (d?.tags?.length) {
+      const g = groep('tags');
+      for (const t of d.tags) optie(g, `tag:${t.sleutel}`, `#${t.naam} (${t.aantal})`);
+    }
+    staat.indeling = d;
+  } catch (_) { /* een oudere server: geen indeling */ }
+  try {
+    const r = await fetch('/api/kaart');
+    const d = r.ok ? await r.json() : null;
+    const g = (d?.kratten || []).some((k) => k.binnen) ? groep('kratten van de kaart') : null;
+    for (const k of d?.kratten || []) {
+      if (!k.binnen) continue;
+      optie(g, k.id, `${k.naam} (${k.binnen} binnen)`);
+    }
+  } catch (_) { /* geen kaart: geen kratten */ }
+  if (sel.options.length <= 1) sel.hidden = true;
+}
+
+/**
+ * Alle ids van een lijst van de library (pagina's van 500), in de volgorde van de server. Een nummer
+ * dat het venster nog niet kende (het kent de geladen pagina's van de mixer, of de eerste 500) komt
+ * erbij: anders viel een categorie of filter van meer dan 500 stil kleiner uit.
+ */
+async function idsVan(query) {
+  const uit = [];
+  for (let van = 0; van < 20000; van += 500) {
+    const r = await fetch(`/api/library?${query}&van=${van}&aantal=500`);
+    const d = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(d?.fout || `${r.status}`);
+    for (const t of d.tracks || []) {
+      uit.push(t.id);
+      if (!staat.tracks.has(t.id)) { staat.tracks.set(t.id, t); staat.bieb.push(t); }
+    }
+    if ((d.tracks || []).length < 500) break;
+  }
+  return uit;
+}
+
+$('.pl-krat').addEventListener('change', async (e) => {
+  const id = e.target.value;
+  if (!id) return;
+  try {
+    let ids, wat;
+    if (id === 'lib') {
+      // Het filter van de library van de mixer, in de volgorde waarin de lijst het nu toont.
+      const lib = mixerLibrary();
+      if (!lib?.indeling) throw new Error('geen mixer (open het planvenster vanuit de mixer)');
+      const v = lib._vraag();
+      const q = filterNaarQuery({ ...v.filter, zoek: v.zoek || undefined },
+        new URLSearchParams({ sorteer: v.plek ? 'plek' : v.sorteer, richting: v.plek ? 'op' : v.richting }));
+      ids = await idsVan(q.toString());
+      wat = `het filter van de library (${lib.indeling?.kort?.(lib.filter) || 'alles'})`;
+    } else if (id.startsWith('cat:')) {
+      const c = staat.indeling?.categorieen?.find((x) => `cat:${x.id}` === id);
+      const plek = c && (c.soort === 'gewoon' || c.regel?.categorie != null);
+      ids = await idsVan(`cat=${encodeURIComponent(id.slice(4))}&sorteer=${plek ? 'plek' : 'toegevoegd'}`);
+      wat = `categorie ${c?.naam ?? ''}${plek ? ' (in zijn volgorde)' : ''}`;
+    } else if (id.startsWith('tag:')) {
+      ids = await idsVan(`tag=${encodeURIComponent(id.slice(4))}&sorteer=toegevoegd`);
+      wat = `#${id.slice(4)}`;
+    } else {
+      const r = await fetch(`/api/kaart/nummers?krat=${encodeURIComponent(id)}&filter=binnen&sorteer=krat&aantal=500`);
+      const d = await r.json();
+      ids = (d.nummers || []).map((n) => n.binnen).filter(Boolean);
+      wat = 'krat (in de volgorde van de krat)';
+    }
+    ids = ids.filter((x) => staat.tracks.has(x));
+    staat.selectie = new Set(ids);
+    staat.selectieVolgorde = ids;
+    wisLater(melding(`${wat}: ${ids.length} nummers in de selectie`), 5000);
+  } catch (err) { melding(`niet gelezen: ${err.message}`); }
+  e.target.value = '';
+  vulBieb();
+});
+$('.pl-sel-alles').addEventListener('click', () => { for (const t of staat.bieb) staat.selectie.add(t.id); staat.selectieVolgorde = null; vulBieb(); });
+$('.pl-sel-geen').addEventListener('click', () => { staat.selectie.clear(); staat.selectieVolgorde = null; vulBieb(); });
+
+$('.pl-maakset').addEventListener('click', () => {
+  const bron = $('.pl-bron').value;
+  let tracks = [];
+  if (bron === 'selectie') {
+    const volg = staat.selectieVolgorde?.filter((id) => staat.selectie.has(id)) ?? [];
+    const rest = staat.bieb.map((t) => t.id).filter((id) => staat.selectie.has(id) && !volg.includes(id));
+    tracks = [...volg, ...rest].map((id) => staat.tracks.get(id)).filter(Boolean);
+  } else if (bron === 'pastbij') {
+    // Vanaf de gekozen stap; anders wat er op de focus-track van de mixer staat; anders stap 1.
+    const k = koppeling();
+    const focusId = k?.auto?.welkNummer?.(k.engine?.focus) ?? null;
+    const s0 = staat.plan.stappen.find((x) => x.id === staat.gekozen);
+    const start = staat.tracks.get(s0?.track) ?? staat.tracks.get(focusId) ?? staat.tracks.get(staat.plan.stappen[0]?.track) ?? null;
+    if (!start) { melding('kies eerst een stap, of laad een nummer op de focus-track: de keten begint daar'); return; }
+    tracks = pastBijKeten(start, staat.bieb, { aantal: 12 });
+  } else tracks = staat.bieb;
+  if (!tracks.length) { melding(bron === 'selectie' ? 'de selectie is leeg: vink rechts nummers aan of kies een krat' : 'geen nummers'); return; }
+  const duur = leesDuur($('.pl-duur-set').value);
+  if (duur === undefined) { melding('duur: minuten (90), uren (1,5 of 2u) of een eindtijd (01:30)'); return; }
+  const r = maakSet(tracks, { vorm: $('.pl-vorm').value, duur, naam: staat.plan.naam, door: 'clay',
+    tracks: staat.plan.tracks ?? null, bron: { selectie: 'uit de selectie', pastbij: '"past bij"-keten', library: 'de hele library' }[bron] });
+  wijzig(() => ({ ...staat.plan, uitleg: staat.plan.uitleg || r.plan.uitleg, stappen: r.plan.stappen }));
+  wisLater(melding(`set: ${r.plan.stappen.length} nummers, ~${mmss(r.totaal)}${r.meldingen.length ? ` — ${r.meldingen.join('; ')}` : ''} (ctrl+z = terug)`), 10000);
+});
+
+$('.pl-auto-tracks').addEventListener('change', (e) => {
+  const lijst = String(e.target.value).split(/[\s,;]+/).filter(Boolean).map(Number);
+  if (lijst.some((n) => !Number.isInteger(n) || n < 1 || n > 8)) { melding('tracks van de automaat: nummers 1–8, bv. 1,2'); render(); return; }
+  wijzig({ soort: 'tracks', tracks: normaliseerTracks({ auto: lijst }) });
+});
+
+// ---- lagen van de gekozen stap -------------------------------------------------------------
+function tekenLagen() {
+  const el = $('.pl-lagen .lijst');
+  const s0 = staat.plan.stappen.find((x) => x.id === staat.gekozen);
+  el.replaceChildren();
+  if (!s0) { el.innerHTML = '<span class="pl-info">kies een stap</span>'; return; }
+  if (!s0.lagen?.length) { el.innerHTML = '<span class="pl-info">geen lagen</span>'; return; }
+  for (const l of s0.lagen) {
+    const r = document.createElement('div');
+    r.className = 'pl-laag';
+    r.innerHTML = `<span title="${esc(laagTekst(l))}">${esc(laagTekst(l))}</span><button class="pl-weg" title="weg">✕</button>`;
+    r.querySelector('button').addEventListener('click', () => wijzig({ soort: 'zet', id: s0.id, velden: { lagen: s0.lagen.filter((x) => x.id !== l.id) } }));
+    el.append(r);
+  }
+}
+$('.pl-laag-erbij').addEventListener('click', () => {
+  const s0 = staat.plan.stappen.find((x) => x.id === staat.gekozen);
+  if (!s0) { melding('kies eerst een stap'); return; }
+  const soort = $('.pl-laag-soort').value;
+  const opT = $('.pl-laag-op').value.trim();
+  let op;
+  if (/^\d{1,2}$/.test(opT)) {
+    const k = Number(opT), x = staat.secties.get(s0.track)?.stukken?.[k - 1];
+    // Een los getal is een SECTIE; zonder kaart (of zo'n sectie) zeggen we dat (een tijd is m:ss).
+    if (!x) { melding(`laag: dit nummer heeft geen sectie ${k}${staat.secties.get(s0.track) ? '' : ' (geen sectiekaart)'}; een tijd schrijf je als m:ss (bv. 0:32)`); return; }
+    op = { sectie: k, label: x?.label ?? null, groep: x?.groep ?? null, ...(x ? { sec: Math.max(0, x.van - (s0.van ?? 0)) } : {}) };
+  } else {
+    const t = leesTijd(opT);
+    if (t === undefined || t === null) { melding('laag: "op" is een sectienummer (bv. 3) of een tijd in de stap (m:ss)'); return; }
+    op = { sec: t };
+  }
+  const deck = Number($('.pl-laag-deck').value) || null;
+  const nr = Number($('.pl-laag-nr').value) || null;
+  const duur = Number(String($('.pl-laag-duur').value).replace(',', '.')) || null;
+  let laag;
+  if (soort === 'nummer') {
+    // Het nummer dat je het LAATST aanvinkte (niet het laatste van een krat of "alles": review S9 b).
+    const gekozen = staat.laatstAangevinkt && staat.selectie.has(staat.laatstAangevinkt) ? staat.laatstAangevinkt : null;
+    if (!gekozen) { melding('laag: vink rechts het nummer aan dat erbij moet (het laatst aangevinkte telt)'); return; }
+    laag = { soort, track: gekozen, op, deck, stem: $('.pl-laag-stem').value || null, duur, start: $('.pl-laag-start').value };
+  } else if (soort === 'sampler') laag = { soort, pad: nr, op };
+  else laag = { soort, deck, plek: nr, op };
+  const voor = s0.lagen?.length ?? 0;
+  wijzig({ soort: 'zet', id: s0.id, velden: { lagen: [...(s0.lagen || []), laag] } });
+  const na = staat.plan.stappen.find((x) => x.id === s0.id)?.lagen?.length ?? 0;
+  if (na === voor) melding('laag niet toegevoegd: sampler vraagt een pad (1–8), patroon een track van jou en een plek (1–5)');
+});
+
+// ---- sets ----------------------------------------------------------------------------------
+const mixerSets = () => { try { return window.opener && !window.opener.closed ? window.opener.varveSets ?? null : null; } catch (_) { return null; } };
+async function haalSets() {
+  try {
+    const m = mixerSets();
+    if (m) { await m.ververs(); staat.sets = m.st.lijst; }
+    else { const r = await fetch('/api/sets'); staat.sets = r.ok ? (await r.json()).sets : []; }
+  } catch (_) { /* later nog eens */ }
+  tekenSets();
+}
+function tekenSets() {
+  const el = $('.pl-sets .lijst');
+  el.replaceChildren();
+  if (!staat.sets.length) { el.innerHTML = '<span class="pl-info">nog geen sets: geef een naam en bewaar</span>'; return; }
+  for (const x of staat.sets) {
+    const r = document.createElement('div');
+    r.className = x.naam === staat.gekozenSet ? 'gekozen' : '';
+    const datum = x.gewijzigd ? new Date(x.gewijzigd).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    r.textContent = `${x.naam} · ${datum} · ${x.nummers} nrs${x.duur ? ` · ${mmss(x.duur)}` : ''}${x.moment ? ' · mixer' : ''}${x.kapot ? ' · kapot' : ''}`;
+    r.title = x.uitleg || x.naam;
+    r.addEventListener('click', () => { staat.gekozenSet = x.naam; $('.pl-set-naam').value = x.naam; const m = mixerSets(); if (m) m.st.gekozen = x.naam; tekenSets(); });
+    el.append(r);
+  }
+}
+$('.pl-set-moment').addEventListener('change', (e) => mixerSets()?.zetMetMoment(e.target.checked));
+$('.pl-set-bewaar').addEventListener('click', async () => {
+  const naam = $('.pl-set-naam').value.trim() || staat.gekozenSet;
+  if (!naam || !/^[a-z0-9_-]{1,60}$/.test(naam)) { melding('een setnaam is kleine letters, cijfers, - en _'); return; }
+  if (gewijzigd()) await opslaan();
+  if (gewijzigd()) return;
+  const m = mixerSets();
+  if (!m) { melding('open dit venster via de knop "plan" in de mixer om een set te bewaren (de patronen, de werkruimte en de mixer zitten daar)'); return; }
+  const r = await m.bewaar(naam, { metMoment: $('.pl-set-moment').checked });
+  if (r.ok) { staat.gekozenSet = naam; wisLater(melding(`set "${naam}" bewaard`), 4000); }
+  haalSets();
+});
+let laadKnopTimer = null;
+$('.pl-set-laad').addEventListener('click', async () => {
+  const naam = staat.gekozenSet || $('.pl-set-naam').value.trim();
+  const m = mixerSets();
+  if (!m) { melding('open dit venster via de knop "plan" in de mixer om een set terug te laden'); return; }
+  if (gewijzigd() && !window.confirm('Er zijn niet-opgeslagen wijzigingen in dit plan. Toch een set terugladen?')) return;
+  const r = await m.terugladen(naam, { metMoment: $('.pl-set-moment').checked });
+  const b = $('.pl-set-laad');
+  if (r.vraag) {
+    b.classList.add('vraag'); b.textContent = 'zeker?';
+    clearTimeout(laadKnopTimer);
+    laadKnopTimer = setTimeout(() => { b.classList.remove('vraag'); b.textContent = 'laad'; }, 3000);
+    melding('er speelt een track: klik binnen 3 s nog eens om de set met de mixer terug te laden');
+    return;
+  }
+  b.classList.remove('vraag'); b.textContent = 'laad';
+  if (r.ok) { await laad(naam); await vulKiezer(); wisLater(melding(`set "${naam}" teruggeladen: plan "${naam}" is actief${r.ontbreekt?.length ? `, ${r.ontbreekt.length} nummers ontbreken` : ''}; er speelt niets`), 8000); }
+});
+$('.pl-set-kopie').addEventListener('click', async () => {
+  const naar = $('.pl-set-naam').value.trim(), m = mixerSets();
+  if (!staat.gekozenSet || !naar || naar === staat.gekozenSet) { melding('kies een set en typ links een nieuwe naam'); return; }
+  if (m) await m.kopie(staat.gekozenSet, naar);
+  else await fetch(`/api/sets/${staat.gekozenSet}/kopie`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ naar }) });
+  staat.gekozenSet = naar; haalSets();
+});
+$('.pl-set-hernoem').addEventListener('click', async () => {
+  const naar = $('.pl-set-naam').value.trim(), m = mixerSets();
+  if (!staat.gekozenSet || !naar || naar === staat.gekozenSet) { melding('kies een set en typ links de nieuwe naam'); return; }
+  if (!m) { melding('hernoemen gaat via de mixer (open dit venster met de knop "plan")'); return; }
+  const r = await m.hernoem(staat.gekozenSet, naar);
+  if (r.ok) staat.gekozenSet = naar;
+  haalSets();
+});
+
+// ---- de live-balk: NU / VOLGENDE / DAARNA, de verwachte eindtijd ------------------------------
+let liveLees = 0, liveBezig = false;
+function tekenLive(k, s) {
+  const m = mixerSets();
+  const zet = (sel, t) => { const el = $(sel); if (el.textContent !== t) el.textContent = t; };
+  $('.pl-livebalk .buiten').hidden = !s.buiten;
+  $('.pl-buiten-knop').classList.toggle('on', !!s.buiten);
+  $('.pl-go-knop').classList.toggle('on', !!s.volgende?.go?.wacht);
+  const n = Date.now();
+  if (!m?.live || liveBezig || n - liveLees < 400) return;
+  liveBezig = true;
+  liveLees = n;
+  m.live(n).then((l) => {
+    zet('.pl-livebalk .nu', l.tekst.nu);
+    zet('.pl-livebalk .volg', l.tekst.volgende);
+    zet('.pl-livebalk .daarna', l.tekst.daarna);
+    zet('.pl-livebalk .laag', l.tekst.laag);
+    zet('.pl-livebalk .eind', l.tekst.eind);
+    window.varvePlanLive = l;
+  }).catch(() => {}).finally(() => { liveBezig = false; });
+}
 
 // ---- start --------------------------------------------------------------------------------
 
@@ -606,7 +969,10 @@ window.addEventListener('beforeunload', (e) => { if (gewijzigd()) { e.preventDef
     staat.tracks = new Map(staat.bieb.map((t) => [t.id, t]));
     await laad(q || k?.naam?.() || 'auto-plan');
     await vulKiezer();
+    vulKratten();
+    haalSets();
     setInterval(kijkServer, 3000);
+    setInterval(haalSets, 10000);
     requestAnimationFrame(lus);
     window.varvePlanVenster = staat;           // voor de console en de headless proef
   } catch (err) {

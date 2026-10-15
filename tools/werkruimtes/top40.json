@@ -1,0 +1,206 @@
+{
+ "bron": "origin/visie/handen, docs/HANDEN.md §4 \"Wat de handen doen (top-40 uit de handelingenlogs)\" (gegenereerd door tools/handen/handenkaart.mjs): 27 logs, set-20260930-001113 … set-20261010-190959, 62.282 handelingen. Overgenomen als data (werkruimte S8), de tak is niet samengevoegd.",
+ "let_op": "Het log kende toen geen bron (muis, MIDI, toets): dit zijn alle handelingen, niet alleen muisklikken. N = een tracknummer, K = een plek. Sinds S8 draagt een regel van de iPad/iPhone zijn bron.",
+ "top40": [
+  {
+   "nr": 1,
+   "action": "track.N.fader",
+   "aantal": 11796
+  },
+  {
+   "nr": 2,
+   "action": "track.N.filter",
+   "aantal": 6452
+  },
+  {
+   "nr": 3,
+   "action": "video.layer.knob.K",
+   "aantal": 5799
+  },
+  {
+   "nr": 4,
+   "action": "track.N.fx.knob.K",
+   "aantal": 5064
+  },
+  {
+   "nr": 5,
+   "action": "track.N.send.a",
+   "aantal": 4765
+  },
+  {
+   "nr": 6,
+   "action": "track.N.fx.mix",
+   "aantal": 3717
+  },
+  {
+   "nr": 7,
+   "action": "track.N.send.b",
+   "aantal": 2280
+  },
+  {
+   "nr": 8,
+   "action": "track.N.filter.glide",
+   "aantal": 1602
+  },
+  {
+   "nr": 9,
+   "action": "track.N.low",
+   "aantal": 1560
+  },
+  {
+   "nr": 10,
+   "action": "mixer.xfader",
+   "aantal": 1518
+  },
+  {
+   "nr": 11,
+   "action": "track.N.xfade.thru",
+   "aantal": 1306
+  },
+  {
+   "nr": 12,
+   "action": "track.N.fader.glide",
+   "aantal": 1208
+  },
+  {
+   "nr": 13,
+   "action": "mixer.master",
+   "aantal": 1162
+  },
+  {
+   "nr": 14,
+   "action": "video.fx.pixel",
+   "aantal": 1117
+  },
+  {
+   "nr": 15,
+   "action": "track.N.trim",
+   "aantal": 1012
+  },
+  {
+   "nr": 16,
+   "action": "track.N.hotcue.K",
+   "aantal": 876
+  },
+  {
+   "nr": 17,
+   "action": "sampler.volume",
+   "aantal": 719
+  },
+  {
+   "nr": 18,
+   "action": "track.N.pitch",
+   "aantal": 658
+  },
+  {
+   "nr": 19,
+   "action": "video.layer.opacity",
+   "aantal": 655
+  },
+  {
+   "nr": 20,
+   "action": "track.N.inst.knob.K",
+   "aantal": 616
+  },
+  {
+   "nr": 21,
+   "action": "video.fx.trails",
+   "aantal": 596
+  },
+  {
+   "nr": 22,
+   "action": "video.fx.grain",
+   "aantal": 490
+  },
+  {
+   "nr": 23,
+   "action": "track.N.send.a.glide",
+   "aantal": 427
+  },
+  {
+   "nr": 24,
+   "action": "klankschaal.veld.K",
+   "aantal": 426
+  },
+  {
+   "nr": 25,
+   "action": "video.layer.react",
+   "aantal": 418
+  },
+  {
+   "nr": 26,
+   "action": "video.fx.mirror",
+   "aantal": 369
+  },
+  {
+   "nr": 27,
+   "action": "track.N.send.b.glide",
+   "aantal": 347
+  },
+  {
+   "nr": 28,
+   "action": "klankschaal.toon",
+   "aantal": 290
+  },
+  {
+   "nr": 29,
+   "action": "track.N.focus",
+   "aantal": 279
+  },
+  {
+   "nr": 30,
+   "action": "video.fx.rgb",
+   "aantal": 257
+  },
+  {
+   "nr": 31,
+   "action": "track.N.stem.drums",
+   "aantal": 248
+  },
+  {
+   "nr": 32,
+   "action": "video.fx.color",
+   "aantal": 239
+  },
+  {
+   "nr": 33,
+   "action": "track.N.stem.drums.send.b",
+   "aantal": 220
+  },
+  {
+   "nr": 34,
+   "action": "video.pulse",
+   "aantal": 219
+  },
+  {
+   "nr": 35,
+   "action": "track.N.stem.other",
+   "aantal": 216
+  },
+  {
+   "nr": 36,
+   "action": "headphone.level",
+   "aantal": 176
+  },
+  {
+   "nr": 37,
+   "action": "track.N.play",
+   "aantal": 166
+  },
+  {
+   "nr": 38,
+   "action": "track.N.seek",
+   "aantal": 154
+  },
+  {
+   "nr": 39,
+   "action": "track.N.tempo",
+   "aantal": 152
+  },
+  {
+   "nr": 40,
+   "action": "track.N.high",
+   "aantal": 135
+  }
+ ]
+}

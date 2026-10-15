@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "stuk": "set-voorbeeld",
+  "titel": "VOORBEELD: GO, buiten plan en laag weg in de modus auto",
+  "uitleg": "VOORBEELD van spoor S9 (docs/PLAN-SET.md §7), geen standaard: alleen met ?stukken=set-voorbeeld of als je hem in je werkruimte noemt. In de grid-modus auto (Shift + scene 4) op de VRIJE pads 5–7 van de bovenste rij: 5 = GO, 6 = buiten plan / terug, 7 = de volgende laag overslaan. Clay verdeelt de knoppen zelf: pas dit aan of gooi het weg.",
+  "regels": {
+    "apc40mk2": [
+      {"in": "note:0:36", "laag": "grid.auto", "action": "plan.go", "mode": "trigger", "label": "pad 5 (auto): GO"},
+      {"in": "note:0:37", "laag": "grid.auto", "action": "plan.buiten", "mode": "trigger", "label": "pad 6 (auto): buiten plan / terug"},
+      {"in": "note:0:38", "laag": "grid.auto", "action": "plan.laag.skip", "mode": "trigger", "label": "pad 7 (auto): laag weg"}
+    ]
+  }
+}

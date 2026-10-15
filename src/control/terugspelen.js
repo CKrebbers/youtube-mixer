@@ -24,6 +24,7 @@
  * naspelen: niets aanraken.
  */
 import { PITCH_BEREIKEN, SPRONG_TELLEN, EQ_BANDEN } from '../engine/deck.js';
+import { metaOf as busMeta } from './actions.js';
 
 /**
  * Wat NIET opnieuw de bus op gaat:
@@ -64,6 +65,16 @@ import { PITCH_BEREIKEN, SPRONG_TELLEN, EQ_BANDEN } from '../engine/deck.js';
 export const OVERSLAAN = /^(record\.|log\.|layer\.|library\.|track\.\d+\.load\.selected$|headphone\.|beeld\.regie\.|track\.\d+\.rack\.(next|prev)$|track\.\d+\.key(\.|$)|track\.\d+\.pfl$|track\.\d+\.inst(\.|$)|track\.\d+\.pattern\.(step\.|length|swing|clear)|patterns\.(record|tap)$|track\.\d+\.stem\.\w+\.pfl$|sampler\.\d+\.drums$)/;
 
 /**
+ * Slaat terugspelen deze action over? OVERSLAAN hierboven, OF de action zegt
+ * het zelf: `meta.log === 'overslaan'` in zijn define() (14 okt, werkruimte
+ * S0). Zo hoeft een nieuw spoor deze regex niet aan te raken. `metaOf` is die
+ * van de bus; een test kan een eigen meegeven.
+ */
+export function slaOver(a, metaOf = busMeta) {
+  return OVERSLAAN.test(a) || metaOf?.(a)?.log === 'overslaan';
+}
+
+/**
  * Actions die over het NUMMER gaan (transport, cues, loops, grid, secties).
  * Staat het nummer van toen niet op de track (niet meer in de library, een los
  * bestand, laden mislukt), dan worden die overgeslagen: anders speelt `play`
@@ -72,6 +83,15 @@ export const OVERSLAAN = /^(record\.|log\.|layer\.|library\.|track\.\d+\.load\.s
  * niet bij het nummer, en gelden ook voor wat er later in het log op geladen wordt.
  */
 export const NUMMER_NODIG = /^track\.\d+\.(play|cue|sync|tap|hotcue\.|beatloop\.|loop\.|nudge\.|grid\.|stem\.|section\.|seek$|beatjump\.(back|fwd)$|brake$)/;
+
+/**
+ * Hoort deze action bij het nummer? NUMMER_NODIG hierboven, OF de action zegt
+ * het zelf: `meta.nummer === true` in zijn define() (14 okt, werkruimte S1: jog,
+ * fase duwen, op de 1, de vaste beatjumps), net als `meta.log` bij slaOver.
+ */
+export function nummerNodig(a, metaOf = busMeta) {
+  return NUMMER_NODIG.test(a) || metaOf?.(a)?.nummer === true;
+}
 
 /** Het tracknummer van een action (`track.3.fader` -> 3), of null. */
 export function trackVanActie(a) {
@@ -125,7 +145,7 @@ const ALLES = '*';
  * @param beginstand  de stand die al vóór T0 gezet wordt (die gaat er niet
  *                    nog eens in). Niet opgegeven: de eerste stand van het log.
  */
-export function maakPlan(regels, { beginstand } = {}) {
+export function maakPlan(regels, { beginstand, metaOf = busMeta } = {}) {
   const plan = [];
   let volg = 0, onbekend = 0;
   let eersteStand = beginstand === undefined;
@@ -133,7 +153,7 @@ export function maakPlan(regels, { beginstand } = {}) {
     if (Array.isArray(r)) {
       const [t, a, v, x] = r;
       if (!Number.isFinite(t) || typeof a !== 'string') { onbekend++; continue; }
-      if (OVERSLAAN.test(a)) continue;
+      if (slaOver(a, metaOf)) continue;
       // Een sectiedruk draagt de plek waar de sprong toen van rekende (Handelingenlog.vulAan).
       const van = Number.isFinite(x?.van) ? x.van : null;
       plan.push({ tijd: t, volg: volg++, soort: 'actie', a, v, van, track: trackVanActie(a) });
@@ -237,7 +257,7 @@ export class Terugspeler {
     // in zijn rij, de rest loopt door.
     const rij = this.laadt.get(ALLES) ?? (x.track !== null ? this.laadt.get(x.track) : undefined);
     if (rij) { rij.push(x); return; }
-    if (this.zonder.has(x.track) && (x.soort === 'actie' ? NUMMER_NODIG.test(x.a) : NUMMER_GEBEURTENIS.has(x.soort))) {
+    if (this.zonder.has(x.track) && (x.soort === 'actie' ? nummerNodig(x.a) : NUMMER_GEBEURTENIS.has(x.soort))) {
       this.stats.overgeslagen++;
       return;
     }

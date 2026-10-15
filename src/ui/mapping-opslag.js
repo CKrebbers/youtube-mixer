@@ -19,6 +19,34 @@ export const EIGEN_MAPPING = 'varve.mapping';
 /** De standaard van de app: waar "standaard herstellen" naartoe gaat. */
 export const STANDAARD_APPARAAT = 'apc40mk2';
 
+/*
+ * PER APPARAAT (14 okt, werkruimte S5, docs/werkruimte/S5.md). Elk apparaat met
+ * knoppen heeft zijn eigen standaard (`mappings/<apparaat>.json`) en zijn eigen
+ * verschil: op de server onder `/api/mapping/<apparaat>`, in de browser onder
+ * `varve.mapping:<apparaat>`. Zonder apparaat (of met 'apc40mk2') is het de APC,
+ * PRECIES zoals vóór 14 okt: dezelfde route `/api/mapping`, dezelfde sleutel
+ * `varve.mapping`, dus Clay's verschil verhuist niet.
+ */
+export const APPARATEN = Object.freeze(['apc40mk2', 'maschine-mk2', 'xboard49', 'toetsen']);
+
+/** Waar het verschil van dit apparaat staat: { apparaat, url, sleutel, standaard }. */
+export function plekVan(apparaat = null) {
+  const a = apparaat || STANDAARD_APPARAAT;
+  if (!APPARATEN.includes(a)) throw new Error(`mapping-opslag: onbekend apparaat "${a}"`);
+  if (a === STANDAARD_APPARAAT) return { apparaat: a, url: '/api/mapping', sleutel: EIGEN_MAPPING, standaard: a };
+  return { apparaat: a, url: `/api/mapping/${a}`, sleutel: `${EIGEN_MAPPING}:${a}`, standaard: a };
+}
+
+/*
+ * Wie bewaart voor welk apparaat (alleen deze pagina): opzetMappingOpslag meldt
+ * zich hier aan, zodat het koppelpaneel per apparaat "standaard herstellen" kan
+ * vragen zonder te weten wie de opslag opzette (midi-opzet, speelapparaten,
+ * instrument-paneel, de aanhaker van de toetsen).
+ */
+const PER_APPARAAT = new Map();
+/** De opslag van een apparaat ({ mapping, start, herstel, … }), of null. */
+export const opslagVan = (apparaat) => PER_APPARAAT.get(apparaat || STANDAARD_APPARAAT) ?? null;
+
 const leeg = (device) => ({ name: 'leeg', device, version: MAPPING_VERSIE, rules: [] });
 
 /**
@@ -42,7 +70,7 @@ export async function haalStandaard(device, haal) {
   return doc;
 }
 
-const lees = (opslag) => { try { return JSON.parse(opslag?.getItem(EIGEN_MAPPING) || 'null'); } catch (_) { return null; } };
+const lees = (opslag, sleutel = EIGEN_MAPPING) => { try { return JSON.parse(opslag?.getItem(sleutel) || 'null'); } catch (_) { return null; } };
 /** Is dit iets om te laden? Een verschil (ook leeg) of een oude kopie met regels. */
 const bruikbaar = (d) => isVerschil(d) || (Array.isArray(d?.rules) && d.rules.length > 0);
 
@@ -53,26 +81,47 @@ const bruikbaar = (d) => isVerschil(d) || (Array.isArray(d?.rules) && d.rules.le
  * (standaard + verschil = die kopie). Bewaart zelf niets: `omgezet` en
  * `standaardNieuw` zeggen de aanroeper dat opnieuw bewaren zin heeft.
  *
+ * `apparaat`: welk apparaat (zie plekVan). Zonder: de APC, zoals altijd. Met
+ * een apparaat telt alleen wat voor DAT apparaat is: een document dat zegt dat
+ * het voor een ander apparaat is, wordt niet geladen (dan de standaard, en
+ * `fouten` zegt waarom). Zonder apparaat blijft het oude gedrag: de APC-sleutel
+ * kon altijd een geïmporteerde mapping van een ander apparaat bevatten.
+ *
  * @returns {{ bron: 'server'|'browser'|null, serverBereikbaar, omgezet, standaardNieuw, eigen, weg, aantal, fouten }}
  */
-export async function laadEigen(mapping, { haal, opslag = null }) {
+export async function laadEigen(mapping, { haal, opslag = null, apparaat = null }) {
+  const plek = plekVan(apparaat);
+  // Met een apparaat is de standaard vooraf bekend (alleen een verschil voor DAT
+  // apparaat telt): tegelijk met je verschil ophalen, zoals de Maschine en de
+  // Xboard hun bestand vroeger meteen haalden. Zonder apparaat (de APC) precies
+  // de oude volgorde.
+  const vooraf = apparaat ? haalStandaard(plek.standaard, haal) : null;
+  vooraf?.catch(() => {});   // wie hem nodig heeft, wacht er hieronder op (en krijgt de fout)
+  const standaard = () => vooraf ?? haalStandaard(plek.standaard, haal);
   let vanServer = null, serverBereikbaar = true;
   try {
-    const r = await haal('/api/mapping');
+    const r = await haal(plek.url);
     if (!r.ok) throw new Error(`${r.status}`);
     vanServer = (await r.json())?.mapping ?? null;
   } catch (_) { serverBereikbaar = false; }
-  const lokaal = lees(opslag);
-  const eigen = bruikbaar(vanServer) ? vanServer : bruikbaar(lokaal) ? lokaal : null;
+  const lokaal = lees(opslag, plek.sleutel);
+  const vreemd = [];
+  const vanHier = (d) => {
+    if (!apparaat || !bruikbaar(d) || (d.device || 'generic') === plek.apparaat) return true;
+    vreemd.push(`eigen mapping voor "${d.device || 'generic'}" onder ${plek.apparaat} genegeerd`);
+    return false;
+  };
+  const eigen = bruikbaar(vanServer) && vanHier(vanServer) ? vanServer : bruikbaar(lokaal) && vanHier(lokaal) ? lokaal : null;
   const bron = !eigen ? null : eigen === vanServer ? 'server' : 'browser';
 
   if (!eigen) {
-    const uit = mapping.laadStandaard(await haalStandaard(STANDAARD_APPARAAT, haal));
+    const uit = mapping.laadStandaard(await standaard());
+    uit.fouten.unshift(...vreemd);
     return { bron, serverBereikbaar, omgezet: false, standaardNieuw: false, eigen: 0, weg: 0, aantal: uit.aantal, fouten: uit.fouten };
   }
 
   if (isVerschil(eigen)) {
-    mapping.laadStandaard(await haalStandaard(eigen.device, haal));
+    mapping.laadStandaard(await (apparaat ? standaard() : haalStandaard(eigen.device, haal)));
     const uit = mapping.load(eigen);
     return { bron, serverBereikbaar, omgezet: false, standaardNieuw: uit.standaardNieuw, eigen: uit.eigen, weg: uit.weg, aantal: uit.aantal, fouten: uit.fouten };
   }
@@ -82,9 +131,9 @@ export async function laadEigen(mapping, { haal, opslag = null }) {
   // waar de kopie op rust (de huidige of een voorganger uit `eerder`): anders
   // zou alles wat de standaard sinds die kopie kreeg als "weggehaald" gelden.
   const kopie = normaliseer(eigen).doc;
-  const standaard = await haalStandaard(kopie.device, haal);
-  const { verschil } = verschilVanKopie(standaard, kopie);
-  mapping.laadStandaard(standaard);
+  const basis = await (apparaat ? standaard() : haalStandaard(kopie.device, haal));
+  const { verschil } = verschilVanKopie(basis, kopie);
+  mapping.laadStandaard(basis);
   const uit = mapping.load(verschil);
   return { bron, serverBereikbaar, omgezet: true, standaardNieuw: uit.standaardNieuw, eigen: uit.eigen, weg: uit.weg, aantal: uit.aantal, fouten: uit.fouten };
 }
@@ -99,8 +148,13 @@ export async function laadEigen(mapping, { haal, opslag = null }) {
  * dus dan gebeurt er niets.
  *
  * @param meld  (tekst, soort) -> void: fouten naar de strook onderaan.
+ * @param apparaat  welk apparaat (plekVan); zonder: de APC, precies zoals altijd.
+ * @param learn     de MidiLearn van dit apparaat (alleen bewaard, voor het koppelpaneel: opslagVan(apparaat).learn).
  */
-export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => {}, wacht = 500 }) {
+export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => {}, wacht = 500, apparaat = null, learn = null }) {
+  const plek = plekVan(apparaat);
+  // Wat de meldingen zeggen: bij de APC zoals altijd, bij een ander apparaat met zijn naam erbij.
+  const van = plek.apparaat === STANDAARD_APPARAAT ? '' : ` (${plek.apparaat})`;
   let geladen = false;       // niet de lege begintoestand bewaren
   let laatst = null;         // tekst van het laatst bewaarde verschil
   let timer = null;
@@ -110,9 +164,8 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
   function naarServer(doc, direct) {
     clearTimeout(timer);
     const stuur = () => {
-      bezig = haal('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: doc }) })
-        .then((r) => { leesWeg(r); if (!r.ok) throw new Error(`${r.status}`); return true; })
-        .catch((err) => { meld(`mapping niet op de server bewaard (${err.message}) — staat wel in deze browser`, 'fout'); return false; });
+      bezig = naarDeServer(doc, { haal, apparaat })
+        .catch((err) => { meld(`mapping${van} niet op de server bewaard (${err.message}) — staat wel in deze browser`, 'fout'); return false; });
       return bezig;
     };
     if (direct || wacht <= 0) return stuur();
@@ -132,14 +185,14 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
       const device = mapping.device;
       standaardHalen = haalStandaard(device, haal)
         .then((doc) => { if (mapping.device === device) mapping.zetStandaard(doc); })
-        .catch((err) => meld(`mapping niet bewaard: geen standaard voor ${device} (${err.message})`, 'fout'))
+        .catch((err) => meld(`mapping${van} niet bewaard: geen standaard voor ${device} (${err.message})`, 'fout'))
         .finally(() => { standaardHalen = null; if (mapping.verschil()) bewaar(); });
       return;
     }
     const tekst = JSON.stringify(v);
     if (tekst === laatst) return;
     laatst = tekst;
-    try { opslag?.setItem(EIGEN_MAPPING, tekst); } catch (_) {}
+    try { opslag?.setItem(plek.sleutel, tekst); } catch (_) {}
     return naarServer(v, direct);
   }
   mapping.on('change', bewaar);
@@ -148,7 +201,7 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
   async function start() {
     let verslag;
     try {
-      verslag = await laadEigen(mapping, { haal, opslag });
+      verslag = await laadEigen(mapping, { haal, opslag, apparaat });
     } catch (err) {
       // Wat er bewaard staat is niet te lezen, of de standaard kwam niet binnen.
       // Dan de standaard erop en zeggen wat er aan de hand is, maar deze sessie
@@ -160,10 +213,10 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
       // overschreef de eerste 'change' (een fragment) je verschil met een lege
       // mapping.
       try {
-        mapping.laadStandaard(await haalStandaard(STANDAARD_APPARAAT, haal));
-        meld(`jouw eigen mapping kon niet geladen worden (${err.message}) — de standaard staat erop, en koppelingen worden niet bewaard tot je herlaadt`, 'fout');
+        mapping.laadStandaard(await haalStandaard(plek.standaard, haal));
+        meld(`jouw eigen mapping${van} kon niet geladen worden (${err.message}) — de standaard staat erop, en koppelingen worden niet bewaard tot je herlaadt`, 'fout');
       } catch (e2) {
-        meld(`standaardmapping niet geladen (${e2.message}) — koppelingen worden niet bewaard tot je herlaadt`, 'fout');
+        meld(`standaardmapping${van} niet geladen (${e2.message}) — koppelingen worden niet bewaard tot je herlaadt`, 'fout');
         return { bron: null, fout: e2.message };
       }
       return { bron: null, fout: err.message };
@@ -176,7 +229,7 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
     // samenvoeging van 23 sep) die het overneemt zodra de server even niet
     // antwoordt. Alleen de browser; de server heeft het al.
     if (verslag.bron === 'server' && laatst) {
-      try { if (opslag && opslag.getItem(EIGEN_MAPPING) !== laatst) opslag.setItem(EIGEN_MAPPING, laatst); } catch (_) {}
+      try { if (opslag && opslag.getItem(plek.sleutel) !== laatst) opslag.setItem(plek.sleutel, laatst); } catch (_) {}
     }
     // Omgezet, een nieuwe standaard (de vingerafdruk in het verschil klopt niet
     // meer), of alleen in de browser gevonden: dan nu bewaren, zodat server en
@@ -200,9 +253,9 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
     geladen = false;
     clearTimeout(timer);
     try {
-      mapping.laadStandaard(await haalStandaard(STANDAARD_APPARAAT, haal));
+      mapping.laadStandaard(await haalStandaard(plek.standaard, haal));
     } catch (err) {
-      meld(`standaardmapping niet geladen (${err.message})`, 'fout');
+      meld(`standaardmapping${van} niet geladen (${err.message})`, 'fout');
       geladen = true;
       return false;
     }
@@ -211,5 +264,30 @@ export function opzetMappingOpslag({ mapping, haal, opslag = null, meld = () => 
     return (await bewaarNu(true)) !== false;
   }
 
-  return { start, bewaar, herstel, klaar: () => bezig, get geladen() { return geladen; } };
+  const uit = { apparaat: plek.apparaat, mapping, learn, start, bewaar, herstel, klaar: () => bezig, get geladen() { return geladen; } };
+  PER_APPARAAT.set(plek.apparaat, uit);
+  return uit;
+}
+
+/** Eén POST van een verschil naar de plek van dit apparaat. true, of gooit. */
+async function naarDeServer(doc, { haal, apparaat = null }) {
+  const r = await haal(plekVan(apparaat).url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mapping: doc }) });
+  leesWeg(r);
+  if (!r.ok) throw new Error(`${r.status}`);
+  return true;
+}
+
+/**
+ * Eén keer bewaren, zonder opzet eromheen: het verschil van `mapping` naar de
+ * browser en de server van dit apparaat. Voor een hulpmiddel dat alleen wil
+ * vastleggen; de app zelf bewaart via opzetMappingOpslag (bij elke 'change').
+ * Geeft het verschil terug, of null als er geen standaard is om tegen af te zetten.
+ */
+export async function bewaarEigen(mapping, { haal, opslag = null, apparaat = null }) {
+  const v = mapping.verschil();
+  if (!v) return null;
+  const tekst = JSON.stringify(v);
+  try { opslag?.setItem(plekVan(apparaat).sleutel, tekst); } catch (_) {}
+  await naarDeServer(v, { haal, apparaat });
+  return v;
 }

@@ -30,6 +30,15 @@
  * de sampler", VRAGEN CX). Het moment hangt aan CX4: wordt er pas na avond 2
  * gemerged, dan gaat het blok bij het mergen naar avond 3 (titel "Avond 3 · …",
  * achter beeld-pc); de ids blijven.
+ * Erbij (14 okt, werkruimte S8): de proefavonden van de werkruimte (docs/WERKRUIMTE.md D3: E0, poort M,
+ * A, B, C, D), elk met een meetbaar oordeel. Ze staan na avond 3 en vóór "Eerder werk" (titel
+ * "Werkruimte · …"). Naar main pas na A–C; wat bevalt gaat daarna pas naar de standaard.
+ * Erbij (15 okt): wat er op 14 en 15 okt gebouwd is. Afmaken (VRAGEN GA, docs/BEATGRID.md §12–13,
+ * APC40.md, de vier verslagen van 14 okt): op avond 1 "Zonder lag" na de kern en "Beatgrid gelijkzetten
+ * op de APC" na het beatgrid; op avond 2 de twee proeven van de hub (V1, ms-scherm) vóór het opstarten
+ * met de hub en "Zonder lag met de hub" erna. De sporen S9 (sets), S10 (effecten) en S11 (tags) als
+ * "Werkruimte · S9/S10/S11" na D (VRAGEN S9, S10, S11), en in D de vakken plan, sets, sjablonen en tags
+ * op de iPad. Vraagcodes als "S9-1" telt de test ook. Geen id veranderd.
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
@@ -89,6 +98,21 @@ export const SPEELLIJST = [
     { id: 'ky-sprong', doe: 'Keylock aan: zet en druk een hotcue (pad in modus hotcues, scene 1) en spring met Bank ◀ ▶.',
       let: 'Landt hij precies (beatjump in de maat)? Voelt het traag dat de sprong ~0,1 s later klinkt?' },
   ] },
+  // Afmaken (14 okt, docs/APC40.md, controller-invoer/-uitvoer): na de kern meteen voelen of "laggy" weg is.
+  { id: 'ga-lag', titel: 'Avond 1 · Zonder lag: de APC na afmaken', minuten: 10, punten: [
+    { id: 'ga-latentie', doe: 'Knop MIDI in de bovenbalk (het MIDI-paneel). Beweeg een paar faders en knoppen op de APC en lees de regel "latency: … in + … audio".',
+      let: 'Welke getallen staan er? Boven ~15 ms audio ligt het aan de uitgang (Scarlett of het samengestelde apparaat), niet aan de code. Schrijf ze in de notitie. (GA11)' },
+    { id: 'ga-voel', doe: 'Twee tracks spelen, de rijen stems en master open. Schuif fader, filter en crossfader snel heen en weer, en draai aan EQ en sends.',
+      let: 'Volgt het geluid je hand meteen? En het scherm (faders, golfvorm)? Waar voelt het nog laggy: het geluid, het scherm, de lampjes, of een knop die niets deed? (GA12, GA16)' },
+    { id: 'ga-lampjes', doe: 'Druk om de beurt play, sync, de A|B-knop en Track Select, en wissel mapjes (Clip/Device View, Shift + scene 1–5).',
+      let: 'Gaat een lampje meteen aan bij de druk, en staat een heel mapje in één keer goed? Of lopen de lampjes achter? (GA14)' },
+    { id: 'ga-knipper', doe: 'Track 1 geeft de maat (zijn Track Select knippert). Druk afwisselend Track Select 1 en 2, snel, een stuk of twintig keer.',
+      let: 'Wisselt de focus bij elke druk, ook precies als het lampje aan- of uitgaat? (Het echofilter slikte vroeger ~13% van zulke drukken.)' },
+    { id: 'ga-endless', doe: 'Wissel de focus met Track Select en draai meteen één tik aan device knob 1.',
+      let: 'Telt die eerste tik, of gaat hij verloren (bewust, tot bekend is wat de APC doet)? Merk je het tijdens het mixen?' },
+    { id: 'ga-echoes', doe: 'Aan het eind van de avond, met de mixer nog open: Controlekamer, tegel APC40, de regel "echo\'s: N" (of midi.status().echoes in de console van de mixer).',
+      let: 'Staat er 0 na een hele avond? Dan mag het echofilter voor de APC uit. (GA13, GA15)' },
+  ] },
 
   // Daarna, als er tijd en zin is: klank, beatgrid, stems, master, en de secties (6 okt, docs/SECTIES.md; verweven §7).
   { id: 'klank', titel: 'Avond 1 · Modus klank', minuten: 5, punten: [
@@ -116,6 +140,25 @@ export const SPEELLIJST = [
     { id: 'bg-terug', doe: 'Druk ↶ (of Cmd+Z).', let: 'Staat het grid weer zoals vóór je klik?' },
     { id: 'bg-vast', doe: 'Lang nummer (Let it all go), grid-modus: scene 1 op een kick aan het begin (= tel 1); een paar minuten later Shift + scene 1 op een kick (= vast). Daarna grid-modus weer uit.',
       let: 'Melding "vastgezet — … bpm", en loopt het grid daarna gelijk met de muziek (geen ⚠)? (S20)' },
+  ] },
+  // Afmaken (14 okt, docs/BEATGRID.md §12–13, APC40.md "Grid-modus: gelijkzetten"): alles in de grid-modus op de APC.
+  { id: 'ga-grid', titel: 'Avond 1 · Beatgrid gelijkzetten op de APC', minuten: 18, punten: [
+    { id: 'ga-een', doe: 'Nummer met ✓ naast de bpm, spelend. Grid-modus (Shift + Metronome). Device ▶, daarna Device ◀.',
+      let: 'Schuift de "1" een tel verder en weer terug (de langere streepjes in de zoom), terwijl de tellen blijven liggen? Ligt dat goed, nu de grid-modus Device ◀ ▶, On/Off, Clip/Device View en Detail View van strip en rack overneemt? (GA6)' },
+    { id: 'ga-tellen', doe: 'Grid-modus: houd Nudge + vast tot het grid duidelijk naast de klappen ligt, laat los. Druk dan Clip/Device View op een willekeurige kick (tellen hier). Daarna Detail View (↶) twee keer.',
+      let: 'Herhaalt Nudge na een korte pauze en stopt hij bij loslaten (lekker zo)? Staat na tellen hier de tel weer op de klap, met dezelfde "1"? Zet één ↶ het hele vasthouden terug, en brandt Detail View alleen als er iets terug te zetten is?' },
+    { id: 'ga-controle', doe: 'Grid-modus, spelende track: On/Off = controleren (tik in de koptelefoon). Shift + Device ◀ ▶ = de plekken langs; Shift + On/Off = ✓ klopt tot hier.',
+      let: 'Valt de tik op de tel, springen de plekken goed, en staat het stuk na ✓ goedgekeurd? Doen de lampjes van On/Off en Shift + On/Off wat ze zeggen?' },
+    { id: 'ga-stil', doe: 'Track 2 staat stil (fader dicht). Focus op track 2, grid-modus, druk On/Off.',
+      let: 'Hij zoekt een plek op en start de track met de tik; zonder koptelefoonuitgang hoort de zaal dat. Liever alleen klaarzetten (niet starten), of weigeren met een melding? (GA7)' },
+    { id: 'ga-oranje', doe: 'Kijk in de grid-modus naar scene 1 (tel 1 hier), bij een nummer met ✓ en bij een met ? naast de bpm.',
+      let: 'Wit = klopt, oranje = twijfel. Zie je het verschil op het apparaat, ook in het donker? Bij "geen puls" liever uit of rood? (GA9)' },
+    { id: 'ga-vast', doe: 'Lang nummer (Let it all go): scene 1 op een kick aan het begin, en pas na ruim 5 minuten Shift + scene 1 op een kick (vast). Grid-modus uit en laat hem doorspelen.',
+      let: 'Melding "vastgezet — … bpm" zonder "LET OP", en blijft de tik (On/Off) tot het eind op de tel, ook al lag het grid daar al een kwart tel uit de pas?' },
+    { id: 'ga-twee', doe: 'Laad hetzelfde nummer op track 1 en 2 (track 2 speelt). Zet op track 1 in de grid-modus de "1" een tel verder (Device ▶).',
+      let: 'Krijgt track 2 het nieuwe grid ook (een kwart seconde na je laatste druk)? Goed zo midden in een set, of alleen op tracks die stilstaan? (GA8)' },
+    { id: 'ga-dj', doe: 'Laad Ciel (Beat This! hoorde eerst 77) en een reggae- of downtempo-nummer dat je zelf traag telt. Kijk naar de bpm in de kolom. Klopt hij niet: grid-modus scene 3 (½) of scene 2 (×2).',
+      let: 'Ciel nu ~154, zoals jij tikt? Krijgt het trage nummer het dubbele (150 in plaats van 75), en draai je genoeg van zulke muziek om het per krat te willen? Alleen na de herberekening bij de eerste start. (GA1, GA2)' },
   ] },
   { id: 'stems', titel: 'Avond 1 · Stems', minuten: 14, punten: [
     { id: 'st-zang', doe: 'Laad Loving arms (vier stems), knop stems in de balk, kill bij de zang aan en weer uit.',
@@ -205,11 +248,26 @@ export const SPEELLIJST = [
   ] },
 
   // ---- Avond 2: spelen en programmeren (met de hub) -------------------------------
+  // Afmaken (14 okt): eerst twee proeven van de hub zelf, die de apparaten alleen openen als de hub NIET draait.
+  { id: 'ga-proef', titel: 'Avond 2 · Vóór de hub: proef V1 en de schermen', minuten: 10, punten: [
+    { id: 'ga-v1', doe: 'Hub uit, mixer-tabblad dicht, APC aangesloten. In Terminal in de map AV-app-hub: node src/cli.js proef. Sla met o + Enter door tot stap 14 ("Nemen de knoppen een waarde van de hub over? (V1)"), draai twee knoppen een klein tikje, daarna Ctrl-C.',
+      let: 'Wat zegt de proef: telt de knop verder vanaf de ring die de hub zette (ja of nee)? Dat beslist of de draaiknoppen endless blijven. (GA17)' },
+    { id: 'ga-msscherm', doe: 'Nog steeds zonder hub, Maschine aangesloten: node src/cli.js proef speelapparaten, en loop de stap "Maschine: de twee schermen" (ms-scherm); de rest met o + Enter.',
+      let: 'Hoe lang duurt het schrijven van twee volle schermen? Veel meer dan ±20 ms betekent dat een druk scherm de pads kan vertragen: schrijf het getal in de notitie.' },
+  ] },
   { id: 'hub', titel: 'Avond 2 · Opstarten met de hub', minuten: 5, punten: [
     { id: 'hb-start', doe: 'Varve draait al: start de hub pas daarna, dan gebruikt hij die server en laat hem bij stoppen staan. Mixer-tabblad dicht; APC, Xboard49 en Maschine aangesloten. Dubbelklik Start studio.command in de map AV-app-hub (of in Terminal: npm start -- studio --geen-drivers). Doet de Maschine niets: Invoermonitoring voor Terminal aan en opnieuw starten. Zegt de hub "Maschine: bezet"? Klik Studio uit (de app) en wacht een paar seconden.',
       let: 'Chrome opent (na een paar seconden) de mixer met ?hub= in de adresbalk, en de APC werkt zoals op avond 1?' },
     { id: 'hb-lpd8', doe: 'LPD8 (als hij aangesloten is): draai K1 terwijl er muziek speelt.',
       let: 'In VARVE gebeurt er niets (bewust). Wil je K1 ergens aan hangen, bijvoorbeeld de puls? (O1)' },
+  ] },
+  { id: 'ga-hub', titel: 'Avond 2 · Zonder lag met de hub', minuten: 8, punten: [
+    { id: 'ga-hubvoel', doe: 'Mix een minuut op de APC zoals op avond 1: faders, filter, play, Track Select en een paar mapjes.',
+      let: 'Voelt het even direct als zonder hub, en gaan de lampjes meteen aan na een druk? (GA12, GA16)' },
+    { id: 'ga-msdraai', doe: 'Maschine: groep D (de Drums op track 4), ◄ ► links boven tot de pagina Strip. Draai snel aan draaiknop 4 en 8 en sla intussen met de andere hand de pads aan.',
+      let: 'Loopt het scherm vlot mee (~25 beelden per seconde)? Prettig, of liever rustiger zoals eerst? Haperen de pads zolang het scherm druk is? (GA18)' },
+    { id: 'ga-hubknipper', doe: 'Track 1 geeft de maat (zijn Track Select knippert). Druk snel afwisselend Track Select 1 en 2 op de APC, een stuk of twintig keer.',
+      let: 'Wisselt de focus ook via de hub bij elke druk, zoals zonder hub op avond 1?' },
   ] },
   { id: 'spelen', titel: 'Avond 2 · Spelen', minuten: 30, punten: [
     { id: 'sp-fm', doe: 'Track 1 speelt een nummer. Focus op track 3, knop instrument in de balk, kies FM. Fader 3 dicht, ● op kolom 3.',
@@ -380,6 +438,102 @@ export const SPEELLIJST = [
       let: 'Doet elke knop wat hij zegt? Mis je dat het lampje laat zien of vasthouden en paniek aan staan? Wint je spiergeheugen van de Stroommachine-indeling? (BE4, BE5)' },
     { id: 'bp-weg', doe: 'Trek de netwerkkabel van de pc eruit (of zet de wifi uit), wacht 20 s, en sluit hem weer aan. Herlaad daarna de Stroommachine.',
       let: 'Hooguit één melding, en daarna komt alles vanzelf terug (tel, scène, macro\'s), zonder dat het spelen hapert? Is "zoeken zonder pc" stil genoeg? (BE7)' },
+  ] },
+
+  // ---- De werkruimte (docs/WERKRUIMTE.md D3, docs/werkruimte/S8.md) ---------------
+  { id: 'werk-e0', titel: 'Werkruimte · E0 · Worpen via koppelen (kan nu al)', minuten: 10, punten: [
+    { id: 'we-pads', doe: 'Koppel in grid-modus video drie vrije pads aan video.fx.pixel.hold, .trails.hold, .mirror.hold; speel er 2 min mee.',
+      let: 'Oordeel: hoeveel keer greep je mis (tel)? 0–1 = pads werken voor worpen.' },
+    { id: 'we-knop', doe: 'Koppel ⇧ + A|B 1–4 aan track.{focus}.fx.knob.1–4.hold en gooi een echo-worp in een overgang.',
+      let: 'Oordeel: pads of knoppen voor worpen? Schrijf je keuze in de notitie (W3 als je iets mist).' },
+  ] },
+  { id: 'werk-m', titel: 'Werkruimte · Poort M · Maschine-ijkproef (met de hub)', minuten: 20, punten: [
+    { id: 'wm-ijk', doe: 'Open tools/proef/maschine-ijk.html via de hub en loop elke knop, het wiel, de draaiknoppen en F1–F8 af.',
+      let: 'Oordeel per punt ja/nee: kloppen de nummers van het profiel; wiel relatief ±1 per klik; SOLO/MUTE/VOLUME sturen noot aan én uit; F1–F8 onder de schermlabels. Alles ja = twee-handen mag aan.' },
+  ] },
+  { id: 'werk-a', titel: 'Werkruimte · A · Uitlijnen', minuten: 20, punten: [
+    { id: 'wa-ring', doe: 'Twee nummers, ⇧ Lock (fasemeters); duw track 2 met device knob 2 tot de ring in het midden staat.',
+      let: 'Oordeel: binnen hoeveel tikken stond hij gelijk (tel)? Is de ring leesbaar als fasemeter (ja/nee)?' },
+    { id: 'wa-ms', doe: 'Duoklik aan (Maschine UITLIJN r4 pad 1 of koppelen); duw 1 ms met ±1 ms.', let: 'Oordeel: hoor je de flam van 1 ms (ja/nee)? Klopt "muziek Δ" in de uitlijnweergave met je oor (ja/nee)?' },
+    { id: 'wa-scherm', doe: 'Werkruimte apc-alleen, deel UITLIJN; "open schermen" (mac-2) op het tweede scherm.', let: 'Oordeel: loopt de uitlijnweergave op mac-2 zonder haperen 5 min mee (ja/nee)?' },
+  ] },
+  { id: 'werk-b', titel: 'Werkruimte · B · Delen en effecten', minuten: 25, punten: [
+    { id: 'wb-delen', doe: 'apc-alleen, grid-modus uit (daarin is ⇧ On/Off ✓ van het grid): open stems (⇧ scene 3), fx-matrix (⇧ On/Off), terug; 10 keer wisselen.',
+      let: 'Oordeel: hoe vaak wist je niet in welk deel je zat (tel)? THUIS (⇧ master-knop) bracht je elke keer terug (ja/nee)?' },
+    { id: 'wb-dub', doe: 'Superknop DUB en de dub-worp in een overgang.', let: 'Oordeel: is de dub-worp wat je wilde (ja/nee + wat anders)? Hoeveel nieuwe plekken was te veel (het getal "⚠ N nieuw")?' },
+    { id: 'wb-inricht', doe: '✎ op de werk-balk: maak een paneel, wijs drie knoppen aan, zet het op het werkvak; wijs het toe aan de APC device knobs; ↶ terug.',
+      let: 'Oordeel: lukte het zonder JSON (ja/nee)? Hoeveel minuten? Wat zocht je en vond je niet (notitie)?' },
+  ] },
+  { id: 'werk-c', titel: 'Werkruimte · C · Twee handen (met de hub)', minuten: 25, punten: [
+    { id: 'wc-f', doe: 'twee-handen: F1–F8 op de Maschine, de houd-knoppen (VOLUME + draaiknop = fader), het wiel als jog.',
+      let: 'Oordeel: voelt APC breed / Maschine diep logisch (1–5)? Kom je met THUIS (SHIFT + F1) altijd terug (ja/nee)?' },
+    { id: 'wc-kaart', doe: 'Open de kaarten (apc.html, maschine.html) en het paneel "kaart" op mac-2.', let: 'Oordeel: kon je zonder kijken zeggen wat een knop doet in het deel van nu (ja/nee)?' },
+  ] },
+  { id: 'werk-d', titel: 'Werkruimte · D · iPad en iPhone naast de Mac', minuten: 30, punten: [
+    { id: 'wd-kijk', doe: 'iPad via Tailscale: werk.html?s=ipad op het beginscherm; laat hem 10 min naast de Mac staan, met auto-lock aan.',
+      let: 'Oordeel: loopt hij in de pas met wat je hoort (ja/nee)? Valt hij weg bij auto-lock, en komt hij binnen 5 s terug (ja/nee)?' },
+    { id: 'wd-koppel', doe: 'Zet hieronder "Bedienen vanaf iPad en iPhone" aan; koppelcode; typ hem op de iPad; dan op de iPhone (werk.html?s=iphone).',
+      let: 'Oordeel: lukte koppelen in één keer (ja/nee)? Zie je beide apparaten in de lijst?' },
+    { id: 'wd-xy', doe: 'Deel FX: veeg op de iPhone over de xy-pad (x = plek 1, y = echo; aanraken = worp, loslaten = terug).',
+      let: 'Oordeel: voelt de vertraging speelbaar (1–5)? Klinkt de worp op het moment van aanraken (ja/nee)? (De headless meting: zie docs/werkruimte/S8.md.)' },
+    { id: 'wd-weg', doe: 'Houd een worp vast op de iPad en zet de wifi van de iPad uit.', let: 'Oordeel: laat de mixer binnen ~2 s los (ja/nee)?' },
+    { id: 'wd-nooit', doe: 'Zet record.start of play in een paneel op de iPad en druk.', let: 'Oordeel: gebeurt er niets, met een melding op de iPad (ja/nee)?' },
+    { id: 'wd-vakken', doe: 'Zet in je werkruimte de vakken van S9–S11 op de iPad (delen.<deel>.schermen.ipad.vakken: plan, sets, sjablonen, tags) en zet plan.*, set.* en track.*.tag.* in schermen.ipad.mag (track.*.fx.* en track.*.rack.* staan er in twee-handen al). Met de auto-DJ aan: druk op de iPad GO, ◀ set / set ▶ en laad set.',
+      let: 'Oordeel: passen de vier vakken op de iPad, en loopt NU / VOLGENDE / DAARNA mee met de mixer (ja/nee)? Weigert laad set met een melding, terwijl kiezen wel gaat (ja/nee)? Wil je terugladen toch vanaf de iPad? (S9-4)' },
+  ] },
+  // De sporen van 14–15 okt na de proefavonden: S9 (docs/PLAN-SET.md), S10 (docs/EFFECTEN-MEER.md), S11
+  // (docs/LIBRARY-TAGS.md). Met de APC; wat de hub of de iPad vraagt staat erbij (de iPad koppelen: werk-d).
+  { id: 'werk-s9', titel: 'Werkruimte · S9 · Een set klaarzetten, live bijmixen, sets', minuten: 35, punten: [
+    { id: 's9-maak', doe: 'Mixer: knop plan. Rechts bij "uit…" een categorie of een krat van de kaart (of vink nummers aan). Bij "maak set van": de selectie rechts, boog, duur 60. Dan maak set.',
+      let: 'Staat er in een paar handelingen een set (gemeten: 3–4)? Klopt de boog (rustig, piek op 70%, iets terug) met hoe jij een avond opbouwt, of liever oplopend of een golf? (S9-1)' },
+    { id: 's9-klaar', doe: 'Kijk naar de klaar-tekens per nummer (G T S § V). Ontbreekt er iets: maak klaar (er speelt nog niets, geen speeldag).',
+      let: 'Lees je in één blik wat er mist? Weigert maak klaar met een reden zodra er een deck speelt?' },
+    { id: 's9-tracks', doe: 'Vul tracks auto in: 1,2. Dan gebruik dit plan en auto. Laad intussen zelf een nummer op track 5 en mix het erbij.',
+      let: 'Blijft de automaat van track 3–8 af, ook van een lege track waar je net iets aan deed? 2 minuten als vangrail goed, of liever een vaste verdeling als standaard? (S9-3)' },
+    { id: 's9-go', doe: 'Kies een stap en druk G (GO-stap), opslaan. Laat de overgang aankomen en druk GO (AUTO-rij of planvenster); bij een volgende GO-stap druk je niet.',
+      let: 'Begint de overgang pas na GO, en zonder GO op het laatste moment (de live-balk telt af)? Kloppen NU / VOLGENDE / DAARNA en de eindtijd? (S9-8)' },
+    { id: 's9-laag', doe: 'LAGEN VAN DE GEKOZEN STAP: vink rechts een nummer met stems aan, soort nummer, op: een sectie (bv. 3), track 5 (leeg laten!), stem zang, start vanzelf, + laag. Laat de stap spelen.',
+      let: 'Valt de laag op de maat in, gaat hij in 4 maten open tot 0,8 en na zijn duur weer dicht? Is dat niveau goed bovenop de mix? Raak je de track aan, laat de automaat hem dan los? (S9-2, S9-8)' },
+    { id: 's9-buiten', doe: 'Druk buiten plan, mix een minuut zelf op track 3–8, en druk terug.',
+      let: 'Laat de automaat echt los (BUITEN PLAN in de balk), en neemt hij bij terug zonder sprong over wat het hardst klinkt?' },
+    { id: 's9-sets', doe: 'SETS (rechts in het planvenster): naam "proef", met mixer aan, bewaar. Verander de mixer (andere nummers, faders, filter), dan laad terwijl er iets speelt (tweede klik).',
+      let: 'Vraagt hij de tweede klik, staat daarna alles terug (nummers, posities, faders, plan, patronen) en start er niets? Met acht tracks met stems: hoe lang duurt het? Moet de werkruimte als kopie mee, en de sets in de backup? (S9-5, S9-6, S9-8)' },
+    { id: 's9-apc', doe: 'Herlaad de mixer met ?stukken=set-voorbeeld. APC: Shift + scene 4 (modus auto), pad 5 = GO, 6 = buiten plan / terug, 7 = laag weg.',
+      let: 'Werkt GO van de APC precies zoals op het scherm? Waar wil je GO, buiten plan en laag weg echt hebben? Mis je een set kiezen in de Controlekamer? (S9-7, S9-8)' },
+  ] },
+  { id: 'werk-s10', titel: 'Werkruimte · S10 · Meer effecten en eigen sjablonen', minuten: 35, punten: [
+    { id: 'fx2-ruimte', doe: 'Track 1 speelt. RACK-kiezer (of Device ◀ ▶ in de strip): Dub-echo, Wegspoelen, Ruimte bevriezen, Ademende galm, Opbouw, Band zakt weg. Telkens MIX open (device knob 7), Clip/Device View naar rack, knob 1 van dicht naar open.',
+      let: 'Welke houd je, welke gaan weg? Klinkt de beginstand droog, en liggen de knoppen op het gehoor goed? Per sjabloon in de notitie. (S10-1)' },
+    { id: 'fx2-kleur', doe: 'Zelfde, met Kleur: filter, Kleur: dub, Kleur: ruimte, Kleur: crush (knob 1 vanuit het midden naar links en naar rechts), Kanteling, Klinker-zweep, Kam-zweep (knob 2 = toon) en Schaduw.',
+      let: 'Werken de Color-FX-sweeps naar beide kanten? Glijdt de kam mooi naar een nieuwe toon, of liever springen? Is de klinker luid genoeg? (S10-1, S10-3, S10-4)' },
+    { id: 'fx2-ritme', doe: 'Op een nummer met ✓ naast de bpm: Tel-gate 1/8, Pomp, Stappenfilter, Droedel, Break-kraker en Reese.',
+      let: 'Lopen ze strak op de maat, ook het stappenfilter op 1/16 bij een snel nummer? Genoeg zo als besturing (33 ms), of mis je modulatie op audiosnelheid? (S10-1, S10-2)' },
+    { id: 'fx2-master', doe: 'Shift + Clip/Device View (mapje master), Device ◀ ▶ tot Master-lijm, knob 8 = mix open. Daarna op een nummer met stems: Zangband met alleen de zang, Drum-punch met alleen de drums (STEMS-rij).',
+      let: 'Lijmt hij de mix zonder te pompen? Standaard op de master, of alleen als je hem kiest? Doen Zangband en Drum-punch wat ze beloven? (S10-1, S10-7)' },
+    { id: 'fx2-maken', doe: 'RACK-rij: bewerk. + effect… Kam en daarna Band; ∥ op Band (er komt een knop nat); + modulator… LFO, op de maat, 1/1, doel de toon van de kam; bij een koppeling ▸ stuurt: knop 2; verloop → eigen kromme.',
+      let: 'Vind je alles zonder te zoeken? Is band (het zwaarste nieuwe effect) het waard? Wat zou je als volgende willen: parallelle ketens, stutter, of eerst de sjablonen afmaken? (S10-8, S10-9)' },
+    { id: 'fx2-eigen', doe: 'In de editor: A (de eerste klik bewaart A en maakt B), muteer een paar keer, A om terug te luisteren. Naam bovenaan, als sjabloon. Kies hem op track 2 (eigen sjablonen in de kiezer), daarna wis sjabloon (tweede klik).',
+      let: 'Is A/B met muteren bruikbaar om te zoeken? Staat je sjabloon onder eigen sjablonen en klinkt hij op track 2 hetzelfde?' },
+    { id: 'fx2-xy', doe: 'iPhone gekoppeld (werk-d): zet in deel FX ook het vak sjablonen op de iPhone (schermen.iphone.vakken) en track.*.rack.* in zijn mag. Wissel met ◀ sjabloon / sjabloon ▶ en speel de XY-pad.',
+      let: 'Speelt de XY-pad bij elk sjabloon de twee knoppen die erbij horen? Moet je eigen xy-paneel dat ook (track.N.fx.xy.x/.y)? Bewaren alleen op de Mac goed? (S10-5, S10-6)' },
+  ] },
+  { id: 'werk-s11', titel: 'Werkruimte · S11 · Tags en categorieën in de library', minuten: 25, punten: [
+    { id: 'tg-tag', doe: 'B (library). Klik een nummer, alt+T, typ "dub" en Enter (een nieuwe tag: nog eens Enter); met een komma een tweede tag. Cmd-klik nog twee nummers en tag ze ook.',
+      let: 'Lukt taggen zonder te zoeken? Terecht dat een nieuwe tag een tweede Enter vraagt? Vindt "dub" in het zoekveld ook de nummers met #dub, en is dat handig? (S11-8)' },
+    { id: 'tg-cat', doe: '☰ indeling (de kolom CATEGORIEËN/TAGS): + met een naam en Enter. Sleep de gekozen rijen op de categorie, kies hem en sleep een rij op een andere (↕ volgorde).',
+      let: 'Werkt slepen met een echte muis (alleen nagebootst getest)? Kost de kolom te veel ruimte (LUFS en racks vallen weg)? (S11-3)' },
+    { id: 'tg-slim', doe: 'Typ in het zoekveld #dub bpm:70-90 grid:zeker en druk + ✦ (slimme categorie). Tag daarna een passend nummer met dub.',
+      let: 'Staan de chips onder het zoekveld, en komt het nieuwe nummer vanzelf in de slimme categorie? Mis je mappen in mappen? (S11-1)' },
+    { id: 'tg-snel', doe: '⋯ bij een tag: snel 1. Kies een nummer, alt+1 (aan) en nog eens (uit). Wis daarna een proefcategorie: ⋯, wis, tweede klik.',
+      let: 'Welke acht snel-tags wil je, en op welke knop (APC of Maschine)? Weg is weg (alleen de backup heeft hem nog): goed? (S11-5, S11-9)' },
+    { id: 'tg-kaart', doe: 'Library, tab KAART: kies een krat en druk → categorie. Haal een nummer van die krat binnen en druk nog eens → categorie.',
+      let: 'Staan de nummers die binnen zijn erin, in kratvolgorde, en komt de tweede keer alleen het nieuwe erbij? Een kopie goed, of liever een die meeloopt? (S11-2)' },
+    { id: 'tg-set', doe: 'Planvenster (plan): rechts bij "uit…" je slimme categorie, of "het filter van de library nu". Dan maak set.',
+      let: 'Wordt de selectie die nummers, in hun volgorde? Energie: dezelfde regel voor het filter energie: en de boog van maak set? (S11-7)' },
+    { id: 'tg-maschine', doe: 'Met de hub en een werkruimte met "stukken": ["indeling-voorbeeld"]: kies een filter in de library, Maschine BROWSE; SHIFT + ◄ ► bij het wiel = categorie, SHIFT + ENTER = filter leeg.',
+      let: 'Toont de kop van het linkerscherm het filter (@warm #dub), en bladert het wiel in die categorie? Deze knoppen overnemen, of liever andere? (S11-6)' },
+    { id: 'tg-ipad', doe: 'iPad gekoppeld met het vak tags (wd-vakken). Track 1 speelt: druk snel-tag 1 op de iPad, en kijk in de library op de Mac.',
+      let: 'Heeft het nummer op de focus-track de tag gekregen (en weer af bij de tweede druk)? Genoeg, of wil je op de iPad zelf een nummer uit de lijst aanwijzen? (S11-4)' },
   ] },
 
   // ---- Eerder werk (vóór 6 okt): als er tijd over is ------------------------------

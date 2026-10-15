@@ -326,6 +326,25 @@ vijf keer overvloeien en één filter-uit (uit de jungle-piek, waar het grid zek
 Niet getest: met Clay's echte library in zijn Chrome (streaming, lange mixen,
 seek naar een beginpunt midden in een uur), met de APC, op de M1. Niet beluisterd.
 
+## 6b. Een set waar Clay live bij mixt (spoor S9, 14 okt)
+
+Volledig in `docs/PLAN-SET.md` §4. Wat de automaat erbij kreeg (`test/auto-set.test.mjs`):
+- **Tracks van de automaat** (`plan.tracks.auto`): hij laadt, start en mixt alleen daar; na een
+  overname wacht hij alleen op ZIJN tracks. Zonder `tracks` kiest hij zelf, maar **nooit een track
+  waar Clay de laatste 2 minuten iets aan deed** (`CLAY_RECENT`, elke `track.N.*` op de bus van
+  iemand anders dan de automaat) en nooit een track met een laag. AU4 is daarmee beantwoord.
+- **GO** (`go: 'wacht'`, `plan.go`): klaarzetten zoals altijd, beginnen pas na GO; zonder GO op
+  het laatste moment dat de overgang nog past (`_goUiterst`), met een melding. Nooit stilte.
+- **Buiten plan / terug** (`plan.buiten`, `plan.terug`): los laten (een lopende overgang eerst
+  af), en terug = wat het hardst klinkt wordt de hoofdtrack. Ook uit "jij mixt" (overgenomen).
+- **Lagen**: 30 s vooraf laden op een track van Clay (fader dicht), op zijn moment (sectie of tijd,
+  op de POSITIE van de hoofdtrack) starten (op de maat met sync als beide grids zeker zijn), de
+  fader in 4 maten naar 0,8, na `duur` weer dicht. Raakt Clay de track aan: de laag is van hem.
+  Sampler en patroon: op het moment de action, anders niets.
+- **Nooit stilte na een overname**: speelt er helemaal niets meer (ook niet op Clay's tracks), dan
+  gaat hij meteen verder met de set.
+- Actions `plan.*` met `log: 'overslaan'`: terugspelen herhaalt wat de automaat deed, niet de knop.
+
 ## 7. Bekende grenzen (fase 1)
 
 - Fades zijn sinds 2 okt (A7) glijbeurten: rechte stukken van ~0,4 s op de
@@ -363,4 +382,5 @@ seek naar een beginpunt midden in een uur), met de APC, op de M1. Niet beluister
   zesde grid-modus (geen fragment: de auto-DJ hangt niet aan een vlag), zie §4.
 - **AU2 👂** Klinkt overvloeien in 24 s goed bij jouw muziek, of langer (32–48 s)?
 - **AU3 👂** Moet "nu" bij beatloos echt meteen, of 4 s later zodat je het ziet aankomen?
-- **AU4 💬** Mag de automaat tracks laden op een lege track als jij daar straks iets wilt? (Nu: eerst zijn eigen twee, dan een lege.)
+- ~~**AU4 💬** Mag de automaat tracks laden op een lege track als jij daar straks iets wilt?~~
+  S9: `tracks` per plan, en zonder: nooit een track die je de laatste 2 minuten aanraakte (§6b).

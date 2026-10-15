@@ -312,7 +312,7 @@ overschrijven, zoals plannen en patronen.
       "label": "FX", "kleur": "violet",
       "apc40mk2":     { "grid": "fx", "device": "rack" },
       "maschine-mk2": { "pads": "worpen", "pagina": "rack", "wiel": "rack", "scherm": ["rack", "super"] },
-      "schermen": { "hoofd": { "werkvak": "paneel:super", "rijen": ["master"] }, "ipad": { "vakken": ["paneel:super", "kaart"] } }
+      "schermen": { "hoofd": { "werkvak": "fx", "rijen": ["master"] }, "ipad": { "vakken": ["fx", "kaart"] } }
     },
     "stems": {
       "label": "STEMS", "kleur": "zeegroen",
@@ -757,6 +757,23 @@ bestanden aanraken. Geen gedrag verandert.
   aanhaker die gooit geeft één melding en de rest start.
 - `renderblok.test.mjs`: gouden hash en 0 GC ongewijzigd.
 
+**Gebouwd (14 okt, tak `werk/S0`, `docs/werkruimte/S0.md`).** Wat anders werd dan hierboven:
+- `Deck.tijdlijn()` geeft ook `vorig` (het segment dat tot een geplande sprong met keylock nog
+  speelt; zonder klopt `positieIn` dan niet). Op een BufferBron (de reserve) `null`.
+- `ctx.renderloop` is `{ stap(naam, fn) }`: een eigen requestAnimationFrame in `aanhakers.js`,
+  naast `renderloop.js` (dat is van S7), die alleen loopt als er een stap is.
+- De acht panelen: twee regels elk (de import van `rijen.js` en de aanmelding).
+- `alleenScherm` werkt in een Mapping met `metaOf`; app.js zet die op de APC-, Maschine- en
+  Xboard-mapping, en na de aanhakers loopt `weigerAlleenScherm()` alles nog eens langs (hun
+  actions bestaan pas na het laden). `set()` geeft dan null.
+- `voegMapjeToe` alleen in een bestaande groep met mapjes (`device`, `grid`). Een NIEUWE groep
+  (`houd` uit B5, Maschine `pads`/`pagina`) kan nog niet: de stand per groep rekent de
+  constructor van Lagen uit. Dat hoort bij S4 (lagen.js in golf 2) of S6.
+- `meta.overneem` zonder track in de id (bv. `super.1`) telt als "raakt elke overgang", zoals de
+  crossfader.
+- terugspelen.js en automaat.js lezen de meta via `metaOf` uit actions.js (als standaard; een
+  test kan een eigen meegeven: `maakPlan(regels, { metaOf })`, `new Automaat({ metaOf })`).
+
 ---
 
 #### S1 — Precisie (golf 2)
@@ -828,6 +845,29 @@ sync-drempel), `mappings/stukken/uitlijn.json` (nieuw), `test/precisie.test.mjs`
   tikken per seconde.
 - `renderblok.test.mjs`: gouden hash en 0 GC ongewijzigd.
 
+**Gebouwd (14 okt, tak `werk/S1`, `docs/werkruimte/S1.md`).** Wat anders werd dan hierboven:
+- `Deck.beatjump` had al een optionele lengte (een getal); er kwam `{ tellen }` bij. Zonder lengte
+  blijft het `sprongTellen`.
+- `phase.offset` duwt de afstand op een CIRKEL (`omtrek(v − read)`): over de rand van de ring gaat
+  hij rond, en dezelfde v twee keer duwt maar één keer. De read telt mee wat nog niet ingegaan is.
+- De Duwer voert de eerste tik pas na 15 ms uit (anders 8 sprongen in 100 ms in plaats van ≤ 7).
+- Vaste beatjumps en op de 1 gaan ook door de Duwer (`sprong`): met keylock wachten ze op een
+  geplande sprong die nog onderweg is. Ze en ±1 ms hebben ook `overneem: true`.
+- 5 ms en 1 ms zijn wat je hoort (× rate). De maatgever is `syncMaster()`: speelt er niets, dan de
+  eerste andere track met een grid (zoals sync); read null alleen op de maatgever zelf of zonder.
+- Duoklik: hoog = de controleklik op de track zelf (met zijn cue), laag = de maatgever (zoals de
+  opdracht hierboven; A6 zei het omgekeerd). Een ander deck controleren zet hem uit.
+- De headless meting rendert offline (OfflineAudioContext) met per deck een eigen kanaal, en meet
+  de sprong als de grootste tweede afgeleide tegen dezelfde muziek zonder duwen.
+- Het stuk `uitlijn.json` is een VOORBEELD (`"voorbeeld": true`, afspraak met Clay 14 okt: hij maakt
+  de knoppenverdeling zelf); hoe hij het invult: `docs/verslagen/2026-10-14/werk-S1.md` "Zelf invullen".
+- Review ronde 1: de fasemeters hebben GEEN `takeover: 1` (de standaard 0,02 van endless): met 1 gaf
+  de eerste tik na een jog of sync een sprong van ~30 ms als de APC zijn knopstand gelijkzet met de
+  ring. Het stuk heeft een 21e regel: ⇧ Lock in de grid-modus (`edit.aan`) blijft slot.
+- Terugspelen: `nummer: true` in de meta (terugspelen.js `nummerNodig`, een aanhaker naast
+  NUMMER_NODIG, zoals `log: 'overslaan'` naast OVERSLAAN): duwen, jog, op de 1 en de vaste beatjumps
+  op een track zonder zijn nummer van toen worden overgeslagen.
+
 ---
 
 #### S2 — De uitlijnweergave (golf 2)
@@ -879,6 +919,16 @@ Kijk vóór je `src/engine/tellen.js` nodig hebt of `faseTussen` er al is; zet h
   hoofdvenster < 1 beeld per seconde; de getallen in het DOM kloppen met `engine.faseVerschil`
   binnen 0,5 ms; `uitlijn.html` maakt geen AudioContext en vraagt geen MIDI.
 - `regels.test.mjs`: `src/uitlijn/reken.js` zonder DOM en zonder imports uit ui/control/server.
+
+**Gebouwd (14 okt, tak `werk/S2`, `docs/werkruimte/S2.md`).** Wat anders werd dan hierboven:
+- De knop "uitlijn" staat achteraan de transportrij van de focus-track (de bovenbalk had in rust
+  nog 4 px over op 1440 px); tot S3 het werkvak vult opent hij het losse venster.
+- Een werkruimte plaatst de weergave met een VAKNAAM (data): `uitlijn` (pagina), `uitlijn-strook`,
+  `uitlijn-vouw`, of `uitlijn:<vorm>:<maten>` (bv. `uitlijn:pagina:1`). `vakVorm(naam)` in
+  `teken.js`, `varveUitlijn.toonVak(el, naam)` en `varveUitlijn.open(naam)`; `uitlijn.html?vorm=&maten=`.
+- `faseTussen` staat in `reken.js` (`src/engine/tellen.js` had hem niet); de engine is niet geraakt.
+- Een track die STIL staat wordt getekend alsof hij nu zou starten, vastgemaakt aan de speelkop:
+  zo zie je ook in pauze waar zijn tellen vallen.
 
 ---
 
@@ -960,6 +1010,23 @@ voorbeelden (punt 1 en 6).
   werk-balk zichtbaar met `apc-alleen`, verborgen met `standaard`; ⇧ scene 3 → STEMS-rij open;
   `rijen.mjs` en `kijk.mjs` met `standaard` ongewijzigd groen.
 
+**Gebouwd (14 okt, tak `werk/S3`; `docs/werkruimte/S3.md`, verslag `docs/verslagen/2026-10-14/werk-S3.md`).**
+Zoals hierboven, met drie verschillen:
+- W1 (iPad kijkt alleen): `PUT /api/werkruimtes/<naam>` mag alleen vanaf deze Mac (`ctx.vanDezeMac`, zoals
+  `/api/mixer`); via Tailscale of met een proxykop 403. Lezen mag zoals de rest.
+- Afspraak met Clay (14 okt): de indeling maakt hij zelf. De drie bestanden in
+  `tools/werkruimtes/voorbeelden/` zijn VOORBEELDEN (de kiezer zet er "(voorbeeld)" achter); S3 levert
+  één echt stuk (`basis`: THUIS). `apc-alleen` en `twee-handen` noemen stukken van andere sporen; zolang
+  die er niet zijn: een waarschuwing per stuk, de rest werkt.
+- De Maschine-adapter (`registreerApparaat('maschine-mk2', …)`) levert S6; de toets van vereist/terugval
+  draait met een nep-adapter.
+- Review ronde 1 (14 okt): de werk-balk (30 px, tot 1000 px hoog 26) gaat NIET van de pagina af. Op
+  1440×790 is er met een rij open geen pixel over (main wordt nooit lager dan het focusdeel); zolang de balk
+  staat zet `werk-balk.js` `body.werk-balk-aan` (alleen bij een wissel) en maakt `werk.css` topbar, main en
+  de kolom rechts in het focusdeel samen 30 px lager. Met `standaard` geldt niets daarvan.
+  `tools/headless/werkruimte.mjs` toetst 1440×790 per deel. Peilen elke 2,5 s (niet 3), zodat "binnen 3 s"
+  ook met de rondgang klopt.
+
 ---
 
 #### S4 — Combinaties en effecten (golf 2)
@@ -1026,6 +1093,28 @@ gevallen), `docs/werkruimte/S4.md`.
 - Stukken: 0 botsingen met de standaard; elke action bestaat en heeft een uitleg; zonder deze
   velden is elke bestaande mappingtest groen.
 
+**Gebouwd (14 okt, tak `werk/S4`, `docs/werkruimte/S4.md`).** Clay koos (14 okt): hij bepaalt zelf
+welke effecten, worpen, superknoppen en racks er zijn; S4 bouwde het mechaniek, met per soort
+hooguit één voorbeeld. Wat anders werd dan hierboven:
+- Geen grote standaardindeling: het enige voorbeeld is superknop 1 "dub (voorbeeld)" (zonder knop
+  erop) en de twee stukken zoals beschreven. Zonder werkruimte (of `?stukken=` voor één pagina)
+  verandert er aan de knoppen niets.
+- `mapping.lagen`/`mapping.vars` zijn een getter/setter geworden (de houd-mapjes ervoor, de
+  variabelen van buiten erbij); een lezer terugzetten zet zijn bron terug (apc-kaart.js).
+  `{maatgever}` = `engine.maatgever()` (wat je hoort), niet `syncMaster()`; hij staat alleen in
+  `vars()` van een mapping die hem gebruikt.
+- Druk/latch alleen op een value-action (met `metaOf`); twee drukknoppen op één doel: de eerste
+  stand telt. Stappen naar een `.fwd`/`.back` die niet bestaat doet niets.
+- Houd-register telt per apparaat en mapje (twee knoppen van één apparaat); de eigenaar staat bij
+  het indrukken vast; een andere mapping laden sluit wat die mapping vasthield.
+- Bus-racks: alleen de eigen echo en galm, plus racks met `"bus": true` in `racks/sjablonen.json`
+  (een gewoon insert-rack klinkt op een natte bus droog). Nog geen enkel sjabloon heeft dat: Clay kiest.
+- Solo per stem telt per stem; `fx.mix.hold` zet niet terug na een rackwissel (zoals drukknop()).
+- `zetStuk(doc, { mapping, voegMapjeToe, herbind })` in acties-combi.js zet één stuk (mapjes, dan
+  het fragment `stuk:<naam>`); S3 kan hem gebruiken of zijn eigen doen.
+- Open voor anderen: feedback.js kent de condities van `als` niet in de sleutel van het LED-plan
+  (één regel, `m._alsStand?.()`); regels.test.mjs kent `control/houd.js` nog niet als pure module.
+
 ---
 
 #### S5 — Mapping per apparaat, koppelen overal, toetsenbord als data, Maschine-ijkproef (golf 2)
@@ -1081,6 +1170,23 @@ met een eigen verschil op de server (punt 6, VISIE §5.3), en de hardwareproef v
 - Alle bestaande Maschine-tests en `tools/headless/speelapparaten.mjs` groen.
 - De ijkproef draait headless tegen de nep-Maschine van `speelapparaten.mjs` en geeft voor elke
   control "klopt".
+
+**Gebouwd (14 okt, tak `werk/S5`, `docs/werkruimte/S5.md`).** Wat anders werd dan hierboven:
+- `src/control/maschine.js` is niet aangeraakt: de opslag laadt standaard + verschil in
+  `maschine.mapping` zelf, en het leren hangt vóór `maschine.ontvang` (`vangLeren` in
+  `midi-learn.js`). Het bestand blijft helemaal van S6.
+- Signature van een toets: `key:0:<HID-gebruikscode>` (A = 4 … § = 100) met de toets als label,
+  niet `key:<code>`: `mapping.js` (S4) neemt alleen `type:kanaal:nummer` aan.
+- Niet te koppelen op de Maschine (melding): pads, wiel, ENTER, CONTROL, SHIFT, ◄ ► (pagina en
+  transport), STEP, SCENE, SAMPLING, PATTERN — die handelt `maschine.js` af vóór de mapping.
+- De Xboard-plek geldt voor elk MIDI-keyboard (`noten.js` heeft één mapping voor alle poorten
+  behalve de APC).
+- De server weigert een document voor een ander apparaat (400) op `/api/mapping/<apparaat>`.
+- Erbij: `tools/proef/maschine-ijk.mjs` (headless runner, ook koppelen in de echte mixer), en
+  `test/aanhaakpunten.test.mjs`: "de routebestanden zijn leeg" werd "elke route onder /api/, geen
+  witte-lijstregel die data openzet" (een gevulde stub kon nooit meer groen zijn).
+- `tools/proef/` valt onder `proef/` in `.gitignore` (de datamap): met `git add -f` toegevoegd;
+  `.gitignore` hoort `/proef/` te zeggen (S3).
 
 ---
 
@@ -1153,6 +1259,29 @@ profiel zonder de uitkomst.
   (hub.test).
 - Spiekbrief: één pagina per apparaat × deel, elke regel met tekst.
 
+**Gebouwd (14 okt, tak `werk/S6`; `docs/werkruimte/S6.md`, verslag `docs/verslagen/2026-10-14/werk-S6.md`).**
+Clay koos (14 okt): hij maakt zelf de knoppenverdeling, ook op de Maschine. Dus het mechaniek, en per
+soort één klein voorbeeld. Wat anders werd dan hierboven:
+- De stukken zijn VOORBEELDEN, geen indeling: `maschine-delen` = F1–F8, SHIFT + F1, één padmodus
+  (`worpen`), één pagina (`uitlijn`), één wiel (`jog`); `maschine-houd` = VOLUME en SOLO als houd-knop,
+  MUTE = bypass. Transport, stems, beeld, laden, super, de wielen rack/sectie/mengvorm en TEMPO, SWING
+  en DUPLICATE staan als recept in S6.md §3, niet als regels.
+- Padmodi, pagina's en wielen "uit data" = elke regel met laag `pads.<x>`, `pagina.<x>` of `wiel.<x>`
+  (geen aparte declaratie nodig voor de namen die het model kent; een nieuwe naam als mapje melden).
+  Een houd-regel op een pad wint van elke padmodus, ook SAMPLING en spelen.
+- Het wiel: `stappen` (mapping.js) roept alleen `.fwd`/`.back` aan, dus `rack.next/prev`,
+  `section.next/prev` en `video.mode` kunnen nog geen wielregel zijn (vraag in het verslag).
+- SHIFT + pad in SCENE = als loop alleen in een werkruimte (zonder werkruimte bit voor bit als vroeger).
+- `tekenDeelLabels(delen, actief, { nr, buf })`, `tekenFasescoop(vouw, { buf, y0, h })`,
+  `tekenGetallen(getallen, { buf, y0 })`; met delen schuift elk scherm 9 px omlaag (de onderregel valt weg).
+- De pure helpers voor kaarten en spiekbrief staan in `src/ui/spiekbrief.js`; wat de Maschine nodig
+  heeft (`maakVoorbeeldMaschine`, `maschineRijen`) in `maschine-kaart-plan.js` (hub.test: de
+  Maschine-code blijft in haar eigen keten).
+- "De Maschine weg": de hub meldt een lease-app niet dat één speelapparaat wegviel; de terugval werkt
+  zodra de nep-poort `disconnected` wordt (nu alleen als de hub wegvalt). De proef zet de poort zelf.
+- Gemeten: zonder stukken 0 verschillen op 20 000 berichten; volgorde SOLO + APC 1000/1000, scheefheid
+  p99 17,8 ms; pads in SPELEN en de LED-tik van de Maschine gelijk (± 2%).
+
 ---
 
 #### S7 — Schermen en de iPad (kijken) (golf 3)
@@ -1222,6 +1351,26 @@ headless browsercontext zonder opener), `docs/werkruimte/S7.md`.
   geen AudioContext, geen requestMIDIAccess, geen Web Lock; de mixer laadt `src/paneel/` niet.
 - Met `standaard`: `rijen.mjs`, `kijk.mjs`, `bovenbalk` ongewijzigd groen; het werkvak verborgen.
 
+**Gebouwd (14 okt, tak `werk/S7`, `docs/werkruimte/S7.md`, verslag `docs/verslagen/2026-10-14/werk-S7.md`):**
+het mechaniek zoals hierboven, als data; Clay bepaalt de indeling (geen standaardindeling, alleen
+een proefwerkruimte in de headless proeven). Wat afwijkt of erbij kwam:
+- De mixer laadt `src/paneel/` en de zender pas bij een werkruimte (niet `standaard`), dynamisch in de
+  aanhaker `schermen` (`regels-werk.test.mjs`). Zonder werkruimte: geen timer, geen fetch naar `/api/paneel/`.
+- Vakken op mac-2 en de iPad: `uitlijn…`, `paneel:<id>`, `kaart`, `stand`, `secties`; in het werkvak:
+  `uitlijn…`, `paneel:<id>`, `kaart`. `xy` stuurt twee actions via `{as}` (1 = links–rechts, 2 = onder–boven).
+- De server stuurt 1×/s een `hb`; de pagina toont de rode balk na 2,5 s stilte en verbindt zelf opnieuw
+  (één poging per 0,75 s). Een tweede mixer-tabblad wordt ook op de server genegeerd (tab-id; overnemen
+  pas na 3 s stilte en met een stand). `GET /api/paneel/kijkers` en `/api/paneel/stand` erbij (lezen).
+- De klok: `getOutputTimestamp()` + het gemiddelde verschil met `currentTime` (het midden van de
+  schommeling per audioblok), 1×/s en meteen bij een sprong > 1 ms (hooguit 10×/s).
+- Bouwstenen (Clay 14 okt, op W1): `fx`, `strip`, `mixer`, `stems`, `master`, `sampler` (data in vrij.js, met
+  `:<n>` voor een vaste track) en `library` als vak, op elk scherm en in het werkvak. De xy-pad met `y`,
+  `druk` en `los` (uit het ruwe bestand). De berichtvorm voor invoke en `zetSchrijver` liggen klaar voor S8.
+- De relais zegt `weg` als de mixer bewust stopt (en na 70 s stilte); een pagina die opnieuw verbindt
+  vervangt zijn vorige verbinding.
+- Gemeten in deze container: de hoorbare positie op de nep-iPad haalt de 5 ms NIET aantoonbaar (mediaan
+  ~1,3 ms, max 5–28 ms afhankelijk van de load; `currentTime` springt hier zelf 10,7 ms). Op de Mac meten.
+
 ---
 
 #### S8 — Inrichten, iPad bedienen (na W1), totaalmeting, proef en docs (golf 4)
@@ -1284,13 +1433,41 @@ tests `test/inrichten.test.mjs`, `test/paneel-schrijf.test.mjs` (nieuw),
 
 ---
 
+## Gebouwd (S0–S8, 14 okt 2026)
+
+*Samengevoegd uit `docs/werkruimte/S0–S8.md` (daar staat per spoor alles: bestanden, regels, metingen, wat
+niet getest is). De verslagen staan in `docs/verslagen/2026-10-14/werk-S0…S8.md`. Vragen: VRAGEN blok W.*
+
+| spoor | wat er is | waar | niet getest (kort) |
+|---|---|---|---|
+| **S0** aanhaakpunten | aanhakers per spoor (`src/ui/aanhakers/<spoor>.js`, in vaste volgorde), uitleg per spoor (`src/ui/beschrijf/`), css per spoor, routes per spoor (`server/routes/`), meta-vlaggen (`log`, `beginstand`, `overneem`, `alleenScherm`, `nummer`), mapjes en fragmenten van buiten (`voegMapjeToe`, `vervangFragment`), rijenregister, `Deck.tijdlijn()` | S0.md | — |
+| **S1** precisie | fase duwen (3,81 / 0,48 ms per tik), jog, ±1 ms, vaste beatjump, op de 1, bend-sterkte, duoklik, eerlijker sync-lampje; de Duwer (één sprong per 15 ms) | S1.md, `src/control/acties-precisie.js`, stuk `uitlijn` | de ring als fasemeter (proef A) |
+| **S2** uitlijnweergave | alle tracks in tellen van de maatgever: pagina, vouw, strook; grid Δ, muziek Δ, drift, maat; `uitlijn.html` en het werkvak | S2.md, `src/uitlijn/` | kosten op de M1 |
+| **S3** werkruimte-kern | het model (`src/werk/model.js`, ook de server), de runtime (deel, volgt, onthoud, THUIS, vereist/terugval, vastleggen, peilen), de werk-balk, `/api/werkruimtes` (versie, 409, .versies), voorbeelden standaard · apc-alleen · twee-handen | S3.md | — |
+| **S4** combinaties | druk, latch, lang, stappen, houd-mapjes, `als`, `{tweede}`/`{maatgever}`, worpen, solo per stem, superknoppen, fx-matrix, ⇧ A\|B = thru | S4.md, `src/control/acties-combi.js`, `superknop.js`, `houd.js` | W27–W31 |
+| **S5** mapping per apparaat | een eigen verschil per apparaat (APC, Maschine, Xboard, toetsenbord als data), koppelen overal, de Maschine-ijkproef | S5.md | de ijkproef op de echte Maschine (poort M) |
+| **S6** Maschine-delen en kaarten | padmodi, pagina's en wiel uit data, houd-knoppen, F1–F8, deelnamen en fasescoop op de schermen, spiekbrief, de kaarten in voorbeeldmodus | S6.md, stukken `maschine-delen`, `maschine-houd` | alles op de echte Maschine (poort M) |
+| **S7** schermen en de iPad (kijken) | `werk.html?s=<scherm>`: mac-2 als venster (bedient), de iPad via de server (SSE, regel 3 over het netwerk); vrije panelen en bouwstenen (fx, strip, mixer, stems, master, sampler), kaart, stand, secties, library; het werkvak in de mixer | S7.md, `src/paneel/`, `server/paneel.js`, `src/ui/live-zender.js` | Safari, Wake Lock, Begeleide toegang, wifi; de 5 ms op de iPad |
+| **S8** inrichten, bedienen, totaalmeting | de schrijfweg voor iPad en iPhone (standaard uit = 404, koppelcode → HttpOnly-cookie, Origin, rem 120/s, seq, de mixer beslist per scherm, loslaten binnen 1,5 s, bron in het log), de xy-pad in het model, ✎ inrichten zonder JSON (aanwijzen, zoeker met de top-40, weghalen, op een scherm, toewijzen aan een groep knoppen, terug), de tegel in de Controlekamer, de proefavonden in de speellijst, de totaalmeting | S8.md, `src/paneel/uitvoer.js`, `schrijver.js`, `src/werk/inrichten.js`, `src/controle/bedienen-tegel.js`, `tools/headless/werk-alles.mjs` | de echte iPad/iPhone (cookie op ts.net, vinger, wifi), een echte `tailscale serve`, de Maschine in de totaalmeting |
+
+**De regels die blijven** (ook in CLAUDE.md, sectie "Werkruimte"): met `standaard` is alles bit voor bit
+vandaag; stukken en werkruimteregels alleen op vrije sleutels of in eigen mapjes; een deel zet nooit een
+klank; uitzonderingen als meta-vlag; elk spoor raakt alleen zijn eigen stub; de iPad doet nooit opnemen,
+log, mappings, werkruimtes, library of laden; wat op de ms moet kloppen niet van buiten de Mac (tenzij het
+scherm het aanzet).
+
+**Wat er na de proef komt**: deel E2 hieronder, plus de opties in het verslag van S8.
+
+---
+
 ## Deel E: vragen, volgende versie, aannames
 
 ### E1. Vragen voor Clay (blok W)
 
 - **W1** Mag de iPad de mixer **bedienen** (de eerste schrijfweg van buiten de Mac, alleen via de
   tailnet, met een koppelcode en een schakelaar in de Controlekamer), of eerst alleen kijken? Tot
-  je ja zegt, kijkt hij alleen.
+  je ja zegt, kijkt hij alleen. **Beantwoord 14 okt: ja** (en een xy-pad op de iPhone); gebouwd in S8.
+  Alle open vragen van S0–S8: docs/VRAGEN.md blok W.
 - **W2** Hoe staan de controllers op tafel, en met welke hand doe je wat? Het ontwerp gaat uit
   van: de APC voor beide handen bij een overgang (de kern), de Maschine voor één hand naast de
   laptop. Staat de Maschine links of rechts, en ben je links- of rechtshandig? Dat bepaalt

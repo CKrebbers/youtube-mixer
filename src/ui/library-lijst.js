@@ -3,6 +3,8 @@ import { esc } from './dom.js';
 import { gridStatus, libraryBpm, STATUS_TEKST } from './grid-strook.js';
 import { libraryToon } from './toon-weergave.js';
 import { stemsCel } from './stems-weergave.js';
+import { filterNaarQuery } from '../library/indeling.js';
+import { rijChipsHtml } from './library-indeling.js';
 
 /*
  * De lijst van de library, voor 5000 nummers net zo goed als voor 50.
@@ -80,10 +82,18 @@ export function paginasVoor(van, tot, grootte = PAGINA) {
   return uit;
 }
 
-/** De URL voor één pagina. */
-export function lijstUrl({ zoek = '', sorteer, richting }, pagina, grootte = PAGINA) {
-  const q = new URLSearchParams({ sorteer, richting, van: String(pagina * grootte), aantal: String(grootte) });
+/**
+ * De URL voor één pagina. `filter` (spoor S11, src/library/indeling.js) gaat mee als cat/tag/of/niet/
+ * bpm/toon/grid/stems/energie; `plek: true` = sorteren op de volgorde van de categorie (sorteer=plek;
+ * de server zegt 400 zonder gewone categorie). Zonder filter: precies de oude URL.
+ */
+export function lijstUrl({ zoek = '', sorteer, richting, filter = null, plek = false }, pagina, grootte = PAGINA) {
+  const q = new URLSearchParams({ sorteer: plek ? 'plek' : sorteer, richting: plek ? 'op' : richting, van: String(pagina * grootte), aantal: String(grootte) });
   if (zoek) q.set('zoek', zoek);
+  if (filter) {
+    const f = filterNaarQuery({ ...filter, zoek: undefined });
+    for (const [k, v] of f) q.set(k, v);
+  }
   return `/api/library?${q}`;
 }
 
@@ -274,7 +284,8 @@ export const KOLOMMEN = [
   {
     id: 'titel', kop: 'titel', breedte: 'minmax(160px, 1fr)', sorteer: 'titel', klasse: 'lib-titel',
     hint: (t) => t.url,
-    cel: (t) => `<i class="lib-bron ${esc(t.bron || 'web')}">${esc(BRON_LABEL[t.bron] || 'web')}</i>${esc(t.titel)}`,
+    // De tags (spoor S11) als chips achter de titel: geen kolom erbij, de lijst past zo op 1440.
+    cel: (t, nu, staat) => `<i class="lib-bron ${esc(t.bron || 'web')}">${esc(BRON_LABEL[t.bron] || 'web')}</i><bdi class="lib-titeltekst">${esc(t.titel)}</bdi>${rijChipsHtml(t, staat?.tagKleuren)}`,
   },
   { id: 'uploader', kop: 'artiest', breedte: '130px', klasse: 'lib-uploader', cel: (t) => esc(t.uploader || '') },
   { id: 'duur', kop: 'duur', breedte: '52px', sorteer: 'duur', klasse: 'lib-duur', cel: (t) => esc(fmtTime(t.duur || 0).replace(/\.\d+$/, '')) },

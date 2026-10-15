@@ -80,9 +80,11 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
       ? `<optgroup label="van dit nummer">${rackCache[deckId].map((x) => `<option value="${x.id}">${esc(x.naam)}</option>`).join('')
         || '<option disabled>nog geen</option>'}</optgroup>`
       : '';
-    const kant = sjablonen.length
-      ? `<optgroup label="kant-en-klaar">${sjablonen.map((r, i) => `<option value="s:${i}">${esc(r.name)}</option>`).join('')}</optgroup>`
-      : '';
+    const groep = (label, filter) => {
+      const opties = sjablonen.map((r, i) => (filter(r) ? `<option value="${esc(herkomstVan(r, i))}">${esc(r.name)}</option>` : '')).join('');
+      return opties ? `<optgroup label="${label}">${opties}</optgroup>` : '';
+    };
+    const kant = groep('kant-en-klaar', (r) => !r._eigen) + groep('eigen sjablonen', (r) => r._eigen);
     sel.innerHTML = '<option value="" disabled>— niet bewaard —</option>' + eigen + kant;
     volgRackKiezer(deckId);
   }
@@ -94,10 +96,84 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
    * wordt nooit overschreven.
    */
   let sjablonen = [];
+  let ingebouwd = [], eigen = [], eigenVersie = null;
+  // Een kant-en-klaar sjabloon heet "s:<nr>" (vast: de kant-en-klare staan vooraan en veranderen niet
+  // tijdens een sessie); een eigen sjabloon "eigen:<naam>" (niet "e:": dat is op de master al "los effect") (S10): wissen of bijzetten verschuift de nummers
+  // van de eigen, en dan wees de herkomst van een andere track naar het verkeerde sjabloon.
+  const herkomstVan = (r, i) => (r._eigen ? `eigen:${r.name}` : `s:${i}`);
+  const sjabloonVan = (h) => {
+    if (typeof h !== 'string') return null;
+    if (h.startsWith('eigen:')) return sjablonen.find((r) => r._eigen && r.name === h.slice(6)) ?? null;
+    if (h.startsWith('s:')) { const r = sjablonen[Number(h.slice(2))]; return r && !r._eigen ? r : null; }
+    return null;
+  };
+  // Eigen sjablonen (spoor S10, /api/sjablonen) staan achter de kant-en-klare, in dezelfde lijst:
+  // zo blijft "s:<nr>" van een kant-en-klaar sjabloon hetzelfde, en bladert de APC ook door de eigen.
+  const zetLijst = () => { sjablonen = [...ingebouwd, ...eigen.map((r) => ({ ...r, _eigen: true }))]; vulRackKiezer(engine.focus); };
   fetch('racks/sjablonen.json')
-    .then((r) => (r.ok ? r.json() : { racks: [] }))
-    .then((d) => { sjablonen = d.racks || []; vulRackKiezer(engine.focus); })
+    .then((r) => (r.ok ? r.json() : leesWeg(r).then(() => ({ racks: [] }))))
+    .then((d) => { ingebouwd = d.racks || []; zetLijst(); })
     .catch((err) => console.warn('[rack] sjablonen niet geladen:', err.message));
+  async function haalEigen() {
+    try {
+      const r = await fetch('/api/sjablonen');
+      if (!r.ok) { await leesWeg(r); return; }
+      const j = await r.json();
+      eigen = j.racks || []; eigenVersie = j.versie ?? null;
+      zetLijst();
+    } catch (err) { console.warn('[rack] eigen sjablonen niet geladen:', err.message); }
+  }
+  haalEigen();
+
+  /**
+   * Wat er op deze track klinkt als eigen sjabloon bewaren (spoor S10). Dezelfde naam als een
+   * eigen sjabloon = daaroverheen; een andere naam = een nieuw (zo dupliceer je er een). Na het
+   * bewaren is het nieuwe sjabloon de herkomst: de kiezer staat erop.
+   */
+  async function bewaarSjabloon(deckId, naam) {
+    const fx = engine.deck(deckId).fx;
+    const rack = { ...fx.naarJSON(), name: String(naam || fx.rackNaam || '').trim() };
+    // Een nieuw sjabloon vanaf een ander erft zijn uitleg niet: die beschrijft het andere (review S10).
+    const bron = sjabloonVan(fx.herkomst);
+    if (bron && bron.name !== rack.name && rack.uitleg === bron.uitleg) delete rack.uitleg;
+    const zend = () => fetch('/api/sjablonen', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rack, versie: eigenVersie }) });
+    let r = await zend();
+    let j = await r.json().catch(() => null);
+    // Intussen ergens anders veranderd (een tweede venster, Claude): de lijst van nu, en één keer opnieuw.
+    if (r.status === 409 && j?.racks) {
+      eigen = j.racks; eigenVersie = j.versie ?? null; zetLijst();
+      // Is er intussen (elders: een ander venster, Claude) een sjabloon met DEZE naam gekomen, dan
+      // niet stil overschrijven: de editor vraagt bij de volgende klik (review S10, ronde 2).
+      if (eigen.some((x) => x?.name === rack.name)) throw new Error(`er is intussen een eigen sjabloon "${rack.name}": klik nog eens om het te vervangen`);
+      if (!/kant-en-klaar/.test(j.fout || '')) { r = await zend(); j = await r.json().catch(() => null); }
+    }
+    if (!r.ok) throw new Error(j?.fout || `${r.status}`);
+    eigen = j.racks || []; eigenVersie = j.versie ?? null;
+    zetLijst();
+    if (sjablonen.some((x) => x._eigen && x.name === rack.name)) { fx.herkomst = `eigen:${rack.name}`; fx.hernoem(rack.name); volgRackKiezer(deckId); }
+    return { naam: rack.name };
+  }
+
+  /** Een eigen sjabloon wissen (spoor S10). Wat er klinkt blijft klinken, maar is niet meer bewaard. */
+  async function wisSjabloon(naam) {
+    const r = await fetch('/api/sjablonen/wis', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ naam, versie: eigenVersie }) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) { if (j?.racks) { eigen = j.racks; eigenVersie = j.versie ?? null; zetLijst(); } throw new Error(j?.fout || `${r.status}`); }
+    for (const id of DECK_IDS) {
+      const fx = engine.deck(id).fx;
+      if (fx.herkomst === `eigen:${naam}`) fx.herkomst = null;
+    }
+    eigen = j.racks || []; eigenVersie = j.versie ?? null;
+    zetLijst();
+  }
+
+  /** Is wat er op deze track klinkt een eigen sjabloon? Dan zijn naam, anders null. */
+  const eigenSjabloon = (deckId) => {
+    const h = engine.deck(deckId).fx.herkomst;
+    return typeof h === 'string' && h.startsWith('eigen:') && sjabloonVan(h) ? h.slice(6) : null;
+  };
 
   function volgRackKiezer(deckId) {
     const sel = fxEl(deckId, '.fx-rack');
@@ -139,8 +215,8 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     const kiezer = rij.querySelector('.fx-rack');
     kiezer.addEventListener('change', () => {
       const id = engine.focus;
-      if (kiezer.value.startsWith('s:')) {
-        const sjabloon = sjablonen[Number(kiezer.value.slice(2))];
+      if (kiezer.value.startsWith('s:') || kiezer.value.startsWith('eigen:')) {
+        const sjabloon = sjabloonVan(kiezer.value);
         if (sjabloon) engine.deck(id).fx.zetRack(sjabloon, { herkomst: kiezer.value }).fouten.forEach((f) => console.warn(`[rack ${id}]`, f));
         naRack(id);
         kiezer.blur();
@@ -188,6 +264,11 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
     effecten: EFFECTEN,
     kanBewaren: (id) => !!deckTrack[id],
     onBewaar: async ({ deckId, naam, alsNieuw }) => bewaarRack(deckId, { naam, alsNieuw }),
+    onBewaarSjabloon: ({ deckId, naam }) => bewaarSjabloon(deckId, naam),
+    eigenNamen: () => eigen.map((r) => r.name),
+    onWisSjabloon: (naam) => wisSjabloon(naam),
+    eigenSjabloon,
+    sjabloonNamen: () => sjablonen.map((r) => r.name),
   });
 
   rij.querySelector('.fx-bewerk').addEventListener('click', () => {
@@ -208,7 +289,7 @@ export function opzetRacks({ engine, staat, naRack = () => {} }) {
   // Door de racks bladeren (APC): eerst die van het nummer, dan de kant-en-klare.
   function rackStap(id, stap) {
     const lijst = [...rackCache[id].map((r) => ({ herkomst: r.id, zet: () => zetRackVan(id, r) })),
-      ...sjablonen.map((r, i) => ({ herkomst: `s:${i}`, zet: () => { engine.deck(id).fx.zetRack(r, { herkomst: `s:${i}` }); naRack(id); } }))];
+      ...sjablonen.map((r, i) => ({ herkomst: herkomstVan(r, i), zet: () => { engine.deck(id).fx.zetRack(r, { herkomst: herkomstVan(r, i) }); naRack(id); } }))];
     if (!lijst.length) return;
     const nu = lijst.findIndex((x) => x.herkomst === engine.deck(id).fx.herkomst);
     lijst[(nu + stap + lijst.length) % lijst.length].zet();

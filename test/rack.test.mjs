@@ -223,22 +223,51 @@ console.log('\nkant-en-klare racks');
   const { EFFECTEN, effectVan } = await import('../src/engine/fx.js');
   const doc = JSON.parse(readFileSync(new URL('../racks/sjablonen.json', import.meta.url), 'utf8'));
   ok('er zijn sjablonen', Array.isArray(doc.racks) && doc.racks.length >= 3);
+  // Een doel in de keten (`slot.param` of `slot._nat`) bestaat echt; `plek.K` wijst naar een
+  // knop van dit rack (en niet naar zichzelf); `mod.N.diepte` naar een modulator (spoor S10).
+  const doelBestaat = (rack, t, vanPlek = null) => {
+    if (R.isPlekDoel(t)) return Number(t.slice(5)) !== vanPlek && rack.macros.some((m) => m.place === Number(t.slice(5)));
+    if (R.isModDoel(t)) return Number(t.split('.')[1]) <= (rack.mods || []).length;
+    const [slot, p] = t.split('.');
+    const node = rack.chain.find((n) => n.slot === slot);
+    return !!node && (p === '_nat' || effectVan(node.type).params.includes(p));
+  };
   for (const data of doc.racks) {
     const { rack, fouten } = R.leesRack(data, { bekendType: (t) => !!effectVan(t) });
     ok(`${data.name}: leest zonder fouten`, fouten.length === 0);
     const paramsBestaan = rack.chain.every((n) => Object.keys(n.params).every((p) => effectVan(n.type).params.includes(p)))
-      && rack.macros.every((m) => m.links.every((l) => {
-        const [slot, p] = l.target.split('.');
-        return effectVan(rack.chain.find((n) => n.slot === slot).type).params.includes(p);
-      }));
-    ok(`${data.name}: elke parameter bestaat echt`, paramsBestaan);
+      && rack.macros.every((m) => m.links.every((l) => doelBestaat(rack, l.target, m.place)))
+      && (rack.mods || []).every((m) => (m.doelen || []).every((d) => doelBestaat(rack, d.target)));
+    ok(`${data.name}: elke parameter bestaat echt (ook de doelen van knoppen en modulators)`, paramsBestaan);
     const doelen = rack.macros.flatMap((m) => m.links.map((l) => l.target));
     ok(`${data.name}: geen parameter op twee knoppen (dan wint er stil één)`, new Set(doelen).size === doelen.length);
-    const bijStart = R.resolveMacros(rack, {});
+    const bijStart = R.resolveMacros(rack, R.stuurPlekken(rack, {}).standen);
     const filters = rack.chain.filter((n) => n.type === 'filter').map((n) => `${n.slot}.freq`);
-    ok(`${data.name}: filter staat open bij de beginstand`, filters.every((t) => Math.abs((bijStart.get(t) ?? 0.5) - 0.5) < 1e-9));
+    ok(`${data.name}: filter staat open bij de beginstand`, filters.every((t) => Math.abs((bijStart.get(t) ?? rack.chain.find((n) => `${n.slot}.freq` === t).params.freq ?? 0.5) - 0.5) < 1e-9));
     ok(`${data.name}: elke knop doet iets`, rack.macros.every((m) => m.links.some((l) => l.from !== l.to)));
+    if (data.uitleg === undefined) continue;
+    // De sjablonen van spoor S10 (met een uitleg) moeten ook:
+    ok(`${data.name}: een naam en een uitleg van één of meer zinnen`, typeof data.name === 'string' && data.name.length > 2 && data.uitleg.length > 40);
+    ok(`${data.name}: elke knop een naam`, rack.macros.every((m) => typeof m.label === 'string' && m.label.length > 1 && !/^plek /.test(m.label)));
+    ok(`${data.name}: xy wijst naar twee knoppen van dit rack`, Array.isArray(rack.xy) && rack.xy.every((k) => rack.macros.some((m) => m.place === k)));
+    // Veilige beginstand: wat een echo, galm, kam, frequentieschuif of band erin mengt staat bij de
+    // (De compressor van Master-lijm niet: die hoort op de master en pakt in de beginstand alleen pieken.)
+    // beginstand van de knoppen dicht (de MIX van de slot mag dan open, je hoort nog niets vreemds).
+    // Een delay heeft geen eigen meng: dan moet zijn droog/nat (`_nat`) er zijn en dicht staan.
+    const stand = (t) => (bijStart.has(t) ? bijStart.get(t) : (() => { const [slot, p] = t.split('.'); const n = rack.chain.find((x) => x.slot === slot); return p === '_nat' ? (n.meng ?? 1) : (n.params[p] ?? effectVan(n.type).standaard[p]); })());
+    const nat = rack.chain.filter((n) => ['delay', 'reverb', 'kam', 'freqschuif', 'flanger', 'chorus', 'pitch', 'ringmod', 'klinker', 'autowah', 'band'].includes(n.type)).map((n) => {
+      const eff = effectVan(n.type);
+      const v = eff.params.includes('meng') && n.meng === undefined ? stand(`${n.slot}.meng`) : Math.min(stand(`${n.slot}._nat`), eff.params.includes('meng') ? stand(`${n.slot}.meng`) : 1);
+      return { slot: n.slot, type: n.type, v };
+    });
+    ok(`${data.name}: beginstand droog voor ${nat.map((x) => `${x.type} ${Math.round(x.v * 100)}%`).join(', ') || 'geen nat effect'}`, nat.every((x) => x.v <= 0.05));
+    // Modulators staan in de beginstand stil (diepte 0, of een knop zet hem op 0).
+    const modDiepte = R.stuurPlekken(rack, {}).diepte;
+    ok(`${data.name}: modulators staan in de beginstand stil`, (rack.mods || []).every((m, i) => (modDiepte.has(i + 1) ? modDiepte.get(i + 1) : m.diepte ?? 1) === 0));
   }
+  const nieuw = doc.racks.filter((r) => r.uitleg !== undefined);
+  ok(`minstens twintig sjablonen van spoor S10 (${nieuw.length})`, nieuw.length >= 20);
+  ok('namen uniek', new Set(doc.racks.map((r) => r.name)).size === doc.racks.length);
   ok('alle effecttypen bestaan', doc.racks.every((r) => r.chain.every((n) => EFFECTEN.some((e) => e.id === n.type))));
 }
 

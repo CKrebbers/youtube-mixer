@@ -4,10 +4,16 @@ import { libraryToon, KIEZER } from './toon-weergave.js';
 import { ToonKaart, camelot, kortNaam, volleNaam } from '../engine/toonsoort.js';
 import {
   RIJ_H, PaginaCache, lijstUrl, zichtbaar, volgendeSortering, leesSortering, bewaarSortering,
-  kolomSjabloon, kopHtml, cellenHtml, standaardOpslag, stemsCelHtml, klemKeuze, bladerVenster,
+  kolomSjabloon, kopHtml, cellenHtml, standaardOpslag, stemsCelHtml, klemKeuze, bladerVenster, KOLOMMEN,
 } from './library-lijst.js';
+
+/** Zoveel nummers kiest cmd+A hooguit (= MAX_IDS van taggen in één keer, src/library/indeling.js). */
+export const MAX_ALLES = 5000;
+/** Welke kolommen weggaan zolang de kolom INDELING open staat (spoor S11). */
+export const SMAL_WEG = ['lufs', 'racks'];
 import { IngestStrook } from './ingest-strook.js';
 import { pastBij, pastBijKop, tempoTekst } from './past-bij.js';
+import { IndelingPaneel, NUMMERS_MIME, leesSleep } from './library-indeling.js';
 import { leesWeg } from '../lib/antwoord.js';
 
 /** Wat de upload aanneemt; gelijk aan BESTAND_EXT in server/links.js. */
@@ -49,6 +55,11 @@ export class LibraryPanel {
     this.gekozen = 0;            // de rij waar je met een controller op staat (bladeren, docs/MASCHINE.md §5e)
     this.gekozenId = null;       // ...en welk NUMMER dat is: een ingest bovenaan schuift de rijen op
     this.zoek = '';
+    // Spoor S11 (docs/LIBRARY-TAGS.md): wat er gekozen is (cmd-klik, shift-klik) om in één keer te
+    // taggen of in een categorie te zetten, en of de lijst op de volgorde van de categorie staat.
+    this.selectie = new Set();
+    this._anker = null;          // de rij van de laatste klik (shift-klik = een reeks vanaf hier)
+    this.plek = false;
     // De lijst: pagina's van de server, alleen zichtbare rijen getekend (library-lijst.js).
     this.opslag = opslag;
     this.sortering = leesSortering(opslag);
@@ -120,14 +131,46 @@ export class LibraryPanel {
       root.classList.remove('drag');
       this.uploadBestanden([...e.dataTransfer.files]);
     });
-    // Zoeken op de server: even wachten tot je uitgetypt bent, en dan bovenaan beginnen.
+    // Zoeken op de server: even wachten tot je uitgetypt bent, en dan bovenaan beginnen. De tekst is
+    // ook het filter (de zoekregel: #tag -#tag @categorie bpm:70-90 …, src/library/indeling.js).
     let zoekTimer = null;
     this.el.zoek.addEventListener('input', () => {
       clearTimeout(zoekTimer);
-      zoekTimer = setTimeout(() => {
-        const zoek = this.el.zoek.value.trim();
-        if (zoek !== this.zoek) { this.zoek = zoek; this.ververs({ bovenaan: true }); }
-      }, 120);
+      zoekTimer = setTimeout(() => this._zoekNu(this.el.zoek.value.trim()), 120);
+    });
+    this.el.zoek.title = 'zoeken, en filteren: #tag  -#tag  #a|b  @categorie  bpm:70-90  toon:8A  grid:zeker  stems  energie:hoog';
+    // De indeling (library-indeling.js): de kolom links en de tagbalk. Hij praat met het paneel via dit.
+    this.indeling = new IndelingPaneel({ root, opslag, panel: {
+      // Wat er in het veld STAAT (ook als het wachten op uitgetypt nog loopt): daar bouwt een klik op.
+      zoekTekst: () => this.el.zoek.value.trim(),
+      zetZoekTekst: (t) => { clearTimeout(zoekTimer); this.el.zoek.value = t; this._zoekNu(t.trim()); },
+      doelIds: () => this.doelIds(),
+      selectieGrootte: () => this.selectie.size,
+      selectieBuiten: () => this.selectieBuiten(),
+      track: (id) => this._track(id),
+      ververs: () => this.ververs(),
+      meld: (tekst, goed) => { this.melding = { tekst, goed }; this.tekenStatus(); },
+      bevestigd: (soort, sleutel) => this._bevestigd(soort, sleutel),
+      naIndeling: () => this._naIndeling(),
+      vraagSleutel: () => this._vraagSleutel(),
+      plekAan: () => this._plekNu(),
+      naKolom: () => this._zetKolommen(),
+      zetPlek: (aan) => { this.plek = !!aan; this._kolomGekozen = !aan; this.tekenKop(); this.ververs({ bovenaan: true }); },
+    } });
+    // Sneltoetsen zolang het paneel open is: alt+T = het tagveld, alt+1…8 = snel-tag (keyboard.js
+    // negeert alles met alt, dus geen botsing met de DJ-toetsen).
+    globalThis.addEventListener?.('keydown', (e) => {
+      if (!this.open || !this.indeling.aan || !e.altKey || e.metaKey || e.ctrlKey || this.root.classList.contains('tab-kaart')) return;
+      if (e.code === 'KeyT') { e.preventDefault(); this.indeling.el.tagveld.focus(); this.indeling.el.tagveld.select(); }
+      const m = /^Digit([1-8])$/.exec(e.code);
+      if (m) { e.preventDefault(); this.indeling.snel(Number(m[1])); }
+    });
+    // cmd+A (ctrl+A) in de lijst, niet in een invoerveld: alle treffers kiezen.
+    globalThis.addEventListener?.('keydown', (e) => {
+      if (!this.open || !this.indeling.aan || !(e.metaKey || e.ctrlKey) || e.altKey || e.code !== 'KeyA' || this.root.classList.contains('tab-kaart')) return;
+      if (e.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+      e.preventDefault();
+      this.kiesAlles();
     });
 
     // "Past bij" (past-bij.js): aan/uit, en laden vanuit die lijst (zelfde tweede klik als de gewone lijst).
@@ -151,8 +194,38 @@ export class LibraryPanel {
     this.el.ruimte = this.el.rijen.querySelector('.lib-ruimte');
     this.el.venster = this.el.rijen.querySelector('.lib-venster');
     root.style.setProperty('--lib-rij-h', `${RIJ_H}px`);
-    root.style.setProperty('--lib-kolommen', kolomSjabloon());
+    this._zetKolommen();
     this.tekenKop();
+    // Slepen (spoor S11): een rij, of wat gekozen is, naar een categorie links; in een categorie op
+    // volgorde ook op een andere rij (= daarvóór zetten).
+    this.el.rijen.addEventListener('dragstart', (e) => {
+      const rij = e.target.closest?.('.lib-rij[data-id]');
+      if (!rij || !e.dataTransfer) return;
+      const id = rij.dataset.id;
+      const ids = this.selectie.has(id) ? this._opVolgorde([...this.selectie]) : [id];
+      e.dataTransfer.setData(NUMMERS_MIME, JSON.stringify(ids));
+      e.dataTransfer.setData('text/plain', ids.map((x) => this._track(x)?.titel ?? x).join('\n'));
+      e.dataTransfer.effectAllowed = 'copyMove';
+      this._sleept = ids;
+    });
+    this.el.rijen.addEventListener('dragend', () => { this._sleept = null; this._markeerDrop(null); });
+    this.el.rijen.addEventListener('dragover', (e) => {
+      const rij = e.target.closest?.('.lib-rij[data-id]');
+      if (!rij || !this._plekNu() || !e.dataTransfer?.types?.includes(NUMMERS_MIME) || this._sleept?.includes(rij.dataset.id)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      this._markeerDrop(rij);
+    });
+    this.el.rijen.addEventListener('drop', (e) => {
+      const rij = e.target.closest?.('.lib-rij[data-id]');
+      this._markeerDrop(null);
+      const cat = this._plekNu();
+      if (!rij || !cat) return;
+      const ids = leesSleep(e);
+      if (!ids || ids.includes(rij.dataset.id)) return;
+      e.preventDefault();
+      this.indeling.inCategorie(cat, ids, { voor: rij.dataset.id });
+    });
     let beeld = 0;
     const volg = () => {
       if (beeld) return;
@@ -163,6 +236,13 @@ export class LibraryPanel {
     if (typeof ResizeObserver === 'function') new ResizeObserver(volg).observe(this.el.rijen);
 
     this.el.rijen.addEventListener('click', (e) => {
+      // Een tagchip in een rij: filter hierop (alt = niet), shift = van dit nummer af.
+      const chip = e.target.closest('button[data-tagchip]');
+      if (chip) {
+        const id = chip.closest('.lib-rij[data-id]')?.dataset.id;
+        if (e.shiftKey && id) return this.indeling.zetTags([id], [chip.dataset.tagchip], false);
+        return this.indeling.wisselTagFilter(chip.dataset.tagchip, e.altKey);
+      }
       const kop = e.target.closest('button[data-sorteer]');
       if (kop) return this.sorteer(kop.dataset.sorteer);
       // Toonsoort: klik op de badge = de kiezer onder die rij, open of dicht.
@@ -212,8 +292,14 @@ export class LibraryPanel {
         return this.verwijder(weg.dataset.weg);
       }
       // Een klik op een rij (niet op een knop) zet de keuze daar: muis en controller wijzen hetzelfde aan.
+      // Cmd/ctrl-klik = erbij of eraf, shift-klik = een reeks (spoor S11: in één keer taggen).
       const rij = e.target.closest('.lib-rij[data-i]');
-      if (rij && !e.target.closest('button, input, select')) { this._zetKeuze(Number(rij.dataset.i)); this.tekenRijen(); }
+      if (rij && !e.target.closest('button, input, select')) {
+        const i = Number(rij.dataset.i);
+        this.kiesRij(i, { erbij: e.metaKey || e.ctrlKey, reeks: e.shiftKey });
+        this.tekenRijen();
+        this.indeling.tekenBalk();
+      }
     });
 
     this.ververs();
@@ -231,6 +317,145 @@ export class LibraryPanel {
   }
 
   get open() { return !this.root.classList.contains('hidden'); }
+
+  // ---- de indeling (spoor S11, docs/LIBRARY-TAGS.md) -------------------------------------------
+
+  /** Een nieuwe zoektekst (= filter): bovenaan beginnen; een andere categorie = op zijn volgorde. */
+  _zoekNu(zoek) {
+    if (zoek === this.zoek) return;
+    const was = this.indeling.lees(this.zoek).filter.categorie ?? null;
+    this.zoek = zoek;
+    const nu = this.indeling.lees(zoek).filter.categorie ?? null;
+    if (nu !== was) { this.plek = nu != null; this._kolomGekozen = false; }
+    this.indeling.teken();
+    this.ververs({ bovenaan: true });
+  }
+
+  /**
+   * De stand van de indeling kwam binnen en het filter betekent nu iets anders (een @categorie in het
+   * veld die nu bestaat, of niet meer): opnieuw, bovenaan. Alleen dan: een nieuwe stand na elke
+   * tag-wijziging mag de lijst niet laten verspringen.
+   */
+  _naIndeling() {
+    if (this.plek === false && this.indeling.lees(this.zoek).filter.categorie != null && !this._kolomGekozen) this.plek = true;
+    this.ververs({ bovenaan: true });
+  }
+
+  /** Het filter van nu (uit het zoekveld). */
+  get filter() { return this.indeling?.aan ? this.indeling.lees(this.zoek).filter : (this.zoek ? { zoek: this.zoek } : {}); }
+
+  /**
+   * De gewone categorie waarvan de lijst nu de volgorde toont (sorteer=plek), of null. Een slimme
+   * die binnen een gewone zoekt: die gewone.
+   */
+  _plekNu() {
+    if (!this.plek) return null;
+    const f = this.filter;
+    const c = this.indeling.categorieen.find((x) => x.id === f.categorie);
+    if (!c) return null;
+    return c.soort === 'gewoon' ? c.id : c.regel?.categorie ?? null;
+  }
+
+  /** De vraag voor de pagina-cache: zoek, filter, sortering. Een nieuwe vraag = een nieuwe generatie. */
+  _vraag() {
+    const { zoek = '', ...filter } = this.filter;
+    return { zoek, filter, ...this.sortering, plek: !!this._plekNu() };
+  }
+
+  _vraagSleutel() { return JSON.stringify(this._vraag()); }
+
+  /** Wat taggen en "→ categorie" raakt: de selectie, anders het gekozen nummer. */
+  doelIds() {
+    if (this.selectie.size) {
+      // Onthouden tot de selectie of de pagina's veranderen: de read van library.quicktag.K vraagt dit elke tik.
+      const sleutel = `${this._selVersie}:${this.cache.gen}:${this.cache.paginas.size}`;
+      if (this._doel?.sleutel !== sleutel) this._doel = { sleutel, ids: this._opVolgorde([...this.selectie]) };
+      return this._doel.ids;
+    }
+    // Alleen een nummer dat je zelf aanwees (klik, of het wiel): na een nieuw filter staat de keuze op
+    // rij 0, en dan zou alt+1 de bovenste rij taggen zonder dat je het vroeg (review S11 b10).
+    if (!this._bewust) return [];
+    const id = this.gekozenId ?? this.cache.rij(this.gekozen)?.id ?? null;
+    return id && this.cache.totaal ? [id] : [];
+  }
+
+  /** Hoeveel van de selectie niet (meer) in de lijst van nu staat (een ander filter, nog niet geladen). */
+  selectieBuiten() {
+    const binnen = new Set(this.cache.geladen.map((t) => t.id));   // één keer, niet per gekozen nummer
+    let n = 0;
+    for (const id of this.selectie) if (!binnen.has(id)) n++;
+    return n;
+  }
+
+  /** Ids in de volgorde van de lijst (een categorie krijgt ze zoals je ze ziet); wat niet binnen is achteraan. */
+  _opVolgorde(ids) {
+    const plek = new Map(ids.map((id) => [id, this.cache.index(id)]));
+    return [...ids].sort((a, b) => (plek.get(a) < 0 ? Infinity : plek.get(a)) - (plek.get(b) < 0 ? Infinity : plek.get(b)));
+  }
+
+  /** Klik op rij i: alleen deze (de selectie leeg), erbij/eraf (cmd), of een reeks vanaf de vorige klik (shift). */
+  kiesRij(i, { erbij = false, reeks = false } = {}) {
+    const id = this.cache.rij(i)?.id;
+    this._bewust = true;
+    this._selVersie = (this._selVersie ?? 0) + 1;
+    if (reeks && this._anker != null) {
+      const [a, b] = [Math.min(this._anker, i), Math.max(this._anker, i)];
+      if (!erbij) this.selectie.clear();
+      let mis = 0;
+      for (let k = a; k <= b; k++) { const t = this.cache.rij(k); if (t) this.selectie.add(t.id); else mis++; }
+      if (mis) { this.melding = { tekst: `${mis} rijen van die reeks waren nog niet binnen en zijn niet gekozen (cmd+A kiest alle treffers)`, goed: false }; this.tekenStatus(); }
+    } else if (erbij) {
+      // De eerste cmd-klik neemt het nummer dat al gekozen was mee.
+      if (!this.selectie.size && this.gekozenId && this.gekozenId !== id) this.selectie.add(this.gekozenId);
+      if (id) { if (this.selectie.has(id)) this.selectie.delete(id); else this.selectie.add(id); }
+      this._anker = i;
+    } else {
+      this.selectie.clear();
+      this._anker = i;
+    }
+    this._zetKeuze(i);
+  }
+
+  /**
+   * Alle treffers van het filter kiezen (cmd+A in de lijst): de ids van de server, pagina's van 500,
+   * hooguit MAX_ALLES (zoveel neemt taggen in één keer aan).
+   */
+  async kiesAlles() {
+    const vraag = this._vraag(), gen = this.cache.gen;
+    const ids = [];
+    try {
+      for (let p = 0; p * 500 < Math.min(this.cache.totaal, MAX_ALLES); p++) {
+        const r = await fetch(lijstUrl(vraag, p, 500));
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.fout || `${r.status}`);
+        ids.push(...(j.tracks || []).map((t) => t.id));
+        if ((j.tracks || []).length < 500) break;
+      }
+    } catch (err) { this.melding = { tekst: `alles kiezen mislukt: ${err.message}`, goed: false }; return this.tekenStatus(); }
+    if (gen !== this.cache.gen) return;   // intussen een ander filter
+    this.selectie = new Set(ids.slice(0, MAX_ALLES));
+    this._selVersie = (this._selVersie ?? 0) + 1;
+    this._bewust = true;
+    this.melding = { tekst: `${this.selectie.size} gekozen${this.cache.totaal > MAX_ALLES ? ` (de eerste ${MAX_ALLES} van ${this.cache.totaal})` : ''}: typ een tag of kies "→ categorie"`, goed: true };
+    this.tekenStatus();
+    this.tekenRijen();
+    this.indeling.tekenBalk();
+  }
+
+  _markeerDrop(el) {
+    for (const x of this.el.venster?.querySelectorAll('.drop-voor') ?? []) if (x !== el) x.classList.remove('drop-voor');
+    el?.classList.add('drop-voor');
+  }
+
+  /** De bus (aanhaker indeling): de volgende/vorige categorie als filter; null = alles. */
+  stapCategorie(stap) { const naam = this.indeling.stapCategorie(stap); this.melding = { tekst: `library: ${naam}`, goed: true }; this.tekenStatus(); return naam; }
+  wisFilter() { this.indeling.zetFilter({}); }
+  /** Snel-tag K aan/uit in het filter (de bus: library.quickfilter.K). */
+  snelFilter(k) {
+    const naam = this.indeling.stand.snel[k - 1];
+    if (!naam) { this.melding = { tekst: `snel-tag ${k} is leeg`, goed: false }; this.tekenStatus(); return; }
+    this.indeling.wisselTagFilter(naam);
+  }
 
   /** Een melding onthoudt wanneer hij kwam (het scherm van de Maschine toont alleen een verse). */
   get melding() { return this._melding; }
@@ -280,6 +505,7 @@ export class LibraryPanel {
   kies(stap) {
     const totaal = this.cache.totaal;
     if (!totaal) return;
+    this._bewust = true;
     this._zetKeuze(klemKeuze(this.gekozen, stap, totaal));
     const el = this.el.rijen, kop = this.el.kop?.offsetHeight || 0;
     const boven = kop + this.gekozen * RIJ_H, onder = boven + RIJ_H;
@@ -311,7 +537,9 @@ export class LibraryPanel {
   /** Voor een klein scherm: de rijen rond de keuze, en een melding van de laatste 3 s (zo lang telt een tweede druk). */
   bladerStand(n = 5, nu = Date.now()) {
     const vers = this._melding && nu - (this._meldingT ?? 0) < 3000;
-    return { ...bladerVenster(this.cache, this.gekozen, n), zoek: this.zoek, laadt: this.bezig.size > 0, melding: vers ? this._melding.tekst : null };
+    // filter: het filter kort ("@warm #dub"), voor de kop van het scherm van de Maschine (spoor S11).
+    const filter = this.indeling?.aan ? this.indeling.kort(this.filter) : '';
+    return { ...bladerVenster(this.cache, this.gekozen, n), zoek: this.zoek, filter, laadt: this.bezig.size > 0, melding: vers ? this._melding.tekst : null };
   }
 
   /** Wat er nu van de lijst geladen is, op volgorde (console; de lijst zelf staat in `cache`). */
@@ -345,6 +573,8 @@ export class LibraryPanel {
 
   /** Klik op een kolomkop. */
   sorteer(sleutel) {
+    // In een categorie op volgorde: een kolom kiezen = op die kolom (nog eens: andersom).
+    if (this._plekNu()) { this.plek = false; this._kolomGekozen = true; this.sortering = { sorteer: sleutel, richting: volgendeSortering(null, sleutel).richting }; bewaarSortering(this.opslag, this.sortering); this.tekenKop(); return this.ververs({ bovenaan: true }); }
     const nieuw = volgendeSortering(this.sortering, sleutel);
     if (nieuw === this.sortering) return;
     this.sortering = nieuw;
@@ -644,7 +874,10 @@ export class LibraryPanel {
     // onomkeerbaar en hoort een bewuste handeling te zijn, geen klik naast.
     await fetch(`/api/library/${id}`, { method: 'DELETE' }).then(leesWeg, () => {});
     this.melding = { tekst: `${track.titel} uit de lijst (bestanden staan er nog)`, goed: true };
+    this.selectie.delete(id);
+    this._selVersie = (this._selVersie ?? 0) + 1;
     this.ververs();
+    this.indeling.ververs();   // aantallen per categorie en tag
   }
 
   // ---- past bij (src/ui/past-bij.js) ---------------------------------------------
@@ -722,15 +955,18 @@ export class LibraryPanel {
    */
   async ververs({ bovenaan = false } = {}) {
     // Nieuwe zoekterm of sortering: de kiezer hoort bij een rij die nu ergens anders staat.
-    if (bovenaan) { this.el.rijen.scrollTop = 0; this.kiezer = null; this.gekozen = 0; this.gekozenId = null; }
+    if (bovenaan) { this.el.rijen.scrollTop = 0; this.kiezer = null; this.gekozen = 0; this.gekozenId = null; this.selectie.clear(); this._anker = null; this._bewust = false; this._selVersie = (this._selVersie ?? 0) + 1; }
     const { van, tot } = this._venster(Math.max(this.cache.totaal, 1));
+    const vraag = this._vraag();
     try {
-      if (!(await this.cache.ververs({ zoek: this.zoek, ...this.sortering }, van, tot))) return;
+      if (!(await this.cache.ververs(vraag, van, tot))) return;
     } catch (err) {
       this.melding = { tekst: `library niet geladen: ${err.message}`, goed: false };
     }
     this.tekenStatus();
+    this.tekenKop();
     this.tekenRijen();
+    this.indeling.tekenBalk();
     this._haalZichtbaar();
     this._volgKeuze();
   }
@@ -751,16 +987,30 @@ export class LibraryPanel {
     const m = this.melding
       ? `<b class="${this.melding.goed ? 'goed' : 'bad'}">${esc(this.melding.tekst)}</b> &nbsp;·&nbsp; ` : '';
     if (this.pastBijAan && this._pbKop) { this.el.status.innerHTML = m + esc(this._pbKop); return; }
+    const kort = this.indeling?.aan ? this.indeling.kort(this.filter) : this.zoek;
     this.el.status.innerHTML = m + (this.zoek
-      ? `${n} gevonden voor "${esc(this.zoek)}"`
+      ? `${n} gevonden voor ${esc(kort || `"${this.zoek}"`)}${this._plekNu() ? ' — op de volgorde van de categorie (sleep een rij om hem te verzetten)' : ''}`
       : `${n} nummer${n === 1 ? '' : 's'} in de library`);
+  }
+
+  /**
+   * De kolommen van de lijst. Met de kolom INDELING open (spoor S11) vallen LUFS en racks weg: zo past
+   * de lijst met alle laadknoppen nog op 1440 px. ☰ dicht = alle kolommen.
+   */
+  _zetKolommen() {
+    const smal = this.indeling?.aan && this.indeling.open;
+    this.kolommen = smal ? KOLOMMEN.filter((k) => !SMAL_WEG.includes(k.id)) : KOLOMMEN;
+    this.root.style.setProperty('--lib-kolommen', kolomSjabloon(this.kolommen));
+    if (this.el.kop) { this.tekenKop(); this.tekenRijen(); }
   }
 
   /** De kolomkop: sorteerknoppen, en onzichtbare knoppen zodat de kolommen gelijk lopen met de rijen. */
   tekenKop() {
-    this.el.kop.innerHTML = kopHtml(this.sortering,
+    // Op de volgorde van een categorie: geen kolom "aan" (de statusregel zegt het).
+    const html = kopHtml(this._plekNu?.() ? null : this.sortering,
       this.decks.map((d) => `<button class="btn sm lib-trk" tabindex="-1">${esc(this.label(d))}</button>`).join('')
-      + '<button class="btn sm" tabindex="-1">↻</button><button class="btn sm" tabindex="-1">×</button>');
+      + '<button class="btn sm" tabindex="-1">↻</button><button class="btn sm" tabindex="-1">×</button>', this.kolommen);
+    if (this.el.kop._html !== html) { this.el.kop._html = html; this.el.kop.innerHTML = html; }
   }
 
   /**
@@ -774,7 +1024,7 @@ export class LibraryPanel {
       this.el.ruimte.style.height = '';
       this.el.venster.style.transform = '';
       this.el.venster.innerHTML = this.zoek
-        ? `<div class="lib-leeg">niets gevonden voor "${esc(this.zoek)}"</div>`
+        ? `<div class="lib-leeg">niets gevonden voor ${esc(this.indeling?.aan ? this.indeling.kort(this.filter) || `"${this.zoek}"` : `"${this.zoek}"`)}</div>`
         : `<div class="lib-leeg">nog niets binnengehaald — plak hierboven een YouTube- of TikTok-link, of sleep je eigen audio en video hierheen</div>`;
       return;
     }
@@ -784,7 +1034,7 @@ export class LibraryPanel {
     const nu = Date.now();
     // Per deck één keer vragen, niet per rij.
     const standen = this.decks.map((d) => this.stand(d));
-    const staat = { kiezer: this.kiezer, ...this._stemsStaat() };
+    const staat = { kiezer: this.kiezer, tagKleuren: this.indeling?.kleuren, ...this._stemsStaat() };
     this._stemsHtml.clear();
     const rijen = [];
     let kiezer = '';
@@ -794,7 +1044,7 @@ export class LibraryPanel {
       const laadt = this.bezig.has(t.id);
       const her = this.analyseert.has(t.id);
       this._stemsHtml.set(t.id, stemsCelHtml(t, staat));
-      rijen.push(`<div class="lib-rij${i === this.gekozen ? ' gekozen' : ''}" data-i="${i}">${cellenHtml(t, nu, staat)}
+      rijen.push(`<div class="lib-rij${i === this.gekozen ? ' gekozen' : ''}${this.selectie.has(t.id) ? ' sel' : ''}" data-i="${i}" data-id="${esc(t.id)}" draggable="true">${cellenHtml(t, nu, staat, this.kolommen)}
         <span class="lib-knoppen">
           ${this.decks.map((d, k) => `<button class="btn sm lib-trk ${standen[k]}" data-deck="${d}" data-id="${esc(t.id)}" title="laad op track ${this.label(d)} (${standen[k]})"${laadt ? ' disabled' : ''}>${laadt ? '…' : this.label(d)}</button>`).join('')}
           <button class="btn sm lib-her${her ? ' bezig' : ''}" data-her="${esc(t.id)}" title="grid en toonsoort opnieuw analyseren${t.grid?.slot || t.toon?.slot ? ' (staat op slot: tweede klik)' : ''}">${her ? '…' : '↻'}</button>

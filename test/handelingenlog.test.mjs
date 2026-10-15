@@ -709,6 +709,83 @@ try {
     ok('DECK_IDS en TRACKS horen bij elkaar (acht tracks)', DECK_IDS.length === A.TRACKS.length);
   }
 
+  console.log('\ncombinaties (werkruimte S4): druk en superknop in het log, terugspelen');
+  {
+    const { Engine } = await import('../src/engine/engine.js');
+    const { renderDemoTrack } = await import('../src/analysis/demo-track.js');
+    const { Mapping } = await import('../src/control/mapping.js');
+    const { HoudRegister } = await import('../src/control/houd.js');
+    const C = await import('../src/control/acties-combi.js');
+    const eng = new Engine();
+    A.bindEngine(eng);
+    const combi = C.bindCombi({ engine: eng });
+    NOW = 200;
+    const demo = { A: { seed: 0, bars: 4 }, B: { seed: 1, bars: 4 } };
+    for (const id of ['A', 'B']) eng.deck(id).load(renderDemoTrack(eng.ctx, demo[id]), `demo ${id}`);
+    const herkomst = { A: { bron: 'demo', demo: demo.A }, B: { bron: 'demo', demo: demo.B } };
+    // Een superknop met vier links (bereik, venster, curve, stappen) en een druk-regel op send.a.
+    const LINKS = ['track.1.send.b', 'track.1.filter', 'track.2.fx.mix', 'track.2.fader'];
+    combi.zetSuperknop(1, { links: [
+      { target: LINKS[0], from: 0, to: 0.6 },
+      { target: LINKS[1], in: [0.5, 1], from: 0.5, to: 0.8, curve: 's' },
+      { target: LINKS[2], from: 0.1, to: 0.9, curve: 'exp' },
+      { target: LINKS[3], from: 1, to: 0.3, steps: 8 },
+    ] });
+    const m = new Mapping({ read: A.read, invoke: A.invoke, vars: () => ({ focus: 1 }), houd: new HoudRegister() });
+    m.load({ name: 'combi', device: 'apc40mk2', version: 3, rules: [
+      { in: 'note:0:1', action: 'track.1.send.a', mode: 'druk', naar: 1 },
+      { in: 'cc:0:16', action: 'super.1', mode: 'absolute', takeover: 1 },
+    ] });
+    A.invoke('track.1.send.a', 0.3);
+    const stand0 = H.leesStand({ engine: eng, tracks: A.TRACKS, herkomst: (id) => herkomst[id] ?? null, acties: A.list(), lees: A.read });
+    ok('beginstand: super.1 niet (beginstand: false), zijn kinderen wel', !('super.1' in stand0.waarden) && LINKS.every((a) => a in stand0.waarden));
+
+    const dir = join(map, 'combi');
+    const timers = nepTimers();
+    const srv = nepServer(dir);
+    const log = new H.Handelingenlog({ klok: () => NOW, haal: srv.haal, wacht: async () => {}, elke: timers.elke, stopElke: timers.stopElke });
+    const weg = A.bijInvoke((id, v) => log.neem(id, v));
+    const r = await log.start({ stand: stand0 });
+    const druk = (on) => m.handle({ sig: 'note:0:1', type: 'note', channel: 0, number: 1, value: on ? 127 : 0, norm: on ? 1 : 0, on });
+    const draai = (v) => m.handle({ sig: 'cc:0:16', type: 'cc', channel: 0, number: 16, value: v, norm: v / 127 });
+    NOW += 0.2; druk(true); NOW += 0.3; druk(false);
+    for (const v of [10, 40, 64, 90, 127, 70]) { NOW += 0.1; draai(v); }
+    NOW += 0.2; A.invoke('super.1.hold', true); NOW += 0.1; A.invoke('super.1.hold', false);
+    NOW += 0.3; timers.tik();
+    const ALLE = [...LINKS, 'track.1.send.a'];
+    const eind = Object.fromEntries(ALLE.map((a) => [a, A.read(a)]));
+    await log.stop();
+    weg();
+    const l = H.leesLog(readFileSync(join(dir, `set-${r.id}.acties.jsonl`), 'latin1'));
+    const sendA = l.regels.filter((x) => x[1] === 'track.1.send.a').map((x) => x[2]);
+    ok(`druk op track.1.send.a met naar 1: twee regels in het log, 1 en de oude stand (${sendA.join(', ')})`,
+      sendA.length === 2 && sendA[0] === 1 && sendA[1] === 0.3);
+    const inLog = new Map();
+    for (const x of l.regels) if (typeof x[1] === 'string') inLog.set(x[1], (inLog.get(x[1]) || 0) + 1);
+    ok(`de superknop staat in het log (${inLog.get('super.1')}×), elk kind ook (${LINKS.map((a) => inLog.get(a)).join('/')}×)`,
+      inLog.get('super.1') === 6 && LINKS.every((a) => inLog.get(a) === 8));
+
+    // Alles door elkaar, en terugspelen.
+    for (const a of ALLE) A.invoke(a, 0.77);
+    A.invoke('super.1', 0.05);
+    const doe = T.maakUitvoerder({ engine: eng, tracks: A.TRACKS, invoke: A.invoke, read: A.read, has: A.has,
+      laad: async (deckId, e) => { eng.deck(deckId).load(renderDemoTrack(eng.ctx, e.demo), e.titel); return true; } });
+    const gespeeld = new Map();
+    const tel = (a, v, o) => { gespeeld.set(a, (gespeeld.get(a) || 0) + 1); return A.invoke(a, v, o); };
+    const tt = nepTimers();
+    const sp = new T.Terugspeler({ klok: () => NOW, invoke: tel, doe, elke: tt.elke, stopElke: tt.stopElke });
+    let klaar = null;
+    sp.onKlaar = (x) => { klaar = x; };
+    await sp.start({ stand: l.stand, regels: l.regels, duur: l.duur });
+    const T0 = NOW;
+    while (NOW < T0 + l.duur + 0.05) { NOW = Math.round((NOW + 0.01) * 1000) / 1000; tt.tik(); }
+    ok('terugspelen klaar', klaar?.reden === 'klaar');
+    const afw = ALLE.map((a) => Math.abs(A.read(a) - eind[a]));
+    ok(`zelfde reads op elk kind (± 1e-9; grootste afwijking ${Math.max(...afw).toExponential(1)})`, afw.every((x) => x <= 1e-9));
+    ok('zonder dubbele invokes: super.1 zelf niet, elk kind precies zo vaak als in het log',
+      !gespeeld.has('super.1') && !gespeeld.has('super.1.hold') && ALLE.every((a) => gespeeld.get(a) === inLog.get(a)));
+  }
+
   console.log('\nhoe groot wordt een uur?');
   {
     // De echte regels, via de echte klasse; alleen de server telt bytes in plaats van te schrijven.

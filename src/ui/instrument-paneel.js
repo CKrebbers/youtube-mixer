@@ -1,8 +1,11 @@
 import { read as readAction, invoke, trackVanDeck } from '../control/actions.js';
 import { Noten } from '../control/noten.js';
+import { MidiLearn, vangLeren, keyboardMagLeren, KEYBOARD_APPARAAT } from '../control/midi-learn.js';
+import { opzetMappingOpslag } from './mapping-opslag.js';
 import { knobVan } from './controls.js';
 import { meld } from './meldingen.js';
 import { zetTekst } from './dom.js';
+import { registreerRij } from './rijen.js';
 
 /*
  * De INSTRUMENT-rij (docs/INSTRUMENTEN.md §6): voor de track met focus het
@@ -55,10 +58,13 @@ export function opzetInstrument({ engine, midi, lagen }) {
 
   // ---- noten: MIDI-keyboards en het schermtoetsenbord ------------------------
   const noten = new Noten({ engine, read: readAction, invoke });
-  fetch('mappings/xboard49.json')
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
-    .then((doc) => noten.laadMapping(doc))
-    .catch((err) => meld(`instrument: de knoppen van het keyboard (mappings/xboard49.json) niet geladen (${err.message})`, 'fout'));
+  // De knoppen van het keyboard: mappings/xboard49.json + jouw verschil (/api/mapping/xboard49,
+  // werkruimte S5). Koppelen: "Xboard" in het koppelpaneel, dan een knop of de schuif bewegen.
+  const learn = new MidiLearn({ mapping: noten.mapping, device: KEYBOARD_APPARAAT });
+  vangLeren(noten, 'ontvang', learn, { magLeren: (msg) => keyboardMagLeren(noten, msg) });
+  const opslag = (() => { try { return window.localStorage; } catch (_) { return null; } })();
+  // start() gooit niet: een fout meldt de opslag zelf (met "xboard49" erbij), en de standaard staat erop.
+  opzetMappingOpslag({ mapping: noten.mapping, apparaat: 'xboard49', learn, haal: (...a) => fetch(...a), opslag, meld }).start();
   if (midi) noten.hoorHub(midi);
   let laatsteGeen = 0;
   noten.on('geen', () => {
@@ -75,6 +81,7 @@ export function opzetInstrument({ engine, midi, lagen }) {
     schrijf(OPEN, open ? '1' : '0');
   };
   knop.addEventListener('click', () => zet(isDicht()));
+  registreerRij('instrument', { zet, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zet(true);
 
   // ---- de track met focus ----------------------------------------------------

@@ -9,6 +9,176 @@ daarna in CLAUDE.md of ROADMAP.md.
 
 Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 alleen een keuze
 
+Nieuwste blokken (14–15 okt): **W, de werkruimte** en **GA, afmaken: controllers en beatgrid** (hieronder),
+en achteraan **S9**, **S10** en **S11**.
+
+---
+
+## W. De werkruimte (14 okt, docs/WERKRUIMTE.md, docs/werkruimte/S0–S8.md, tak werk/S8)
+
+Alle open vragen van de sporen S0–S8, ontdubbeld (bronnen: WERKRUIMTE.md E1, docs/verslagen/2026-10-14/werk-S0…S8.md
+en werk-golf2.md). Niets hiervan houdt de proef tegen: waar je niets zegt, geldt het advies (zo is het gebouwd).
+De proefavonden staan in de Controlekamer (blokken "Werkruimte · E0 … D").
+
+**Ontwerp**
+- [x] **W1. Mag de iPad de mixer bedienen?** 💬 Beantwoord 14 okt: ja ("per onderdeel van een mix anders"), plus een
+  xy-pad op de iPhone. Gebouwd in S8 (docs/werkruimte/S8.md): standaard uit, aanzetten in de Controlekamer, koppelen
+  met een code, alleen via Tailscale; opnemen, het log, mappings, werkruimtes, library en laden nooit.
+- [ ] **W2. Hoe staan de controllers op tafel?** 👀 Maschine links of rechts, links- of rechtshandig? Bepaalt alleen
+  welke houd-knoppen het makkelijkst samen gaan, niet de indeling. **Advies:** zeg het na proefavond C.
+- [ ] **W3. Effecten die de engine raken** (loop roll/beat repeat op NOTE REPEAT, reverse, effect per stem, extra bus,
+  vrije routing)? 🎧 Welk moment in een set mis je nu? **Advies:** niets bouwen zonder een concreet voorbeeld; noteer het
+  bij proefpunt E0 als je iets mist.
+- [ ] **W4. Op 1440×790 met een rij open krimpt het werkvak tot 9 px** (in feite weg; tools/headless/werkruimte.mjs, deel
+  FX met de MASTER-rij). 👀 Het werkvak geeft als eerste ruimte af, zodat faders en rijen heel blijven. Kiezen: zo laten ·
+  in dat deel de MASTER-rij niet openzetten (`schermen.hoofd.rijen`) · het werkvak ten koste van de rijen (dan scrollt
+  #rijen meer) · het werkvak naar mac-2. **Advies:** zo laten; zet wat je in FX op het werkvak wilt op mac-2 of de iPad.
+
+**Bedienen vanaf iPad en iPhone (S7, S8)**
+- [ ] **W5. Wat mag de iPad, wat de iPhone (`schermen.<s>.mag`)?** 💬 Het voorbeeld twee-handen: de iPad de bouwsteen fx,
+  mijn-mix en de video-worpen; de iPhone de xy-pad. **Advies:** begin daarmee, breid uit na avond D.
+- [ ] **W6. Tijdkritisch blijft uit?** 💬 Bend, play, cue, nudge, hotcues, loop in/out en tap weigert een scherm buiten de
+  Mac, tenzij `"tijdkritisch": true`. **Advies:** uit laten (A5: wifi en aanraking zijn tientallen ms).
+- [ ] **W7. De schakelaar na een herstart van de server weer uit?** 💬 Nu wel: aanzetten is een handeling, nooit een
+  overblijfsel. Gekoppelde apparaten blijven gekoppeld. **Advies:** zo laten.
+- [ ] **W8. De iPad: delen kiezen (`werk.deel.*`), maar nooit werkruimtes schrijven?** 💬 Zo is het (werk.kies, terug,
+  vastleggen staan in VAST_NOOIT). **Advies:** zo laten.
+- [ ] **W9. Standen (`PUT /api/standen`, `…/activeer`) ook alleen vanaf de Mac?** 💬 Nu kan de Controlekamer via Tailscale
+  een stand activeren. **Advies:** ja, alleen vanaf de Mac (een kleine wijziging in server/index.js, nog niet gedaan).
+- [ ] **W10. Vertraging op de echte iPhone.** 🎧 Headless (loopback, software-GL): POST -> mixer p50 13 ms, p99 38 ms; met
+  het tekenen van de pagina erbij p50 ~30 ms, maar een staart tot ~700 ms (aan de kant van de headless pagina met
+  software-GL). **Advies:** meten op avond D (proefpunt wd-xy); voelt het traag, dan een
+  WebSocket in plaats van POST (volgende versie).
+- [ ] **W11. Twee vingers op één xy-pad?** 👀 Nu: één vinger per pad (twee pads = twee vingers). **Advies:** zo laten.
+- [ ] **W12. De positie op de iPad binnen 5 ms** is hier niet aan te tonen (de headless audioklok hapert). 🎧 **Advies:**
+  meten op avond D; haalt hij het niet, dan de eis p99 ≤ 5 ms maken.
+- [ ] **W13. Bouwstenen of eigen panelen?** 💬 **Advies:** begin met de bouwstenen, maak een eigen paneel (✎) waar een
+  bouwsteen te veel of te weinig heeft.
+
+**Inrichten (S8)**
+- [ ] **W14. Toewijzen in een eigen mapje per paneel (`p-<paneel>`) dat het deel openzet: goed?** 💬 Zo raakt het nooit de
+  standaard en doet het alleen in dat deel iets. Let op: het VERVANGT het mapje van dat deel voor die groep (in
+  twee-handen FX wordt de Maschine-pagina dan p-dub in plaats van rack; ◄ ► bladert nog naar rack). Aanwijzen door een
+  control te bewegen voert die control ook uit (een klik op het scherm niet). **Advies:** zo laten; na de proef kan wat bevalt naar de standaard.
+- [ ] **W15. F1–F8 als groep voor een paneel** kan alleen in een werkruimte zonder het stuk maschine-delen (anders kiezen
+  F1–F8 het deel). 💬 **Advies:** zo laten.
+
+**Precisie en uitlijnen (S1, S2)**
+- [ ] **W16. Duoklik: hoog op de gelijkgezette track, laag op de maatgever** (gebouwd) of andersom? 🎧 **Advies:** zo laten.
+- [ ] **W17. "Op de 1" bij gelijkspel: terug** (gebouwd) of vooruit? 🎧 **Advies:** terug.
+- [ ] **W18. Precisie op het toetsenbord?** 💬 **Advies:** geen standaard; koppel zelf (S5), na de proef in toetsen.json.
+- [ ] **W19. `?uitlijn=1` wordt onthouden.** 💬 **Advies:** laten tot de proefavond, daarna weghalen.
+- [ ] **W20. Twee maten per pagina** in de uitlijnweergave (gebouwd) of één? 👀 **Advies:** twee.
+- [ ] **W21. Knop "uitlijn" in de transportrij houden** nu het werkvak er is (kost 4 px)? 👀 **Advies:** beslissen op avond A.
+- [ ] **W22. Een track zonder tellen: "grof" tonen** (gebouwd) of leeg? 👀 **Advies:** grof, met het label.
+
+**Werkruimte-kern en combinaties (S0, S3, S4)**
+- [ ] **W23. De voorbeelden apc-alleen en twee-handen houden?** 💬 **Advies:** alle drie houden tot je een eigen hebt.
+- [ ] **W24. De eerste keer "⚠ 74 nieuw": zo laten?** 👀 **Advies:** zo laten (klik = gezien).
+- [ ] **W25. "Leg vast" ook op de APC?** 💬 **Advies:** nee (op de balk en met ✎).
+- [ ] **W26. Mag een werkruimte een rack op de echo/galmbus zetten (`bussen`)?** 💬 **Advies:** alleen bij een uitdrukkelijke
+  keuze in de kiezer, niet bij peilen of opstarten, en alleen als er niets op die bus klinkt.
+- [ ] **W27. Twee solo's tegelijk = stilte; moeten solo drums + solo bas die twee laten horen?** 🎧 **Advies:** ja, samen.
+- [ ] **W28. Welke racks op de echo- en galmbus?** 🎧 **Advies:** begin met één dub-echo, kies na de proefavond.
+- [ ] **W29. ⇧ On/Off in de mapjes master en instrument** opent met de fx-matrix ook daar de fx-matrix (was bypass/stil). 🎛
+  **Advies:** daar laten wat het was (een `laag` per regel).
+- [ ] **W30. Een worp die vastzit bij het begin van een opname: bij terugspelen ook?** 🎧 **Advies:** nee.
+- [ ] **W31. Druk/latch op een toets van het toetsenbord doet nu niets.** 💬 **Advies:** zo laten tot je het mist.
+- [ ] **W32. Een superknop met `overneem: true` zonder track laat de auto-DJ altijd los.** 💬 **Advies:** zo (zoals de crossfader).
+
+**Maschine (S5, S6; poort M eerst)**
+- [ ] **W33. Koppelen op de Maschine alleen met CONTROL?** 🎛 **Advies:** ja.
+- [ ] **W34. De Maschine-pads ook koppelen (padmodus "knoppen")?** 🎛 **Advies:** na de ijkproef (S6).
+- [ ] **W35. Mapping bewaren alleen vanuit het tabblad met de APC?** 💬 **Advies:** ja.
+- [ ] **W36. Maschine weg terwijl de hub blijft: moet de hub dat per apparaat melden?** 💬 **Advies:** ja, in de hub (§17);
+  dan werkt de terugval naar apc-alleen vanzelf.
+- [ ] **W37. `stappen` ook `.next`/`.prev`** (een wiel dat racks of secties kiest)? 💬 **Advies:** ja, klein.
+- [ ] **W38. De deelnamen op de Maschine-schermen** (de onderregel valt weg): zo, of alleen zolang een F-knop vastzit? 👀
+  **Advies:** eerst zo proberen.
+- [ ] **W39. SHIFT + pad in SCENE = als loop, ook zonder werkruimte?** 🎛 **Advies:** ja, na de proefavond.
+- [ ] **W40. Welke padmodi en pagina's wil je echt?** 🎛 **Advies:** begin met de worpen in FX en de pagina uitlijn.
+
+Zelf gekozen (zeg het als je het anders wilt): acht delen op F1–F8 in deze volgorde; THUIS op ⇧ + master-knop; werkruimte
+wisselen alleen vanaf het scherm; fase lineair met een fijne variant op shift; SSE (plus POST voor bedienen) in plaats van
+WebSocket; sampler, secties, patronen en auto in twee-handen uit de ▲ ▼-rondgang; de zender vraagt zonder kijker 1×/s of er
+iemand kijkt.
+
+---
+
+## GA. Afmaken: controllers en beatgrid (14 okt, tak `studio/afmaken`, PR #41)
+
+De vragen uit de vier verslagen van afmaken, letterlijk overgenomen en ingekort (bronnen:
+docs/verslagen/2026-10-14/beatgrid-analyse.md §8, beatgrid-bediening.md, controller-invoer.md,
+controller-uitvoer.md). Waar je niets zegt, geldt wat er gebouwd is. BEATGRID.md §12–13 en APC40.md
+leggen de achtergrond uit.
+
+**Beatgrid-analyse** (BEATGRID.md §12)
+- [ ] **GA1. Het dansbereik.** 🎧 Hoort Beat This! een nummer op 70–87, dan wordt het tempo nu verdubbeld
+  (Ciel 77 → 154, zoals jij tikt). Reggae of downtempo die je echt op 75 telt, krijgt dan ook 150. Is dat
+  goed, of draai je genoeg van die muziek om het per krat te willen regelen?
+  Aan de bovenkant (181–300) blijft het tempo staan; daar wordt alleen gehalveerd als de downbeats én de
+  oude analyse het bevestigen.
+  **Advies:** zo laten, en per krat pas als je het mist. Let op: de winst op het DJ-tempo is deels
+  op nep-tellen gemeten; daarom bestaat GA3.
+- [ ] **GA2. Alle automatische grids één keer opnieuw rekenen bij de eerste start (VERSIE 2)?** 💬
+  Dat kost 0,7–4 s per nummer in een worker, voor 300 nummers 4–20 minuten achtergrondwerk, één keer.
+  Het wacht zolang er een deck speelt. Grids op slot en grids die met de hand zijn gezet blijven staan;
+  bewaarde sampler-pads rekenen mee; lengtes in maten in het setplan niet.
+  Zo niet: VERSIE op 1 laten, dan geldt het alleen voor nieuwe nummers en na ↻.
+  **Advies:** ja, op een dag zonder optreden.
+- [ ] **GA3. Eén keer het echte Beat This! op de benchmark draaien?** 💬 Drie commando's op de Mac
+  (beatgrid-analyse.md §1). Dan weten we of de nep-tellen kloppen. **Advies:** ja, vóór GA1 en GA2.
+- [ ] **GA4. Krijgt de oude analyse ook een versie?** 💬 Nummers zonder tellen (Beat This! stond er niet
+  op toen ze binnenkwamen) houden het grid van de oude analyse, ook op 70–87. Met een versie komen ze
+  bij het opstarten in het dansbereik: een paar seconden per nummer in de worker.
+  **Advies:** ja, samen met GA2.
+- [ ] **GA5. Wat gebeurt er met een dubbel tempo dat niemand bevestigt?** 💬 Telt Beat This! onder 300
+  het dubbele tempo en kan de oude analyse het niet bevestigen, dan blijft het tempo van het netwerk
+  staan en geldt het als zeker. Sync tegen een nummer op 120 speelt dan op halve snelheid. Boven 300
+  wordt gehalveerd, en dat blijft onzeker tot het bevestigd is.
+  Is dat goed, of liever een melding "dubbel tempo?" als voorstel?
+  **Advies:** de melding, als het in de praktijk voorkomt.
+
+**Beatgrid-bediening op de APC** (BEATGRID.md §13, APC40.md)
+- [ ] **GA6. De grid-modus neemt Device ◀ ▶, On/Off, Clip/Device View en Detail View over.** 🎛 Dat zijn
+  de "1", controle/✓, tellen hier en ↶. De grid-modus wint dan van elk open device-mapje: rack kiezen,
+  effect aan/uit, strip ↔ rack, het master-rack, het instrument, het mapje vorm. De device knobs, Bank
+  en de shift-varianten blijven werken. Goed zo, of liever een andere plek? **Advies:** proberen op de
+  proefavond.
+- [ ] **GA7. On/Off (controleren) op een stilstaand deck.** 🎛 Die zoekt een plek op en drukt op play.
+  Zonder koptelefoonuitgang van vier kanalen gaat de tik naar de master, en wie uit gewoonte op On/Off
+  drukt, laat de zaal de track en de tik horen. Liever alleen klaarzetten (plek, tik aan, niet starten),
+  of zonder koptelefoon weigeren met een melding? **Advies:** alleen klaarzetten.
+- [ ] **GA8. Een bewerkt grid op twee tracks met hetzelfde nummer.** 💬 De andere track krijgt het grid
+  ook, ook als hij in de zaal speelt (pas na 250 ms rust, één keer). Ook midden in een set, of alleen
+  op tracks die niet spelen? **Advies:** alleen op tracks die niet spelen.
+- [ ] **GA9. Oranje op "tel 1 hier" = twijfel.** 👀 Genoeg, of bij "geen puls" liever uit of rood?
+  **Advies:** zo laten.
+- [ ] **GA10. Tap tempo zet na vier tikken het hele grid op slot** (al van vóór afmaken). 💬 Zo laten?
+  **Advies:** ja.
+
+**Controllers: invoer** (controller-invoer.md)
+- [ ] **GA11 (C1). De latentie in het MIDI-paneel.** 🎛 Wat zegt "latency: … in + … audio" op de Mac met
+  de Scarlett? Boven ~15 ms audio ligt het aan de uitgang, niet aan de code.
+- [ ] **GA12 (C2). Waar voelde het laggy?** 🎛 De fader (geluid), het scherm dat achterloopt, de lampjes
+  op de APC, of knoppen die soms niets deden? Dat laatste past precies bij het echofilter dat nu voor
+  noten weg is.
+- [ ] **GA13 (C3). Na een avond spelen: `midi.status().echoes` in de console.** 🎛 Staat daar 0, dan mag
+  het echofilter voor de APC helemaal uit (zie ook GA15).
+- [ ] **GA14 (C4). Mag de LED-tik verder om?** 💬 Optie 1 van controller-invoer raakt feedback.js.
+  Het uitvoer-spoor heeft de tik al van 454 naar 45 µs gebracht. **Advies:** alleen als GA12 de lampjes
+  noemt.
+
+**Controllers: uitvoer** (controller-uitvoer.md)
+- [ ] **GA15. Het echofilter voor de APC uit na één avond meten?** 🎛 Daarvoor is `midi.status().echoes`
+  na een sessie nodig (GA13). **Advies:** ja; dat staat ook bovenaan de opties in HANDOFF.
+- [ ] **GA16. Laggy: het lampje of de knop zelf?** 🎛 Ligt het aan het lampje (dit spoor), of reageert
+  de knop zelf laat (het geluid, de fader)? Dat laatste is het invoerpad. Hoort samen met GA12.
+- [ ] **GA17. Eén keer de hub-proef V1 (ring-overname) op de APC?** 🎛 Die beslist of de draaiknoppen in
+  het invoerpad anders moeten (endless of absoluut). **Advies:** ja, bij dezelfde meting als GA13.
+- [ ] **GA18. Het schermtempo van de Maschine bij draaien.** 👀 Nu ~25 beelden per seconde. Prettig, of
+  liever rustiger (100 ms, zoals eerst)?
+
 ---
 
 ## A. Eerst: wat er nu klaarstaat
@@ -555,3 +725,91 @@ grenzen, fase `auto`, Tailscale serve, stap 7a, stap 8/9, de LPD8.
   de apparaten van de proefavond nog aangesloten, twee alleen-lezen-commando's draaien
   (`system_profiler … -json`, `ioreg -p IOUSB …`)? Of doe je het zelf: de commando's staan
   letterlijk in §14 punt 9. **Advies:** een agent, dan zijn de fixtures dezelfde ochtend echt.
+
+## S9. Een set klaarzetten, live bijmixen, sets (14 okt, docs/PLAN-SET.md, tak `werk/S9`)
+
+- [ ] **S9-1 💬 De boog.** "maak set" zet de nummers standaard in een boog (rustig, piek op 70%,
+  iets terug). De energie is een gok uit bpm, luidheid en de luidste sectie. Klopt de vorm voor jouw
+  avonden, of liever oplopend als standaard (of iets anders: een golf met twee pieken)?
+- [ ] **S9-2 👂 De niveaus van een laag.** Een laag gaat in 4 maten open tot fader 0,8 en na zijn
+  duur in 4 maten dicht. Is 0,8 goed bovenop de mix, en 4 maten?
+- [ ] **S9-3 💬 Tracks van de automaat.** Zonder `tracks` in het plan laadt hij nooit op een track
+  waar jij de laatste 2 minuten iets aan deed. Is 2 minuten goed, of liever een vaste verdeling als
+  standaard (bv. 1–2 voor de automaat, 3–8 voor jou)? **Advies:** zet het per plan (veld "tracks
+  auto"); 2 minuten is de vangrail.
+- [ ] **S9-4 💬 GO en terugladen vanaf de iPad.** `plan.*` (GO, buiten/terug, lagen) en een set
+  KIEZEN mogen van buiten de Mac als je ze in `mag` van dat scherm zet; `set.bewaar` en
+  `set.terugladen` nooit (terugladen laadt nummers en kiest een werkruimte, net als wat VAST_NOOIT al
+  verbiedt). Wil je terugladen toch vanaf de iPad (met de tweede druk)? En moet GO, dat de automaat
+  laat laden, juist ook nooit van buiten?
+- [ ] **S9-5 💬 Wat zit er in een set.** Plan en patronen als kopie, de werkruimte op naam, de mixer
+  alleen met "met mixer". Moet de werkruimte ook als kopie mee (dan is een set helemaal draagbaar,
+  maar een latere aanpassing van je werkruimte zit niet in oude sets)?
+- [ ] **S9-6 💬 Backup van sets.** De backup neemt alleen `library.db` mee; `sets/`, `plannen/` en
+  `patronen/` zijn bestanden in de Bureaublad-map. Moet de backup ze ook kopiëren?
+- [ ] **S9-7 💬 Een set kiezen in de Controlekamer** ("een set kiezen voor vanavond", de aanvulling)
+  is niet gebouwd: de keuze en het terugladen zitten in het planvenster, het vak `sets` en de
+  actions. Wil je hem ook als tegel in de Controlekamer?
+- [ ] **S9-8 👂 Live te bevestigen**: een laag op de maat (sync + op de maat) met echte nummers, GO
+  op de APC (het voorbeeldstuk `set-voorbeeld`), terugladen van een set met acht tracks op de M1.
+
+## S10. Meer effecten en meer mogelijkheden bij het maken (14 okt, docs/EFFECTEN-MEER.md, tak `werk/S10`)
+
+- [ ] **S10-1 👂 De sjablonen.** 25 nieuwe (de lijst met één zin per stuk: `docs/verslagen/2026-10-14/werk-S10.md`).
+  Alles is gemeten (droog in de beginstand, begrensd, klikvrij), niets beluisterd. Welke houd je, welke
+  gaan weg, en liggen de knoppen op het gehoor goed? Een sjabloon aanpassen kan in de editor en dan
+  "als sjabloon" (een eigen sjabloon), of in `racks/sjablonen.json`.
+- [ ] **S10-2 💬 Modulators als besturing.** Een modulator rekent elke 33 ms op de audioklok en het
+  effect glijdt (vrij hooguit 8 Hz). Genoeg, of wil je een LFO op audiosnelheid op elke parameter
+  (dan moet elk effect zijn schaling in een worklet doen: een groot werk)? **Advies:** zo laten; voor
+  snel zijn tremolo, autopan, vibrato en chorus er.
+- [ ] **S10-3 👂 De kam glijdt.** Een nieuwe toon schuift in 20 ms (het hele naklinken gaat mee
+  omhoog of omlaag), anders dan de delay (twee koppen, nooit glijden). Klinkt dat als een instrument,
+  of liever springen met overvloeien?
+- [ ] **S10-4 👂 De klinker.** Make-up ×1,2·Q, hooguit ×8: op Q 20 is hij 12 dB zachter dan droog, en
+  een toon precies op een formant kan +18 dB komen. Liever even luid (en meer risico op pieken), of zo?
+- [ ] **S10-5 💬 Eigen sjablonen vanaf de iPad.** Kiezen (sjabloon ◀ ▶), de knoppen en de XY-pad mag
+  van de iPad (bouwsteen `sjablonen`, als `mag` het noemt). Bewaren en wissen niet: dat staat niet op
+  de bus en de editor is alleen in de mixer. **Advies:** zo laten (een rack bewaren schrijft naar de
+  server, zoals werk.opslaan dat nooit van buiten mag).
+- [ ] **S10-6 💬 De XY-pad van een sjabloon.** Elk sjabloon zegt welke twee knoppen samen op de XY-pad
+  passen (`xy`), en `track.N.fx.xy.x/.y` volgen dat. Wil je dat de bouwsteen `sjablonen` (of jouw
+  xy-paneel) standaard die actions gebruikt in plaats van knop 1 en 2?
+- [ ] **S10-7 💬 Master-lijm op de master.** Het sjabloon staat in de lijst van de master-racks (zoals
+  alle sjablonen). In de beginstand pakt hij alleen pieken boven −9 dB; MIX begint op 0. Wil je hem
+  standaard op de master, of alleen als je hem kiest?
+- [ ] **S10-8 💬 Band is het zwaarste nieuwe effect** (6,7% van een kern voor acht, gemeten in deze
+  container; twee vibrato-trappen). Goed, of liever één trap (alleen wow)?
+- [ ] **S10-9 💬 Volgende stap**: echte parallelle ketens (twee ketens naast elkaar met elk een mix),
+  een stutter/korrel-effect binnen het rack, of eerst de sjablonen op het gehoor afmaken?
+
+## S11. Categorieën en tags in de library (14 okt, docs/LIBRARY-TAGS.md, tak `werk/S11`)
+
+- [ ] **S11-1 💬 Plat, geen mappen in mappen.** Een categorie is een eigen bak met een volgorde; een
+  nummer kan in veel categorieën staan. Wat je met mappen zou doen ("dub › traag") is een slimme
+  categorie (`#dub bpm:60-90`). **Advies:** zo laten; een boom maakt "waar staat hij?" onbeantwoordbaar
+  en past niet op het scherm van de Maschine.
+- [ ] **S11-2 💬 Een krat van de kaart overnemen = een kopie.** "→ categorie" in de kaart-tab neemt wat
+  binnen is, in kratvolgorde; nog eens = wat erbij kwam. Hij volgt de krat niet vanzelf (de kaart is van
+  buiten en verandert stil). Wil je ook een gekoppelde (die meeloopt met de krat), of is kopiëren goed?
+- [ ] **S11-3 💬 De kolom links kost ruimte.** Met CATEGORIEËN/TAGS open vallen LUFS en racks uit de
+  lijst, zodat de acht laadknoppen op 1440 passen; ☰ indeling = dicht en alles terug (onthouden). Goed,
+  of liever een andere kolom eruit, of de kolom standaard dicht?
+- [ ] **S11-4 💬 Taggen vanaf de iPad: alleen het nummer op een track.** De bouwsteen `tags` zet de
+  acht snel-tags op het nummer van de focus-track (of een vaste track), via de schrijfweg van S8 als
+  `mag` `track.*.tag.*` noemt. Een rij in de lijst taggen kan van de iPad niet: de bus kent geen
+  nummer-id. Genoeg, of wil je een "gekozen nummer" dat de iPad zelf aanwijst (dan een nieuw veld op de
+  schrijfweg)?
+- [ ] **S11-5 💬 Welke acht snel-tags?** Je zet ze in de library (⋯ bij een tag, "snel 1–8"). Ze staan
+  op geen knop; de sneltoetsen zijn alt+1…8 (en alt+T = het tagveld). Wil je ze op de APC of de
+  Maschine, en waar?
+- [ ] **S11-6 💬 De Maschine bij BROWSE.** Het voorbeeldstuk `indeling-voorbeeld` (noem het in je werkruimte, `"stukken"`) zet SHIFT + ◄ ►
+  op de categorie en SHIFT + ENTER op "filter leeg". Overnemen in je mapping, of liever andere knoppen?
+- [ ] **S11-7 💬 Wat is "energie" van een nummer?** Nu: de energie van de secties gewogen naar hun
+  lengte (`energie:hoog` = ≥ 0,66). De set-klaarzetter (S9) rekent met de LUIDSTE sectie. Zelfde regel
+  voor allebei? Welke?
+- [ ] **S11-8 💬 Zoeken vindt ook tags.** "dub" in het zoekveld vindt ook nummers met #dub (naast titel
+  en artiest). Handig, of liever alleen met `#`?
+- [ ] **S11-9 💬 Wissen.** Een categorie of tag wissen kan alleen in het paneel op de Mac (tweede klik;
+  gebruikt een slimme hem, dan nog een klik). Niet op de bus, niet van de iPad, zoals gevraagd. Een
+  categorie bewaart geen "prullenbak": weg is weg (de backup van het uur ervoor heeft hem nog). Goed?

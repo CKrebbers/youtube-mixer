@@ -40,8 +40,10 @@ console.log('de speellijst');
   ok('blok-ids zijn uniek', new Set(SPEELLIJST.map((b) => b.id)).size === SPEELLIJST.length);
   // De volgorde (9 okt, verbeteronderzoek): Clay loopt de lijst van boven af, dus alle "Avond 1" vóór "Avond 2"
   // vóór "Avond 3" vóór "Eerder werk", en avond 1 begint met de kern van ~45 min.
-  const AVONDEN = ['Avond 1', 'Avond 2', 'Avond 3', 'Eerder werk'];
+  // S8: de proefavonden van de werkruimte (docs/WERKRUIMTE.md D3) staan tussen avond 3 en "Eerder werk".
+  const AVONDEN = ['Avond 1', 'Avond 2', 'Avond 3', 'Werkruimte', 'Eerder werk'];
   const rang = SPEELLIJST.map((b) => AVONDEN.indexOf(b.titel.split(' · ')[0]));
+  ok('het blok Werkruimte: E0, poort M, A, B, C en D, elk punt met een oordeel', ['werk-e0', 'werk-m', 'werk-a', 'werk-b', 'werk-c', 'werk-d'].every((id) => SPEELLIJST.find((b) => b.id === id)?.punten.every((p) => /Oordeel/.test(p.let))));
   ok(`elke bloktitel begint met ${AVONDEN.map((a) => `"${a} · "`).join(', ')}`, rang.every((r) => r >= 0));
   ok('de blokken staan op avondvolgorde', rang.every((r, i) => i === 0 || r >= rang[i - 1]));
   const KERN = ['start', 'luisteren', 'draaien', 'koptelefoon', 'keylock'];
@@ -59,10 +61,12 @@ console.log('de speellijst');
   ok(`de ${EERDER.length} punten van vóór 6 okt bestaan nog${weg.length ? ` (weg: ${weg.join(', ')})` : ''}`, !weg.length);
   // Een vraagcode tussen haakjes in een let-tekst ("(S21)", "(I4, O2)", "(VRAGEN AU2)", "(SVT1)") bestaat in docs/VRAGEN.md.
   const vragen = readFileSync(new URL('../docs/VRAGEN.md', import.meta.url), 'utf8');
-  const vraagcodes = (tekst) => [...tekst.matchAll(/\((?:VRAGEN )?([A-Z]{1,3}\d{1,2}(?:, [A-Z]{1,3}\d{1,2})*)\)/g)]
+  // Ook codes met een volgnummer erachter (de sporen van de werkruimte: S9-1, S10-3, S11-8).
+  const vraagcodes = (tekst) => [...tekst.matchAll(/\((?:VRAGEN )?([A-Z]{1,3}\d{1,2}(?:-\d{1,2})?(?:, [A-Z]{1,3}\d{1,2}(?:-\d{1,2})?)*)\)/g)]
     .flatMap((m) => m[1].split(', '));
   // Ook codes van drie letters (de sporen van de secties: SVC1, …): anders liep een onbekende code er stil doorheen.
   ok('vraagcodes: ook drie letters, en een lijst', JSON.stringify(vraagcodes('Klopt het? (SVC1) En (S21, SVC2)')) === '["SVC1","S21","SVC2"]');
+  ok('vraagcodes: ook met een volgnummer (S9-1, S10-3)', JSON.stringify(vraagcodes('Goed? (S9-1) En (S10-3, GA7, S11-12)')) === '["S9-1","S10-3","GA7","S11-12"]');
   const codes = [...new Set(punten.flatMap((p) => vraagcodes(p.let)))];
   const onbekend = codes.filter((c) => !new RegExp(`\\*\\*${c}[. ]`).test(vragen));
   ok(`elke vraagcode in de speellijst staat in docs/VRAGEN.md (${codes.length} codes${onbekend.length ? `; onbekend: ${onbekend.join(', ')}` : ''})`,

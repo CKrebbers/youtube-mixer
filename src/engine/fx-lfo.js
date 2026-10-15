@@ -43,6 +43,13 @@ export const LFO_VORMEN = ['sinus', 'driehoek', 'blok', 'zaag'];
 export const vormVan = (t) => LFO_VORMEN[Math.min(LFO_VORMEN.length - 1,
   Math.max(0, Math.round(clamp(t) * (LFO_VORMEN.length - 1))))];
 
+/**
+ * De golven van de duiker (spoor S10): herstel kort, middel, lang (τ als deel van
+ * de cyclus). Geen deel van LFO_VORMEN: de vorm-knop van tremolo en autopan
+ * blijft vier trappen.
+ */
+export const DUIK_TAU = { duik1: 0.06, duik2: 0.15, duik3: 0.3 };
+
 /** Samples per cyclus in de buffer. */
 export const LFO_N = 4096;
 /** Randen van blok en zaag: dit deel van de periode, een halve cosinus. Hard is een tik. */
@@ -72,6 +79,12 @@ export function vormSamples(vorm, n = LFO_N) {
       else v = rand(-1, 1, (f - (1 - w)) / w);
     } else if (vorm === 'zaag') {
       v = f < 1 - w ? 1 - 2 * f / (1 - w) : rand(-1, 1, (f - (1 - w)) / w);
+    } else if (DUIK_TAU[vorm]) {
+      // De duiker (S10, fx-s10.js): −1 op de tel, herstelt met e^(−f/τ) naar +1,
+      // en zakt in de laatste LFO_RAND zacht terug naar −1 (hard is een tik).
+      const tau = DUIK_TAU[vorm];
+      const herstel = (x) => 1 - 2 * Math.exp(-x / tau);
+      v = f < 1 - w ? herstel(f) : rand(herstel(1 - w), -1, (f - (1 - w)) / w);
     } else v = Math.cos(2 * Math.PI * f);
     d[i] = v;
   }
@@ -96,8 +109,10 @@ const frac = (x) => x - Math.floor(x);
 
 export class Lfo {
   /** @param klok  () => { beatLengte, ankerCtx } | null, zoals fxKlok() */
-  constructor(ctx, { klok = () => null } = {}) {
+  /** @param opDeEen  een golf van meer tellen begint op de "1" van de maat als de klok die kent (de duiker, S10) */
+  constructor(ctx, { klok = () => null, opDeEen = false } = {}) {
     this.ctx = ctx;
+    this.opDeEen = opDeEen;
     this.klok = klok;
     this.uit = ctx.createGain();
     this.bron = null;                // { src, g, start }: de bron die klinkt (of straks gaat klinken)
@@ -171,7 +186,11 @@ export class Lfo {
       // van de cyclus: waar de oude golf daar zou zijn, op de tel afgerond.
       const T = this.stand.tellen;
       let faseA = 0;
-      if (T > 1 && this.seg) faseA = (Math.round(frac(this.fase(k.ankerCtx)) * T) % T) / T;
+      const per = k.perMaat, tot = k.tellenTotEen;
+      if (T > 1 && this.opDeEen && per > 0 && Number.isInteger(tot) && T <= per) {
+        // De tel van het anker in de maat (0 = de "1"); de cyclus begint op de "1".
+        faseA = ((((per - tot) % per) + per) % per % T) / T;
+      } else if (T > 1 && this.seg) faseA = (Math.round(frac(this.fase(k.ankerCtx)) * T) % T) / T;
       seg = { t0: k.ankerCtx, fase0: faseA, periode: P };
     } else {
       seg = { t0: s, fase0: this.seg ? frac(this.fase(s)) : 0, periode: P };

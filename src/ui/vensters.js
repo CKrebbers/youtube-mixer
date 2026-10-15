@@ -1,7 +1,8 @@
 import { DECK_IDS } from '../engine/engine.js';
 import { invoke, metaOf, trackVanDeck } from '../control/actions.js';
 import { WaveformView } from './waveform.js';
-import { Knob, bindButtons } from './controls.js';
+import { Knob, bindButtons, knobVan } from './controls.js';
+import { meldAan } from './renderloop.js';
 import { renderDemoTrack } from '../analysis/demo-track.js';
 import { volgFocus, zetTweede } from './spiegel-plan.js';
 import { meld } from './meldingen.js';
@@ -27,6 +28,59 @@ import { meld } from './meldingen.js';
 
 export const VENSTERS = ['L', 'R'];
 
+/** Een fader stuurt zijn action (alleen een value-action) bij elke beweging; gelezen bij de beweging zelf. */
+function bindFader(el) {
+  el.addEventListener('input', () => {
+    const a = el.dataset.action;
+    if (a && metaOf(a)?.type === 'value') invoke(a, parseFloat(el.value));
+  });
+}
+
+/**
+ * Een paneel dat NA het opstarten verschijnt (werkruimte S7: het werkvak, een vrij paneel,
+ * docs/werkruimte/S7.md): zijn draaiknoppen (`.knob`), knoppen (`[data-kind=button]`) en
+ * faders (`input[type=range][data-action]`) binden, en bij de renderloop aanmelden zodat ze
+ * read() volgen zoals de vaste knoppen. Een element dat al gebonden is, wordt overgeslagen.
+ * Nog eens bind(root) op hetzelfde root: eerst ontbind (de inhoud kan veranderd zijn).
+ * Geeft { knobs, faders } (de lijsten die de renderloop volgt).
+ */
+const banden = new Map();
+export function bind(root) {
+  if (!root) return null;
+  if (banden.has(root)) ontbind(root);
+  const knobs = [], faders = [];
+  root.querySelectorAll('.knob').forEach((el) => { if (!knobVan.has(el)) knobs.push(new Knob(el)); else knobs.push(knobVan.get(el)); });
+  const lossers = bindButtons(root);
+  // Ook een fader van een paneel die (nog) geen action heeft (een {maatgever} zonder maatgever):
+  // hij krijgt er later een en leest hem bij elke beweging opnieuw.
+  root.querySelectorAll('input[type=range][data-action], input[type=range].vp-fader').forEach((el) => {
+    if (el.dataset.gebonden) { faders.push(el); return; }
+    el.dataset.gebonden = '1';
+    bindFader(el);
+    faders.push(el);
+  });
+  const af = meldAan({ knobs, faders });
+  banden.set(root, { af, lossers, knobs, faders });
+  return { knobs, faders };
+}
+
+/**
+ * Het paneel verdwijnt: zijn Knobs en faders van de renderloop af, en een knop die nog
+ * ingedrukt is laat los naar de action van het indrukken. Daarna staat er niets van dit root
+ * meer in de renderlijst (aangemeld() in renderloop.js).
+ */
+export function ontbind(root) {
+  const b = banden.get(root);
+  if (!b) return false;
+  banden.delete(root);
+  b.af();
+  for (const los of b.lossers) { try { los(); } catch (_) {} }
+  // De Knob en de luisteraars blijven aan hun element (knobVan, data-gebonden): wordt hetzelfde
+  // element ooit opnieuw gebonden, dan komt er geen tweede set luisteraars bij.
+  for (const k of b.knobs) k.dragging = false;
+  return true;
+}
+
 /**
  * `venster` is het gedeelde object venster -> deck-id (in `staat`); het wordt
  * ter plekke bijgewerkt, want andere modules houden het vast. Laden komt van
@@ -43,12 +97,7 @@ export function opzetVensters({ engine, venster, laadBuffer, loadFile, naFocus, 
   // Ook de gespiegelde faders zonder action (nog): die krijgen er een zodra
   // de mapping binnen is, en lezen hem bij elke beweging opnieuw.
   const faders = [...document.querySelectorAll('input[type=range][data-action], input[type=range].spg')];
-  faders.forEach((el) => {
-    el.addEventListener('input', () => {
-      const a = el.dataset.action;
-      if (a && metaOf(a)?.type === 'value') invoke(a, parseFloat(el.value));
-    });
-  });
+  faders.forEach(bindFader);
   // Na loslaten de focus teruggeven: een fader met focus volgt MIDI niet meer
   // (volgEngine slaat hem over) en vangt de pijltjestoetsen.
   document.addEventListener('pointerup', (e) => {

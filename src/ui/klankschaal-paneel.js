@@ -1,5 +1,6 @@
 import { meld } from './meldingen.js';
 import { zetTekst } from './dom.js';
+import { registreerRij } from './rijen.js';
 
 /*
  * De KLANKSCHAAL-rij onder de sampler: openen en sluiten (knop in de balk),
@@ -45,6 +46,7 @@ export function opzetKlankschaal({ engine }) {
     if (open) laad();
   };
   knop.addEventListener('click', () => zet(rij.classList.contains('hidden')));
+  registreerRij('klankschaal', { zet, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zet(true);
 
   const tekst = zetTekst;   // de bestaande tekstknoop, geen nieuwe (dom.js)

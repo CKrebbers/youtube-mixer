@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VARVE DJ — uitlijn</title>
+<!-- De uitlijnweergave als los venster (werkruimte S2, docs/werkruimte/S2.md): alle tracks in
+     tellen van de maatgever. Een VENSTER van de mixer (window.opener.varveUitlijn, zoals het
+     beamervenster en plan.html): geen AudioContext, geen MIDI, geen Web Lock. -->
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="src/ui/css/uitlijn.css">
+</head>
+<body class="ul-venster">
+<header class="topbar ul-balk">
+  <div class="brand">VARVE<span>DJ</span><em>uitlijn</em></div>
+  <div class="ul-knoppen">
+    <span class="ul-keus" role="group" aria-label="vorm">
+      <button class="ghost" data-vorm="pagina" title="twee maten (of één), de pagina slaat om; alleen de speelkop beweegt">pagina</button>
+      <button class="ghost" data-vorm="vouw" title="per track één maat: elke gehoorde tel als stip op zijn fase (gelijk = één stapel, drift = schuin, flam = twee stapels)">vouw</button>
+      <button class="ghost" data-vorm="strook" title="één maat, klein">strook</button>
+    </span>
+    <span class="ul-keus" role="group" aria-label="maten per pagina">
+      <button class="ghost" data-maten="1" title="één maat per pagina">1 maat</button>
+      <button class="ghost" data-maten="2" title="twee maten per pagina">2 maten</button>
+    </span>
+    <span class="ul-uitleg" title="grid Δ: wat de grids zeggen · muz Δ: wat de gevonden tellen zeggen · drift: ms per 16 tellen · maat: tellen naast de &quot;1&quot;. + = loopt voor. Groen &lt; 3 ms, geel &lt; 10 ms, rood daarboven. Sleep een baan om hem te duwen.">? getallen</span>
+  </div>
+</header>
+<!-- Een div, geen main: styles.css maakt van main het raster van de mixer. -->
+<div class="ul-hoofd">
+  <div id="ul-los" class="ul-los" hidden>Dit venster hoort bij de mixer: open het daar met de knop <b>uitlijn</b>.</div>
+  <div id="ul-plek" class="ul-plek"></div>
+</div>
+<script type="module" src="src/uitlijn/venster.js"></script>
+</body>
+</html>

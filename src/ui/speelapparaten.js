@@ -2,6 +2,8 @@ import { read, invoke } from '../control/actions.js';
 import { Maschine } from '../control/maschine.js';
 import { meld } from './meldingen.js';
 import { beschrijf } from './apc-beschrijf.js';
+import { opzetMappingOpslag } from './mapping-opslag.js';
+import { MidiLearn, vangLeren, maschineMagLeren } from '../control/midi-learn.js';
 
 /*
  * De speelapparaten van de AV-app-hub (PROTOCOL §17, docs/MASCHINE.md): alleen
@@ -12,6 +14,12 @@ import { beschrijf } from './apc-beschrijf.js';
  *   Maschine MK2 (hub)  -> maschine.js: pads, groepen, draaiknoppen (pagina's Instrument,
  *                          Strip, Rack), masterwiel, uitleg (CONTROL, met de teksten van
  *                          apc-beschrijf.js), lampjes en schermen (mappings/maschine-mk2.json)
+ *
+ * De indeling van de Maschine is standaard + jouw verschil (14 okt, werkruimte S5):
+ * mappings/maschine-mk2.json met wat je koppelde erop, bewaard op de server onder
+ * /api/mapping/maschine-mk2 (mapping-opslag.js). Koppelen: kies "Maschine" in het
+ * koppelpaneel, klik een action aan, en raak dan op de Maschine de control aan
+ * met CONTROL vastgehouden (zonder CONTROL speelt de Maschine gewoon door).
  *
  * Geen requestMIDIAccess: de poorten zijn nep-poorten van HubMidi. De lampjes
  * en schermen lopen op een eigen setInterval (zoals de LED-laag van de APC),
@@ -27,13 +35,21 @@ export function opzetSpeelapparaten({ engine, midi, noten, library = null }) {
   let maschine = null;
   if (ms) {
     maschine = new Maschine({ engine, noten, read, invoke, beschrijf, library });
-    fetch('mappings/maschine-mk2.json')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
-      .then((doc) => maschine.laadMapping(doc))
-      .catch((err) => meld(`Maschine: de indeling (mappings/maschine-mk2.json) niet geladen (${err.message})`, 'fout'));
+    // Koppelen op de Maschine (werkruimte S5). Het profiel (namen en nummers) komt
+    // dynamisch: maschine.js heeft het al geladen, en zo blijft de statische keten
+    // zoals test/hub.test.mjs hem eist. Tot het er is (één microtaak) leert hij niets.
+    let profiel = null;
+    const namen = { id: 'maschine-mk2', name: 'Maschine MK2 (via de hub)', label: (sig) => profiel?.default.label(sig) ?? null };
+    const learn = new MidiLearn({ mapping: maschine.mapping, device: namen });
+    import('../control/devices/maschine-mk2.js').then((p) => { profiel = p; }).catch(() => {});
+    vangLeren(maschine, 'ontvang', learn, { magLeren: (msg) => (profiel ? maschineMagLeren(maschine, learn, msg, profiel) : false) });
+    opzetMappingOpslag({ mapping: maschine.mapping, apparaat: 'maschine-mk2', learn, haal: (...a) => fetch(...a), opslag: browserOpslag(), meld })
+      .start();   // gooit niet: een fout meldt de opslag zelf (met "maschine-mk2" erbij)
     maschine.koppel(ms);
     setInterval(() => { try { maschine.tik(); } catch (err) { console.warn('[maschine]', err); } }, TIK_MS);
     globalThis.addEventListener?.('pagehide', () => maschine.stop());   // geen wektik meer bij het sluiten
   }
   return { maschine };
 }
+
+const browserOpslag = () => { try { return globalThis.localStorage ?? null; } catch (_) { return null; } };

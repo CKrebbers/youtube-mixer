@@ -54,6 +54,8 @@ als een feature erom lijkt te vragen, is dat bijna altijd een ontwerpfout elders
 ```
 index.html          geen build-stap, plain ES-modules
 plan.html           het planvenster: de programmering zien, inrichten, live volgen (src/plan/plan-venster.js)
+uitlijn.html        de uitlijnweergave als los venster (window.opener.varveUitlijn): alle tracks in tellen van de maatgever (docs/werkruimte/S2.md)
+werk.html           de paneelpagina (?s=<scherm>): mac-2 als venster van de mixer, de iPad/iPhone via de server; bedienen na koppelen (docs/werkruimte/S7.md, S8.md)
 apc.html            interactieve APC-kaart: knoppen op hun echte plek, wat ze doen (src/ui/apc-kaart.js)
 maschine.html       de Maschine-kaart: wat elke knop nu doet (uitleg van de Maschine zelf), live vanuit de mixer (src/ui/maschine-kaart.js)
 companion.html      de companion (/companion) voor iPad en iPhone: kaart met wens/kies/haal nu, nu, beeld. Geen geluid, MIDI of Web Lock (docs/COMPANION.md)
@@ -75,6 +77,8 @@ src/
                     fx-lfo.js       LFO van tremolo/autopan: vrij of op de maat (buffer + playbackRate, fase op de audioklok)
                     fx-kern.js      rekenkernen van de effect-worklets (toonhoogte, omhullende), afvalvrij. Puur.
                     fx-worklet.js   de AudioWorklet eromheen (laadt pas bij gebruik, één keer per context)
+                    fx-s10.js       zeven effecten van spoor S10 (kam … duiker), in EFFECTEN achter fx-meer.js (docs/EFFECTEN-MEER.md)
+                    modulatie.js    modulators van een rack (lfo, stap, volger, toeval): offsets op de audioklok. Puur.
                     rack.js         racks als data: macro's, curves, migratie
                     deck.js         transport, cues, loops, beatjump, quantize, rem, beatgrid, stems + stemkanalen (geluid zit in bron.js)
                     sampler.js      acht pads: knippen op het grid, loopen op de maat van wat je hoort
@@ -97,6 +101,8 @@ src/
                     limiter-kern.js de limiter als rekenwerk: vooruitblik 1,5 ms, −1 dBTP (4×), gekoppeld, afvalvrij. Puur.
                     limiter-worklet.js  de AudioWorklet eromheen (uitgang 1 = de gain, voor de gain reduction)
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
+                    acties-effecten.js  spoor S10: track.N.fx.xy.x/.y en master.fx.xy.* (de twee knoppen die het rack in `xy` noemt)
+                    acties-precisie.js  werkruimte S1: fase duwen, jog, ±1 ms, beatjump ¼/½/1, op de 1, bend-sterkte, duoklik; Duwer (15 ms samenvoegen) (docs/werkruimte/S1.md)
                     keyboard.js     toetsen -> actions
                     midi.js         Web MIDI: poorten, parsen, sysex. Kent geen actions.
                     mapping.js      signature -> action, soft-takeover, shift, mapjes. Kent geen hardware.
@@ -124,6 +130,9 @@ src/
                     onderpanelen, midi-opzet, opname-knop, video-paneel,
                     renderloop, mapje-balk — elk een opzet…()-functie
                     vertrek.js      Cmd+R/Cmd+W: eerst vragen zolang er iets speelt, wacht, laadt, de auto-DJ aan staat of er opgenomen wordt (één plek)
+                    aanhakers.js    werkruimte S0: startAanhakers(ctx) laadt aanhakers/<spoor>.js (precisie … inrichten) na alle opzet; renderloop.stap
+                    aanhakers/, beschrijf/, css/  per spoor één eigen bestand (opzet · uitleg van zijn actions · stijl); docs/werkruimte/S0.md
+                    rijen.js        rijenregister: de acht rijen melden zich aan met hun eigen zet (registreerRij, rij, rijNamen)
                     vlag.js + vorm-paneel.js: ?vormen=1 en de VORM-rij (paneel pas geladen als de vlag aan staat)
                     vlag.js ook ?hub=ws://… (hubAdres): dan laadt app.js control/hub.js, anders niet
                     bovenbalk.js    past de balk niet (tijdens het spelen), dan scrollt het rechterdeel opzij: vervaging, wiel
@@ -134,6 +143,8 @@ src/
                     spiegel.js      acht kolommen, focusdeel, acht banen; data-actions uit de mapping
                     vensters.js     de track met focus bovenaan + vensters als model (L/R)
                     tabblad.js      Web Lock 'varve-mixer': maar één tabblad praat met de APC
+                    live-zender.js  de stand naar de server voor de iPad (S7, alleen met een kijker) + de ontvanger van de schrijfweg (S8,
+                                    alleen als die aan staat en alleen in het tabblad met de APC)
                     status-zender.js de stand voor de Controlekamer: BroadcastChannel 'varve-status', alleen het eerste tabblad;
                                     met naarServer ook POST /api/mixer (hooguit 1 per 900 ms, nooit wachten) voor de companion
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
@@ -142,7 +153,8 @@ src/
                     maschine-kaart.js  maschine.html: plaat, schermen, live volgen via window.opener.maschine. Stuurt niets.
                     maschine-kaart-plan.js  plaatsing + wat een control doet = legUit() van de Maschine (label, soort). Puur.
                     toon-weergave.js toonsoort als tekst: kolomkop, focus, library, tooltip. Puur.
-                    library-lijst.js de library als virtuele lijst: kolommen, cellen, pagina-cache. Puur.
+                    library-lijst.js de library als virtuele lijst: kolommen, cellen, pagina-cache (de vraag draagt het filter). Puur.
+                    library-indeling.js S11: de kolom CATEGORIEËN/TAGS, de tagbalk, taggen, slepen, snel-tags (docs/LIBRARY-TAGS.md)
                     past-bij.js     "past bij": wat mixt met de focus-track (regels van de auto-DJ, docs/LIBRARY.md). Puur.
                     kaart-lijst.js  de muziekkaart als lijst (tab kaart): kolommen, badges, stand → knop, filters, kratten, nachtteksten. Puur.
                     kaart-panel.js  de tab kaart in het library-paneel: zoeken, kratten, haal binnen/zoek, wenslijst, nachtwachtrij (docs/LIBRARY.md "De kaart-tab")
@@ -181,7 +193,13 @@ src/
                     beamer-venster.js video.html: het losse venster mengt ZELF (eigen <video>'s, WebGL, lus)
                     fouten.js       video ontbreekt of laadt niet: tekst en wachtregel. Puur.
                     eindbeeld.js    beeld-noodknoppen: zwart, bevriezen, master, flits (laatste stap). Puur.
-  plan/             plan-model.js   het setplan als data: formaat v2, normaliseerPlan, bewerk, verschil. Puur (ook door de server gebruikt)
+  uitlijn/          reken.js        de uitlijnweergave, puur: as in tellen van de maatgever zoals je hem hoort, banen uit Deck.tijdlijn(),
+                                    grid Δ, muziek Δ (faseTussen), drift, maat, vouw, tekensleutel; invoer { decks, maatgever, V, nu }
+                    teken.js        pagina · vouw · strook: tegels in tracktijd, tekenen alleen bij een nieuwe sleutel; vaknamen (vakVorm)
+                    venster.js      uitlijn.html (geen AudioContext, MIDI of Web Lock); docs/werkruimte/S2.md
+  plan/             plan-model.js   het setplan als data: formaat v2 (+ tracks, go, lagen), normaliseerPlan, bewerk, verschil, herstelVelden. Puur (ook de server)
+                    klaarzetten.js  een set uit een keuze: volgorde (boog/oplopend), lengte of eindtijd, "past bij"-keten (docs/PLAN-SET.md). Puur.
+                    live.js         NU / VOLGENDE / DAARNA, de laag, de verwachte eindtijd uit automaat.stand(). Puur.
                     tijdlijn.js     voorspel: set-tijden en de overgang die de app echt kiest. Puur.
                     plan-venster.js het planvenster (plan.html): lijst, strook, bewerken, opslaan met versie, live via opener
   companion/        companion.js    de pagina voor iPad en iPhone: alleen fetch naar /api; companion-lijst.js het rekenwerk en de HTML (puur)
@@ -191,9 +209,26 @@ src/
                     stand-tegel.js  de tegel "Opstelling", het adres van "mixer openen", de tekst onder de kiezer (docs/STANDEN.md). Puur.
                     stand-bewerker.js een opstelling instellen zonder JSON: keuzelijsten → stand. Puur.
                     avondpakket-tegel.js  de tegel "Avondpakket" (vertrek/aankomst, docs/AVONDPAKKET.md). Puur.
+                    bedienen-tegel.js  het blok "Bedienen vanaf iPad en iPhone" (S8): aan/uit, koppelcode, apparaten, intrekken
+  sets/             model.js        een set als geheel (plan, patronen, werkruimte, momentopname): normaliseerSet, nummersVan. Puur, ook de server (docs/PLAN-SET.md §6)
   standen/          stand-model.js  het formaat van een stand (schema 1): witte lijst van delen, de nacht alleen remmen,
                                     normaliseerStand. Puur, geen DOM, geen imports; ook door de server gebruikt
                                     (server/standen.js importeert dit en src/control/mapping.js, allebei puur)
+  library/          indeling.js     spoor S11: het filter (cat, tags en/of/niet, bpm, toon, grid, stems, energie), de zoekregel
+                                    (#tag -#tag @categorie bpm:70-90 …), namen/sleutels, plekken, import; k_grid/k_toon/k_energie. Puur, ook de server
+  werk/             model.js        de werkruimte als data (schema 1): normaliseerWerkruimte/-Stuk (fouten en waarschuwingen apart), samenstellen,
+                                    kern, telNieuwePlekken, kleurControle; S8: waaromNietOpScherm, VAST_NOOIT, TIJDKRITISCH, xy y/druk/los.
+                                    Puur, geen imports; ook de server (docs/werkruimte/S3.md)
+                    werkruimte.js   de werkruimte in de mixer: deel, wie koos, onthoud, volgt, THUIS, vereist/terugval, vastleggen, peilen
+                    apparaten.js    registreerApparaat(id, { zetMapjes, mapjes, aanwezig }); de APC-adapter (layer.* over de bus)
+                    kleuren.js      deel -> paletnaam (MIX wit … LIBRARY grijs). Puur.
+                    inrichten.js    ✎ inrichten zonder JSON (S8): item erbij/weg, op een scherm, toewijzen aan een groep knoppen
+                                    (eigen mapje p-<paneel>), de zoeker (top-40), de Inrichter (opslaan met versie, terug). Puur, alleen het model
+  paneel/           protocol.js     de berichten mixer <-> server <-> paneel (S7), invokeBericht/isInvoke (S8). Puur
+                    verbinding.js   opener (mac-2) of server (SSE + ping); zetSchrijver = bedienen (S8)
+                    paneel.js, vrij.js, kaart.js  werk.html: de vakken, het vrije paneel en de bouwstenen, de kaart (S7); koppelen en ✎ (S8)
+                    schrijver.js    de iPad/iPhone: POST invoke (seq, één herhaling), ping met ?k= zolang iets vastzit, wie/koppel (S8)
+                    uitvoer.js      in de mixer: de Uitvoerder beslist (panelen van DAT scherm, waaromNietOpScherm), loslaten, bron in het log (S8)
   auto/             planner.js      de auto-DJ, puur: welk fragment, welke overgang (bewakers), wanneer (frasegrens), de curves
                     automaat.js     de auto-DJ, uitvoeren: laden, klaarzetten, overgang via de bus, overnemen, nooit stilte
   opname/           opnemer.js      je set opnemen: worklet aan de master, stukken naar de server
@@ -210,7 +245,8 @@ server/             draait apart: `node server/index.js`
   ingest.js         yt-dlp (of een eigen bestand) -> ffmpeg -> media/<id>/. Gooit nooit.
   links.js          links netjes maken (TikTok), bron van een nummer, id's, bestandsnamen
   media-plek.js     waar media/ staat: VARVE_MEDIA, media-VERHUISD.txt, binnen iCloud?, isTestserver (VARVE_TESTSERVER=1)
-  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren), peaks, racks, grid, toonsoort, hotcues, stems.
+  library.js        SQLite via node:sqlite. Tracks (pagina's, sorteren, filter), peaks, racks, grid, toonsoort, hotcues, stems.
+  indeling.js       S11: tags, categorieën (gewoon/slim), snel-tags, het filter als SQL, kaartkrat overnemen, export/import (lib.indeling)
   backup.js         backups van library.db: wanneer, hoeveel, opruimen; het werk in backup-werker.js (worker)
   avondpakket.js    het avondpakket: parsers (pmset, ioreg, df, system_profiler, tailscale, find), profielen, fase, oordeel. Puur
   avondpakket-meet.js  de sondes in kindprocessen met time-outs (nooit fs op media/), cache, bevroren als er een deck speelt, NEP-fixtures
@@ -225,6 +261,7 @@ server/             draait apart: `node server/index.js`
   proef.js          de speellijst van de Controlekamer: proef/sessie.json, per punt, atomisch; archief per ronde
   mixer-melding.js  de melding van de mixer voor de companion (POST/GET /api/mixer): isMelding, vanDezeMac, MixerStand (alleen geheugen). Puur.
   handelingen.js    handelingenlogs naast de opnames: stukken op hun plek, lijst, lezen
+  sjablonen.js      spoor S10: eigen sjablonen (racks/eigen.json, VARVE_SJABLONEN), versie + 409, alleen deze Mac (routes/sjablonen.js)
   stems.js          de stems-rij: Demucs starten (nice), één tegelijk, annuleren, werkmap, nalopen, verhuizen
   stems/splits.py   de splitter: Demucs htdemucs in stukken met kruisfade, 16-bit stems.wav + stems.json (docs/STEMS.md)
   kaart.js          de muziekkaart als zoeklaag: varve-kaart.json in het geheugen (zoeken/filteren/sorteren/pagineren), binnen = tracks.id,
@@ -237,6 +274,14 @@ server/             draait apart: `node server/index.js`
                     server (MAX_DRADEN: iCloud mag de threadpool niet vullen, de andere 2 draden blijven voor de audio)
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
+  routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel/sets/sjablonen/indeling.js ({ routes, mag }), vlak vóór de 404;
+                    indeling.js = /api/indeling/* (S11, elke POST alleen deze Mac)
+  paneel.js         S7 PaneelRelais (de stand naar de kijkers, SSE) + S8 PaneelSchrijf: schakelaar (standaard uit = 404), koppelcode,
+                    token-cookie (alleen de hash op schijf), Origin, rem 120/s, seq, het kanaal naar de mixer, loslaten na 1,5 s
+  werkruimtes.js    werkruimte S3: werkruimtes/<naam>.json met versie (409 met de huidige inhoud) en .versies/, voorbeelden uit
+                    tools/werkruimtes/voorbeelden/ (een eigen bestand gaat voor), VARVE_WERKRUIMTES; opslaan alleen vanaf deze Mac (W1);
+                    S8: POST …/terug (de vorige versie, 409); tools/werkruimtes/top40.json op de witte lijst (de zoeker van ✎);
+                    lezen onder dezelfde grens als de standen (`beperkt` + ANDERE_LEZERS in standen.js: samen hooguit 2, 503 na 2 s)
 tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
                     media-verhuis.mjs (media/ buiten iCloud: --droog, --doe; docs/LIBRARY.md "Waar media/ staat"),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
@@ -246,6 +291,8 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     beeld-e2e.mjs: met de echte relay en Stroommachine uit ~/Projects/stroommachine;
                     zaalbeeld.mjs: video.clips op Metal, eigen server 8806 (--opruimen na een harde stop);
                     beeld-lokaal.mjs: de Stroommachine naast VARVE meten (--zelftest zonder GPU; de volledige run NIET op een speeldag);
+                    werk-scherm.mjs, werk-ipad.mjs (S7 + S8: koppelen, de xy-pad op een nep-iPhone, weigeren, loslaten), werk-maschine.mjs,
+                    inrichten.mjs (✎ in echte Chrome), werk-alles.mjs (de totaalmeting van de werkruimte, C6);
                     avondpakket.mjs: de tegel Avondpakket (eigen server 8914, NEP-fixtures, de mixer-lock in een tweede tab);
                     en los: tools/avondpakket.mjs, de CLI van het avondpakket (exit 0/1/2/3; docs/AVONDPAKKET.md);
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
@@ -271,6 +318,8 @@ mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
   generic.json      leeg startpunt
   apc40mk2-vormen.json  fragment: het mapje "vorm" (alleen met ?vormen=1, komt BIJ de mapping)
+  stukken/          stukken van de werkruimte (WERKRUIMTE.md B4: fragmenten per apparaat, alleen VRIJE plekken); basis.json = ⇧ master-knop THUIS (S3);
+                    uitlijn.json = mapje device.uitlijn op ⇧ Lock, acht fasemeters (S1; ook los met ?uitlijn=1)
   xboard49.json     E-MU Xboard49: knop 1–8 -> instrument, 9–16 -> FX, schuif -> fader van de speeltrack (AANNAME, te controleren met een proef)
   maschine-mk2.json Maschine MK2 (via de hub): groep A–H = focus, draaiknoppen = instrumentknoppen van de speeltrack (relatief, shift fijn), transport van de patronen ({plek}); laag pagina.strip / pagina.rack = de knoppagina's van de focus-track
 racks/
@@ -294,6 +343,8 @@ test/
   avondpakket-meet.test.mjs  sondes met een nep-exec (time-outs 50 ms), cache en bevriezing, de CLI via spawnSync (nooit een server)
   avondpakket-server.test.mjs  GET /api/avondpakket op een eigen server: compleet, onbekend profiel, bevroren na een Range-verzoek, schrijft niets
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
+  indeling.test.mjs, indeling-server.test.mjs, indeling-ui.test.mjs  S11: model en zoekregel, schema v10 + migratie met data, filter-SQL,
+                    volgorde, slim, hernoemen/samenvoegen/wissen, export/import; de routes (403 van buiten, 409, kaartkrat); URL, race bij een nieuw filter, bus
   past-bij.test.mjs  "past bij": goed/bijna per paar, toon na de sync, half tempo, volgorde, meetpunt (t, eind, zeker deel)
   kaart-lijst.test.mjs  de tab kaart als rekenwerk, en de nep-server (tools/headless/kaart-nep.mjs) tegen het contract van de kaart-API
   ingest.test.mjs   pipeline zonder netwerk; ffmpeg maakt zijn eigen testmateriaal
@@ -311,6 +362,8 @@ test/
   beatgrid.test.mjs beatrekenen, grid bewerken, tap tempo met een misser erin
   detect.test.mjs   beatdetectie op materiaal waarvan het antwoord bekend is
   rack.test.mjs     macro-resolutie met een gouden bestand, migratie, onbekende effecten
+  modulatie.test.mjs, effecten-s10.test.mjs, sjablonen-server.test.mjs, sjablonen-paneel.test.mjs  spoor S10: modulators, rackformaat,
+                    muteren; de zeven effecten en hun kernen (0 GC); /api/sjablonen; de bouwsteen sjablonen en de XY-actions (nep-fx.mjs = de mock)
   effecten.test.mjs de effecten uit de filter app: contract, eenheden = zet(), lussen, inloop, twee koppen, LFO op de maat, worklets, 0 GC
   stream.test.mjs   streamkern tegen ffmpeg (bit voor bit), pagina-plan, StreamBron
   video.test.mjs    video volgt audio: bijsturen, springen, zichtbaarheid
@@ -374,6 +427,13 @@ test/
                     (VARVE_TEST_ECHTETIJD=1: ook in echte tijd, ~2 min; niet tijdens een speelavond)
   nep-kaart.mjs     de verzonnen kaart (twaalf nummers die elke regel raken) — geen test zelf
   media-verhuis.test.mjs  media buiten iCloud: iCloud-herkenning, het briefje, droogloop/--doe op een nepmap, VARVE_TESTSERVER-bewaker
+  aanhaakpunten.test.mjs  werkruimte S0: mapjes erbij/weg/volgorde, fragmenten, meta-vlaggen, alleenScherm, Deck.tijdlijn, aanhakers, routes (kopie-server)
+  precisie.test.mjs werkruimte S1: duwen (3,81/0,48 ms per tik), samenvoegen, keylock, jog, op de 1 (stukgrens), duoklik, sync-lampje, het stuk uitlijn
+  werkruimte-model.test.mjs, werkruimte.test.mjs, werkruimte-server.test.mjs  werkruimte S3: het model (weigeren/waarschuwen, samenstellen =
+                    de mapping van vandaag), de runtime (bus-spion, volgt, onthoud, THUIS, terugval, LED-tik), /api/werkruimtes (409, W1)
+  paneel-schrijf.test.mjs  werkruimte S8: de schrijfweg (model, Uitvoerder, de bron in het log, PaneelSchrijf met nepklok, een eigen server
+                    met nep-mixer nep-mixer.mjs (geen test zelf): 404/401/403, invoke -> read, 429, seq, los binnen 1,5 s), de tegel
+  inrichten.test.mjs  werkruimte S8: ✎ inrichten (bewerkingen, toewijzen: het model beslist, de zoeker, de Inrichter, terug met 409 op een eigen server)
   alles.mjs         alle tests in één keer met overzicht
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -387,7 +447,8 @@ docs/
   TOONSOORT.md      toonsoort per nummer: meting, ontwerp, en wat gebouwd is (§13)
   KEYLOCK.md        keylock en toon verschuiven met Signalsmith: meting, ontwerp, gebouwd (§9)
   MAPPING-VERSCHIL.md  eigen mapping als verschil: vorm, gedrag, Clay's echte verschil
-  LIBRARY.md        library: pagina's, sorteren, hotcues per nummer, schema v6/v7
+  LIBRARY.md        library: pagina's, sorteren, hotcues per nummer, schema v6/v7; S11 kort
+  LIBRARY-TAGS.md   categorieën, slimme categorieën en tags (S11): begrippen, filter en zoekregel, bediening, opslag v10, routes
   BEAMER.md         het losse venster mengt zelf: wie mengt, opname, herladen, rVFC-meting
   HANDELINGENLOG.md formaat, keuzes en grenzen van het handelingenlog
   AUDIOPAD.md       audiopad zonder afval: waar het zat, de regels, cijfers vóór/na
@@ -412,6 +473,8 @@ docs/
   AVONDPAKKET.md    één controle vóór vertrek en bij aankomst (10 okt): profielen, fase, oordeel, paklijst, ritueel, tegel en CLI
   KAART.md          de muziekkaart in Varve (10 okt): het bestand, de API (+ §3b de afspraken met de UI), de nachtregels, "er speelt een deck",
                     §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
+  WERKRUIMTE.md     de werkruimte: het ontwerp (A–E) en "Gebouwd" (S0–S8 samengevat)
+  werkruimte/       per spoor van de werkruimte wat het bouwde (S0.md: de aanhaakpunten … S8.md: inrichten, bedienen, totaalmeting)
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -428,7 +491,7 @@ docs/
 | Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. Hij draait in een pool (zoveel tegelijk als er kernen zijn, langste eerst uit `test/.duur.json`); een test met een tijdsgrens op de wandklok, een afvalmeting of een vaste poort krijgt bovenaan `// @alleen: <waarom>` en loopt daarna alleen. `--serieel` = alles na elkaar, `--banen N`. |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
-| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`, `standen/`. Een server die vanuit een worktree draait schrijft patronen, de speellijst en de standen in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
+| Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`, `standen/`, `sets/`, `racks/eigen.json` (eigen sjablonen; `racks/sjablonen.json` hoort WEL in git). Een server die vanuit een worktree draait schrijft patronen, de speellijst, de standen, de sets en de eigen sjablonen in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
 
 ## Bekende grenzen (niet als bug rapporteren)
 
@@ -1862,12 +1925,137 @@ Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag misse
 - Verhuizen gaat met `tools/media-verhuis.mjs` (droog standaard; `--doe` hernoemt alleen, met de
   server uit). VARVE.app leest `~/.varve/media-pad` en, via de login-shell, `~/.zprofile`.
 
+## Werkruimte: aanhaakpunten (14 okt, spoor S0)
+
+Volledig in `docs/werkruimte/S0.md`. Precisie (S1): `docs/werkruimte/S1.md`; duwen en jog gaan door de
+Duwer (hooguit één nudge/seek per 15 ms, met keylock nooit twee geplande sprongen), headless
+`tools/headless/precisie.mjs`. Een spoor van de werkruimte raakt ALLEEN zijn eigen stub:
+`src/ui/aanhakers/<spoor>.js`, `src/ui/beschrijf/<spoor>.js`, `src/ui/css/<spoor>.css`,
+`server/routes/<spoor>.js`. Uitzonderingen in de meta van de action, niet in een regex:
+`log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true`, `nummer: true` (hoort
+bij het nummer: terugspelen slaat hem over op een track zonder zijn nummer van toen, `nummerNodig`). Een
+fasemeter op een endless-knop krijgt GEEN `takeover: 1`: dan geeft de eerste tik na een jog of sync een
+sprong (docs/werkruimte/S1.md). Mapjes van buiten:
+`voegMapjeToe`/`haalMapjeWeg`/`zetVolgorde` (lagen.js) en daarna `herbindLagen()`; regels van buiten:
+`mapping.vervangFragment(bron, doc)`/`haalWeg(bron)` (een eigen regel wint altijd).
+
+Werkruimte-kern (S3, `docs/werkruimte/S3.md`): `werkruimtes/<naam>.json` (niet in git) of een voorbeeld uit
+`tools/werkruimtes/voorbeelden/`; zonder werkruimte (`standaard`) is de mapping bit voor bit die van vandaag en de
+werk-balk `hidden`. Een deelwissel zet ALLEEN mapjes (layer.* via de adapters), rijen, onderpaneel en werkvak
+(event `'werkruimte'`): 0 invokes buiten `layer.*`/`werk.*` (bus-spion in werkruimte.test). Wat een werkruimte
+mag en niet mag staat op één plek: `src/werk/model.js` (de server gebruikt hetzelfde).
+Op 1440×790 is er met een rij open geen pixel over: de werk-balk haalt zijn hoogte van de mixer zelf af
+(`body.werk-balk-aan` in `src/ui/css/werk.css`, alleen bij een wissel gezet), nooit van de pagina;
+`tools/headless/werkruimte.mjs` toetst het per deel. Wie nog iets boven `main` zet: hetzelfde.
+Een HERLAAD (peil, 409, terugval) haalt mapjes weg en zet ze terug: dat gaat STIL (`adapter.stil(fn)`, geen
+volgt-melding) en daarna gaat per apparaat weer open wat er stond. Een nieuwe adapter (S6: de Maschine) geeft
+`stil` mee, anders springt het deel bij elke peil (review ronde 2). Nieuwe fs-lezers in de server: via `beperkt`
+uit server/standen.js met `ANDERE_LEZERS`, nooit een eigen pool (de grens van 2 geldt voor de hele server).
+
+## Werkruimte (S0–S8, 14 okt): wat een bouwer niet mag missen
+
+Volledig in `docs/WERKRUIMTE.md` ("Gebouwd") en `docs/werkruimte/S0–S8.md`; vragen in VRAGEN blok W.
+- **Met `standaard` is alles bit voor bit vandaag**: geen fragment, geen mapje erbij, de werk-balk `hidden`, en de mixer
+  laadt niets van `src/paneel/` (geen zender, geen ontvanger, geen timer). Elke bestaande test en headless tool moet zo groen blijven.
+- **Stukken en werkruimteregels alleen op VRIJE sleutels of in nieuwe/eigen mapjes**, nooit op de kern of een plek van de
+  standaard (`leesRegels`, B1/B3). Een eigen (gekoppelde) regel wint altijd. De standaardmappings veranderen pas na de proef.
+- **Een deel zet nooit een klank**: alleen mapjes (layer.* via de adapters), rijen, onderpaneel, werkvak (bus-spion, 0 invokes buiten layer.*/werk.*).
+- **Meta-vlaggen, geen regex**: `log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true` (een mapping weigert
+  hem op een knop, de iPad ook), `nummer: true`. Houd-mapjes (`houd.<naam>`) zijn gedeeld over alle apparaten.
+- **Eigen stubs per spoor**: `src/ui/aanhakers/<spoor>.js`, `src/ui/beschrijf/<spoor>.js`, `src/ui/css/<spoor>.css`, `server/routes/<spoor>.js`.
+- **De iPad en iPhone (S8)**: de schrijfweg staat standaard UIT (404, ook na een herstart van de server); alleen via de tailnet
+  (VARVE_HOSTS) en met een Origin die precies de eigen pagina is; een koppelcode (6 cijfers, 60 s) geeft een HttpOnly-cookie
+  (alleen de hash op schijf) per apparaat én scherm. De MIXER beslist (`src/paneel/uitvoer.js`): alleen wat in de panelen
+  van DAT scherm in het actieve deel staat, en `waaromNietOpScherm` (model.js): VAST_NOOIT (opnemen, log, mappings,
+  werkruimtes, library, laden, auto-DJ, `track.*.grid.*`, `track.*.key`/`.key.*` (niet keylock), patronen opnemen; op de NAAM) wint altijd, dan `nooit`, dan TIJDKRITISCH (bend, play, cue, nudge, hotcues, loop in/out,
+  tap: alleen met `"tijdkritisch": true`), dan `mag`. Rem 120/s per apparaat en scherm (loslaten door als er iets vastzit of een `aan` onderweg is), `seq` tegen
+  dubbel, wegvallen = binnen 1,5 s alles los wat met `druk: 'aan'` binnenkwam (geen ping met `?k=` of de SSE dicht; de
+  mixer ook zelf als zijn kanaal 1,5 s stil is). Het log draagt de bron als vierde kolom (`[t, id, v, { bron: 'ipad' }]`,
+  samen met `van`); terugspelen leest alleen `van`. Een nieuwe action die gevaarlijk is van buiten de Mac: in VAST_NOOIT.
+- **Eén tabblad**: zender en ontvanger alleen in het tabblad dat `statusVanMij` is; de server neemt één mixer-verbinding aan (het tabblad van de relais, anders de eerste; een ander 409). De ontvanger opent zijn SSE alleen als de
+  schrijfweg aan staat: een open SSE kost een van de zes verbindingen per host die de StreamBron nodig heeft.
+- **xy-pad**: `y`, `druk`, `los` staan in het model; `actionsVan` neemt `y` en `druk` mee (anders weigert de mixer ze).
+- **✎ inrichten** (`src/werk/inrichten.js`): elke bewerking = één opslag met versie, het model toetst vooraf; toewijzen aan
+  een groep knoppen gaat in een eigen mapje `p-<paneel>` dat het deel openzet; terug = `POST /api/werkruimtes/<naam>/terug` (409).
+- **Totaalmeting**: `tools/headless/werk-alles.mjs` (C6). Wie iets per beeld toevoegt aan de mixer of mac-2: opnieuw meten.
+
+## Meer effecten, sjablonen en modulators (14 okt, spoor S10)
+
+Volledig in `docs/EFFECTEN-MEER.md` (ontwerp + "Gebouwd"), vragen in VRAGEN blok S10. Wat een bouwer niet mag missen:
+- Het rackformaat blijft SCHEMA 1; alles is optioneel: `mods`, `xy`, `uitleg`, `meng` per effect, `kromme` per
+  koppeling, doelen `plek.K`, `mod.N.diepte` en `<slot>._nat`. Een rack zonder die velden laadt, klinkt en schrijft
+  bit voor bit als voorheen (`bouwKeten` maakt alleen een droog/nat-pad als het rack erom vraagt). `schrijfRack`
+  bewaart onbekende velden op het hoogste niveau (behalve `_…`), en een onbekende modulator blijft als ruwe JSON.
+- Modulators (`src/engine/modulatie.js`) zijn een BESTURING: InsertSlot rekent elke 33 ms (`MOD_TIK`, alleen als het
+  rack modulators met een doel heeft; 8 ms `MOD_TIK_FIJN` met een snelle op de maat) op `ctx.currentTime` en de klok van het deck; staat die stil, dan gebeurt er
+  niets. Ze geven een OFFSET: `leesPlek` (knopstand, soft-takeover, LED-ring) beweegt niet mee, `paramWaarde` wel.
+  Een parameter met `trappen` krijgt alleen een nieuwe stand als hij een trap verder is (`_opTrap`). De volger leest
+  een AnalyserNode op `slot.in` die pas bestaat als er een volger is. Nooit Math.random: toeval komt uit een zaad.
+- Knop → knop (`stuurPlekken`) is één niveau diep: elke knop rekent met zijn EIGEN stand. `resolveMacros` laat
+  `plek.*` en `mod.*` buiten de keten; een nieuwe plek die macro's oplost: gebruik `_waardenNu()` in InsertSlot.
+- Droog/nat per effect is LINEAIR (`zetNat`); een effect met `alleenNat: true` (de delay) krijgt een STUUR vóór
+  het effect (droog vol, de staart rolt door). Een eigen sjabloon heeft herkomst `eigen:<naam>` (niet `e:`: dat is op de master "los effect"), een kant-en-klaar
+  `s:<nr>`. Weghalen van een modulator of koppeling: `_herstelLos` zet de parameter terug; bewerken houdt de
+  `ModStaat` van een modulator met dezelfde soort (`new ModBank(mods, vorige)`).
+- Een nieuw doel `<slot>._nat` op een effect zonder droog/nat-pad vraagt een nieuwe keten: `natOntbreekt()` /
+  `bewerkMods().opnieuw`, en de editor doet dan `zetRack(…, { behoudStanden: true })` (kruisfade).
+- De drie nieuwe kernen (`Kam`, `Freqschuif`, `Aanslag` in fx-kern.js) volgen het audiopad: 0 GC, gemeten in
+  `test/effecten-s10.test.mjs`. Twee dingen die hier al misgingen: een keyed store van een double
+  (`this.kern[naam] = …` in de processor) en een module-constante in de lus (de grens van de aanslag) maakten
+  per blok afval; geef de processor een `zet(kern, p)` met namen en lees een grens in een veld. Niemitalo's
+  Hilbert-tabel geeft a, de trap rekent met a². Parameters die per blok binnenkomen en een lus versterken
+  (feedback van de kam) glijden per SAMPLE in de kern.
+- Een sjabloon met `uitleg` (die van S10) moet in `rack.test` ook: knopnamen, `xy` op twee knoppen, een DROGE
+  beginstand (wat een echo, galm, kam, frequentieschuif … erin mengt staat dicht; een delay via `_nat`), en
+  modulators die in de beginstand stilstaan. Nieuw sjabloon: ook `node tools/headless/effecten-meer.mjs`.
+- Eigen sjablonen: `/api/sjablonen` (bewaren met versie, 409 met wat er nu staat; geen naam van een kant-en-klaar
+  sjabloon; alleen `vanDezeMac`). In de kiezer achter de kant-en-klare (`_eigen`), dus `s:<nr>` van een
+  kant-en-klaar sjabloon verandert niet. Elke proefserver zet ook `VARVE_SJABLONEN` (`harnas()`, set-proef, latentie, sec-plan en sec-auto doen het al), anders schrijft "als sjabloon" in `<worktree>/racks/eigen.json`.
+- De XY-pad van een rack: `track.N.fx.xy.x/.y` (`beginstand: false`, de plek staat al in het log). Bouwsteen
+  `sjablonen` in `src/paneel/vrij.js`; bewaren of wissen staat niet op de bus, dus nooit van de iPad.
+- De editor (`rack-editor.js`) tekent nog steeds niet tijdens het slepen: schuiven van modulators en de kromme
+  veranderen alleen getallen en hun eigen canvas (`tools/headless/rack-editor.mjs` meet het met een MutationObserver).
+
 ## Werkwijze die hier werkt
 
 - Eén fase per keer. Maak fase N af en laat hem draaien voordat fase N+1 begint.
 - Bij een keuze met gevolgen: benoem de trade-off en kies, wacht niet op goedkeuring.
 - Meld het expliciet als iets een aanname is die verkeerd kan zijn.
 - Geen features bouwen die niet gevraagd zijn, ook niet als ze voor de hand liggen.
+
+## Een set klaarzetten, live bijmixen, sets (14 okt, spoor S9)
+
+Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
+- Het planformaat groeit ZONDER nieuwe versie: `tracks: { auto }` (plan), `go: 'wacht'` en
+  `lagen` (stap), allemaal optioneel. Wie het plan schrijft stuurt `kent: KENT` (plan-model.js);
+  zonder zet de server ze terug (`herstelVelden`, de regels van in/uit). Een nieuw optioneel veld:
+  in KENT en in GROEPEN van herstelVelden.
+- De automaat raakt een track van Clay NOOIT: met `tracks` alleen die, zonder nooit een track waar
+  iemand anders dan de automaat de laatste `CLAY_RECENT` (120 s) een `track.N.*` stuurde, en nooit
+  een track met een laag (`_laagDecks`). `_luidste`/`_naOvername` tellen alleen zijn tracks. Een
+  nieuwe plek die een track kiest: `_mijn()` en `_vanClay()`.
+- GO heeft een uiterste moment (`_goUiterst`): nooit stilte gaat voor GO. Lagen kijken naar de
+  POSITIE van de hoofdtrack (regel 3); Clay die de track van een laag aanraakt = de laag is van hem.
+- `plan.*` en `set.*` hebben `log: 'overslaan'` en `beginstand: false`; `set.bewaar*` en
+  `set.terugladen*` staan in VAST_NOOIT (src/werk/model.js). De rest mag van de iPad alleen als `mag`
+  het noemt.
+- Laden gaat niet over de bus: de automaat ziet wat Clay laadde aan een ANDER nummer op het deck
+  (`_kijkLaden`, elke tik, met `laadSleutel` = `bron.bestand`; NOOIT `deck.buffer` vergelijken: de
+  StreamBron geeft daar elke keer een nieuw object); zelf laden gaat via `_laadZelf`, en die leest null van
+  `laadLibrary` als "verdrongen door Clay": een GELUKTE laad geeft daarom altijd een object (`{}`), nooit null
+  (integratie S9: met null telde elke laad van de auto-DJ als een laad van Clay; set-proef stap 4). Een laag rekent op de positie van zijn
+  eigen track en loopt mee over een stapwissel; zonder zeker grid start hij niet vanzelf.
+- Een SET (`src/sets/model.js`, puur, ook de server): plan en patronen als KOPIE, werkruimte op
+  NAAM, momentopname = `leesStand()` met speelt/wacht/pads/patronen UIT. `sets/<naam>.json` (niet in
+  git: `/sets/` in .gitignore; `VARVE_SETS`, ook in elke proefserver), versie + 409 + `.versies`, elke fs-operatie via `beperkt` (server/sets.js).
+  Terugladen laadt nummers gewoon uit de library (grid van NU) en zet dan de stand
+  (`maakZetMoment`); over een spelende track pas bij de tweede druk binnen 3 s; er start niets.
+- `/api/set/klaarmaken` weigert (409) als er een deck speelt of op een speeldag (de speeldagen van
+  de nacht). De secties gaan één voor één en wachten als er een deck gaat spelen.
+- Aanhaker `src/ui/aanhakers/set.js` (negende in AANHAKERS), uitleg `src/ui/beschrijf/set.js`,
+  routes `server/routes/sets.js`, bouwstenen `plan` en `sets` (src/paneel/vrij.js; de live-stand
+  erboven in paneel.js `setVak`, op de iPad via `GET /api/set/live`). Toetsen: `test/plan-set`,
+  `test/auto-set`, `test/sets-server`, `test/sets-mixer`; headless `tools/headless/set-proef.mjs`.
 
 ## Beatgrid (23 sep 2026, restpunten 25 sep, docs/BEATGRID.md)
 - Het grid is een TEMPOKAART: stukken {van, bpm, anker, zekerheid?, maat?} in tracktijd; tellen
@@ -1938,3 +2126,29 @@ Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag misse
   leesWeg ook bij een fout, time-out 5 s), na elke POST de library-rij, pas na de REEKS andere tracks
   met dat nummer (`naReeks`). Een geladen grid als bewaard markeren: `grids.alsBewaard(id)`, niet
   `gridBewaard[id]` zelf zetten. Weergave leest `deck.gridMetingBij(nu)`.
+
+## Categorieën en tags in de library (14 okt, spoor S11)
+
+Volledig in `docs/LIBRARY-TAGS.md`, vragen in VRAGEN blok S11. Wat een bouwer niet mag missen:
+- Begrippen: *categorie* (eigen bak met volgorde, plat), *slimme categorie* (bewaard filter, de server rekent hem bij
+  elke vraag), *tag* (label + kleur), *snel-tag 1–8* (een PLEK die naar een tag wijst: de bus kent geen namen). Een
+  *krat* is van de kaart; "→ categorie" maakt er een KOPIE van. Tags van nummers zijn niet `rack.tags`.
+- Schema v10: `tags`, `nummer_tags`, `categorieen`, `categorie_nummers` (`plek` REAL, tussenvoegen = een getal ertussen,
+  te klein = opnieuw nummeren) en de afgeleide kolommen `k_grid`/`k_toon`/`k_energie`. Een nieuwe plek die grid, toon,
+  secties of duur schrijft: `this._kenmerken(id)` erachter (anders klopt het filter niet). Formules alleen uit
+  `src/library/indeling.js` (die gridStatus en ToonKaart gebruikt), nooit een tweede.
+- Het filter is ÉÉN object (`normaliseerFilter`), in de URL via `filterNaarQuery`/`queryNaarFilter`, in het zoekveld als
+  zoekregel (`leesZoekregel`/`zoekregelVan`). In de UI is de tekst van het zoekveld de enige bron: een klik op een
+  categorie of tag schrijft die tekst om. Tags in een regel staan bij SLEUTEL; hernoemen/samenvoegen schrijft de regels
+  en snel-tags mee om (één transactie). Slim in slim kan niet; een slimme mag binnen één gewone zoeken.
+- `GET /api/library` zonder de nieuwe parameters = precies de oude lijst. `sorteer=plek` alleen met een gewone categorie
+  (400). Een filterkolom met weinig waarden (k_grid) gaat NIET via de index (`+t.k_grid`): dat maakte een slimme
+  telling twee keer zo duur. `stand()` is onthouden op total_changes + data_version.
+- Schrijven: `/api/indeling/*`, elke POST `vanDezeMac` (403). Op de bus alleen kiezen en taggen
+  (`library.category.*`, `library.quicktag/quickfilter.K`, `track.N.tag.K`), alle met `log: 'overslaan'` en
+  `beginstand: false`; wissen, hernoemen, categorieën maken nooit op de bus. `library.*` blijft VAST_NOOIT;
+  `track.*.tag.*` mag van de iPad als `mag` het noemt (bouwsteen `tags`).
+- Met de kolom open vallen LUFS en racks uit de lijst (`SMAL_WEG` in library-panel.js): zo past hij op 1440. Een kolom
+  erbij in de library: meet het opnieuw (tools/headless/indeling.mjs controleert de breedte).
+- Toetsen: `test/indeling*.test.mjs`, `tools/headless/indeling.mjs` (echte Chrome, 5000 nummers),
+  `tools/bench/indeling.mjs` (5.000 en 20.000).

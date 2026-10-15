@@ -225,11 +225,30 @@ nep-context (de witte strepen liggen bovenop).
 Niet: met de planner van het spoor auto (die negeert in/uit in deze tak), en
 niet op Clay's library.
 
+## 5b. Een set klaarzetten en live bijmixen (spoor S9, 14 okt)
+
+Volledig in `docs/PLAN-SET.md`. Kort, wat er in dit venster bij kwam:
+- **Maak set van** (balk onder de kop): de selectie rechts (vinkjes, "alles", of een krat van de
+  kaart), een "past bij"-keten vanaf de gekozen stap, of de hele library; vorm boog / oplopend /
+  zoals gekozen; duur in minuten of een eindtijd (01:30). `src/plan/klaarzetten.js` (puur).
+- **Tracks auto**: de tracks van de automaat (`plan.tracks.auto`); de rest is van jou.
+- **Klaar** per nummer: G grid · T toon · S stems · § secties · V video (`POST /api/set/klaar`);
+  **maak klaar** zet stems en secties in de bestaande rijen (niet op een speeldag, niet als er een
+  deck speelt).
+- Per stap: **GO** (wacht op GO), **+N laag**; toetsen 1–4 = overgang, G = GO. De lagen van de
+  gekozen stap staan rechts (erbij, weg).
+- **Live-balk**: NU / VOLGENDE / DAARNA, de laag, de verwachte eindtijd; GO, buiten plan, terug,
+  laag nu, laag weg (over de bus van de mixer).
+- **Sets** rechts: bewaar, laad (met of zonder de mixer; tweede klik over een spelende track),
+  kopie, hernoem (`/api/sets`, `sets/<naam>.json`).
+- Het formaat groeit zonder nieuwe versie: `tracks`, `go`, `lagen` (optioneel). Opslaan stuurt
+  `kent: KENT` (`['in', 'uit', 'go', 'lagen', 'tracks']`); een oud venster dat ze niet kent krijgt
+  ze terug (`herstelVelden`, dezelfde regels als in/uit). **Claude stuurt `kent: KENT` mee.**
+
 ## 6. Volgende fases (uit het onderzoek)
 
-2. **Live-stand**: groot NU / VOLGENDE / DAARNA, GO per stap (automatisch /
-   wacht op GO / direct), "buiten plan" + **terug naar plan**, een klok met de
-   verwachte eindtijd, en een APC-mapje "auto".
+2. ~~**Live-stand**: groot NU / VOLGENDE / DAARNA, GO per stap, "buiten plan" +
+   **terug naar plan**, een klok met de verwachte eindtijd.~~ Gebouwd in S9 (§5b).
 3. **Claude als medeprogrammeur**: een plan uit een wens in gewone taal,
    voorstellen als gestippelde stappen die je per stuk aanneemt, en na de set
    het handelingenlog nalezen voor een stijlnotitie.

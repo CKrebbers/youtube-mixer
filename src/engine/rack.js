@@ -23,6 +23,37 @@ export const RACK_SCHEMA = 1;
 
 export const CURVES = ['lin', 'exp', 'log', 's'];
 
+/** Hoeveel punten een eigen kromme mag hebben (S10): 2..17, gelijk verdeeld over 0..1. */
+export const KROMME_MIN = 2, KROMME_MAX = 17;
+/** Een standaard eigen kromme: vijf punten op een rechte lijn. */
+export const KROMME_RECHT = () => [0, 0.25, 0.5, 0.75, 1];
+
+/** Een eigen kromme (S10): punten gelijk verdeeld over 0..1, lineair ertussen. Puur. */
+export function pasKromme(t, punten) {
+  const x = clamp(t), n = punten.length - 1;
+  const p = x * n, i = Math.min(n - 1, Math.floor(p));
+  const a = punten[i], b = punten[i + 1];
+  return clamp(a + (b - a) * (p - i));
+}
+
+/** Een geldige eigen kromme, of null (dan geldt `curve`). */
+export function leesKromme(k) {
+  if (!Array.isArray(k) || k.length < KROMME_MIN || k.length > KROMME_MAX) return null;
+  if (!k.every((y) => typeof y === 'number' && Number.isFinite(y))) return null;
+  return k.map((y) => clamp(y));
+}
+
+// ---- doelen van een link (S10) ---------------------------------------------
+// Naast `<slot>.<param>` kan een knop ook naar:
+//   `<slot>._nat`  het deel van één effect dat nat is (droog/nat per effect);
+//   `plek.K`       een andere knop (één niveau diep: zie stuurPlekken);
+//   `mod.N.diepte` de diepte van modulator N (vanaf 1).
+export const isPlekDoel = (t) => /^plek\.[1-8]$/.test(t);
+export const isModDoel = (t) => /^mod\.[1-9]\d*\.diepte$/.test(t);
+export const isNatDoel = (t) => /^[^.]+\._nat$/.test(t);
+/** Een doel dat een effect in de keten raakt (ook `_nat`), niet een knop of modulator. */
+export const isKetenDoel = (t) => typeof t === 'string' && !isPlekDoel(t) && !isModDoel(t) && t.indexOf('.') > 0;
+
 /** Curve over 0..1. Een filter-sweep zonder curve voelt altijd verkeerd. */
 export function pasCurve(t, curve = 'lin') {
   const x = clamp(t);
@@ -50,7 +81,7 @@ export function resolveLink(macro, link) {
   let t;
   if (b === a) t = m >= b ? 1 : 0;
   else t = clamp((m - a) / (b - a));
-  t = pasCurve(t, link.curve);
+  t = Array.isArray(link.kromme) && link.kromme.length >= KROMME_MIN ? pasKromme(t, link.kromme) : pasCurve(t, link.curve);
   const van = typeof link.from === 'number' ? link.from : 0;
   const naar = typeof link.to === 'number' ? link.to : 1;
   let v = van + (naar - van) * t;
@@ -76,11 +107,39 @@ export function resolveMacros(rack, standen) {
   for (const macro of macros) {
     const stand = standen?.[macro.place] ?? macro.default ?? 0;
     for (const link of macro.links || []) {
-      if (!link.target) continue;
+      if (!link.target || !isKetenDoel(link.target)) continue;
       uit.set(link.target, resolveLink(stand, link));
     }
   }
   return uit;
+}
+
+/**
+ * Knoppen die andere knoppen sturen (S10): `plek.K` als doel. Eén niveau diep:
+ * elke knop rekent met zijn EIGEN stand (`standen`), ook als hij zelf door een
+ * andere gestuurd wordt. Zo bestaan er geen lussen, en is het voorspelbaar:
+ * knop 1 → knop 2 → knop 3 laat knop 3 de stand volgen die knop 2 met de hand
+ * heeft. Botsen: de hoogste plek wint, zoals bij parameters.
+ *
+ * Geeft de effectieve standen (een nieuw object) en wat de knoppen op de
+ * diepte van een modulator zetten (`mod.N.diepte`: N → 0..1).
+ */
+export function stuurPlekken(rack, standen) {
+  const uit = { ...standen };
+  const diepte = new Map();
+  const macros = [...(rack.macros || [])].sort((x, y) => (x.place || 0) - (y.place || 0));
+  for (const macro of macros) {
+    const stand = standen?.[macro.place] ?? macro.default ?? 0;
+    for (const link of macro.links || []) {
+      if (isPlekDoel(link.target)) {
+        const k = Number(link.target.slice(5));
+        if (k !== macro.place) uit[k] = resolveLink(stand, link);
+      } else if (isModDoel(link.target)) {
+        diepte.set(Number(link.target.split('.')[1]), resolveLink(stand, link));
+      }
+    }
+  }
+  return { standen: uit, diepte };
 }
 
 // ---- het rack zelf ---------------------------------------------------------
@@ -152,6 +211,7 @@ export function leesRack(data, { bekendType = () => true } = {}) {
     glide: typeof m.glide === 'number' && m.glide > 0 ? Math.min(m.glide, 600) : 0,
     links: (Array.isArray(m.links) ? m.links : []).filter((l) => {
       if (!l?.target || typeof l.target !== 'string') { fouten.push(`macro ${m.place}: link zonder doel`); return false; }
+      if (isPlekDoel(l.target) || isModDoel(l.target)) return true;
       const [slot] = l.target.split('.');
       if (!slots.has(slot)) {
         // Luid klagen, niet stil negeren: een niet-oplosbaar doel betekent dat
@@ -160,9 +220,53 @@ export function leesRack(data, { bekendType = () => true } = {}) {
         return false;
       }
       if (l.curve && !CURVES.includes(l.curve)) fouten.push(`macro ${m.place}: onbekende curve "${l.curve}"`);
+      if (l.kromme !== undefined && !leesKromme(l.kromme)) fouten.push(`macro ${m.place}: kromme van "${l.target}" klopt niet (2–17 getallen)`);
       return true;
+    }).map((l) => {
+      if (l.kromme === undefined) return l;
+      const k = leesKromme(l.kromme);
+      const { kromme, ...rest } = l;
+      return k ? { ...rest, kromme: k } : rest;
     }),
   }));
+
+  // Droog/nat per effect (S10): alleen een getal 0..1 telt, anders weg (de oude bedrading).
+  rack.chain = rack.chain.map((n) => {
+    if (n.meng === undefined) return n;
+    if (typeof n.meng === 'number' && Number.isFinite(n.meng)) return { ...n, meng: clamp(n.meng) };
+    fouten.push(`slot "${n.slot}": meng is geen getal`);
+    const { meng, ...rest } = n;
+    return rest;
+  });
+
+  // Modulators (S10, src/engine/modulatie.js). Een soort die deze versie niet kent blijft
+  // als ruwe JSON staan en doet niets (zoals een onbekend effect).
+  const ruweMods = (Array.isArray(d.mods) ? d.mods : []).filter((x) => x && typeof x === 'object');
+  if (ruweMods.length > MAX_MODS) fouten.push(`${ruweMods.length} modulators: alleen de eerste ${MAX_MODS} tellen`);
+  rack.mods = ruweMods.slice(0, MAX_MODS)
+    .map((x, i) => {
+      // Een soort die deze versie niet kent: helemaal ongeschonden laten (ook zijn doelen).
+      if (!MOD_SOORT_BEKEND.includes(x.soort)) return x;
+      if (Array.isArray(x.doelen) && x.doelen.length > MAX_DOELEN) fouten.push(`modulator ${i + 1}: ${x.doelen.length} doelen, alleen de eerste ${MAX_DOELEN} tellen`);
+      const doelen = (Array.isArray(x.doelen) ? x.doelen : []).filter((dl) => {
+        if (!dl || typeof dl.target !== 'string') { fouten.push(`modulator ${i + 1}: doel zonder target`); return false; }
+        if (isPlekDoel(dl.target)) return true;
+        if (isModDoel(dl.target)) {
+          if (Number(dl.target.split('.')[1]) === i + 1) { fouten.push(`modulator ${i + 1}: stuurt zijn eigen diepte`); return false; }
+          return true;
+        }
+        if (!slots.has(dl.target.split('.')[0])) { fouten.push(`modulator ${i + 1}: doel "${dl.target}" wijst naar een slot dat niet bestaat`); return false; }
+        return true;
+      }).slice(0, MAX_DOELEN).map((dl) => ({ target: dl.target, diepte: Number.isFinite(dl.diepte) ? Math.max(-1, Math.min(1, dl.diepte)) : 0.5 }));
+      return { ...x, doelen };
+    });
+
+  // Welke twee knoppen samen op een XY-pad passen (S10). Zonder: knop 1 en 2.
+  if (d.xy !== undefined) {
+    const ok = Array.isArray(d.xy) && d.xy.length === 2 && d.xy.every((k) => Number.isInteger(k) && k >= 1 && k <= 8) && d.xy[0] !== d.xy[1];
+    if (!ok) { fouten.push('xy: twee verschillende knoppen 1–8'); delete rack.xy; }
+    else rack.xy = [...d.xy];
+  }
 
   const plekken = rack.macros.map((m) => m.place);
   if (new Set(plekken).size !== plekken.length) fouten.push('twee macros op dezelfde plek');
@@ -170,9 +274,21 @@ export function leesRack(data, { bekendType = () => true } = {}) {
   return { rack, fouten };
 }
 
+/** De soorten modulators die deze versie kent (zelfde lijst als MOD_SOORTEN in modulatie.js; rack.js blijft zonder imports). */
+const MOD_SOORT_BEKEND = ['lfo', 'stap', 'volger', 'toeval'];
+/** Hooguit zoveel modulators per rack, en zoveel doelen per modulator. */
+export const MAX_MODS = 4, MAX_DOELEN = 8;
+
+/** Velden van een rack die schrijfRack zelf schrijft; de rest gaat ongeschonden mee (S10). */
+const BEKENDE_VELDEN = new Set(['schema', 'name', 'tags', 'from', 'chain', 'macros', 'out', 'conflict', 'mods', 'xy', 'uitleg']);
+
 /** Terugschrijven, inclusief wat we niet begrepen. */
 export function schrijfRack(rack) {
+  // Velden die een nieuwere versie erbij zette, gaan er weer zo uit (zoals een onbekend effect).
+  const extra = {};
+  for (const [k, v] of Object.entries(rack || {})) if (!BEKENDE_VELDEN.has(k) && !k.startsWith('_') && v !== undefined) extra[k] = v;
   return {
+    ...extra,
     schema: RACK_SCHEMA,
     name: rack.name || 'naamloos',
     tags: rack.tags || [],
@@ -192,11 +308,15 @@ export function schrijfRack(rack) {
         ...(l.in ? { in: l.in } : {}),
         from: l.from ?? 0, to: l.to ?? 1,
         ...(l.curve && l.curve !== 'lin' ? { curve: l.curve } : {}),
+        ...(l.kromme ? { kromme: [...l.kromme] } : {}),
         ...(l.steps ? { steps: l.steps } : {}),
       })),
     })),
     out: rack.out || { trim: 0, mix: 0 },
     conflict: rack.conflict || 'hoogste-plek-wint',
+    ...(rack.uitleg ? { uitleg: rack.uitleg } : {}),
+    ...(Array.isArray(rack.xy) ? { xy: [...rack.xy] } : {}),
+    ...(Array.isArray(rack.mods) && rack.mods.length ? { mods: rack.mods.map((m) => JSON.parse(JSON.stringify(m))) } : {}),
   };
 }
 
@@ -251,4 +371,62 @@ export function neemOp(macro, target, kant, v, basis) {
     return { link: null, weg: true, basis: waarde };
   }
   return { link, weg: false, basis: null };
+}
+
+// ---- willekeurig en muteren, met zaad (S10) ----------------------------------
+
+/** Een reeks getallen 0..1 uit een zaad (mulberry32): hetzelfde zaad = dezelfde reeks. */
+export function reeksVan(zaad) {
+  let a = (zaad | 0) >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Een rack een beetje (of helemaal) anders maken, puur en herhaalbaar: hetzelfde
+ * zaad en dezelfde sterkte geven hetzelfde rack.
+ *
+ *   - elke parameter in de keten schuift tot `sterkte` op (trappen springen met
+ *     kans sterkte/3 naar een andere trap);
+ *   - van elke koppeling schuift de OPEN kant (`to`) tot sterkte/2 op; de dichte
+ *     kant (`from`) blijft, dus de beginstand van de knoppen klinkt zoals hij klonk;
+ *   - de frequentie van een filter blijft waar hij is (dicht is stilte), en
+ *     knoppen, namen, modulators en de keten zelf blijven ook.
+ *
+ * `sterkte` 1 = willekeurig, 0,15 = muteren. `effectVan` (type → effect) zegt
+ * welke parameters er zijn en welke trappen hebben.
+ */
+export function muteer(rack, { zaad = 1, sterkte = 0.15, effectVan = () => null } = {}) {
+  const r = reeksVan(zaad);
+  const s = clamp(sterkte);
+  const uit = JSON.parse(JSON.stringify(schrijfRack(rack)));
+  const vast = new Set();
+  for (const node of uit.chain) {
+    const eff = effectVan(node.type);
+    if (!eff) continue;
+    node.params = { ...(node.params || {}) };
+    for (const p of eff.params) {
+      if (node.type === 'filter' && p === 'freq') { vast.add(`${node.slot}.${p}`); continue; }
+      const v = node.params[p] ?? eff.standaard?.[p] ?? 0.5;
+      const n = eff.trappen?.[p];
+      if (n > 1) {
+        if (r() < s / 3) node.params[p] = Math.floor(r() * n) / (n - 1);
+        else r();
+      } else {
+        node.params[p] = Math.round(clamp(v + (r() * 2 - 1) * s) * 1000) / 1000;
+      }
+    }
+  }
+  for (const m of uit.macros) {
+    for (const l of m.links) {
+      if (!isKetenDoel(l.target) || vast.has(l.target)) continue;
+      l.to = Math.round(clamp((l.to ?? 1) + (r() * 2 - 1) * s / 2) * 1000) / 1000;
+    }
+  }
+  return uit;
 }

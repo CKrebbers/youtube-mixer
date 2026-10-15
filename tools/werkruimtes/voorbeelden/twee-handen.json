@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "naam": "twee-handen",
+  "titel": "APC breed · Maschine diep",
+  "uitleg": "APC = alle tracks. Maschine = de focus-track: precisie, secties, sampler, spelen, bladeren. F1–F8 kiezen het deel.",
+  "vereist": ["apc40mk2", "maschine-mk2"],
+  "terugval": "apc-alleen",
+  "stukken": ["basis", "uitlijn", "fx-matrix", "mix-extra", "maschine-delen", "maschine-houd"],
+
+  "deel": { "start": "mix", "kiezen": "expliciet", "onthoud": true },
+
+  "mapjes": {
+    "nieuw": {
+      "device.mijndub": { "naam": "mijn dub (leeg, zelf koppelen)", "kiesknop": { "in": "note:0:58", "shift": true } }
+    },
+    "volgorde": { "apc40mk2.grid": ["hotcues", "loops", "klank", "stems", "fx", "video"] }
+  },
+
+  "delen": {
+    "mix": {
+      "label": "MIX", "kleur": "wit",
+      "apc40mk2":     { "grid": "hotcues", "device": "strip" },
+      "maschine-mk2": { "pads": "transport", "pagina": "strip", "wiel": "jog", "scherm": ["strip", "fasescoop"] },
+      "schermen": { "hoofd": { "werkvak": "uitlijn-strook", "rijen": [] },
+                    "ipad":  { "vakken": ["uitlijn", "paneel:mijn-mix"] } }
+    },
+    "uitlijn": {
+      "label": "UITLIJN", "kleur": "groen",
+      "apc40mk2":     { "device": "uitlijn" },
+      "maschine-mk2": { "pads": "uitlijn", "pagina": "uitlijn", "wiel": "jog", "scherm": ["fasescoop", "getallen"] },
+      "schermen": { "hoofd": { "werkvak": "uitlijn" }, "mac-2": { "vakken": ["uitlijn"] }, "ipad": { "vakken": ["uitlijn"] } }
+    },
+    "fx": {
+      "label": "FX", "kleur": "violet",
+      "apc40mk2":     { "grid": "fx", "device": "rack" },
+      "maschine-mk2": { "pads": "worpen", "pagina": "rack", "wiel": "rack", "scherm": ["rack", "super"] },
+      "schermen": { "hoofd": { "werkvak": "fx", "rijen": ["master"] }, "ipad": { "vakken": ["fx", "kaart"] },
+                    "iphone": { "vakken": ["paneel:xy"] } }
+    },
+    "stems": {
+      "label": "STEMS", "kleur": "zeegroen",
+      "apc40mk2":     { "grid": "stems" },
+      "maschine-mk2": { "pads": "stems", "pagina": "stems", "scherm": ["stems"] },
+      "schermen": { "hoofd": { "rijen": ["stems"] } }
+    },
+    "secties": {
+      "label": "SECTIES", "kleur": "hemelsblauw",
+      "apc40mk2":     { "grid": "loops" },
+      "maschine-mk2": { "pads": "secties", "pagina": "strip", "wiel": "sectie", "scherm": ["secties"] }
+    },
+    "spelen": {
+      "label": "SPELEN", "kleur": "oranje",
+      "apc40mk2":     { "grid": "patronen", "device": { "als": "focus.instrument", "dan": "inst", "anders": "strip" } },
+      "maschine-mk2": { "pads": { "als": "speel.instrument", "dan": "spelen", "anders": "sampler" }, "pagina": "instrument", "wiel": "instrument" },
+      "schermen": { "hoofd": { "rijen": ["instrument", "patronen"] } }
+    },
+    "beeld": {
+      "label": "BEELD", "kleur": "geel",
+      "apc40mk2":     { "grid": "video", "device": "beeld" },
+      "maschine-mk2": { "pads": "beeld", "pagina": "beeld", "wiel": "mengvorm", "scherm": ["beeld"] },
+      "schermen": { "hoofd": { "rijen": ["beeld"] }, "ipad": { "vakken": ["paneel:video-fx"] } }
+    },
+    "bladeren": {
+      "label": "LIBRARY", "kleur": "grijs",
+      "maschine-mk2": { "pads": "laden", "pagina": "strip", "wiel": "bladeren", "scherm": ["blader"] },
+      "schermen": { "hoofd": { "onderpaneel": "library" }, "ipad": { "vakken": ["kaart"] } }
+    }
+  },
+
+  "volgt": [],
+
+  "regels": {
+    "apc40mk2": [
+      { "in": "note:0:58", "laag": "device.mijndub", "action": "track.{focus}.send.a", "mode": "druk", "naar": 1 }
+    ]
+  },
+
+  "superknoppen": [
+    { "nr": 1, "naam": "DUB", "links": [
+      { "action": "track.{focus}.send.a", "in": [0, 0.3], "from": 0,   "to": 1 },
+      { "action": "send.a.knob.2",        "in": [0.3, 1], "from": 0.5, "to": 0.9 },
+      { "action": "track.{focus}.filter", "in": [0, 1],   "from": 0.5, "to": 0.72, "curve": "s" },
+      { "action": "video.fx.trails",      "in": [0.5, 1], "from": 0,   "to": 0.6 } ] }
+  ],
+
+  "bussen": { "a": "Dub-echo", "b": null },
+
+  "panelen": {
+    "mijn-mix": { "titel": "MIX", "doel": "focus", "items": [
+      { "soort": "knop", "action": "track.{focus}.play.quant", "label": "OP DE MAAT" },
+      { "soort": "knop", "action": "track.{focus}.bar.align",  "label": "OP DE 1" },
+      { "soort": "draai", "action": "track.{focus}.phase.offset" },
+      { "soort": "draai", "action": "super.1" } ] },
+    "xy": { "titel": "XY (voorbeeld)", "items": [
+      { "soort": "xy", "action": "track.{focus}.fx.knob.1", "y": "track.{focus}.send.a",
+        "druk": "track.{focus}.fx.knob.2.hold", "los": "terug" } ] },
+    "video-fx": { "titel": "BEELD", "items": [
+      { "soort": "rij", "herhaal": ["pixel", "trails", "grain", "mirror", "rgb", "color"],
+        "item": { "soort": "knop", "action": "video.fx.{k}.hold" } } ] }
+  },
+
+  "schermen": {
+    "hoofd": { "soort": "mixer" },
+    "mac-2": { "soort": "venster", "plek": "onthouden" },
+    "ipad":  { "soort": "ipad",
+               "mag":   ["track.*.section.*", "track.*.play.quant", "track.*.bar.align", "track.*.phase.offset*", "super.*", "video.fx.*", "werk.deel.*",
+                         "track.*.stem.*", "track.*.fx.*", "track.*.rack.*", "track.*.send.*", "track.*.filter", "track.*.kill.*", "master.fx.*", "master.rack.*"],
+               "nooit": ["track.*.play", "track.*.cue", "track.*.bend.*"] },
+    "iphone": { "soort": "iphone",
+               "mag":   ["track.*.fx.*", "track.*.send.*", "track.*.filter", "super.*"] }
+  }
+}

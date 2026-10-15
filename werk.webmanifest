@@ -1,0 +1,11 @@
+{
+  "name": "VARVE scherm",
+  "short_name": "VARVE",
+  "description": "Een scherm van de VARVE-mixer: de vakken van het deel (werkruimte S7). Op de iPad: alleen kijken.",
+  "start_url": "werk.html?s=ipad",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07090b",
+  "theme_color": "#07090b"
+}

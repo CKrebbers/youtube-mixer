@@ -1,4 +1,5 @@
 import { Emitter, clamp } from '../lib/emitter.js';
+import { houd as gedeeldHoud } from './houd.js';
 
 /**
  * Mapping: van MIDI-signature naar action-id. Data, geen code.
@@ -41,6 +42,31 @@ import { Emitter, clamp } from '../lib/emitter.js';
  * Soft-takeover uitzetten voor een regel die op een doorlopend bewegende waarde
  * staat (scrub bijvoorbeeld): zet `"takeover": 1` — dan valt elke stand binnen
  * de marge en pakt de knop altijd direct over.
+ *
+ * Combinaties (14 okt, werkruimte S4, docs/werkruimte/S4.md; ontwerp B5):
+ *   druk          { "mode": "druk", "naar": 1 }: elke value-action als
+ *                 drukknop. Indrukken zet `naar`, loslaten zet terug wat er
+ *                 stond. Allebei over de bus, dus allebei in het log.
+ *   latch         { "mode": "latch", "naar": 0.85 }: druk = `naar`, nog eens
+ *                 = de stand van ervoor.
+ *   lang          bij druk/latch: { "lang": 400 } (of true = 400 ms): kort
+ *                 drukken zet hem vast (latch), lang = zolang je drukt.
+ *   stappen       een relatieve encoder roept per klik `<action>.fwd` of
+ *                 `<action>.back` aan (triggers: indrukken en loslaten), hooguit
+ *                 MAX_STAPPEN per bericht. `"codering": "bin"` voor binary
+ *                 offset, anders tweecomplement.
+ *   laag houd.*   { "laag": "houd.solo" }: geldt zolang een houd-knop vastzit
+ *                 (`layer.houd.solo`, op welk apparaat ook; houd.js). De open
+ *                 houd-mapjes staan VÓÓR de andere mapjes.
+ *   als           { "als": "focus.instrument" }: de regel geldt alleen als de
+ *                 conditie waar is (witte lijst ALS; de conditie komt van buiten:
+ *                 mapping.als = (naam) => boolean, S3 zet hem). Zonder die
+ *                 functie geldt een regel met `als` nooit. Een regel met `als`
+ *                 gaat voor dezelfde regel zonder.
+ *   {tweede}      = {R} (de vorige focus); {L}/{R} blijven. {maatgever} en
+ *                 andere variabelen van buiten: zetVariabele(naam, fn).
+ * Geen houd-regel en geen druk/latch op de kern (KERN: play, cue, play.quant,
+ * hotcue.*, load.*, layer.*): die worden geweigerd met een reden.
  */
 
 const TAKEOVER_EPS = 0.02;   // ~2,5 stappen van 127; kleiner is frustrerend fijn
@@ -56,10 +82,71 @@ const RELATIVE_STEP = 1 / 127;
  */
 const LAST_TTL = 1000;
 
-export const MODES = ['trigger', 'absolute', 'relative-2c', 'relative-bin', 'endless'];
+export const MODES = ['trigger', 'absolute', 'relative-2c', 'relative-bin', 'endless', 'druk', 'latch', 'stappen'];
 
-/** Sleutel van een regel: dezelfde knop kan met shift en per mapje iets anders doen. */
-export const sleutelVan = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}`;
+/** Knopmodi met `naar` (druk, latch): loslaten hoort bij het indrukken, ook op een CC-knop. */
+const KNOPMODI = new Set(['druk', 'latch']);
+/** Hoe lang is "lang" als een regel `lang: true` zegt (ms): dezelfde 400 ms als gluren (lagen.js). */
+export const LANG_MS = 400;
+/** Hooguit zoveel stappen per bericht (een encoder die doorschiet). */
+export const MAX_STAPPEN = 8;
+
+/**
+ * De kern: hierop nooit een houd-regel en nooit druk/latch (ontwerp B3, C5).
+ * Een drukknop op play of cue zou bij het loslaten terugzetten wat je net
+ * startte; een houd-knop die een paar ms te laat komt, mag niet beslissen of
+ * een track start.
+ */
+export const KERN = /^(track\.(\{\w+\}|\d+)\.(play|cue|play\.quant|hotcue\..+|load(\..+)?)|layer\..+)$/;
+
+/** De condities die een regel mag hebben (`als`, ontwerp B3). Geen expressies. */
+export const ALS = /^(focus\.(instrument|nummer|stems|leeg)|speel\.instrument|hub|apparaat\.[a-z0-9-]{1,32})$/;
+
+/**
+ * Sleutel van een regel: dezelfde knop kan met shift en per mapje iets anders
+ * doen, en met een conditie (`?als`). Zonder `als` precies de sleutel van vroeger.
+ */
+export const sleutelVan = (r) => `${r.in}${r.shift ? '#shift' : ''}${r.laag ? `@${r.laag}` : ''}${r.als ? `?${r.als}` : ''}`;
+
+/**
+ * Mag deze regel zo? Geeft een reden (tekst) of null. `geweigerd: true` als het
+ * de kern raakt (dat meldt de Mapping met 'geweigerd'); de rest is een gewone fout.
+ */
+export function controleerRegel(r) {
+  const mode = r.mode || 'trigger';
+  if (KNOPMODI.has(mode)) {
+    if (typeof r.naar !== 'number' || !(r.naar >= 0 && r.naar <= 1)) return { reden: `${mode} heeft "naar" nodig (een getal 0..1)` };
+  } else if (r.naar !== undefined) return { reden: `"naar" hoort alleen bij druk of latch` };
+  if (r.lang !== undefined) {
+    if (!KNOPMODI.has(mode)) return { reden: `"lang" hoort alleen bij druk of latch` };
+    if (r.lang !== true && !(typeof r.lang === 'number' && r.lang > 0 && r.lang <= 10000)) return { reden: `"lang" is een tijd in ms (of true = ${LANG_MS})` };
+  }
+  if (r.codering !== undefined && (mode !== 'stappen' || !['2c', 'bin'].includes(r.codering))) return { reden: `"codering" is "2c" of "bin", alleen bij stappen` };
+  if (r.als !== undefined && (typeof r.als !== 'string' || !ALS.test(r.als))) return { reden: `onbekende conditie "${r.als}" (als)` };
+  const houdRegel = typeof r.laag === 'string' && r.laag.startsWith('houd.');
+  if ((houdRegel || KNOPMODI.has(mode)) && KERN.test(r.action)) {
+    return { reden: `is de kern (play, cue, play.quant, hotcue, load, layer): geen ${houdRegel ? 'houd-regel' : mode}`, geweigerd: true };
+  }
+  return null;
+}
+
+/**
+ * Variabelen van buiten ({maatgever}, ontwerp B5): naam -> () => waarde of null.
+ * De combi-aanhaker zet `maatgever` (engine.syncMaster()). Een variabele die
+ * de aanroeper zelf meegeeft (vars) gaat altijd voor.
+ */
+/**
+ * Drukknoppen (mode druk) die een doel nu vasthouden, GEDEELD door alle Mappings (APC en
+ * Maschine op hetzelfde doel): de eerste stand telt, terug pas bij de laatste loslating.
+ */
+const DRUK_DOEL = new Map();
+
+const VARIABELEN = new Map();
+let variabelenVersie = 0;
+export function zetVariabele(naam, fn) {
+  if (typeof fn === 'function') VARIABELEN.set(naam, fn); else VARIABELEN.delete(naam);
+  variabelenVersie++;
+}
 
 /** Een action met {variabelen}, eenmalig in stukken: [tekst, naam, tekst, naam, …, tekst]. */
 const SJABLONEN = new Map();
@@ -81,9 +168,17 @@ export function resolveTarget(action, vars) {
   let uit = d[0];
   for (let i = 1; i < d.length; i += 2) {
     const k = d[i];
-    uit += (vars && k in vars ? vars[k] : `{${k}}`) + d[i + 1];
+    uit += (vars && k in vars ? vars[k] : extraVariabele(k, vars) ?? `{${k}}`) + d[i + 1];
   }
   return uit;
+}
+
+/** {tweede} = {R}; daarna de variabelen van buiten (zetVariabele). null = blijft staan. */
+function extraVariabele(k, vars) {
+  if (k === 'tweede') return vars && 'R' in vars ? vars.R : null;
+  const f = VARIABELEN.get(k);
+  if (!f) return null;
+  try { const v = f(); return v ?? null; } catch (_) { return null; }
 }
 
 /** Twee lijsten met dezelfde tekst op dezelfde plek? */
@@ -139,8 +234,15 @@ export const NIEUWE_NAMEN = [
 /**
  * De regels uit een mapping-document, gecontroleerd en zo nodig gemigreerd.
  * Wat niet klopt gaat naar `fouten` en wordt overgeslagen, niet geraden.
+ *
+ * Alleen `rules` en `version` tellen. Een veld `mapjes` (een stuk of een
+ * werkruimte, docs/WERKRUIMTE.md B4) wordt hier bewust NIET gelezen: die mapjes
+ * registreert de aanroeper zelf (lagen.voegMapjeToe), vóór hij de regels zet.
+ *
+ * `weiger(action)`: geeft een reden als deze action niet op een knop mag
+ * (meta.alleenScherm, zie Mapping.metaOf), anders null. Zonder: alles mag.
  */
-function leesRegels(doc) {
+function leesRegels(doc, weiger = null) {
   if (!doc || !Array.isArray(doc.rules)) throw new Error('mapping: "rules" ontbreekt of is geen lijst');
   const rules = new Map();
   const fouten = [];
@@ -156,6 +258,10 @@ function leesRegels(doc) {
     }
     const action = migreerAction(r.action, doc.version ?? 1);
     if (action !== r.action) gemigreerd++;
+    const nee = weiger?.(action);
+    if (nee) { fouten.push(`regel ${i}: "${action}" ${nee}`); return; }
+    const c = controleerRegel({ ...r, action, mode });
+    if (c) { fouten.push(`regel ${i}: "${action}" ${c.reden}${c.geweigerd ? ': geweigerd' : ''}`); return; }
     const regel = {
       in: r.in, action, mode,
       invert: !!r.invert,
@@ -168,6 +274,11 @@ function leesRegels(doc) {
       // feedback.js: { aan, half, uit, invert, tel }. Data, dus hij hoort mee
       // bij exporteren — anders ben je hem kwijt na één keer opslaan.
       led: r.led && typeof r.led === 'object' && !Array.isArray(r.led) ? { ...r.led } : undefined,
+      // Combinaties (S4): alleen als ze er staan, zodat een regel zonder precies de oude vorm houdt.
+      ...(r.naar !== undefined ? { naar: r.naar } : {}),
+      ...(r.lang !== undefined ? { lang: r.lang } : {}),
+      ...(r.codering !== undefined ? { codering: r.codering } : {}),
+      ...(r.als !== undefined ? { als: r.als } : {}),
     };
     const k = sleutelVan(regel);
     if (rules.has(k)) fouten.push(`regel ${i}: "${k}" staat al gekoppeld, laatste wint`);
@@ -194,6 +305,10 @@ function regelNaarJSON(r) {
   if (r.takeover !== undefined) o.takeover = r.takeover;
   if (r.label) o.label = r.label;
   if (r.led) o.led = { ...r.led };
+  if (r.naar !== undefined) o.naar = r.naar;
+  if (r.lang !== undefined) o.lang = r.lang;
+  if (r.codering !== undefined) o.codering = r.codering;
+  if (r.als !== undefined) o.als = r.als;
   return o;
 }
 
@@ -426,10 +541,28 @@ export class Mapping extends Emitter {
   /**
    * @param lagen  () -> ['device.strip', 'grid.hotcues', …]: de open mapjes.
    */
-  constructor({ read, invoke, vars = () => ({}), lagen = () => [], now = () => (globalThis.performance?.now() ?? Date.now()) } = {}) {
+  /**
+   * @param metaOf (actionId) -> meta of null (metaOf uit actions.js). Zegt die
+   *               `alleenScherm: true`, dan komt een regel met die action er bij
+   *               het laden niet in ('geweigerd'). Weg (de server, de kaarten): alles mag.
+   *               Ook later te zetten (mapping.metaOf = …, dan weigerAlleenScherm()).
+   */
+  /**
+   * @param houd     het register van de houd-mapjes (houd.js); standaard het
+   *                 gedeelde van de app, zodat elke Mapping dezelfde ziet.
+   * @param apparaat wie deze Mapping is voor het houd-register (standaard het
+   *                 `device` uit de geladen mapping).
+   */
+  constructor({ read, invoke, vars = () => ({}), lagen = () => [], now = () => (globalThis.performance?.now() ?? Date.now()), metaOf = null,
+    houd = gedeeldHoud, apparaat = null } = {}) {
     super();
+    this.metaOf = metaOf;
     this.read = read;
     this.invoke = invoke;
+    this.houd = houd;
+    this.apparaat = apparaat;
+    this.als = null;            // (naam) => boolean: de conditie van een regel met `als` (S3 zet hem)
+    this._lagenOpen = { versie: -1, bron: null, lijst: null };
     this.vars = vars;
     this.lagen = lagen;
     this.now = now;
@@ -444,6 +577,119 @@ export class Mapping extends Emitter {
     this.vast = new Map();      // sig -> { rule, target } van een ingedrukte knop
     this.extra = new Map();     // bron -> regels die erbij komen maar niet van jou zijn (voegToe)
     this.basis = null;          // de standaard waar je eigen verschil op rust: { doc, vingerafdruk }
+    this._latch = new Map();    // regelsleutel|doel -> de stand van vóór (latch en lang)
+    this._drukDoel = DRUK_DOEL; // doel -> { oud, n }: drukknoppen (druk) die dit doel nu vasthouden, over alle Mappings
+    this._nietWaarde = new Set(); // doelen waarvan al gemeld is dat druk/latch er niets doet
+    this._als = { versie: -1, per: new Map(), namen: [] };
+  }
+
+  /*
+   * De open mapjes, MET de houd-mapjes ervoor (S4). `lagen` blijft een functie
+   * die je zet zoals altijd (constructor, apc-kaart.js); lezen geeft deze
+   * functie terug. Zonder open houd-mapje is het precies de lijst van de bron
+   * (dezelfde bevroren lijst van Lagen.actief(), dus de caches blijven heel);
+   * met, één lijst per stand van het register en van de bron.
+   */
+  get lagen() { return this._lagenMet; }
+  set lagen(fn) {
+    // Een lezer die je hier eerder las, terugzetten (apc-kaart.js: oud = mapping.lagen; …; mapping.lagen = oud)
+    // = zijn eigen bron terug. Elke bron krijgt zijn eigen lezer.
+    const bron = typeof fn === 'function' && fn.bron ? fn.bron : fn;
+    this._lagenBron = bron;
+    this._lagenMet = Object.assign(() => this._openMetHoud(), { bron });
+  }
+
+  _openMetHoud() {
+    const bron = this._lagenBron();
+    const h = this.houd;
+    if (!h || h.leeg) return bron;
+    const c = this._lagenOpen;
+    if (c.versie === h.versie && c.bron === bron) return c.lijst;
+    const lijst = Object.freeze([...h.lijst(), ...(bron || []).filter((l) => !l.startsWith('houd.'))]);
+    this._lagenOpen = { versie: h.versie, bron, lijst };
+    return lijst;
+  }
+
+  /*
+   * De variabelen ({focus}, {speel}, …) plus die van buiten (zetVariabele,
+   * {maatgever}). Zonder variabelen van buiten: precies wat de bron geeft. Met:
+   * ze staan in het object, dus ook in de sleutel van het LED-plan (feedback.js
+   * maakt het plan opnieuw als de maatgever wisselt).
+   */
+  get vars() { return this._varsMet; }
+  set vars(fn) {
+    const bron = typeof fn === 'function' && fn.bron ? fn.bron : fn;
+    this._varsBron = bron;
+    this._varsMet = Object.assign(() => this._varsMetExtra(), { bron });
+  }
+
+  _varsMetExtra() {
+    const v = this._varsBron();
+    if (!VARIABELEN.size) return v;
+    // Alleen de variabelen die een regel van deze mapping gebruikt: zonder zo'n
+    // regel precies het object van de bron (geen extra werk per bericht of tik).
+    const nodig = this._extraNodig();
+    if (!nodig.length) return v;
+    const uit = { ...v };
+    for (const k of nodig) {
+      const f = VARIABELEN.get(k);
+      if (!f || k in uit) continue;
+      let w = null;
+      try { w = f(); } catch (_) {}
+      if (w !== null && w !== undefined) uit[k] = w;
+    }
+    return uit;
+  }
+
+  /** Welke variabelen van buiten de regels gebruiken ({maatgever}); opnieuw als regels of variabelen veranderen. */
+  _extraNodig() {
+    const c = this._extra;
+    if (c && c.versie === this._versie && c.vv === variabelenVersie) return c.namen;
+    const namen = [];
+    for (const k of VARIABELEN.keys()) {
+      const t = `{${k}}`;
+      for (const r of this.rules.values()) if (r.action.includes(t) || r.led?.lees?.includes(t)) { namen.push(k); break; }
+    }
+    this._extra = { versie: this._versie, vv: variabelenVersie, namen };
+    return namen;
+  }
+
+  /** Wie deze Mapping is voor het houd-register. */
+  get _wie() { return this.apparaat || this.device; }
+
+  /**
+   * Welke condities (`als`) de regels gebruiken, per sleutel zonder conditie.
+   * Opnieuw als de regels veranderen (dezelfde teller als de caches van kies).
+   */
+  _alsIndex() {
+    const c = this._als;
+    if (c.versie === this._versie) return c;
+    const per = new Map();
+    const namen = new Set();
+    for (const r of this.rules.values()) {
+      if (!r.als) continue;
+      const k = sleutelVan({ ...r, als: undefined });
+      if (!per.has(k)) per.set(k, []);
+      per.get(k).push(r.als);
+      namen.add(r.als);
+    }
+    this._als = { versie: this._versie, per, namen: [...namen] };
+    return this._als;
+  }
+
+  /** Is deze conditie nu waar? Zonder functie van buiten: nooit. */
+  _alsWaar(naam) {
+    if (typeof this.als !== 'function') return false;
+    try { return !!this.als(naam); } catch (_) { return false; }
+  }
+
+  /** De stand van alle condities als tekst (voor de cache); '' als geen regel er een heeft. */
+  _alsStand() {
+    const { namen } = this._alsIndex();
+    if (!namen.length) return '';
+    let t = '';
+    for (const n of namen) t += this._alsWaar(n) ? '1' : '0';
+    return t;
   }
 
   /*
@@ -461,8 +707,14 @@ export class Mapping extends Emitter {
    */
   _geldig(open) {
     const c = this._cache;
-    if (c.versie === this._versie && zelfdeLijst(c.lagen, open)) return c;
+    // De versie van het houd-register (gaat alleen omhoog bij een verandering)
+    // en de stand van de condities horen bij de sleutel (S4).
+    const hv = this.houd ? this.houd.versie : 0;
+    const als = this._alsStand();
+    if (c.versie === this._versie && c.houd === hv && c.als === als && zelfdeLijst(c.lagen, open)) return c;
     c.versie = this._versie;
+    c.houd = hv;
+    c.als = als;
     c.lagen = open ? [...open] : null;
     c.kies[0].clear(); c.kies[1].clear();
     c.actief[0] = null; c.actief[1] = null;
@@ -517,10 +769,17 @@ export class Mapping extends Emitter {
   }
 
   _laad(doc) {
-    const { rules, fouten, gemigreerd } = leesRegels(doc);
+    const { rules, fouten, gemigreerd } = leesRegels(doc, this._weiger);
+    this._meldGeweigerd(fouten);
     this._pasExtraToe(rules);
     this.shiftSig = typeof doc.shift === 'string' ? doc.shift : null;
     this.shift = false;
+    // Een houd-knop die nog vastzit krijgt na het laden geen loslaten meer: zijn mapje nu dicht (S4).
+    // Idem een drukknop: terug naar zijn stand (anders blijft de telling op dat doel voorgoed staan).
+    for (const v of [...this.vast.values()]) {
+      if (v.target.startsWith('layer.houd.')) this._doe(v.target, false, v.wie);
+      else if (KNOPMODI.has(v.rule.mode)) this._knopLos(v);
+    }
     this.vast.clear();
 
     this.name = doc.name || 'naamloos';
@@ -542,13 +801,78 @@ export class Mapping extends Emitter {
    */
   voegToe(bron, data) {
     const doc = typeof data === 'string' ? JSON.parse(data) : data;
-    const { rules, fouten } = leesRegels(doc);
+    const { rules, fouten } = leesRegels(doc, this._weiger);
+    this._meldGeweigerd(fouten);
     const lijst = [...rules.values()].map((r) => ({ ...r, bron }));
     this.extra.set(bron, lijst);
     const voor = this.rules.size;
     this._pasExtraToe(this.rules);
     this.emit('change', this);
     return { aantal: this.rules.size - voor, fouten };
+  }
+
+  /**
+   * Een fragment VERVANGEN (14 okt, werkruimte S0): eerst alle regels van deze
+   * bron weg, dan de nieuwe erbij met de regels van voegToe (alleen aanvullen,
+   * een eigen regel op dezelfde sleutel wint). Twee keer hetzelfde = één keer de
+   * regels. Voor stukken en werkruimteregels die bij een wissel opnieuw komen.
+   */
+  vervangFragment(bron, data) {
+    this._haalBronWeg(bron);
+    return this.voegToe(bron, data);
+  }
+
+  /**
+   * Een fragment weg: daarna staat er geen regel van deze bron meer. Dekte hij
+   * een regel van een ander fragment af, dan staat die er meteen weer. Een
+   * eigen regel (zonder bron) blijft altijd. Geeft het aantal weggehaalde regels.
+   */
+  haalWeg(bron) {
+    const weg = this._haalBronWeg(bron);
+    this._pasExtraToe(this.rules);
+    if (weg) this.emit('change', this);
+    return weg;
+  }
+
+  _haalBronWeg(bron) {
+    this.extra.delete(bron);
+    let weg = 0;
+    for (const [k, r] of this.rules) if (r.bron === bron) { this.rules.delete(k); weg++; }
+    if (weg) this._versie++;
+    return weg;
+  }
+
+  /** Waarom een action niet op een knop mag (meta.alleenScherm), of null. */
+  get _weiger() {
+    const metaOf = this.metaOf;
+    if (typeof metaOf !== 'function') return null;
+    return (action) => (metaOf(action)?.alleenScherm === true ? 'mag alleen op het scherm, niet op een knop: geweigerd' : null);
+  }
+
+  _meldGeweigerd(fouten) {
+    const g = fouten.filter((f) => f.endsWith(': geweigerd'));
+    if (g.length) this.emit('geweigerd', g);
+  }
+
+  /**
+   * Regels die er al staan nog eens langs meta.alleenScherm: voor actions die
+   * pas NA het laden van de mapping bestaan (de aanhakers, docs/werkruimte/S0.md).
+   * Haalt ze weg ('geweigerd' + 'change'); geeft hoeveel.
+   */
+  weigerAlleenScherm() {
+    const w = this._weiger;
+    if (!w) return 0;
+    const fouten = [];
+    for (const [k, r] of this.rules) {
+      const nee = w(r.action);
+      if (nee) { this.rules.delete(k); fouten.push(`regel ${k}: "${r.action}" ${nee}`); }
+    }
+    for (const [bron, lijst] of this.extra) this.extra.set(bron, lijst.filter((r) => !w(r.action)));
+    if (!fouten.length) return 0;
+    this._versie++;
+    this._meldGeweigerd(fouten);
+    this.emit('change', this);
+    return fouten.length;
   }
 
   _pasExtraToe(rules) {
@@ -585,6 +909,8 @@ export class Mapping extends Emitter {
    * mapje zonder dat je daar iets voor hoeft in te stellen.
    */
   set(sig, action, opts = {}) {
+    const nee = this._weiger?.(action);
+    if (nee) { this._meldGeweigerd([`${sig}: "${action}" ${nee}`]); return null; }
     const shift = opts.shift ?? (this.shift || undefined);
     let laag = opts.laag;
     if (laag === undefined) {
@@ -592,6 +918,11 @@ export class Mapping extends Emitter {
       laag = this.lagen().find((l) => groepen.has(l.split('.')[0]));
     }
     const regel = { in: sig, action, mode: opts.mode || 'trigger', ...opts, shift: shift || undefined, laag: laag || undefined };
+    const c = controleerRegel(regel);
+    if (c) {
+      if (c.geweigerd) this._meldGeweigerd([`${sig}: "${action}" ${c.reden}: geweigerd`]);
+      return null;
+    }
     this.rules.set(sleutelVan(regel), regel);
     this._versie++;
     this.state.delete(sig);
@@ -604,7 +935,7 @@ export class Mapping extends Emitter {
     const was = this.rules.get(sleutel);
     const weg = this.rules.delete(sleutel);
     this._versie++;
-    this.state.delete(sleutel.split(/[#@]/)[0]);
+    this.state.delete(sleutel.split(/[#@?]/)[0]);
     // Een fragmentregel is niet van jou: hij komt meteen terug (anders pas na
     // herladen, en dan doet weghalen iets anders dan wat je zag). En haal je een
     // eigen regel weg die er een afdekte, dan staat die er meteen weer.
@@ -636,10 +967,15 @@ export class Mapping extends Emitter {
   _zoek(sig, shift, open) {
     const [type, ch, nr] = sig.split(':');
     const sigs = ch === '*' ? [sig] : [sig, `${type}:*:${nr}`];
+    const per = this._alsIndex().per;
+    // Met een conditie die nu waar is eerst (in de volgorde van de regels), dan zonder.
+    const pak = per.size
+      ? (k) => { const v = per.get(k); if (v) for (const n of v) if (this._alsWaar(n)) return this.rules.get(`${k}?${n}`); return this.rules.get(k); }
+      : (k) => this.rules.get(k);
     for (const s of sigs) {
       for (const sh of shift ? ['#shift', ''] : ['']) {
-        for (const l of open) { const r = this.rules.get(`${s}${sh}@${l}`); if (r) return r; }
-        const r = this.rules.get(`${s}${sh}`);
+        for (const l of open) { const r = pak(`${s}${sh}@${l}`); if (r) return r; }
+        const r = pak(`${s}${sh}`);
         if (r) return r;
       }
     }
@@ -705,9 +1041,13 @@ export class Mapping extends Emitter {
     if (this.shift) { this.shift = false; this.emit('shift', false); }
     const vast = [...this.vast.values()];
     this.vast.clear();
-    for (const { rule, target } of vast) {
-      if (rule.mode === 'trigger' || !rule.mode) this.invoke(target, false);
+    for (const v of vast) {
+      if (v.rule.mode === 'trigger' || !v.rule.mode) this._doe(v.target, false, v.wie);
+      else if (KNOPMODI.has(v.rule.mode)) this._knopLos(v);   // een drukknop gaat terug, een vastgezette blijft
     }
+    // Wat dit apparaat aan houd-mapjes open hield, gaat dicht (houd.js).
+    this.houd?.losgekoppeld(this._wie);
+    for (const v of vast) if (v.wie !== this._wie) this.houd?.losgekoppeld(v.wie);
     for (const st of this.state.values()) st.last = null;
     this.resetTakeover();
   }
@@ -727,34 +1067,141 @@ export class Mapping extends Emitter {
     }
 
     // Loslaten gaat naar dezelfde action als het indrukken, ook als shift of
-    // het mapje intussen veranderde. Anders blijft een drukknop hangen.
-    const los = msg.type === 'note' && !msg.on;
-    const vast = los ? this.vast.get(msg.sig) : null;
+    // het mapje intussen veranderde. Anders blijft een drukknop hangen. Een
+    // knopmodus (druk, latch) op een CC-knop telt de halve slag als loslaten.
+    const isNoot = msg.type === 'note';
+    const eerder = this.vast.get(msg.sig);
+    const los = isNoot ? !msg.on : !!eerder && KNOPMODI.has(eerder.rule.mode) && msg.value < 64;
+    const vast = los ? eerder : null;
     if (vast) {
       this.vast.delete(msg.sig);
-      if (vast.rule.mode === 'trigger' || !vast.rule.mode) return this._trigger(vast.rule, msg, vast.target);
+      if (vast.rule.mode === 'trigger' || !vast.rule.mode) return this._trigger(vast.rule, msg, vast.target, vast.wie);
+      if (KNOPMODI.has(vast.rule.mode)) return this._knopLos(vast);
     }
+    // Een CC-knop in een knopmodus die nog vastzit: geen tweede indrukken.
+    if (!isNoot && eerder && KNOPMODI.has(eerder.rule.mode)) return { rule: eerder.rule, target: eerder.target, mode: eerder.rule.mode, value: null, taken: false };
 
     const rule = this.kies(msg.sig);
     if (!rule) return null;
 
     const target = resolveTarget(rule.action, this.vars());
-    if (msg.type === 'note' && msg.on) this.vast.set(msg.sig, { rule, target });
+    const knop = KNOPMODI.has(rule.mode);
+    if (isNoot ? msg.on : knop && msg.value >= 64) this.vast.set(msg.sig, { rule, target, wie: this._wie });
 
     switch (rule.mode) {
       case 'absolute':   return this._absolute(rule, msg, target);
       case 'relative-2c':  return this._relative(rule, msg, target, (v) => (v >= 64 ? v - 128 : v));   // 64 = -64 (protocol v1.2 p37)
       case 'relative-bin': return this._relative(rule, msg, target, (v) => v - 64);
       case 'endless':    return this._endless(rule, msg, target);
+      case 'druk':
+      case 'latch':      return this._knop(rule, msg, target);
+      case 'stappen':    return this._stappen(rule, msg, target);
       default:           return this._trigger(rule, msg, target);
     }
   }
 
-  _trigger(rule, msg, target) {
+  _trigger(rule, msg, target, wie) {
     // Noten hebben al een on/off; een knop die CC stuurt gebruikt de halve slag.
     const on = msg.type === 'note' ? msg.on : msg.value >= 64;
-    this.invoke(target, on);
+    this._doe(target, on, wie);
     return { rule, target, mode: rule.mode, value: on, taken: true };
+  }
+
+  /**
+   * Een trigger uitvoeren. `layer.houd.<naam>` gaat niet over de bus maar naar
+   * het houd-register, met DIT apparaat als eigenaar (S4): zo sluit het
+   * loslaten op de Maschine alleen wat de Maschine opende. Bij loslaten de
+   * eigenaar van het indrukken (`wie`), ook als intussen een andere mapping laadde.
+   */
+  _doe(target, on, wie = this._wie) {
+    if (this.houd && target.startsWith('layer.houd.')) { this.houd.druk(wie, target.slice(11), !!on); return; }
+    this.invoke(target, on);
+  }
+
+  /**
+   * Druk en latch (S4). `naar` zetten en onthouden wat er stond; loslaten (druk,
+   * of lang bij `lang`) zet dat terug. Allebei gewone invokes over de bus, dus
+   * het log heeft twee regels en terugspelen doet hetzelfde. Een action zonder
+   * stand (read null) is geen drukknop: dan gebeurt er niets.
+   */
+  _knop(rule, msg, target) {
+    const on = msg.type === 'note' ? msg.on : msg.value >= 64;
+    const geen = { rule, target, mode: rule.mode, value: null, taken: false };
+    if (!on) return geen;                       // een loslaten zonder indrukken (na laden, losgekoppeld)
+    const vast = this.vast.get(msg.sig);
+    // Alleen een value-action (regel 2: naar is 0..1). Een trigger zou bij loslaten false krijgen en blijven staan.
+    const meta = typeof this.metaOf === 'function' ? this.metaOf(target) : undefined;
+    if (meta !== undefined && meta?.type !== 'value') {
+      if (vast) vast.niets = true;
+      if (!this._nietWaarde.has(target)) { this._nietWaarde.add(target); this.emit('geweigerd', [`${rule.in}: "${target}" ${meta ? 'is geen draaiknop' : 'bestaat niet'}: ${rule.mode} doet niets: geweigerd`]); }
+      return geen;
+    }
+    const sleutel = `${sleutelVan(rule)}|${target}`;
+    const lang = rule.lang === true ? LANG_MS : rule.lang;
+    // Vastgezet (latch, of kort gedrukt bij lang): nog eens drukken = terug.
+    if (rule.mode === 'latch' || lang) {
+      if (this._latch.has(sleutel)) {
+        const oud = this._latch.get(sleutel);
+        this._latch.delete(sleutel);
+        if (vast) vast.niets = true;              // het loslaten van deze druk doet niets meer
+        this.invoke(target, oud);
+        return { rule, target, mode: rule.mode, value: oud, taken: true };
+      }
+    }
+    // Een druk (zonder lang) op een doel dat al door een andere druk vastgehouden wordt:
+    // de eerste stand telt, terug pas als de laatste loslaat (zoals drukknop() in actions.js).
+    if (rule.mode === 'druk' && !lang) {
+      const al = this._drukDoel.get(target);
+      if (al) {
+        al.n++;
+        if (vast) { vast.oud = al.oud; vast.gedeeld = al; }
+        this.invoke(target, rule.naar);
+        return { rule, target, mode: rule.mode, value: rule.naar, taken: true };
+      }
+    }
+    const oud = this.read ? this.read(target) : null;
+    if (oud === null || oud === undefined) { if (vast) vast.niets = true; return geen; }
+    if (vast) { vast.oud = oud; vast.t0 = this.now(); vast.sleutel = sleutel; vast.lang = lang; }
+    if (rule.mode === 'druk' && !lang && vast) { vast.gedeeld = { oud, n: 1 }; this._drukDoel.set(target, vast.gedeeld); }
+    if (rule.mode === 'latch' || lang) this._latch.set(sleutel, oud);
+    this.invoke(target, rule.naar);
+    return { rule, target, mode: rule.mode, value: rule.naar, taken: true };
+  }
+
+  _knopLos(vast) {
+    const { rule, target } = vast;
+    const geen = { rule, target, mode: rule.mode, value: null, taken: false };
+    if (vast.niets || vast.oud === undefined) return geen;
+    if (vast.lang) {
+      // Kort = vast laten staan (latch). Lang = zolang je drukte: terug.
+      if (this.now() - vast.t0 < vast.lang) return geen;
+      if (!this._latch.has(vast.sleutel)) return geen;
+      this._latch.delete(vast.sleutel);
+    } else if (rule.mode === 'latch') return geen;
+    else if (vast.gedeeld) {
+      if (--vast.gedeeld.n > 0) return geen;       // een andere druk houdt hem nog vast
+      if (this._drukDoel.get(target) === vast.gedeeld) this._drukDoel.delete(target);
+    }
+    this.invoke(target, vast.oud);
+    return { rule, target, mode: rule.mode, value: vast.oud, taken: true };
+  }
+
+  /**
+   * Stappen (S4): een relatieve encoder als triggers. Per klik `<action>.fwd`
+   * of `.back`, ingedrukt en losgelaten (een trigger die alleen op indrukken
+   * reageert merkt het loslaten niet; een drukknop blijft niet hangen).
+   * Hooguit MAX_STAPPEN per bericht: een draai die doorschiet springt niet ver.
+   */
+  _stappen(rule, msg, target) {
+    const v = msg.value;
+    let n = rule.codering === 'bin' ? v - 64 : (v >= 64 ? v - 128 : v);
+    if (rule.invert) n = -n;
+    if (!n) return { rule, target, mode: rule.mode, value: null, taken: false };
+    if (n > MAX_STAPPEN) n = MAX_STAPPEN; else if (n < -MAX_STAPPEN) n = -MAX_STAPPEN;
+    const id = `${target}.${n > 0 ? 'fwd' : 'back'}`;
+    if (typeof this.metaOf === 'function' && !this.metaOf(id)) return { rule, target: id, mode: rule.mode, value: null, taken: false };
+    for (let i = Math.abs(n); i > 0; i--) { this.invoke(id, true); this.invoke(id, false); }
+    return { rule, target: id, mode: rule.mode, value: n, delta: n, taken: true };
   }
 
   _absolute(rule, msg, target) {

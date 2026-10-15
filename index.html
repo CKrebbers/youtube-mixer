@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VARVE DJ</title>
 <link rel="stylesheet" href="styles.css">
+<!-- De stijl van de sporen van de werkruimte (docs/werkruimte/S0.md): elk spoor zijn eigen bestand, styles.css blijft. -->
+<link rel="stylesheet" href="src/ui/css/werk.css">
+<link rel="stylesheet" href="src/ui/css/uitlijn.css">
+<link rel="stylesheet" href="src/ui/css/panelen.css">
+<link rel="stylesheet" href="src/ui/css/inrichten.css">
+<link rel="stylesheet" href="src/ui/css/effecten.css">
+<link rel="stylesheet" href="src/ui/css/indeling.css">
 </head>
 <body>
 
@@ -45,6 +52,8 @@
     <button id="help-btn" class="ghost">? toetsen</button>
   </div>
 </header>
+<!-- De werk-balk: de delen van de werkruimte (spoor S3, docs/WERKRUIMTE.md A5). Leeg en verborgen tot dat spoor hem vult. -->
+<div id="werk-balk" hidden></div>
 <!-- De lijst met handelingenlogs om terug te spelen (logboek.js). -->
 <div id="log-lijst" class="log-lijst hidden"></div>
 
@@ -259,6 +268,8 @@
 <!-- Wat de knoppen stems … klankschaal in de bovenbalk openen. Samen in één gebied
      dat zelf scrolt als ze niet passen: de kolommen met hun faders en de sampler
      blijven altijd heel (styles.css, "de rijen"). -->
+<!-- Het werkvak: het paneel van het deel (docs/WERKRUIMTE.md A5). Leeg en verborgen tot een spoor het vult. -->
+<section id="werkvak" hidden></section>
 <div id="rijen" class="rijen">
 
 <!-- ================= STEMS (docs/STEMS.md §4) ================= -->
@@ -537,12 +548,18 @@
       <button class="btn sm" data-stems-keuze="2" title="zang en rest">2</button><button class="btn sm" data-stems-keuze="4" title="drums · bas · overig · zang">4</button><button class="btn sm" data-stems-keuze="0" title="niet splitsen">geen</button>
     </span>
     <button class="btn sm lib-pastbij" title="welke nummers goed of bijna goed mixen met het nummer op de focus-track (tempo en toon, zoals de auto-DJ)">past bij</button>
-    <input class="lib-zoek" type="text" placeholder="zoeken…">
+    <input class="lib-zoek" type="text" placeholder="zoeken, #tag, @categorie, bpm:70-90…">
     <button class="btn sm lib-close">sluit</button>
   </div>
   <div class="lib-status"></div>
   <div class="lib-jobs hidden"></div>
-  <div class="lib-rijen"></div>
+  <!-- de indeling (spoor S11, docs/LIBRARY-TAGS.md, src/ui/library-indeling.js): de chips van het filter,
+       taggen, snel-tags; links de categorieën en tags -->
+  <div class="lib-tagbalk"></div>
+  <div class="lib-midden">
+    <aside class="lib-indeling"></aside>
+    <div class="lib-rijen"></div>
+  </div>
   <!-- "past bij" (src/ui/past-bij.js): in plaats van de lijst zolang de knop aan staat -->
   <div class="lib-pastbij-lijst hidden"></div>
   <!-- de tab kaart (contract deel 3): zoeken, kratten, filters, de lijst, de nachtwachtrij -->
@@ -552,6 +569,7 @@
       <select class="kaart-krat" title="een krat: slimme kratten en je playlists (aantal · hoeveel al binnen)"><option value="">hele kaart</option></select>
       <span class="kaart-filters"></span>
       <button class="btn sm kaart-krat-wens" disabled title="kies eerst een krat">alles in deze krat op de wenslijst</button>
+      <button class="btn sm kaart-krat-cat" disabled hidden title="kies eerst een krat">→ categorie</button>
     </div>
     <div class="lib-status kaart-status"></div>
     <div class="lib-rijen kaart-rijen"></div>
@@ -604,6 +622,7 @@
     <span class="re-titel">RACK</span>
     <span class="re-deck"></span>
     <input class="re-naam" type="text" placeholder="naam van dit rack">
+    <span class="re-extra"></span>
     <span class="re-tools">
       <button class="btn sm re-bewaar" title="bijwerken als dit een bewaard rack is, anders als nieuw bewaren">bewaar</button>
       <button class="btn sm re-nieuw" title="als nieuw rack bij dit nummer bewaren">bewaar als nieuw</button>
@@ -613,7 +632,7 @@
   <div class="re-status"></div>
   <div class="re-plekken"></div>
   <div class="re-body">
-    <div class="re-keten"></div>
+    <div class="re-links"><div class="re-keten"></div><div class="re-mods"></div></div>
     <div class="re-macros"></div>
   </div>
 </section>

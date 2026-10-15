@@ -70,7 +70,14 @@ export const DELEN = Object.freeze({
   beeld: Object.freeze({ laag: 'mixer', toegepast: false, sleutels: ['aan', 'latentieMs'] }),
   koptelefoon: Object.freeze({ laag: 'mixer', toegepast: false, sleutels: ['omgewisseld'] }),
   vormen: Object.freeze({ laag: 'mixer', toegepast: false, sleutels: ['aan'] }),
+  // De werkruimte (14 okt, werkruimte S3, docs/WERKRUIMTE.md B6): welke indeling de mixer bij
+  // de volgende start kiest. Activeren legt hem vast (.actief.json, mixer.werkruimte); de mixer
+  // neemt hem over als hij opstart. Een stand verbergt niets: een werkruimte haalt nooit iets weg.
+  werkruimte: Object.freeze({ laag: 'mixer', toegepast: true, sleutels: ['naam'] }),
 });
+
+/** Een werkruimtenaam (= NAAM in src/werk/model.js; geen import: dit bestand is puur en importvrij). */
+export const WERKRUIMTE_NAAM = /^[a-z0-9_-]{1,60}$/;
 
 export const NACHT_REM = 'een stand kan de nacht alleen remmen: { aan: false } of { vannacht: false }';
 
@@ -148,6 +155,10 @@ function controleerDeel(deel, w, { valideerNacht }) {
     case 'vormen':
       if (!isObject(w) || typeof w.aan !== 'boolean') return { fout: 'vormen is { aan: true|false }' };
       return { waarde: { aan: w.aan } };
+    case 'werkruimte':
+      if (!isObject(w) || typeof w.naam !== 'string') return { fout: 'werkruimte is { naam: "<werkruimte>" } (bv. "apc-alleen")' };
+      if (!WERKRUIMTE_NAAM.test(w.naam) || ['actief', 'terug'].includes(w.naam)) return { fout: `werkruimte.naam is kleine letters, cijfers, - en _ (niet "${w.naam}")` };
+      return { waarde: { naam: w.naam } };
     default:
       return { fout: `onbekend deel ${deel}` };
   }

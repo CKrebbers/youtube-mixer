@@ -108,13 +108,16 @@ export class Handelingenlog {
    * opname van een terugspelen (opnieuw renderen) niet per generatie een tik
    * opschuift.
    */
-  neem(actie, waarde, laat = 0) {
+  neem(actie, waarde, laat = 0, bron = null) {
     if (!this.sessie) return;
     // Nooit vóór de regel ervóór: de volgorde in het bestand blijft die van de bus.
     const t = Math.max(this._tijd ?? 0, opMicro(this.klok() - this.t0 - (laat > 0 ? laat : 0)));
     const w = waarde === undefined ? null : waarde;
-    this.buffer.push(asciiJson([t, actie, w]));
-    this._laatste = { buf: this.buffer, i: this.buffer.length - 1, t, actie, w };
+    // Werkruimte S8: een action van buiten de Mac (de iPad, de iPhone) draagt zijn bron als vierde
+    // element ({ bron: 'ipad' }). Terugspelen leest alleen `van` daaruit; de bron is voor wie leest.
+    const extra = typeof bron === 'string' && /^[a-z0-9-]{1,16}$/.test(bron) ? { bron } : null;
+    this.buffer.push(asciiJson(extra ? [t, actie, w, extra] : [t, actie, w]));
+    this._laatste = { buf: this.buffer, i: this.buffer.length - 1, t, actie, w, extra };
     this._tijd = t;
     this.regels++;
   }
@@ -130,7 +133,7 @@ export class Handelingenlog {
   vulAan(voorvoegsel, extra) {
     const l = this._laatste;
     if (!this.sessie || !l || l.buf !== this.buffer || l.w !== true || !l.actie.startsWith(voorvoegsel)) return false;
-    this.buffer[l.i] = asciiJson([l.t, l.actie, l.w, extra]);
+    this.buffer[l.i] = asciiJson([l.t, l.actie, l.w, l.extra ? { ...l.extra, ...extra } : extra]);
     this._laatste = null;
     return true;
   }
@@ -264,7 +267,7 @@ export function busNaarLog(log, kijk) {
   return (id, v, o) => {
     if (!log.bezig) return;
     if (v === true && SECTIEDRUK.test(id)) kijk();
-    log.neem(id, v, o?.laat);
+    log.neem(id, v, o?.laat, o?.bron);
     if (typeof v === 'boolean') queueMicrotask(kijk);
   };
 }
@@ -371,6 +374,9 @@ export function leesStand({ engine, tracks, herkomst, acties, lees }) {
     });
   }
   for (const a of acties) {
+    // Een action kan het ook zelf zeggen: `beginstand: false` in zijn define()
+    // (14 okt, werkruimte S0), naast NIET_IN_WAARDEN; voor waarden én rondlopers.
+    if (a.meta?.beginstand === false) continue;
     if (a.type === 'value' && !NIET_IN_WAARDEN.test(a.id)) {
       const v = lees(a.id);
       if (v !== null) uit.waarden[a.id] = v;

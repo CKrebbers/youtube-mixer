@@ -1,12 +1,13 @@
 import { Emitter } from '../lib/emitter.js';
 import { parseMessage } from './midi.js';
-import { Mapping } from './mapping.js';
+import { Mapping, resolveTarget } from './mapping.js';
 import { trackVanDeck, TRACKS, SECTIE_PADS } from './actions.js';
 import { PALETTE } from './devices/apc40mk2.js';
 import { INSTRUMENTEN } from '../engine/instrumenten/index.js';
 import { KNOP_KANAAL, PAD_KANAAL, PAD_NOOT, WIEL_SIG, GROEPEN, KNOPPEN, KNOP_LABEL, ENCODER_CC, knopNoot, knopSig, padVanNoot } from './devices/maschine-mk2.js';
 import { tekenScherm, BLADER_RIJEN } from './maschine-scherm.js';
 import { eqDb, filterDoelen } from '../engine/audio-graph.js';
+import { houd as gedeeldHoud } from './houd.js';
 
 /**
  * De Maschine MK2 in VARVE (docs/MASCHINE.md), zoals de AV-app-hub hem
@@ -85,6 +86,23 @@ import { eqDb, filterDoelen } from '../engine/audio-graph.js';
  *   wat in de mapping staat, eigen teksten voor pads, STEP, SCENE, ◄ ► …). Wat iets doet
  *   knippert. Loslaten van wat je tijdens de uitleg indrukte gaat ook nergens heen.
  *
+ * WERKRUIMTE (14 okt, spoor S6, docs/werkruimte/S6.md, docs/WERKRUIMTE.md A3): wat een stuk
+ *   (mappings/stukken/*.json) of een werkruimte op de Maschine zet, is DATA in de mapping:
+ *   - padmodi uit data: een regel met laag `pads.<modus>` maakt die padmodus (naast STEP,
+ *     SCENE en SAMPLING, die code blijven). In zo'n padmodus gaan de pads naar de mapping;
+ *     loslaten naar waar het indrukken heen ging (padVast), ook na een deelwissel.
+ *   - pagina's uit data: een regel met laag `pagina.<naam>` maakt een knoppagina erbij
+ *     (◄ ► links boven loopt erlangs); het scherm toont label en read van die regels.
+ *   - het wiel: eerst de mapping (open mapjes, ook `wiel.<naam>`), anders het oude gedrag;
+ *     met de library open gaat de laag `bladeren` voor, anders bladert het wiel zoals altijd.
+ *   - houd-knoppen (houd.js, gedeeld met de APC): `layer.houd.<naam>` op een knop; een
+ *     houd-regel op een pad wint zolang de houd-knop vastzit, in elke padmodus.
+ *   - `layer.pads.<x>`, `layer.pagina.<x>`, `layer.wiel.<x>`: kiesknoppen van een stuk
+ *     (de Maschine zet ze zelf, ze gaan niet over de bus).
+ *   - de werkruimte zet de mapjes met `maakMaschineAdapter` (src/werk/apparaten.js); de
+ *     deellabels staan dan bovenaan de schermen (F1–F8), en SHIFT + pad in SCENE = als loop.
+ *   Zonder stukken en zonder werkruimte: alles precies zoals hierboven.
+ *
  * Wat de engine doet gaat over de bus (focus, knoppen, instrument kiezen,
  * stappen, transport); noten niet (een noot is geen 0..1: noten.js). De engine
  * kent geen MIDI.
@@ -137,6 +155,18 @@ export const nootNaam = (n) => `${NAMEN[((n % 12) + 12) % 12]}${Math.floor(n / 1
 /** De knoppagina's (◄ ► links boven), in deze volgorde; 'instrument' = de regels zonder laag. */
 export const PAGINAS = ['instrument', 'strip', 'rack'];
 export const PAGINA_NAAM = { instrument: 'Instrument', strip: 'Strip', rack: 'Rack' };
+/** De padmodi die code zijn (STEP, SCENE, SAMPLING en spelen); de rest komt uit de mapping (`pads.<modus>`). */
+export const CODE_PADMODI = ['spelen', 'stappen', 'secties', 'sampler'];
+/** De namen in een werkruimte (src/werk/model.js) die een code-padmodus zijn. */
+export const WERK_PADMODUS = { spelen: 'spelen', stap: 'stappen', secties: 'secties', sampler: 'sampler' };
+/** De naam van een pagina, padmodus of wiel uit data op het scherm: "uitlijn" -> "Uitlijn". */
+export const naamUitData = (n) => (PAGINA_NAAM[n] ?? (n ? n[0].toUpperCase() + n.slice(1) : ''));
+/**
+ * Knoppen waarvan maschine.js het lampje zelf zet (ledBeeld). De andere krijgen alleen een lampje
+ * als er een regel op staat (een stuk, of jouw eigen): dan de read van die regel.
+ */
+const CODE_LAMPJES = new Set(['shift', 'enter', 'step', 'pattern', 'play', 'restart', 'rec', 'erase', 'scene', 'sampling',
+  'stapL', 'stapR', 'browseL', 'browseR', 'control', 'browse', 'navL', 'navR', 'wiel', ...GROEPEN]);
 /**
  * De pads in de padmodus sampler (§5f), zoals je ernaar kijkt: bovenste rij (pad 13–16) =
  * sampler-pad 1–4, tweede rij (9–12) = 5–8, derde (5–8) = sectie → pad 1–4, onderste (1–4) =
@@ -207,13 +237,25 @@ export class Maschine extends Emitter {
    * @param invoke  invoke() van de bus
    * @param nu      klok in ms (flitsen, schermtempo, keuze van het wiel)
    * @param beschrijf  action -> { kort, lang } (ui/apc-beschrijf.js), voor de uitleg; zonder: de kale action
+   * @param houd     het register van de houd-mapjes (houd.js), gedeeld met de APC; een test geeft een eigen
+   * @param uitlijn  (deckId) => { vouw, getallen } | null: de fasescoop en de getallen van de focus-track
+   *                 (src/uitlijn/reken.js; de aanhaker geeft hem, zie src/ui/aanhakers/maschine.js)
    */
-  constructor({ engine, noten, read = () => null, invoke = () => {}, nu = () => (globalThis.performance?.now() ?? Date.now()), beschrijf = null, library = null }) {
+  constructor({ engine, noten, read = () => null, invoke = () => {}, nu = () => (globalThis.performance?.now() ?? Date.now()), beschrijf = null, library = null,
+    houd = gedeeldHoud, uitlijn = null }) {
     super();
-    Object.assign(this, { engine, noten, read, invoke, nu, beschrijf, library });
+    Object.assign(this, { engine, noten, read, invoke, nu, beschrijf, library, houd, uitlijn });
     this.pagina = 'instrument';     // de knoppagina (◄ ► links boven): een open "mapje" voor de mapping
-    this.mapping = new Mapping({ read, invoke, now: nu,
-      lagen: () => [...(this.modus === 'sampler' ? ['sampler'] : []), `pagina.${this.pagina}`, ...(this.bladeren() ? ['bladeren'] : [])],
+    this.wiel = null;               // het wiel-mapje uit data ('jog', 'rack', …: laag wiel.<naam>), of null = het oude gedrag
+    this.scherm = null;             // wat de schermen in een deel tonen, per scherm (['strip', 'fasescoop']), of null
+    this.delen = null;              // in een werkruimte: { labels: [..8], actief: 0..7 | -1 } voor de bovenste regel, anders null
+    this.kleur = null;              // de kleur van het deel (APC-palet), voor de pads in een padmodus uit data
+    this._dataC = null;             // wat de mapping aan padmodi, pagina's en wielen declareert (per versie van de regels)
+    // Lezen en uitvoeren gaan via de bus, behalve de kiesknoppen van de Maschine zelf (layer.pads.*, …).
+    const lees = (id) => (id.charCodeAt(0) === 108 && id.startsWith('layer.') ? this._leesLokaal(id, read) : read(id));
+    const doe = (id, v, o) => { if (!(id.charCodeAt(0) === 108 && this._doeLokaal(id, v))) invoke(id, v, o); };
+    this.mapping = new Mapping({ read: lees, invoke: doe, now: nu, houd,
+      lagen: () => this._lagen(),
       vars: () => ({ focus: trackVanDeck(engine.focus), speel: trackVanDeck(engine.speeltrack?.() ?? null), plek: this.plek() }) });
     this.uitleg = null;             // CONTROL vast: { wat: { titel, tekst } | null }
     this.uitlegVast = new Set();    // knoppen/pads die tijdens de uitleg ingedrukt werden: hun loslaten gaat nergens heen
@@ -242,9 +284,106 @@ export class Maschine extends Emitter {
   /** Staat de library open? Dan bladert het wiel en laadt ENTER (docs/MASCHINE.md §5e). */
   bladeren() { return this.read('library.toggle') === 1; }
 
+  /**
+   * De open mapjes voor de mapping. Met de library open gaat `bladeren` voor (het wiel bladert);
+   * dan de padmodus (sampler, of een uit data), het wiel-mapje en de knoppagina. De houd-mapjes
+   * zet de Mapping er zelf voor (houd.js).
+   */
+  _lagen() {
+    const l = [];
+    if (this.bladeren()) l.push('bladeren');
+    if (this.modus === 'sampler') l.push('sampler');
+    else if (this.isDataPad(this.modus)) l.push(`pads.${this.modus}`);
+    if (this.wiel) l.push(`wiel.${this.wiel}`);
+    l.push(`pagina.${this.pagina}`);
+    return l;
+  }
+
+  /**
+   * Wat de regels (standaard, stukken, werkruimte, jouw eigen) aan padmodi, pagina's en wielen
+   * declareren: een laag `pads.x`/`pagina.x`/`wiel.x`, of een kiesknop `layer.pads.x`. Opnieuw
+   * alleen als de regels veranderen (`mapping._versie`). `ledKnoppen`: knoppen met een regel die
+   * maschine.js zelf geen lampje geeft (F1–F8, VOLUME, SOLO …): hun lampje volgt de read.
+   */
+  _data() {
+    const v = this.mapping._versie;
+    if (this._dataC?.v === v) return this._dataC;
+    const pads = new Set(), paginas = new Set(), wielen = new Set(), sigs = new Set();
+    const bij = { pads, pagina: paginas, wiel: wielen };
+    for (const r of this.mapping.rules.values()) {
+      sigs.add(r.in);
+      // De namen uit het werkruimtebestand (stap, secties …) zijn de padmodi van code, geen nieuwe.
+      const [g, n] = typeof r.laag === 'string' ? r.laag.split('.') : [];
+      if (bij[g] && n) bij[g].add(n);
+      const k = /^layer\.(pads|pagina|wiel)\.([a-z0-9-]+)$/.exec(r.action);
+      if (k) bij[k[1]].add(k[2]);
+    }
+    const ledKnoppen = KNOPPEN.filter((naam) => !CODE_LAMPJES.has(naam) && sigs.has(knopSig(naam)));
+    this._dataC = { v, pads: [...pads].filter((p) => !CODE_PADMODI.includes(p) && !WERK_PADMODUS[p]), paginas: [...PAGINAS, ...[...paginas].filter((p) => !PAGINAS.includes(p))],
+      wielen: [...wielen], ledKnoppen };
+    return this._dataC;
+  }
+
+  /** De knoppagina's: Instrument, Strip, Rack en wat een stuk erbij zet (laag pagina.<naam>). */
+  paginas() { return this._data().paginas; }
+  /** De padmodi uit data (laag pads.<modus>), zonder de vier die code zijn. */
+  padmodi() { return this._data().pads; }
+  /** Is dit een padmodus uit data die er nu is? */
+  isDataPad(modus) { return !CODE_PADMODI.includes(modus) && this._data().pads.includes(modus); }
+
+  /**
+   * Na een andere mapping (een werkruimte haalt zijn stukken weg): een padmodus, pagina of wiel
+   * die er niet meer is, gaat terug naar spelen, Instrument en het oude wiel. Goedkoop: alleen
+   * als de versie van de regels veranderde.
+   */
+  _controleer() {
+    if (this._gecontroleerd === this.mapping._versie) return;
+    this._gecontroleerd = this.mapping._versie;
+    if (!CODE_PADMODI.includes(this.modus) && !this.isDataPad(this.modus)) this.modus = 'spelen';
+    if (!this.paginas().includes(this.pagina)) this.pagina = 'instrument';
+    if (this.wiel && !this._data().wielen.includes(this.wiel)) this.wiel = null;
+  }
+
+  /** De read van een kiesknop van de Maschine zelf (layer.pads.x, layer.houd.x …), anders de bus. */
+  _leesLokaal(id, read) {
+    const [, g, n] = id.split('.');
+    if (g === 'houd' && n) return this.houd?.isOpen(n) ? 1 : 0;
+    if (g === 'pads') { const p = WERK_PADMODUS[n] ?? n; return CODE_PADMODI.includes(p) || this.isDataPad(p) ? (this.modus === p ? 1 : 0) : null; }
+    if (g === 'pagina') return this.paginas().includes(n) ? (this.pagina === n ? 1 : 0) : null;
+    if (g === 'wiel') return this._data().wielen.includes(n) ? (this.wiel === n ? 1 : 0) : null;
+    return read(id);
+  }
+
+  /** Een kiesknop van een stuk op de Maschine: zelf doen (indrukken), niet over de bus. Geeft true als hij van hier is. */
+  _doeLokaal(id, v) {
+    const k = /^layer\.(pads|pagina|wiel)\.([a-z0-9-]+)$/.exec(id);
+    if (!k) return false;
+    if (!v) return true;
+    const [, g, n] = k;
+    if (g === 'pads') { const p = WERK_PADMODUS[n] ?? n; this.zetModus(this.modus === p ? 'spelen' : p); }
+    else if (g === 'pagina') this.zetPagina(n);
+    else this.wiel = this.wiel === n || !this._data().wielen.includes(n) ? null : n;
+    return true;
+  }
+
+  /** De read van een regel (met led.lees), zoals de LED-laag van de APC hem leest. */
+  _leesRegel(regel) {
+    if (!regel) return null;
+    const vars = this.mapping.vars();
+    const id = resolveTarget(regel.led?.lees ?? regel.action, vars);
+    try { return this.mapping.read(id); } catch (_) { return null; }
+  }
+
+  /** Een houd-regel op deze signature, zolang er een houd-mapje open is (anders null, zonder te zoeken). */
+  _houdRegel(sig) {
+    if (!this.houd || this.houd.leeg) return null;
+    const r = this.mapping.kies(sig);
+    return r && typeof r.laag === 'string' && r.laag.startsWith('houd.') ? r : null;
+  }
+
   /** Een eigen uitleg (UITLEG) voor deze knop, als die nu geldt; met de library open laden wiel en ENTER (de mapping). */
   eigenUitleg(naam) {
-    if ((naam === 'wiel' || naam === 'enter') && this.bladeren()) return null;
+    if ((naam === 'wiel' || naam === 'enter') && (this.bladeren() || this.mapping.kies(knopSig(naam)))) return null;
     if ((naam === 'stapL' || naam === 'stapR') && this.modus === 'sampler') return null;   // zoals ontvang(): ook met PATTERN vast
     return UITLEG[naam] ?? null;
   }
@@ -340,10 +479,14 @@ export class Maschine extends Emitter {
   }
 
   _staat() {
-    if (this.poort?.in?.state === 'connected') return;
+    const verbonden = this.poort?.in?.state === 'connected';
+    // Voor de werkruimte (vereist/terugval): de aanhaker luistert hierop. Alleen bij een echte wissel.
+    if (verbonden !== this._verbonden) { this._verbonden = verbonden; this.emit('poort', verbonden); }
+    if (verbonden) return;
     // Weg: wat de pads vasthielden los, shift los; bij terugkomen alles opnieuw.
     this.noten?.los(BRON);
-    for (const waar of this.padVast.values()) if (waar !== 'noten' && waar !== 'kies') this.invoke(waar, false);
+    // 'mapping': de pad ging naar de mapping (een padmodus uit data); die laat hem los in losgekoppeld().
+    for (const waar of this.padVast.values()) if (waar !== 'noten' && waar !== 'kies' && waar !== 'mapping') this.invoke(waar, false);
     this.padVast.clear();
     this.patroonVast = false;
     this.uitleg = null;
@@ -361,6 +504,7 @@ export class Maschine extends Emitter {
   ontvang(msg) {
     if (!msg || !(msg.channel >= 0)) return false;
     this.rx++;
+    this._controleer();
     if ((msg.type === 'note' && msg.on) || msg.type === 'cc') this.geraakt = { sig: msg.sig, t: this.nu() };
     // CONTROL vasthouden = uitleg: wat je dan aanraakt wordt uitgelegd, niet uitgevoerd.
     if (msg.type === 'note' && msg.channel === KNOP_KANAAL && msg.number === knopNoot('control')) {
@@ -394,12 +538,16 @@ export class Maschine extends Emitter {
     }
     // Het masterwiel: draaien = kiezen, indrukken (of ENTER) = zetten.
     // Met de library open: door de lijst (bladeren), en indrukken/ENTER gaat naar de mapping (laden).
+    // Het wiel vraagt eerst de mapping (een wiel-mapje uit data, een houd-mapje: TEMPO vast + wiel);
+    // met de library open alleen de laag bladeren, anders bladert hij zoals altijd.
     if (msg.sig === WIEL_SIG) {
       const stappen = msg.value >= 64 ? msg.value - 128 : msg.value;
-      return this.bladeren() ? this.blader(stappen) : this.draaiWiel(stappen);
+      const regel = this.mapping.kies(msg.sig);
+      if (this.bladeren()) return regel?.laag === 'bladeren' ? !!this.mapping.handle(msg)?.taken : this.blader(stappen);
+      return regel ? !!this.mapping.handle(msg)?.taken : this.draaiWiel(stappen);
     }
     if (msg.type === 'note' && msg.channel === KNOP_KANAAL && (msg.number === knopNoot('wiel') || msg.number === knopNoot('enter'))
-      && !this.bladeren() && !this.mapping.vast.has(msg.sig)) {
+      && !this.bladeren() && !this.mapping.vast.has(msg.sig) && !(msg.on && this.mapping.kies(msg.sig))) {
       return msg.on ? this.zetKeuze() : false;
     }
     // De rest via de mapping (groepen, draaiknoppen, shift). Een regel op de
@@ -411,16 +559,16 @@ export class Maschine extends Emitter {
     return !!this.mapping.handle(msg)?.taken;
   }
 
-  /** STEP en SCENE: spelen, stappen of secties (één padmodus tegelijk). */
+  /** STEP, SCENE, SAMPLING of een padmodus uit data: spelen, stappen, secties, sampler of <naam> (één padmodus tegelijk). */
   zetModus(modus) {
-    this.modus = modus === 'stappen' || modus === 'secties' || modus === 'sampler' ? modus : 'spelen';
+    this.modus = modus === 'stappen' || modus === 'secties' || modus === 'sampler' || this.isDataPad(modus) ? modus : 'spelen';
     this._bladzijden();
     this._sectieBladen();
   }
 
-  /** Een knoppagina zetten ('instrument', 'strip', 'rack'). Geeft false bij een onbekende. */
+  /** Een knoppagina zetten ('instrument', 'strip', 'rack', of een uit data). Geeft false bij een onbekende. */
   zetPagina(pagina) {
-    if (!PAGINAS.includes(pagina)) return false;
+    if (!this.paginas().includes(pagina)) return false;
     this.pagina = pagina;
     this.gedraaid = null;
     return true;
@@ -428,8 +576,9 @@ export class Maschine extends Emitter {
 
   /** ◄ ► links boven: één pagina verder of terug, niet rondlopend (het lampje zegt of het kan). */
   bladerPagina(stap) {
-    const i = PAGINAS.indexOf(this.pagina) + stap;
-    return i >= 0 && i < PAGINAS.length ? this.zetPagina(PAGINAS[i]) : false;
+    const lijst = this.paginas();
+    const i = lijst.indexOf(this.pagina) + stap;
+    return i >= 0 && i < lijst.length ? this.zetPagina(lijst[i]) : false;
   }
 
   // ---- uitleg (CONTROL vasthouden) ------------------------------------------------
@@ -463,6 +612,11 @@ export class Maschine extends Emitter {
   legUit(msg) {
     if (msg.channel === PAD_KANAAL && msg.type === 'note' && padVanNoot(msg.number) !== null) return this._legPadUit(padVanNoot(msg.number));
     if (msg.sig === WIEL_SIG) {
+      const regel = this.mapping.kies(msg.sig, { shift: false });
+      const metShift = this.mapping.kies(msg.sig, { shift: true });
+      if (regel && (!this.bladeren() || regel.laag === 'bladeren')) {
+        return { titel: 'masterwiel', tekst: `${this._beschrijfActie(regel.action)}${metShift && metShift !== regel ? `. SHIFT: ${this._beschrijfActie(metShift.action)}` : ''}` };
+      }
       if (this.bladeren()) {
         const nr = trackVanDeck(this.engine.focus ?? null);
         return { titel: 'masterwiel (library open)', tekst: `draaien = door de library (het gekozen nummer licht op); indrukken of ENTER = laden op track ${nr ?? '?'} (focus)` };
@@ -474,7 +628,7 @@ export class Maschine extends Emitter {
       // In de padmodus sampler gaat de laag `sampler` voor (draaiknop 5 = volume).
       const viaSampler = this.modus === 'sampler' ? this.mapping.kies(msg.sig, { shift: false }) : null;
       if (viaSampler?.laag === 'sampler') return { titel: `draaiknop ${k} (sampler)`, tekst: `${this._beschrijfActie(viaSampler.action)}. SHIFT = fijn` };
-      const titel = `draaiknop ${k} (${PAGINA_NAAM[this.pagina]})`;
+      const titel = `draaiknop ${k} (${naamUitData(this.pagina)})`;
       const nr = trackVanDeck(this.engine.focus ?? null);
       if (this.pagina === 'strip') return { titel, tekst: `${STRIP[k - 1].label} van track ${nr ?? '?'} (focus): ${STRIP[k - 1].uitleg}. SHIFT = fijn` };
       if (this.pagina === 'rack') {
@@ -499,8 +653,19 @@ export class Maschine extends Emitter {
 
   _legPadUit(pad) {
     const titel = `pad ${pad}`;
+    const sig = `note:${PAD_KANAAL}:${PAD_NOOT + pad - 1}`;
+    const houd = this._houdRegel(sig);
+    if (houd) return { titel, tekst: `${this._beschrijfActie(houd.action)} (zolang ${houd.laag.slice(5).toUpperCase()} vastzit)` };
     if (this.patroonVast) return { titel, tekst: pad <= PLEKKEN ? `patroonplek ${pad} kiezen op de speeltrack` : 'doet niets zolang PATTERN vastzit (pad 1-5 kiezen een plek)' };
-    if (this.modus === 'secties') return { titel, tekst: `sectie ${this.sectieBlad * STAPPEN + pad} van de focus-track; valt in op de volgende "1"` };
+    if (this.modus === 'secties') return { titel, tekst: `sectie ${this.sectieBlad * STAPPEN + pad} van de focus-track; valt in op de volgende "1"${this.delen ? '. SHIFT = als loop' : ''}` };
+    if (this.isDataPad(this.modus)) {
+      const regel = this.mapping.kies(sig, { shift: false });
+      const metShift = this.mapping.kies(sig, { shift: true });
+      if (!regel && !metShift) return { titel, tekst: `doet in padmodus ${this.modus} niets` };
+      let tekst = regel ? this._beschrijfActie(regel.action) : '';
+      if (metShift && metShift !== regel) tekst += `${tekst ? '. ' : ''}SHIFT: ${this._beschrijfActie(metShift.action)}`;
+      return { titel, tekst };
+    }
     if (this.modus === 'sampler') {
       const { k, soort } = samplerPad(pad);
       return { titel, tekst: soort === 'sample'
@@ -557,6 +722,7 @@ export class Maschine extends Emitter {
           : { label: s.label, waarde: w, tekst: s.tekst(w), bipolair: !!s.bipolair };
       });
     }
+    if (this.pagina !== 'rack') return this._dataKnoppen();
     const fx = this.engine.deck?.(id)?.fx ?? null;
     return Array.from({ length: 8 }, (_, i) => {
       const k = i + 1;
@@ -566,6 +732,37 @@ export class Maschine extends Emitter {
       const bipolair = !!fx?.plekBipolair?.(k);
       return { label, waarde: w, bipolair, tekst: bipolair ? `${w >= 0.5 ? '+' : ''}${Math.round((w - 0.5) * 200)}%` : procent(w) };
     });
+  }
+
+  /**
+   * De acht knoppen van een pagina uit data (laag pagina.<naam>): wat elke draaiknop NU doet (de
+   * regel die de mapping kiest: die van de pagina, een houd-mapje dat vastzit, of de regel zonder
+   * laag als de pagina die plek vrij laat), met zijn label (of de korte uitleg van zijn action), de
+   * read, en in procenten (bipolair vanuit het midden als de action dat zegt). Geen regel: alleen
+   * het nummer.
+   */
+  _dataKnoppen() {
+    const vars = this.mapping.vars();
+    return Array.from({ length: 8 }, (_, i) => {
+      const r = this.mapping.kies(`cc:0:${ENCODER_CC + i}`, { shift: false });
+      if (!r || (r.action.includes('{speel}') && !vars.speel)) return { label: null, waarde: null, tekst: null };
+      const id = resolveTarget(r.action, vars);
+      let label = r.label ?? null;
+      if (!label) { try { label = this.beschrijf?.(id)?.kort ?? null; } catch (_) {} }
+      label ??= id.split('.').slice(-2).join(' ');
+      const w = this.mapping.read(id);
+      if (typeof w !== 'number' || !Number.isFinite(w)) return { label, waarde: null, tekst: null };
+      const bipolair = !!this.mapping.metaOf?.(id)?.bipolar;
+      return { label, waarde: w, bipolair, tekst: bipolair ? `${w >= 0.5 ? '+' : ''}${Math.round((w - 0.5) * 200)}%` : procent(w) };
+    });
+  }
+
+  /** Een pad naar de mapping (een padmodus uit data, of een houd-regel): loslaten gaat er ook heen. */
+  _padNaarMapping(msg, noot) {
+    const r = this.mapping.handle(msg);
+    this.padVast.set(noot, r ? 'mapping' : 'kies');
+    if (r) this.flits.set(noot, this.nu() + FLITS_MS);
+    return !!r?.taken;
   }
 
   /**
@@ -581,12 +778,15 @@ export class Maschine extends Emitter {
       const waar = this.padVast.get(noot);
       this.padVast.delete(noot);
       if (waar === undefined || waar === 'noten') return naarNoten();
+      if (waar === 'mapping') { this.mapping.handle(msg); return true; }
       if (waar !== 'kies') this.invoke(waar, false);
       return true;
     }
     if (this.padVast.has(noot)) this._pad({ ...msg, on: false, value: 0 });   // twee keer aan zonder uit
     const pad = padVanNoot(noot);
     const id = this.engine.speeltrack?.() ?? null;
+    // Een houd-knop vast (DUPLICATE, SOLO …) met een regel op deze pad: die wint, in elke padmodus.
+    if (this._houdRegel(msg.sig)) return this._padNaarMapping(msg, noot);
     if (this.patroonVast) {
       this.padVast.set(noot, 'kies');
       if (id && pad <= PLEKKEN && this.engine.patronen?.kies) { this.engine.patronen.kies(id, pad); this.bladzijde = 0; return true; }
@@ -608,11 +808,13 @@ export class Maschine extends Emitter {
       this._sectieBladen();                                 // de focus kan net gewisseld zijn (groep A–H)
       const k = this.sectieBlad * STAPPEN + pad;
       if (k > SECTIE_PADS) { this.padVast.set(noot, 'kies'); return false; }
-      const action = `track.${t.nr}.section.${k}`;
+      // In een werkruimte: SHIFT + pad = de sectie als loop, zoals op de APC (WERKRUIMTE.md A2).
+      const action = `track.${t.nr}.section.${k}${this.delen && this.mapping.shift ? '.loop' : ''}`;
       this.padVast.set(noot, action);
       this.invoke(action, true);
       return true;
     }
+    if (this.isDataPad(this.modus)) return this._padNaarMapping(msg, noot);
     if (this.modus === 'stappen') {
       if (!id) return false;
       const stap = this.bladzijde * STAPPEN + pad;
@@ -719,6 +921,9 @@ export class Maschine extends Emitter {
         const r = t ? this.read(`track.${t.nr}.section.${this.sectieBlad * STAPPEN + i + 1}`) : null;
         uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), r === null || r === undefined ? PALETTE.uit : r >= 0.75 ? PALETTE.wit : PALETTE.hemelsblauwdonker);
       }
+    } else if (this.isDataPad(this.modus)) {
+      // Een padmodus uit data: elke pad de read van zijn regel (zoals de LED-laag van de APC).
+      for (let i = 0; i < 16; i++) uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), this._padKleur(this.mapping.kies(`note:${PAD_KANAAL}:${PAD_NOOT + i}`), PAD_NOOT + i, nu));
     } else if (inst && this.modus === 'stappen') {
       // Stapmodus: de read van elke stap; de stap die je nu hoort wit (alleen als het gekozen patroon speelt).
       const st = this.engine.patronen?.stand?.(speel) ?? null;
@@ -740,6 +945,13 @@ export class Maschine extends Emitter {
           v = fel ? VOL(inst.soort) : leeg ? PALETTE.donkergrijs : DONKER(inst.soort);
         }
         uit.set(sleutel(PAD_KANAAL, noot), v);
+      }
+    }
+    // Een houd-knop vast met regels op pads: die pads in hun kleur (de rest blijft wat de padmodus zegt).
+    if (this.houd && !this.houd.leeg) {
+      for (let i = 0; i < 16; i++) {
+        const r = this._houdRegel(`note:${PAD_KANAAL}:${PAD_NOOT + i}`);
+        if (r) uit.set(sleutel(PAD_KANAAL, PAD_NOOT + i), this._padKleur(r, PAD_NOOT + i, nu));
       }
     }
     for (const [nr, id] of TRACKS) {
@@ -779,9 +991,12 @@ export class Maschine extends Emitter {
       knop('stapR', this.read('sampler.length.up') != null ? HELDER.half : HELDER.uit);
     }
     // Knoppagina's: ◄ ► half als er die kant op een pagina is. CONTROL zacht, fel tijdens de uitleg.
-    const p = PAGINAS.indexOf(this.pagina);
+    const paginas = this.paginas();
+    const p = paginas.indexOf(this.pagina);
     knop('browseL', p > 0 ? HELDER.half : HELDER.uit);
-    knop('browseR', p < PAGINAS.length - 1 ? HELDER.half : HELDER.uit);
+    knop('browseR', p < paginas.length - 1 ? HELDER.half : HELDER.uit);
+    // Knoppen met een regel uit een stuk of van jou (F1–F8, VOLUME, SOLO …): de read van wat ze nu doen.
+    for (const naam of this._data().ledKnoppen) knop(naam, helder(this._leesRegel(this.mapping.kies(knopSig(naam)))));
     knop('control', this.uitleg ? HELDER.aan : HELDER.beschikbaar);
     // BROWSE: fel = library open (bladeren), zacht = kan; ◄ ► bij het wiel en ENTER doen dan iets.
     const lib = this.read('library.toggle');
@@ -801,6 +1016,42 @@ export class Maschine extends Emitter {
       }
     }
     return uit;
+  }
+
+  /**
+   * De kleur van een pad met een regel (padmodus uit data, houd): null = uit, 1 = vol, 0,5 = donker,
+   * 0 = donkergrijs (iets te doen). Kleur: `led.aan`/`led.uit` van de regel, anders de kleur van het
+   * deel, anders wit. Een aanslag licht kort vol op (FLITS_MS), ook als de read niets zegt.
+   */
+  _padKleur(regel, noot, nu) {
+    if (!regel) return PALETTE.uit;
+    const r = this._leesRegel(regel);
+    const naam = this.kleur && PALETTE[this.kleur] !== undefined ? this.kleur : 'wit';
+    const aan = PALETTE[regel.led?.aan] ?? PALETTE[naam];
+    const donker = PALETTE[regel.led?.uit] ?? PALETTE[`${naam}donker`] ?? PALETTE.donkergrijs;
+    if ((this.flits.get(noot) ?? -Infinity) > nu || r >= 0.75) return aan;
+    if (r === null || r === undefined) return PALETTE.uit;
+    return r >= 0.25 ? donker : PALETTE.donkergrijs;
+  }
+
+  /**
+   * De fasescoop en de getallen van de focus-track (src/uitlijn/reken.js, via de aanhaker), klein
+   * gemaakt voor de sleutel van het scherm: ms op 0,25 ms, de nieuwste 32 tellen. Null zonder.
+   */
+  _uitlijnStand() {
+    let u = null;
+    // Alleen wat een scherm toont (review ronde 1): zonder getallen-scherm geen getallen (muziek Δ is duur).
+    const wat = { vouw: this.scherm.includes('fasescoop'), getallen: this.scherm.includes('getallen') };
+    try { u = this.uitlijn?.(this.engine.focus ?? null, wat) ?? null; } catch (_) { u = null; }
+    if (!u) return { nr: trackVanDeck(this.engine.focus ?? null), vouw: null, getallen: null };
+    const r4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 4) / 4 : null);
+    const g = u.getallen;
+    return {
+      nr: trackVanDeck(this.engine.focus ?? null),
+      vouw: u.vouw ? { bron: u.vouw.bron, punten: (u.vouw.punten ?? []).map((p) => ({ ms: r4(p.ms), k: p.k, tel: p.tel, wie: p.wie })) } : null,
+      getallen: g && !wat.getallen ? { bpm: g.bpm ? Math.round(g.bpm * 100) / 100 : null } : g ? { bpm: g.bpm ? Math.round(g.bpm * 100) / 100 : null, grid: r4(g.grid), muziek: r4(g.muziek?.ms), drift: r4(g.drift), maat: g.maat ?? null,
+        maatgever: !!g.maatgever, afwijking: g.afwijking ? r4(g.afwijking.ms) : null, wacht: g.wacht ? Math.round(g.wacht.maten * 10) / 10 : null } : null,
+    };
   }
 
   /** Wat de schermen tonen (zie maschine-scherm.js). */
@@ -852,13 +1103,16 @@ export class Maschine extends Emitter {
       kandidaat: k ? { naam: k.index === 0 ? 'geen' : INSTRUMENTEN[k.index - 1].naam } : null,
       shift: !!this.mapping.shift,
       melding: this.melding && this.melding.tot > nu ? this.melding.tekst : null,
-      pagina: this.pagina, paginaNr: PAGINAS.indexOf(this.pagina), paginas: PAGINAS.length, paginaNaam: PAGINA_NAAM[this.pagina],
+      pagina: this.pagina, paginaNr: this.paginas().indexOf(this.pagina), paginas: this.paginas().length, paginaNaam: naamUitData(this.pagina),
       dj: this.pagina !== 'instrument' ? this._djStand() : null,
       gedraaid: this.gedraaid && this.gedraaid.tot > nu ? this.gedraaid.k : null,
       uitleg: this.uitleg ? { titel: this.uitleg.wat?.titel ?? null, tekst: this.uitleg.wat?.tekst ?? null } : null,
       sampler: this.modus === 'sampler' ? this._samplerStand() : null,
       bladeren: this.bladeren()
         ? { ...(this.library?.bladerStand?.(BLADER_RIJEN) ?? { gekozen: 0, totaal: 0, rijen: [], track: null }), focus: trackVanDeck(f ?? null) } : null,
+      // Alleen in een werkruimte (anders staan ze er niet: dezelfde sleutel en dezelfde bytes als vroeger).
+      ...(this.delen ? { delen: this.delen } : {}),
+      ...(this.scherm ? { scherm: this.scherm, ...(this.scherm.some((x) => x === 'fasescoop' || x === 'getallen') ? { uitlijn: this._uitlijnStand() } : {}) } : {}),
     };
   }
 
@@ -915,6 +1169,7 @@ export class Maschine extends Emitter {
   tik() {
     const p = this.poort;
     if (!p?.uit || p.uit.state !== 'connected') return 0;
+    this._controleer();
     this._laatsteTik = this.nu();
     let n = 0;
     for (const [k, v] of this.ledBeeld()) {
@@ -972,6 +1227,71 @@ export class Maschine extends Emitter {
     if (this._wekker !== null) clearTimeout(this._wekker);
     this._wekker = null;
   }
+}
+
+/**
+ * De Maschine als apparaat van de werkruimte (werkruimte S3/S6, src/werk/apparaten.js):
+ * `registreerApparaat('maschine-mk2', maakMaschineAdapter(maschine))` (de aanhaker doet dat).
+ *
+ *   zetMapjes({ pads, pagina, wiel, scherm })   pads: spelen · stap · secties · sampler (code) of een
+ *            padmodus uit data; pagina: instrument · strip · rack of een uit data; wiel: instrument
+ *            (= het oude gedrag), bladeren (= ook het oude gedrag: het wiel bladert zodra de library
+ *            open is) of een wiel-mapje uit data; scherm: per scherm wat het toont (['strip', 'fasescoop']).
+ *            Wat er niet is, staat in `niet` (een deel zet nooit iets half).
+ *   mapjes()  wat er nu open staat (voor onthoud en vastleggen)
+ *   standaard()  THUIS: spelen, Instrument, het oude wiel, de schermen zoals altijd, en wat de Maschine
+ *            aan houd-mapjes vasthield dicht. Een pad die nog vastzit laat later los waar hij indrukte.
+ *
+ * Een deelwissel raakt geen klank: alleen de stand van de Maschine (geen invoke).
+ */
+export function maakMaschineAdapter(m, { naam = 'Maschine' } = {}) {
+  const werkNaam = (modus) => (modus === 'stappen' ? 'stap' : modus);
+  const zetEen = (groep, waarde) => {
+    switch (groep) {
+      case 'pads': {
+        const doel = waarde === null || waarde === undefined ? 'spelen' : WERK_PADMODUS[waarde] ?? waarde;
+        if (doel !== 'spelen' && !CODE_PADMODI.includes(doel) && !m.isDataPad(doel)) return false;
+        m.patroonVast = false;
+        m.zetModus(doel);
+        return m.modus === doel;
+      }
+      case 'pagina': return m.pagina === (waarde ?? 'instrument') || m.zetPagina(waarde ?? 'instrument');
+      case 'wiel': {
+        if (waarde === null || waarde === undefined || waarde === 'instrument' || waarde === 'bladeren') { m.wiel = null; return true; }
+        if (!m._data().wielen.includes(waarde)) return false;
+        m.wiel = waarde;
+        return true;
+      }
+      case 'scherm':
+        m.scherm = Array.isArray(waarde) && waarde.length ? waarde.filter((x) => typeof x === 'string').slice(0, 2) : null;
+        return true;
+      default: return false;
+    }
+  };
+  return {
+    naam, mapping: m.mapping,
+    zetMapjes(def = {}) {
+      m._controleer();   // een padmodus/pagina/wiel van een weggehaald stuk telt niet meer (review ronde 1)
+      const gezet = [], niet = [];
+      for (const [g, w] of Object.entries(def ?? {})) (zetEen(g, w) ? gezet : niet).push(`${g}.${Array.isArray(w) ? w.join('+') : w}`);
+      m.gedraaid = null;
+      m.wek?.();
+      return { gezet, niet };
+    },
+    mapjes: () => (m._controleer(), { pads: werkNaam(m.modus), pagina: m.pagina, wiel: m.wiel ?? 'instrument', scherm: m.scherm ? [...m.scherm] : null }),
+    standaard() {
+      m.patroonVast = false;
+      m.zetModus('spelen');
+      m.zetPagina('instrument');
+      m.wiel = null;
+      m.scherm = null;
+      m.houd?.losgekoppeld(m.mapping._wie);
+      m.wek?.();
+      return { gezet: ['pads.spelen', 'pagina.instrument', 'wiel.instrument'], niet: [] };
+    },
+    stil: (fn) => fn(),
+    aanwezig: () => m.poort?.in?.state === 'connected',
+  };
 }
 
 function gelijk(a, b) {

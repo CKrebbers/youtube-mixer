@@ -5,6 +5,7 @@ import { opzetPatronenOpslag } from './patronen-opslag.js';
 import { STANDAARD_LENGTE, MAX_LENGTE } from '../engine/patronen/model.js';
 import { instrumentDef } from '../engine/instrumenten/index.js';
 import { zetTekst } from './dom.js';
+import { registreerRij } from './rijen.js';
 
 /*
  * De PATROON-rij (docs/PATRONEN.md §5): voor de track met focus de vijf
@@ -69,6 +70,7 @@ export function opzetPatronen({ engine, noten }) {
     schrijf(OPEN, open ? '1' : '0');
   };
   knop.addEventListener('click', () => zet(isDicht()));
+  registreerRij('patronen', { zet, isOpen: () => !rij.classList.contains('hidden') });   // rijen.js: een deel zet hem open
   if (lees(OPEN) === '1') zet(true);
 
   // ---- de track met focus -----------------------------------------------------------------

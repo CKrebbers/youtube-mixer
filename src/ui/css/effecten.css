@@ -1,0 +1,23 @@
+/* Spoor S10 (docs/EFFECTEN-MEER.md): de uitbreidingen van de rack-editor. Alles onder #rack-editor. */
+#rack-editor .re-links{overflow:auto;min-height:0;display:flex;flex-direction:column}
+#rack-editor .re-links .re-keten{overflow:visible}
+#rack-editor .re-mods{padding:8px 12px;border-top:1px solid var(--line)}
+#rack-editor .re-extra{display:flex;align-items:center;gap:4px}
+#rack-editor .re-extra .btn.aan{background:var(--warn);border-color:var(--warn);color:#1a1200}
+#rack-editor .re-zaad{font-size:10px;color:var(--dim);display:flex;align-items:center;gap:3px}
+#rack-editor .re-zaad input{width:56px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:3px;font:11px ui-monospace,monospace;padding:1px 3px}
+#rack-editor .re-mod{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:0 0 6px;background:var(--panel2)}
+#rack-editor .re-mod-kop{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px}
+#rack-editor .re-mod-velden{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
+#rack-editor .re-mod-velden .re-schuif{min-width:180px}
+#rack-editor .re-mod-meter{width:60px;height:6px;border-radius:3px;background:var(--line);overflow:hidden;position:relative}
+#rack-editor .re-mod-meter span{position:absolute;left:50%;top:0;bottom:0;width:50%;background:var(--a);transform-origin:left center;transform:scaleX(0)}
+#rack-editor .re-mod-doel{display:flex;align-items:center;gap:6px;margin-top:3px}
+#rack-editor .re-mod-doel select{max-width:200px}
+#rack-editor .re-stappen{display:flex;gap:2px;align-items:flex-end;height:30px}
+#rack-editor .re-stap{width:10px;height:30px;background:var(--line);border:0;padding:0;border-radius:2px;position:relative;cursor:pointer}
+#rack-editor .re-stap span{position:absolute;left:0;right:0;bottom:0;background:var(--a);border-radius:2px}
+#rack-editor .re-kromme{display:block;background:var(--panel);border:1px solid var(--line);border-radius:4px;touch-action:none;cursor:crosshair;margin:4px 0}
+#rack-editor .re-param.nat .re-pnaam{color:var(--warn)}
+#rack-editor .re-sjabloon-uitleg{color:var(--text)}
+#rack-editor .re-kaart-kop .btn.aan{background:var(--warn);border-color:var(--warn);color:#1a1200}

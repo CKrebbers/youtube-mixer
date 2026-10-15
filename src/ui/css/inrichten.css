@@ -1,0 +1,36 @@
+/* Spoor S8 van de werkruimte (docs/werkruimte/S8.md): koppelen op de iPad/iPhone (werk.html) en
+   ✎ inrichten (de mixer en werk.html). Alleen onder .wp-koppel, .wp-melding en .ir-*. */
+.wp-koppel[hidden], .wp-melding[hidden] { display: none; }
+.wp-koppel { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line, #333); font-size: 15px; }
+.wp-koppel input { font-size: 18px; padding: 6px 8px; min-width: 0; }
+.wp-koppel #wp-koppel-code { width: 7ch; letter-spacing: .15em; }
+.wp-koppel button { font-size: 16px; padding: 6px 14px; }
+.wp-melding { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 20; max-width: 90vw; padding: 10px 14px; border-radius: 6px; background: #3a1d1d; color: #fff; font-size: 15px; }
+
+/* ✎ inrichten in de mixer: een klein paneel rechtsonder, alleen open als je inricht (geen laag over
+   de bediening tijdens het spelen: dicht = hidden, kost niets). */
+.ir-paneel[hidden] { display: none; }
+.ir-paneel { position: fixed; right: 12px; bottom: 12px; z-index: 50; width: min(520px, calc(100vw - 24px)); max-height: 70vh; overflow: auto;
+  background: var(--panel); border: 1px solid var(--a); border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.5); padding: 8px 10px; font-size: 12px; }
+.ir-kop { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ir-titel { flex: 1; font-weight: 700; }
+.ir-rij { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+.ir-label { width: 92px; color: var(--muted, #999); }
+.ir-knoppen { display: flex; flex-wrap: wrap; gap: 4px; }
+.ir-lijst { display: flex; flex-wrap: wrap; gap: 3px; max-height: 120px; overflow: auto; margin: 2px 0 6px 98px; }
+.ir-vond { font-size: 11px; padding: 2px 6px; }
+.ir-vond.top { border-color: var(--a); }
+.ir-items { display: flex; flex-wrap: wrap; gap: 3px; }
+.ir-item.vraag, .ir-aanwijs.aan, .werk-inrichten.aan { background: var(--a); color: #000; }
+.ir-dim { color: var(--muted, #999); }
+.ir-stand { min-height: 1.2em; margin-top: 4px; }
+.ir-stand[data-soort="fout"] { color: var(--red, #e55); }
+.ir-nieuw[hidden] { display: none; }
+
+/* ✎ in werk.html (mac-2) */
+.wp-ir-knop.aan { background: var(--a); color: #000; }
+.wp-ir-zoek[hidden], .wp-ir-lijst[hidden] { display: none; }
+.wp-ir-lijst { display: flex; flex-wrap: wrap; gap: 3px; padding: 6px 14px; max-height: 110px; overflow: auto; background: var(--panel); }
+.wp-ir-vond { font-size: 12px; }
+body.wp-inrichten .vp-item { outline: 1px dashed var(--a); }
+.vp-item.wp-ir-vraag { outline: 2px solid var(--red, #e55); }

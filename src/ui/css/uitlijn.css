@@ -1,0 +1,56 @@
+/* De uitlijnweergave (werkruimte S2, docs/werkruimte/S2.md): in het werkvak van de mixer en in
+   uitlijn.html. Alles onder .ul, zodat niets van de mixer verandert. Geen :has(): de banen worden
+   per beeld bijgewerkt (docs/APC40.md "Invoer en vertraging"). Elk vlak is `contain:strict`: een
+   tekst- of transformwissel in een baan raakt de opmaak van de rest niet. */
+.ul{--ul-info:280px;--ul-kop:16px;position:relative;display:flex;flex-direction:column;gap:2px;min-width:0;
+  color:var(--text);font:12px/1.3 ui-sans-serif,-apple-system,"Inter",system-ui,sans-serif}
+.ul-kop{display:grid;grid-template-columns:var(--ul-info) minmax(0,1fr);align-items:end;height:var(--ul-kop)}
+.ul-mg{font-size:11px;color:var(--klein);padding-left:6px;white-space:nowrap;overflow:hidden}
+.ul-asvlak{position:relative;height:14px;overflow:hidden;min-width:0}
+.ul-as{display:block;height:14px}
+.ul-banen{display:flex;flex-direction:column;gap:2px}
+.ul-baan{display:grid;grid-template-columns:var(--ul-info) minmax(0,1fr);background:var(--panel);border-radius:4px;min-width:0}
+.ul-info{display:flex;flex-wrap:wrap;align-content:center;align-items:baseline;gap:0 8px;padding:2px 6px;
+  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;contain:content}
+.ul-nr{display:inline-block;min-width:18px;text-align:center;border-radius:3px;background:var(--panel2);color:var(--text)}
+.ul-nr.mg{background:var(--a);color:#05110f}
+.ul-bpm{color:var(--klein)}
+.ul-g{color:var(--klein)}
+.ul-g.groen{color:#4fe08a}
+.ul-g.geel{color:var(--warn)}
+.ul-g.rood{color:var(--red)}
+.ul-g.grof{font-style:italic}
+.ul-warn{color:var(--warn)}
+.ul-warn:empty,.ul-staat:empty,.ul-g:empty{display:none}
+.ul-staat{color:var(--dim)}
+.ul-vlak{position:relative;height:46px;overflow:hidden;contain:strict;touch-action:none;cursor:ew-resize;background:var(--panel2)}
+.ul-doek{position:absolute;top:0;display:block;will-change:transform}
+.ul-kopvlak{position:absolute;left:var(--ul-info);right:0;top:calc(var(--ul-kop) + 2px);bottom:0;overflow:hidden;pointer-events:none}
+.ul-kopstreep{position:absolute;top:0;bottom:0;left:-1px;width:2px;background:var(--warn);will-change:transform}
+.ul-leeg{color:var(--dim);padding:10px 6px}
+.ul-leeg[hidden],.ul-kopvlak[hidden]{display:none}
+
+/* strook: één maat, klein (het werkvak) */
+.ul-strook{--ul-info:76px;--ul-kop:14px;font-size:10px}
+.ul-strook .ul-vlak{height:16px}
+.ul-strook .ul-info{padding:0 4px;gap:0 4px;flex-wrap:nowrap}
+.ul-strook .ul-bpm,.ul-strook .ul-staat,.ul-strook .ul-warn{display:none}
+.ul-strook .ul-mg{font-size:10px}
+
+/* vouw: elke gehoorde tel als stip op zijn fase */
+.ul-vouw .ul-vlak{cursor:default}
+
+/* de knop achteraan de transportrij van de focus-track (aanhakers/uitlijn.js): een gewone .btn.sm */
+.ul-open{margin-left:auto}
+
+/* uitlijn.html */
+.ul-venster .ul-balk{gap:12px}
+.ul-knoppen{display:flex;align-items:center;gap:10px;min-width:0}
+.ul-keus{display:inline-flex;gap:3px}
+.ul-keus .ghost.aan{color:var(--text);border-color:var(--a)}
+.ul-keus .ghost:disabled{opacity:.4}
+.ul-uitleg{color:var(--klein);font-size:12px;cursor:help}
+.ul-hoofd{flex:1;min-height:0;overflow:auto;padding:8px 12px;width:100%}
+.ul-los{color:var(--dim);padding:24px}
+.ul-los[hidden],.ul-plek[hidden]{display:none}
+@media (max-width:900px){.ul-pagina,.ul-vouw{--ul-info:150px}}

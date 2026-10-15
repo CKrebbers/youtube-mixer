@@ -153,7 +153,8 @@ Chrome geen klik).
 Eén element achteraan `SCHEMA`: tabel `hotcues`, kolom `titel_sleutel` (gevuld
 bij de migratie met `sorteertitel()`, bijgehouden in `bewaarTrack`), en een
 index per sorteerkolom. Samengevoegd met het toonsoort-spoor (25 sep): v6 =
-`toon_json`, v7 = dit element, v8 = `stems_json` (3 okt, stems). `library.test`
+`toon_json`, v7 = dit element, v8 = `stems_json` (3 okt, stems), v9 = `secties_json`, v10 = de
+indeling (14 okt, S11: tags, categorieën, `k_grid`/`k_toon`/`k_energie`; zie onder). `library.test`
 bewaakt die volgorde; verder leunen de tests op `SCHEMA.length`, niet op een
 vast versienummer.
 
@@ -527,3 +528,42 @@ ze op een vrije verbinding: stilte na een sprong.
 
   De video's bleven spelen en bufferen vooruit (20–130 s), nu in meer, kleinere verzoeken.
 - Via Tailscale (https, HTTP/2) speelt dit niet: één verbinding met stromen. De knip kan daar niets breken.
+
+## Categorieën en tags (14 okt, spoor S11, tak `werk/S11`)
+
+Clay: "categorieën in de library, zodat je makkelijk en snel nummers bij elkaar kunt vinden met
+categorieën maar ook met tags." Ontwerp en alles in detail: `docs/LIBRARY-TAGS.md`; vragen: VRAGEN blok
+S11; verslag: `docs/verslagen/2026-10-14/werk-S11.md`. Kort:
+
+- **Begrippen.** Een *categorie* is een eigen bak met een volgorde (plat, geen mappen in mappen); een
+  *slimme categorie* een bewaard filter dat zichzelf bijwerkt; een *tag* een vrij label met een kleur;
+  *snel-tag 1–8* een plek die naar een tag wijst (voor de bus). Een *krat* blijft van de kaart; "→
+  categorie" in de kaart-tab maakt er een KOPIE van (wat binnen is, in kratvolgorde). Tags van nummers
+  zijn niet die van racks (`rack.tags`).
+- **Schema v10** (`SCHEMA` in `server/library.js`): `tags`, `nummer_tags`, `categorieen`,
+  `categorie_nummers` (met `plek`), en de afgeleide kolommen `k_grid`, `k_toon`, `k_energie` met de
+  formules van de lijst (`gridStatus`, `ToonKaart.hoofd`, de secties gewogen naar lengte), gezet in
+  `bewaarTrack/Grid/Toon/Secties` (`_kenmerken`) en bij de migratie. Weghalen = cascade. Geen bestand
+  naast de database, dus geen nieuwe VARVE_*; de backup (`VACUUM INTO`) neemt alles mee.
+- **API.** `GET /api/library` kent nu ook `cat`, `tag` (en), `of`, `niet`, `bpm`, `toon`, `grid`,
+  `stems`, `energie` en `sorteer=plek` (de volgorde van een gewone categorie). Zonder die parameters
+  precies de oude lijst. `zoek` vindt nu ook tagnamen. De indeling zelf: `/api/indeling/*`
+  (`server/routes/indeling.js`, LIBRARY-TAGS.md §5); elke POST alleen vanaf deze Mac.
+- **Het paneel.** Links de kolom CATEGORIEËN/TAGS (☰ indeling = open/dicht; open = LUFS en racks
+  weg, zodat alles op 1440 past). Boven de lijst de tagbalk: de chips van het filter (× = weg), wat
+  gekozen is, het tagveld (aanvullen, Enter; `-naam` = eraf; alt+T), "→ categorie", de snel-tags
+  (alt+1…8). Het zoekveld IS het filter: `#dub -#vocal #a|b @categorie bpm:70-90 toon:8A
+  grid:zeker stems energie:hoog` plus vrije tekst (`leesZoekregel`, `src/library/indeling.js`). Kiezen:
+  klik, cmd-klik (erbij/eraf), shift-klik (een reeks). Slepen naar een categorie; in een categorie op
+  volgorde ook op een rij (= daarvóór). De lijst blijft de virtuele lijst: het filter zit in de vraag
+  van de pagina-cache, een nieuw filter is een nieuwe generatie.
+- **Overal.** Bus (aanhaker `indeling`): `library.category.next/prev/clear`, `library.quicktag.1–8`,
+  `library.quickfilter.1–8`, `track.N.tag.1–8`, allemaal met `log: 'overslaan'` en zonder beginstand.
+  De Maschine toont het filter in de kop bij BROWSE. werk.html en de iPad: het vak `library` kiest een
+  categorie en leest de zoekregel; de bouwsteen `tags` tagt het nummer op een track (schrijfweg S8,
+  als `mag` `track.*.tag.*` noemt). Het planvenster maakt een selectie uit een categorie, tag of het
+  filter van de library (S9). Export/import: `GET/POST /api/indeling` (samenvoegen, `?droog=1`).
+- **Gemeten** (`tools/bench/indeling.mjs`, deze container): een gefilterde pagina van 100 met het
+  totaal 2–10 ms op 5.000 nummers, 2–18 ms op 20.000 (40.000 tagregels); de stand van de kolom na een
+  wijziging 4 ms / 29 ms (12 categorieën), daarna uit het geheugen. Headless:
+  `tools/headless/indeling.mjs` (5.003 nummers, de hele rondgang in 24 handelingen).

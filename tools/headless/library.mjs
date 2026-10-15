@@ -297,7 +297,9 @@ try {
   await evalueer(`(() => { const z = document.querySelector('#lib-panel .lib-zoek'); z.value = ''; z.dispatchEvent(new Event('input')); })()`);
   ok('zoekterm leeg: weer de hele lijst', await tot(`document.querySelector('#lib-panel .lib-status').textContent.includes('${N + 1} nummers')`, 5000), await status());
   await evalueer('document.querySelector("#lib-panel .lib-rijen").scrollTop = 28 * 2500');
-  ok('midden in de lijst: rijen staan er', await tot(`${TITELS}.length > 5`, 5000));
+  // Rijen op DIE plek (niet de oude van bovenaan, die staan er tot het volgende beeld), met hun knoppen.
+  ok('midden in de lijst: rijen staan er', await tot(`${TITELS}.length > 5 && Number(document.querySelector('#lib-panel .lib-venster .lib-rij')?.dataset.i) >= 2400
+    && document.querySelectorAll('#lib-panel .lib-venster button[data-weg]').length > 12`, 5000));
   const inBeeld = await evalueer("[...document.querySelectorAll('#lib-panel .lib-venster button[data-weg]')].map((b) => b.dataset.weg)");
   const weg = inBeeld[12];
   await klikWeg(weg);
