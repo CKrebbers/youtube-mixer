@@ -94,7 +94,7 @@ waarin het moet: 325 punten in 61 blokken.
 |---|---|---|---|---|
 | **Vooraf** (overdag, vóór avond 1) | 2 | 21 | 110 | eerst een kopie buiten de laptop (`tools/backup`, docs/BACKUP.md), dan media buiten iCloud (`tools/media-verhuis.mjs`, server uit), dan VARVE.app opnieuw (ar-app) en de herberekening van alle grids (AR1, ar-herreken: wacht op "[tellen] … grids uit bestaande tellen klaar"); daarna de opstelling (docs/STANDEN.md, eindigt op "Avond 1 · APC direct"), het avondpakket thuis (vertrek, aankomst), de instellingen op de server, de iPhone via Tailscale (co-adres) en de A4 van de handenkaart |
 | **Avond 1** (mixen, zonder hub) | 22 | 127 | 330 | de kern (opstarten, luisteren, draaien, koptelefoon, keylock: 27 punten, 50 min), zonder lag, de library (bpm, past bij, de kaart), klank, beatgrid, gelijkzetten, tel 1, stems, master, de secties, naast de mixer (Controlekamer en de companion, AR16), het geheugen, de server weg, slaap en de Scarlett, en "Na afloop en de ochtend erna" (echo's, de nacht aan, ar-na, het setboek, 7a, de proefherstel, de eigen muziek) |
-| **Avond 2** (spelen, met de hub) | 15 | 90 | 305 | de hub-middag (2a, overdag), V1 en de schermen, opstarten (VARVE.app start de hub: app-hub; de opstelling via de hub; de opname van uitzenden stap 0), zonder lag met de hub, spelen, patronen, de secties met plan, auto-DJ, Maschine, beeld en hub, de Maschine als DJ-bediening, bladeren en sampler, crossover, en "Na afloop" (de opname, Logic, de speeldag) |
+| **Avond 2** (spelen, met de hub) | 15 | 90 | 305 | de hub-middag (2a, overdag), V1 en de schermen, opstarten (eerst de opstelling via de hub: sta-hub, dan start VARVE.app de hub: app-hub; de opname van uitzenden stap 0), zonder lag met de hub, spelen, patronen, de secties met plan, auto-DJ, Maschine, beeld en hub, de Maschine als DJ-bediening, bladeren en sampler, crossover, en "Na afloop" (de opname, Logic, de speeldag) |
 | **Avond 3** (beeld) | 6 | 21 | 135 | met de pc: de Stroommachine, het niveau, het avondpakket en de suite op de pc; zonder de pc: het zaalbeeld, beeld op één machine (overdag, geen speeldag), uitzenden stap 1 |
 | **Werkruimte** | 9 | 40 | 225 | E0, poort M, A–D, S9–S11 (ongewijzigd, met de W-vragen bij hun punt) |
 | **Eerder werk** | 7 | 26 | 45 | als er tijd over is |
@@ -105,20 +105,21 @@ waarin het moet: 325 punten in 61 blokken.
 - **Media buiten iCloud vóór VARVE.app**: de app leest `~/.varve/media-pad`; de verhuizing kan alleen met de server uit.
 - **De herberekening vóór avond 1.** De eerste start na 16 okt rekent elk automatisch grid opnieuw (kaart-VERSIE 3); pas
   daarna kloppen ga-dj en ar-een, en de tegel Server zegt dan of de secties actueel zijn.
-- **Avond 1 is zonder hub, maar VARVE.app start hem** (sinds 13 okt, VRAGEN AR21): start-apc stopt hem en opent de mixer
-  met "zonder hub"; ar-weg en ar-val starten de server met de lus zelf, niet met VARVE.app (die zou de hub midden in
-  avond 1 starten, en dan praten de hub en de mixer allebei met de APC).
+- **Avond 1 is zonder hub.** VARVE.app start de hub sinds 16 okt alleen als de actieve opstelling "mixer via de hub"
+  zegt (VRAGEN AR21); "Avond 1 · APC direct" zegt dat niet, dus geen hub, en de Controlekamer verliest een oude `?hub=`.
+  Draait er toch nog een hub van eerder, dan stopt start-apc hem (met de hub erbij praten de hub en de mixer allebei
+  met de APC). ar-weg en ar-val starten de server met de lus zelf, niet met VARVE.app.
 - **De nacht.** De opstelling "Avond 1 · APC direct" zet "vannacht niet": nacht-eerste zet dat aan het eind van avond 1
   terug. "Vandaag speeldag" op de companion blokkeert de nacht, dus dat punt staat pas na avond 2.
 - **Na afloop**: ar-na, het setboek en 7a lezen kopieën van de avond, dus pas daarna (het setboek leest het log van
   sb-log, het vinkje "log altijd aan" vooraan in het opstarten).
-- **Avond 2**: de hub-middag en V1 kunnen niet naast een draaiende hub; daarna start VARVE.app de hub (app-hub) en is
-  de handmatige start de terugval (hb-start).
+- **Avond 2**: de hub-middag en V1 kunnen niet naast een draaiende hub; daarna eerst de opstelling via de hub
+  (sta-hub), want pas dan start VARVE.app de hub (app-hub); de handmatige start is de terugval (hb-start).
 - **Avond 3**: eerst wat de pc nodig heeft, dan wat zonder pc kan; beeld op één machine en uitzenden overdag.
 
 `test/controle.test.mjs` eist dit: Vooraf vóór avond 1 vóór avond 2 vóór avond 3 vóór Werkruimte vóór Eerder werk,
 de kern als eerste blokken van avond 1, kopie → verhuizing → VARVE.app → herberekening vóór avond 1, de speeldag na de
-nacht, het setboek na de avond, app-hub vóór hb-start, en dat start-apc de hub stopt en ar-weg de lus zonder de app start.
+nacht, het setboek na de avond, sta-hub vóór app-hub vóór hb-start, sta-terug vóór start-apc, en dat start-apc de hub stopt en ar-weg de lus zonder de app start.
 
 - **Citaten** (16 okt): een punt dat een melding of logregel van de app letterlijk aanhaalt, zet die in
   `citeert`. `test/controle.test.mjs` eist dat elk citaat in de doe of de let staat én letterlijk in de code

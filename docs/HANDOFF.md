@@ -1,5 +1,13 @@
 # Overdracht — waar we staan (15 oktober 2026)
 
+## 16 OKT (nog later): AR21, VARVE.APP START DE HUB ALLEEN ALS DE OPSTELLING HET ZEGT (tak `studio/ar21`)
+
+`tools/varve-app/hub-nodig.mjs` vraagt `GET /api/standen/actief` en zegt `ja`/`nee …`/`onbekend …` met dezelfde regel
+als de knop "mixer openen" (`mixerAdres`). VARVE.app start de hub alleen bij `ja`; zonder hub haalt hij `?hub=` van een
+open Controlekamer af, en een hub die al draait krijgt een melding (hij stopt hem niet). In de speellijst staat sta-hub
+nu vóór app-hub. **Op de Mac na `git pull`: `zsh tools/varve-app/maak.sh`** (punt ar-app doet dat al). Niet getest op
+macOS: de AppleScript zelf (hier geen osascript); de test leest zijn tekst en draait het script en de echte server.
+
 ## 16 OKT (later): DE CONTROLEKAMER BIJGEWERKT EN OP VOLGORDE (tak `studio/controle-volgorde`)
 
 De speellijst (`src/controle/speellijst.js`, docs/CONTROLEKAMER.md "De speellijst") had geen punten voor wat er sinds
@@ -12,7 +20,7 @@ Volgorde en waarom: docs/CONTROLEKAMER.md "Waarom deze volgorde". Geen id verand
 **Gevonden:** VARVE.app start sinds 13 okt altijd de hub (als AV-app-hub er staat). Avond 1 is zonder hub, en ar-weg en
 ar-val lieten VARVE.app opnieuw openen: dan pakt de hub de APC terwijl de mixer hem ook heeft. De speellijst omzeilt het
 (start-apc stopt de hub, ar-weg/ar-val starten de lus zelf); de vraag of VARVE.app de hub alleen moet starten als de
-opstelling het zegt is **AR21** (VRAGEN). Ook: de opstelling "Avond 1 · APC direct" zet "vannacht niet" (nacht-eerste
+opstelling het zegt is **AR21** (VRAGEN; gebouwd, zie hierboven). Ook: de opstelling "Avond 1 · APC direct" zet "vannacht niet" (nacht-eerste
 zet het terug) en "vandaag speeldag" op de companion blokkeert de nacht (dat punt staat pas na avond 2).
 
 ## 16 OKT: DE REST VAN BLOK AR (tak `studio/ar-alles`)

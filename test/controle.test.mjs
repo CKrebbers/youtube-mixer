@@ -58,11 +58,15 @@ console.log('de speellijst');
   ok('vooraf: kopie → media verhuizen → VARVE.app → herberekening, en dat vóór avond 1',
     plek('bk-eerste') < plek('mv-doe') && plek('mv-doe') < plek('ar-app') && plek('ar-app') < plek('ar-herreken')
     && plek('ar-herreken') < plek('start-apc') && plek('ar-herreken') < plek('bg-oordeel'));
-  ok('avond 2: VARVE.app start de hub (app-hub) vóór de terugval met de hand (hb-start)', plek('app-hub') < plek('hb-start') && plek('hb-start') < plek('app-erbij'));
+  // AR21: VARVE.app start de hub alleen met een opstelling "via de hub", dus eerst die activeren (sta-hub).
+  ok('avond 2: eerst de opstelling (sta-hub), dan VARVE.app met de hub (app-hub), dan de terugval met de hand (hb-start)',
+    plek('sta-hub') < plek('app-hub') && plek('app-hub') < plek('hb-start') && plek('hb-start') < plek('app-erbij'));
+  ok('avond 1: de opstelling "Avond 1 · APC direct" (sta-terug) vóór start-apc', plek('sta-terug') < plek('start-apc'));
   // De nacht na avond 1 (nacht-eerste) mag niet geblokkeerd zijn: de speeldag op de companion komt pas na avond 2.
   ok('vandaag speeldag (co-speeldag) pas na nacht-eerste, en het setboek na de avond', plek('nacht-eerste') < plek('co-speeldag')
     && plek('ar-wav') < plek('sb-draai') && plek('sb-log') < plek('sb-draai'));
-  // Avond 1 is zonder hub, maar VARVE.app start hem (sinds 13 okt): start-apc en de herstart in ar-weg zeggen hoe niet.
+  // Avond 1 is zonder hub; VARVE.app start hem sinds 16 okt niet meer zonder opstelling "via de hub" (AR21), maar een hub
+  // van eerder kan nog draaien: start-apc zegt hoe je hem stopt, en ar-weg herstart de server zonder de app.
   const tekstVan = (id) => { const p = punten.find((q) => q.id === id); return `${p.doe} ${p.let}`; };
   ok('avond 1 zonder hub: start-apc stopt de hub van VARVE.app, ar-weg start de server zonder VARVE.app',
     /kill \$\(lsof -nP -t -iTCP:7700/.test(tekstVan('start-apc')) && /zonder hub/.test(tekstVan('start-apc'))

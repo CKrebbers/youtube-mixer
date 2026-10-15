@@ -323,7 +323,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen; LEESM
                     feedback.mjs + feedback-samen.mjs: de LED-laag, druk -> lampje, echo's, de Maschine),
                     headless/lek.mjs (groeit de renderer: PROEF=opname, laad (60×) en wissel (50× instrument ↔ nummer), eis ≤ +20 MB privé na GC), headless/gezondheid.mjs (suspend + nep-APC = weer aan, 'stop' komt aan, processorerror hersteld), headless/beeld-afval.mjs (afval per beeld met 8 spelende tracks) en headless/acht-video.mjs (acht decks + acht video's: wacht de audio?), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
-                    luisterbestanden), varve-app/ (de Dock-app VARVE: start de server via server-lus.sh, opent de Controlekamer;
+                    luisterbestanden), varve-app/ (de Dock-app VARVE: start de server via server-lus.sh, de hub alleen als de opstelling "via de hub" zegt (hub-nodig.mjs, AR21), opent de Controlekamer;
                     server-lus.sh: POSIX sh, herstart hooguit 5×/min, `stop`/`status`, ~/.varve/server-lus.pid;
                     een wachter peilt /api/leeft en zet een server die hangt neer, AR18),
                     headless/server-weg.mjs (de server 30 s weg met twee decks, opname en log: 0 stille vensters, WAV zonder gat;
@@ -468,6 +468,7 @@ test/
   server-poort.test.mjs  AR20: een tweede server op een bezette poort stopt met exit 3 vóór hij .bezig-*, de stems-rij of library.db aanraakt
   herstart.test.mjs AR9: leesLus, de herstartregel en de tegel Server (puur), en /api/leeft van een echte server met de omgeving van de lus
   notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node (ook de wachter: SIGSTOP); de Node-waarschuwing van alles.mjs
+  hub-nodig.test.mjs  AR21: VARVE.app start de hub alleen met hub.mixerVia (de regel van mixer openen), een nep-server en de AppleScript-tekst
   alles.mjs         alle tests in één keer met overzicht (een andere Node dan .node-version: waarschuwing boven en onder, niets overgeslagen)
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)

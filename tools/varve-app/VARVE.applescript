@@ -10,11 +10,16 @@
 --    `sh tools/varve-app/server-lus.sh stop` (lus en server), of zoals altijd
 --    `pkill -f server/index.js` (een SIGTERM start de lus niet opnieuw; de lus stopt dan ook).
 --    Niet samen met de LaunchAgent uit docs/TAILSCALE.md: twee starters botsen op de poort.
--- 2. Draait de AV-app-hub (7700) niet, start hem dan (set studio, zonder eigen Chrome-tab): zonder
+-- 2. Zegt de actieve opstelling "mixer via de hub" (hub.mixerVia, docs/STANDEN.md; VRAGEN AR21, 16 okt),
+--    en draait de AV-app-hub (7700) niet, start hem dan (set studio, zonder eigen Chrome-tab): zonder
 --    hub doet de Maschine MK2 niets (docs/MASCHINE.md). Lukt dat niet, dan gaat VARVE door zonder
 --    hub en zegt dat. Het log: ~/.varve-hub.log. Stoppen: kill het proces op 7700 (de hub ruimt op).
--- 3. Haal de Controlekamer in Chrome naar voren, of open er een (met ?hub= als de hub draait, dan
---    opent "mixer openen" de mixer met de hub). Nooit de mixer zelf, en nooit een tweede Controlekamer.
+--    Zegt de opstelling het niet (avond 1: de APC direct), dan GEEN hub: anders praten hub en mixer
+--    allebei met de APC. Welke opstelling: tools/varve-app/hub-nodig.mjs vraagt het de server
+--    (dezelfde regel als de knop "mixer openen"); antwoordt die niet, dan ook geen hub.
+-- 3. Haal de Controlekamer in Chrome naar voren, of open er een (met ?hub= als de hub erbij hoort, dan
+--    opent "mixer openen" de mixer met de hub; zonder haalt hij ?hub= weg). Nooit de mixer zelf, en
+--    nooit een tweede Controlekamer.
 
 property poort : "8777"
 property map : "Desktop/1. Projects/Youtube mixer" -- onder je thuismap
@@ -51,9 +56,21 @@ on run
 	end try
 end run
 
--- true = de hub luistert (al, of na starten). Een hub die al draait wordt nooit opnieuw gestart:
--- twee hubs vechten om de APC en de Maschine.
+-- true = de hub hoort erbij en luistert (al, of na starten). Een hub die al draait wordt nooit
+-- opnieuw gestart: twee hubs vechten om de APC en de Maschine. Zegt de opstelling niet "via de hub",
+-- dan false, ook als er een hub draait (die stoppen we niet: dat beslis je zelf, het staat in de melding).
 on zorgVoorHub()
+	set wens to my hubGewenst()
+	if wens is not "ja" then
+		if my luistertOp(hubPoort) then
+			display notification "De hub draait al, maar de opstelling zegt niet via de hub: de Controlekamer opent zonder ?hub=. Moet de APC direct naar de mixer, stop dan de hub (poort " & hubPoort & ")." with title "VARVE"
+		else if wens starts with "onbekend" then
+			set reden to "geen antwoord"
+			if (length of wens) > 9 then set reden to text 10 thru -1 of wens
+			display notification "Opstelling onbekend (" & reden & "): de hub is niet gestart." with title "VARVE"
+		end if
+		return false
+	end if
 	if my luistertOp(hubPoort) then return true
 	set opdracht to "echo \"--- $(date '+%d-%m %H:%M:%S') gestart door VARVE.app\" && cd ~/" & quoted form of hubMap & " && nohup npm start -- studio --geen-drivers --zonder-chrome --blijf &"
 	try
@@ -71,6 +88,17 @@ on zorgVoorHub()
 	display notification "De hub antwoordt na 15 s nog niet: de Maschine doet niet mee. Log: " & hubLogboek with title "VARVE"
 	return false
 end zorgVoorHub
+
+-- "ja", "nee <naam>" of "onbekend <reden>" (tools/varve-app/hub-nodig.mjs, altijd exit 0). Via zsh -l:
+-- een app uit het Dock heeft node niet op zijn pad. Faalt de shell zelf, dan onbekend (= geen hub).
+on hubGewenst()
+	set opdracht to "cd ~/" & quoted form of map & " && node tools/varve-app/hub-nodig.mjs --poort " & poort
+	try
+		return do shell script "/bin/zsh -lc " & quoted form of opdracht & " < /dev/null"
+	on error
+		return "onbekend node of tools/varve-app/hub-nodig.mjs start niet"
+	end try
+end hubGewenst
 
 on luistertOp(p)
 	try
@@ -148,8 +176,10 @@ on toonControlekamer(hub)
 			set adressen to URL of every tab of w
 			repeat with i from 1 to count of adressen
 				if my isControlekamer((item i of adressen) as text) then
-					-- Een open Controlekamer zonder ?hub= krijgt hem erbij (herladen kost daar niets).
-					if hub and ((item i of adressen) as text) does not contain "hub=" then set URL of tab i of w to adres
+					-- Een open Controlekamer zonder ?hub= krijgt hem erbij, en zonder hub gaat hij eraf
+					-- (herladen kost daar niets; anders opende "mixer openen" via een hub die er niet hoort).
+					set heeftHub to ((item i of adressen) as text) contains "hub="
+					if hub is not heeftHub then set URL of tab i of w to adres
 					set active tab index of w to i
 					if minimized of w then set minimized of w to false
 					set index of w to 1
