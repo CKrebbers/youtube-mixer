@@ -15,7 +15,7 @@ const nodes = [];
 globalThis.AudioWorkletNode = class {
   constructor() {
     // De worklet antwoordt op 'stop' met 'klaar', asynchroon, zoals de audiothread.
-    this.port = { onmessage: null, postMessage: (m) => { if (m.type === 'stop') setTimeout(() => this.port.onmessage?.({ data: { type: 'klaar' } }), 0); } };
+    this.port = { onmessage: null, close() {}, postMessage: (m) => { if (m.type === 'stop') setTimeout(() => this.port.onmessage?.({ data: { type: 'klaar' } }), 0); } };
     nodes.push(this);
   }
   connect(x) { return x; }
@@ -138,6 +138,20 @@ try {
     ok('antwoord kwijt: WAV precies 3 s, stuk 2 niet dubbel', buf.length === kop + 3 * 48000 * 4 && Math.abs(r.duur - 3) < 1e-9);
     ok('stuk 3 staat op 2 s', buf.subarray(kop + 96000 * 4).equals(stuk(2)));
     ok('een gelukte herhaling is geen fout', fouten.length === 0);
+  }
+
+  // ---- 1a. de worklet gooit een fout (processorerror, spoor A): zeggen, niet stil verder "opnemen" --
+  {
+    const op = new Opnemer({ engine: maakEngine(), haal, wacht: () => Promise.resolve() });
+    const fouten = [];
+    op.onFout = (f) => fouten.push(f);
+    await op.start();
+    const node = nodes.at(-1);
+    geef(node, 0);
+    node.onprocessorerror({ message: 'nep' });
+    ok('processorerror van de opname-worklet: één melding via onFout, met wat je moet doen', fouten.length === 1 && /liep vast/.test(fouten[0]) && /nep/.test(fouten[0]) && /stop/.test(fouten[0]));
+    const r = await op.stop();
+    ok('… en stoppen lukt daarna gewoon (wat er al was blijft)', r.ok && Math.abs(r.duur - 1) < 1e-9);
   }
 
   // ---- 1b. een stuk middenin valt helemaal weg: gat = stilte, rest op tijd --

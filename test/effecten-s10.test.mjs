@@ -355,6 +355,23 @@ await import('../src/engine/fx-worklet.js');
   proc[0].port.onmessage({ data: 'stop' });
   ok('na "stop" geeft process() false', proc[0].process(INV[0], uit[0], params[0]) === false);
 }
+// Een fout in een effect-worklet (processorerror, spoor A): het effect is vanaf dan stil; dat wordt een
+// melding via de context (worklet-fout.js), met de naam van het effect.
+console.log('\nworklet-fout van een effect');
+for (const e of S.S10_EFFECTEN) {
+  const w = nepWorklet(), ctx = new MockContext({ worklet: w });
+  const fouten = [];
+  ctx.addEventListener('varve-workletfout', (ev) => fouten.push(ev.detail));
+  const inst = e.bouw(ctx, { klok: nepKlok() });
+  await w.klaar();
+  const wn = staat.WORKLET_NODES.filter((n) => n.ctx === ctx);
+  if (!wn.length) continue;
+  for (const n of wn) n.onprocessorerror?.({ message: 'nep' });
+  ok(`${e.id}: processorerror = een melding op de context per worklet ("${fouten[0]?.wat}")`,
+    fouten.length === wn.length && fouten.every((f) => /^effect /.test(f.wat) && f.reden === 'nep' && /opnieuw/.test(f.hint)));
+  inst.vernietig?.();
+}
+
 void expMap; void dbToGain;
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

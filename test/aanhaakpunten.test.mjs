@@ -44,7 +44,7 @@ globalThis.AudioWorkletNode = class {
   constructor(_ctx, naam, opties = {}) {
     this.naam = naam;
     this.numberOfOutputs = opties.numberOfOutputs ?? 1;
-    this.port = { berichten: [], postMessage(m) { this.berichten.push(m); }, onmessage: null };
+    this.port = { berichten: [], dicht: false, postMessage(m) { if (!this.dicht) this.berichten.push(m); }, onmessage: null, close() { this.dicht = true; } };
   }
   connect(n) { return n; }
   disconnect() {}

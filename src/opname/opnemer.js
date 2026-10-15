@@ -176,6 +176,12 @@ export class Opnemer {
     this._inRij = 0; this._doorTot = null; this._t = nieuweToestand();
     this.storing = null; this.verloren = 0; this._laatsteGoed = undefined; this._laatsteVerloren = 0;
     const node = new AudioWorkletNode(ctx, 'opnemer', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
+    // Een fout in de worklet: vanaf daar komen er geen stukken meer. Zeggen, niet stil verder "opnemen".
+    node.onprocessorerror = (e) => {
+      if (node !== this.node) return;
+      this.fout = `de opname-worklet liep vast${e?.message ? ` (${e.message})` : ''}: vanaf hier wordt niets meer opgenomen, stop en begin opnieuw`;
+      this.onFout?.(this.fout);
+    };
     node.port.onmessage = ({ data: m }) => {
       if (m.type === 'stuk') this._verstuur(m.data, m.frames);
       else if (m.type === 'klaar') this._klaar?.();

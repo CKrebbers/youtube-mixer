@@ -228,11 +228,12 @@ const node = (type) => ({
 let MODULES = 0;
 const BERICHTEN = [];
 globalThis.AudioWorkletNode = class {
-  constructor(ctx, naam, opties) { this.naam = naam; this.opties = opties; this.port = { postMessage: (m) => BERICHTEN.push(m), onmessage: null }; }
+  constructor(ctx, naam, opties) { this.naam = naam; this.opties = opties; this.port = { postMessage: (m) => BERICHTEN.push(m), onmessage: null, close() {} }; }
   connect(n) { this._naar = n; } disconnect() {}
 };
-globalThis.AudioContext = class {
-  constructor() { this.sampleRate = 48000; this.state = 'running'; this.baseLatency = 0.005; this.destination = node('dest'); this.audioWorklet = { addModule: async () => { MODULES++; } }; }
+// Een EventTarget, zoals de echte (worklet-fouten komen als event op de context, worklet-fout.js).
+globalThis.AudioContext = class extends EventTarget {
+  constructor() { super(); this.sampleRate = 48000; this.state = 'running'; this.baseLatency = 0.005; this.destination = node('dest'); this.audioWorklet = { addModule: async () => { MODULES++; } }; }
   get currentTime() { return NOW; }
   createGain() { return node('gain'); }
   createBiquadFilter() { return node('biquad'); }
@@ -320,6 +321,34 @@ globalThis.AudioContext = class {
     await ks3.wrijf(false);                                  // los vóór de worklet er is
     await p;
     ok('wrijven indrukken en loslaten terwijl de worklet laadt: hij zingt daarna niet', !ks3.wrijft && BERICHTEN.filter((m) => m.t === 'wrijf').every((m) => m.p === 0));
+  }
+  {
+    // Een fout in de worklet (processorerror, spoor A): los, melden op de context, de volgende aanslag bouwt hem opnieuw.
+    const c4 = new AudioContext();
+    const fouten = [];
+    c4.addEventListener('varve-workletfout', (e) => fouten.push(e.detail));
+    const ks4 = new Klankschaal(c4, master, { toon: () => null });
+    await ks4.start();
+    const n1 = ks4.node, h1 = n1.onprocessorerror;
+    h1({ message: 'nep' });
+    ok('worklet-fout: de node los, één melding op de context', ks4.node === null && fouten.length === 1 && fouten[0].wat === 'de klankschaal' && /opnieuw/.test(fouten[0].hint));
+    h1({});
+    await ks4.slaVeld(2);
+    ok('… een late tweede doet niets, en de volgende aanslag bouwt een nieuwe worklet', fouten.length === 1 && ks4.node && ks4.node !== n1);
+  }
+  {
+    // De worklet zelf: na { t: 'stop' } geeft process() false.
+    let Klasse = null;
+    globalThis.sampleRate = 48000;
+    globalThis.AudioWorkletProcessor = class { constructor() { this.port = { onmessage: null, postMessage() {} }; } };
+    globalThis.registerProcessor = (_n, k) => { Klasse = k; };
+    await import('../src/engine/klankschaal-worklet.js');
+    const w = new Klasse();
+    const uit = [[new Float32Array(128), new Float32Array(128)]];
+    const voor = w.process([], uit);
+    w.port.onmessage({ data: { t: 'stop' } });
+    ok('de worklet: true tot { t: stop }, daarna false en geen berichten meer', voor === true && w.process([], uit) === false && w.port.onmessage === null);
+    delete globalThis.AudioWorkletProcessor; delete globalThis.registerProcessor;
   }
   ok('instellingen bewaren en terugzetten', JSON.stringify(ks2.instellingen()) === JSON.stringify(bewaard));
   ks2.herstel({ volg: 'raar', ladder: 'x', klank: 7, transpositie: 99, fijn: -400, volume: 'hard' });

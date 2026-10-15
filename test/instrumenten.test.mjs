@@ -351,7 +351,7 @@ const buf = renderDemoTrack(eng.ctx, { bars: 8 });
   const { geheugenHaal } = await import('../src/engine/bron.js');
   eng.ctx.audioWorklet = { addModule: async () => {} };
   globalThis.AudioWorkletNode = class {
-    constructor(_c, _n, o = {}) { this.numberOfOutputs = o.numberOfOutputs ?? 1; this.port = { postMessage() {}, onmessage: null }; }
+    constructor(_c, _n, o = {}) { this.numberOfOutputs = o.numberOfOutputs ?? 1; this.port = { postMessage() {}, onmessage: null, close() {} }; }
     connect(d) { return d; } disconnect() {}
   };
   const wav = maakWav([buf.getChannelData(0), buf.getChannelData(1)], buf.sampleRate);

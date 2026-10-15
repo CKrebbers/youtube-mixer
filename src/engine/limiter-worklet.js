@@ -6,6 +6,10 @@
  * de gain per sample (mono): de hoofdthread leest die met een AnalyserNode
  * uit voor de gain reduction. Geen berichten en geen afval per blok
  * (docs/AUDIOPAD.md); een invoer zonder verbinding (lege lijst) is stilte.
+ *
+ * Bericht 'stop': process() geeft daarna false (zoals fx-worklet.js), zodat de
+ * browser de node mag opruimen. De master leeft zo lang als de AudioContext en
+ * stuurt het (nog) niet; het is er voor wie de limiter ooit wel weghaalt.
  */
 import { LimiterKern } from './limiter-kern.js';
 
@@ -14,9 +18,12 @@ class LimiterProcessor extends AudioWorkletProcessor {
     super();
     this.kern = new LimiterKern(sampleRate, opties?.processorOptions || {});
     this.stil = new Float32Array(128);
+    this.levend = true;
+    this.port.onmessage = (e) => { if (e.data === 'stop') { this.levend = false; this.port.onmessage = null; } };
   }
 
   process(invoer, uitvoer) {
+    if (!this.levend) return false;
     const uit = uitvoer[0];
     const L = uit[0], R = uit.length > 1 ? uit[1] : uit[0];
     const n = L.length;

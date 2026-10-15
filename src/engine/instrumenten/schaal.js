@@ -1,3 +1,4 @@
+import { meldWorkletFout, foutReden } from '../worklet-fout.js';
 import { clamp, expMap } from '../../lib/emitter.js';
 import { komma } from '../../lib/notatie.js';
 import { zetHellingen, startDrempel } from '../overgang.js';
@@ -124,6 +125,7 @@ export class Schaal {
       this._start = laadModule(this.ctx).then(() => {
         if (this._weg || this.node) return;
         const node = new AudioWorkletNode(this.ctx, 'varve-schaal-instrument', { numberOfInputs: 0, outputChannelCount: [2] });
+        node.onprocessorerror = (e) => this._workletFout(node, e);
         node.connect(this.uitGain);
         this.node = node;
         this._post({ t: 'opt', fric: 1, org: 1 });
@@ -268,6 +270,9 @@ export class Schaal {
     this.stil();
     this._weg = true;
     setTimeout(() => {
+      // 'stop' eerst: daarna geeft de worklet false uit process() en mag de
+      // browser hem opruimen. Alleen de poort sluiten liet hem voor altijd draaien.
+      try { this.node?.port.postMessage({ t: 'stop' }); } catch (_) {}
       try { this.node?.disconnect(); } catch (_) {}
       try { this.node?.port.close(); } catch (_) {}
       try { this.uitGain.disconnect(); } catch (_) {}
@@ -276,6 +281,20 @@ export class Schaal {
   }
 
   // ---- binnenkant ----------------------------------------------------------------
+
+  /**
+   * De worklet gooide een fout: vanaf nu stilte. Los, melden, en de volgende
+   * noot bouwt hem opnieuw (noteOn roept start() aan zonder node).
+   */
+  _workletFout(node, e) {
+    if (node !== this.node) return;
+    try { node.disconnect(); } catch (_) {}
+    node.onprocessorerror = null;
+    try { node.port.close(); } catch (_) {}
+    this.node = null;
+    this._start = null;
+    if (!this._weg) meldWorkletFout(this.ctx, 'het instrument Klankschaal', { reden: foutReden(e), hint: 'de volgende noot bouwt hem opnieuw' });
+  }
 
   _waarde(id) { return this._w[this.params.findIndex((p) => p.id === id)]; }
 

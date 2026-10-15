@@ -450,6 +450,7 @@ export class StreamBron {
     this.geladen = new Map();       // pagina -> bytes, wat de worklet heeft
     this.onderweg = new Set();
     this.fouten = 0;
+    this._herbouwd = false;         // na een worklet-fout al eens opnieuw opgebouwd (per laad)
     this._timer = null;
     this._generatie = 0;            // oude antwoorden na een nieuwe laad() negeren
     this.rek = null;                // { keylock, toon, stems } of null (zie KEYLOCK EN TOON)
@@ -472,7 +473,10 @@ export class StreamBron {
   /** Speelt hij? Een rem die op de audioklok al stilstaat is een pauze (remVoorbij). */
   get speelt() { return this.seg.speelt && !remVoorbij(this.seg, this.ctx.currentTime); }
   /** Het deck vraagt alleen "is er iets geladen"; een echte AudioBuffer is er niet. */
-  get buffer() { return this.bestand ? { duration: this.duur, stream: true } : null; }
+  // Eén object per geladen bestand, niet per aanroep: deck.buffer wordt per beeld tientallen
+  // keren gevraagd (snapshot, maatgever, sync) en maakte zo ~1 MB/s afval op de hoofdthread
+  // (tools/headless/beeld-afval.mjs, spoor A 15 okt). Een nieuwe laad = een nieuw object.
+  get buffer() { const b = this.bestand; return b ? (b.info ??= { duration: this.duur, stream: true }) : null; }
   get geheugen() { let n = 0; for (const b of this.geladen.values()) n += b; return n; }
   get remt() { return this.speelt && !!this.seg.rem; }
   /** Hoe snel de positie nu loopt (tracktijd per seconde); tijdens een rem minder (0 na stilstand), stil = de rate. */
@@ -556,23 +560,8 @@ export class StreamBron {
     };
     await laadStreamModule(this.ctx);
     nogActueel();
-    if (!this.node) {
-      // Altijd vier uitgangen van twee kanalen (stems), ook voor stereo: dan
-      // hoeft de node nooit opnieuw gebouwd te worden als een volgend nummer
-      // wel stems heeft. Uitgang k naar uitgang[k], of allemaal naar die ene.
-      this.node = new AudioWorkletNode(this.ctx, 'stream-lezer', {
-        numberOfInputs: 0, numberOfOutputs: UITGANGEN, outputChannelCount: Array(UITGANGEN).fill(KANALEN),
-      });
-      this.node.port.onmessage = ({ data: m }) => {
-        if (m.type === 'einde' && (m.id === undefined || m.id === this._segId)) this._einde();
-        else if (m.type === 'rek') this._uitLat = m.uitLat;
-        else if (m.type === 'rekfout') this.onFout?.(`keylock werkt niet: ${m.fout}`);
-      };
-      for (let k = 0; k < UITGANGEN; k++) {
-        const doel = Array.isArray(this.uitgang) ? this.uitgang[k] : this.uitgang;
-        if (doel) this.node.connect(doel, k);
-      }
-    }
+    this._herbouwd = false;           // per laad hooguit één keer opnieuw opbouwen na een worklet-fout
+    if (!this.node) this._maakNode();
     const res = await this.haal(url, { headers: { Range: 'bytes=0-65535' } });
     nogActueel();
     if (!res.ok) throw new Error(`audio niet gevonden (${res.status})`);
@@ -588,7 +577,7 @@ export class StreamBron {
     }
 
     const bpf = bytesPerFrame(kop);
-    this.bestand = { url, kop, bpf, paginaBytes: PAGINA * bpf, duur: kop.dataLengte / bpf / kop.sampleRate, totaal, vervangen: false };
+    this.bestand = { url, kop, bpf, paginaBytes: PAGINA * bpf, duur: kop.dataLengte / bpf / kop.sampleRate, totaal, vervangen: false, info: null };
     this.geladen.clear();
     this.onderweg.clear();
     this.loop = null;
@@ -600,6 +589,69 @@ export class StreamBron {
     await this.bijvullen();
     nogActueel();
     this._timer ??= setInterval(() => this.bijvullen().catch(() => {}), this.interval);
+  }
+
+  /**
+   * De worklet-node maken en aansluiten. Altijd vier uitgangen van twee
+   * kanalen (stems), ook voor stereo: dan hoeft de node nooit opnieuw gebouwd
+   * te worden als een volgend nummer wel stems heeft. Uitgang k naar
+   * uitgang[k], of allemaal naar die ene.
+   */
+  _maakNode() {
+    const node = new AudioWorkletNode(this.ctx, 'stream-lezer', {
+      numberOfInputs: 0, numberOfOutputs: UITGANGEN, outputChannelCount: Array(UITGANGEN).fill(KANALEN),
+    });
+    node.port.onmessage = ({ data: m }) => {
+      if (m.type === 'einde' && (m.id === undefined || m.id === this._segId)) this._einde();
+      else if (m.type === 'rek') this._uitLat = m.uitLat;
+      else if (m.type === 'rekfout') this.onFout?.(`keylock werkt niet: ${m.fout}`);
+    };
+    node.onprocessorerror = (e) => this._processorFout(node, e);
+    for (let k = 0; k < UITGANGEN; k++) {
+      const doel = Array.isArray(this.uitgang) ? this.uitgang[k] : this.uitgang;
+      if (doel) node.connect(doel, k);
+    }
+    this.node = node;
+    return node;
+  }
+
+  /**
+   * De worklet gooide een fout (processorerror): vanaf dan geeft hij stilte,
+   * voor altijd. Zonder dit was dat een stil deck zonder melding. Eén keer
+   * per laad een nieuwe node op DEZELFDE plek: hetzelfde segment {T, P, R}
+   * (regel 3: de positie volgt uit de audioklok, dus hij speelt verder waar
+   * hij nu hoort te zijn), het bestand opnieuw aangekondigd en de pagina's
+   * opnieuw opgehaald (ze waren naar de oude worklet overgedragen). Tot ze er
+   * zijn: een gat (stilte), zoals na een sprong. Gaat het daarna nog eens mis,
+   * dan blijft het stil en blijft de melding staan; de volgende laad bouwt
+   * een nieuwe node.
+   */
+  _processorFout(node, e) {
+    if (node !== this.node || this._vernietigd) return;
+    const reden = e?.message || e?.error?.message || '';
+    try { node.disconnect(); } catch (_) {}
+    node.onprocessorerror = null;
+    node.port.onmessage = null;
+    try { node.port.close(); } catch (_) {}
+    this.node = null;
+    if (this._herbouwd || !this.bestand) {
+      this.onFout?.(`het afspelen liep opnieuw vast (fout in de worklet${reden ? `: ${reden}` : ''}); deze track blijft stil tot je een nummer laadt`);
+      return;
+    }
+    this._herbouwd = true;
+    try {
+      this._maakNode();
+    } catch (err) {
+      this.onFout?.(`het afspelen liep vast en komt niet terug: ${err?.message || err}`);
+      return;
+    }
+    // Wat de oude worklet had is weg; wat nog onderweg is, gaat naar de nieuwe (_haalReeks leest this.node).
+    this.geladen.clear();
+    const { kop } = this.bestand;
+    this.node.port.postMessage({ type: 'bron', duur: this.duur, sr: kop.sampleRate, kanalen: kop.kanalen });
+    this._stuur(this.seg.T > this.ctx.currentTime);
+    this.bijvullen().catch(() => {});
+    this.onFout?.(`het afspelen liep vast (fout in de worklet${reden ? `: ${reden}` : ''}); opnieuw opgebouwd op dezelfde plek`);
   }
 
   /** Vergelijkt wat er moet zijn met wat er is, haalt op en ruimt op. */
@@ -889,9 +941,17 @@ export class StreamBron {
     this.bestand = null;
     this.geladen.clear();
     if (this.node) {
-      this.node.port.postMessage({ type: 'bron', duur: 0, sr: 48000 });
+      // 'stop': de worklet geeft daarna false uit process(), anders blijft hij
+      // (met zijn stretchers) voor altijd draaien, ook los van alles. Daarna de
+      // poort dicht: wat al verstuurd is komt nog aan. Alleen hier, nooit bij
+      // een herlaad (laad() gebruikt dezelfde node opnieuw).
+      const port = this.node.port;
+      port.postMessage({ type: 'bron', duur: 0, sr: 48000 });
+      port.postMessage({ type: 'stop' });
       this.node.disconnect();
-      this.node.port.onmessage = null;
+      this.node.onprocessorerror = null;
+      port.onmessage = null;
+      port.close();
       this.node = null;
     }
   }

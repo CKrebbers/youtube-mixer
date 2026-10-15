@@ -116,7 +116,7 @@ globalThis.AudioWorkletNode = class {
     if (!PARAMS_VAN[naam]) throw new Error(`InvalidStateError: ${naam} niet geregistreerd`);
     const n = node(ctx, 'worklet', [], { naam, opties, berichten: [] });
     n.parameters = new Map(PARAMS_VAN[naam].map(([p, v]) => [p, param(n, p, v)]));
-    n.port = { postMessage: (m) => n.berichten.push(m) };
+    n.port = { postMessage: (m) => { if (!n.poortDicht) n.berichten.push(m); }, onmessage: null, close() { n.poortDicht = true; } };
     WORKLET_NODES.push(n);
     return n;
   }
@@ -727,6 +727,7 @@ console.log('\nworklets (pitch, auto-wah)');
   p.vernietig(); a.vernietig();
   ok('vernietig: de processor hoort "stop" (anders houdt hij zichzelf in leven) en hangt los',
     pn.berichten.includes('stop') && an.berichten.includes('stop') && pn.naar.length === 0 && an.naar.length === 0);
+  ok('… en daarna gaat de poort dicht (stop eerst: een dichte poort neemt niets meer aan)', pn.poortDicht === true && an.poortDicht === true);
 }
 {
   NOW = 700;

@@ -218,6 +218,8 @@ export function metWorklet(ctx, naam, opties, klaar) {
     if (w.weg || w.node) return;
     let node;
     try { node = new AudioWorkletNode(ctx, naam, opties); } catch (_) { return; }
+    // Een fout in de worklet = stil effect: melden via de context (worklet-fout.js, WORKLET_FOUT; spoor A).
+    node.onprocessorerror = (e) => { try { ctx.dispatchEvent?.(new CustomEvent('varve-workletfout', { detail: { wat: `effect ${String(naam).replace(/^varve-fx-/, '')}`, reden: String(e?.message || ''), hint: 'het effect is stil; kies het opnieuw' } })); } catch (_) {} };
     w.node = node;
     try { klaar(node, meteen); } catch (_) {}
   };
@@ -227,7 +229,10 @@ export function metWorklet(ctx, naam, opties, klaar) {
   w.stop = () => {
     w.weg = true;
     if (!w.node) return;
+    // 'stop' en meteen de poort dicht: het bericht komt nog aan (in Chrome gemeten, spoor A), en een open
+    // poort hield de processor in leven (hij rekende door na het losmaken).
     try { w.node.port.postMessage('stop'); } catch (_) {}
+    try { w.node.port.onmessage = null; w.node.port.close(); } catch (_) {}
     try { w.node.disconnect(); } catch (_) {}
   };
   return w;

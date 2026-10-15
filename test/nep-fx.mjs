@@ -29,8 +29,10 @@ export const node = (ctx, soort, params = [], extra = {}) => {
   return n;
 };
 
-export class MockContext {
+// Een EventTarget, zoals de echte (worklet-fouten komen als event op de context, worklet-fout.js).
+export class MockContext extends EventTarget {
   constructor({ worklet = null } = {}) {
+    super();
     this.sampleRate = 48000; this.state = 'running'; this.baseLatency = 0.005;
     this.destination = node(this, 'dest');
     this.bronnen = [];
@@ -104,7 +106,7 @@ globalThis.AudioWorkletNode = class {
     if (!PARAMS_VAN[naam]) throw new Error(`InvalidStateError: ${naam} niet geregistreerd`);
     const n = node(ctx, 'worklet', [], { naam, opties, berichten: [] });
     n.parameters = new Map(PARAMS_VAN[naam].map(([p, v]) => [p, param(n, p, v)]));
-    n.port = { postMessage: (m) => n.berichten.push(m) };
+    n.port = { postMessage: (m) => n.berichten.push(m), onmessage: null, close() {} };
     staat.WORKLET_NODES.push(n);
     return n;
   }
