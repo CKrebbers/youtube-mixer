@@ -1,5 +1,31 @@
 # Overdracht — waar we staan (15 oktober 2026)
 
+## 15 OKT (avond): DE ARCHITECTUURRONDE (tak `studio/architectuur`)
+
+Een externe audit van vijf punten, gelegd naast de winst-analyses van 13 okt en nagelopen in de code. Twee punten
+(consolideren, telemetrie binair) bleken grotendeels al opgelost of niet de moeite; wat wél klopte en wat de audit
+miste (de server even weg) is in vijf sporen gebouwd. Verslagen: `docs/verslagen/2026-10-15/arch-*.md`; vragen:
+VRAGEN blok **AR** (AR1–AR16).
+
+| spoor | wat | gemeten |
+|---|---|---|
+| A audio | worklets stoppen echt na vernietigen; `onprocessorerror` overal (StreamBron bouwt één keer opnieuw, limiter valt terug); de AudioContext bewaakt (`src/ui/gezondheid.js`: een druk op de APC zet hem na een suspend weer aan); golfvorm-sleutel op `gridVersie` | 50 instrumentwissels: +68 → +3 MB; afval per beeld 176 → 92 kB, de golfvorm-sleutel 8 kB → 0,3 kB |
+| B beatgrid | snappen (tel 1 hier, tellen hier, pin) naar de Beat This!-tel i.p.v. de oude klap; een tweede mening over de "1" uit de lage band (`twijfel: 'maat'`); `bench.mjs --beatthis`; `tools/beatmeting/LEESMIJ.md`, stapA hersteld | snap synthetisch −8,9 → −0,2 ms gemiddeld; "1" één tel naast gemarkeerd 0 → 10 van 20; vals zeker 0 |
+| C Linux | het avondpakket per platform (geen vals rood/groen meer op Linux); `.node-version` 26.8.2 en een waarschuwing in alles.mjs; backup-kopie, wachtrij (zombie) en uitzend (libx264) groen op Linux | |
+| D server weg | opname, video en log herhalen zolang de server weg is (één melding die meegroeit); 60 s vooruit voor wat je hoort; herstartlus `tools/varve-app/server-lus.sh`; de server stopt met exit 3 als de poort bezet is | server 30 s weg: 0 stille vensters (was 200, tot 10 s stilte), WAV zonder gat (was 20 s nullen), 1 melding (was 20) |
+| E opruimen | effect-tests op id; helpers op één plek (`src/lib/notatie.js`, `src/ui/wie.js`); een test die de vijf plekken van een spoor bewaakt; paneel stringify't één keer per bericht | |
+| basis | `meld(…, { sleutel })` en `wisMelding`: één melding die meegroeit | |
+
+**Wat jij moet doen na de merge**
+- VARVE.app opnieuw bouwen: `zsh tools/varve-app/maak.sh` (anders start hij de server zonder de lus). Had je de
+  LaunchAgent uit TAILSCALE.md geladen: eerst `launchctl unload` (AR8).
+- Op de Mac meten (AR2): het echte Beat This! op de bench, en het snappen op je eigen fragmenten. De opdrachten
+  staan in `docs/verslagen/2026-10-15/arch-beatgrid.md` §5; het checkpoint was in de cloud niet te downloaden.
+- Bestaande grids krijgen de tweede mening over de "1" pas met kaart-VERSIE 3 (AR1, niet verhoogd).
+
+**Niet getest:** alles op de Mac zelf, de echte APC, een echte opname van een uur met de server weg, de lus onder
+macOS `/bin/sh`. De Linux-fixtures van accu, USB-PD en de APC zijn HANDGEMAAKT (AR12).
+
 ## 15 OKT: DE WERKRUIMTE IS AF (S0–S11)
 
 Alles staat op **`werkruimte/integratie`**. Met de werkruimte `standaard` doet VARVE bit voor bit wat hij deed; alles
