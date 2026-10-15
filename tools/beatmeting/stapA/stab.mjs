@@ -1,5 +1,5 @@
 import { library, laadOnset, fmt, mmss } from '../lib.mjs';
-import { geschud } from '../varve-beat/gridfit.mjs';
+import { geschud } from '../gridfit.mjs';   // (stond als ../varve-beat/gridfit.mjs: de oude naam van tools/beatmeting/)
 const d = await import('../../../server/detect.js?' + Date.now());
 const q = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(p * (s.length - 1))]; };
 for (const t of await library()) {

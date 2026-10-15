@@ -12,8 +12,8 @@ import {
   Library, normaliseerGrid, normaliseerToon, moetAnalyse, moetToonAnalyse, autoGridWeigert,
   SORTERING, isSortering, MAX_PER_PAGINA, MAX_HOTCUES, IndelingFout,
 } from './library.js';
-import { ZEKER_VANAF, OUDE_ANALYSE_VERSIE } from './analyze.js';
-import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties } from './analyze.js';
+import { ZEKER_VANAF, OUDE_ANALYSE_VERSIE, LAAG_VERSIE } from './analyze.js';
+import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecties, maakLaag } from './analyze.js';
 import { toonSamenvatting } from './toon.js';
 import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
 import { kiesMedia, iCloudReden, VERHUISD_BESTAND, isTestserver } from './media-plek.js';
@@ -24,8 +24,8 @@ import { Patronen, NAAM as SETNAAM } from './patronen.js';
 import { Proef } from './proef.js';
 import { MixerStand, isMelding, vanDezeMac, MAX_BYTES as MIXER_MAX } from './mixer-melding.js';
 import { Splitter, StemsRij, maakStems, wisStemsBestanden, isAantal, isStemsKeuze, STEMS_STANDAARD } from './stems.js';
-import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, leesTweede, bewaarTweede, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
-import { gridUitTellen, vergelijk, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
+import { Tellenzoeker, TellenRij, GpuSlot, leesTellen, wisTellen, leesTweede, bewaarTweede, leesLaag, bewaarLaagMeta, LAAG_BESTAND, TELLEN_BESTAND, TELLEN_VERSIE } from './tellen.js';
+import { gridUitTellen, vergelijk, maatMening, meetGrid, VERSIE as KAART_VERSIE } from '../src/engine/tellen.js';
 import { Beatgrid } from '../src/engine/beatgrid.js';
 import { INSTELLING_SLEUTELS, INSTELLING_MAX, isInstelling } from '../src/ui/instellingen-lijst.js';
 import { Backups, ELKE_MS as BACKUP_ELKE } from './backup.js';
@@ -511,8 +511,21 @@ async function pasTellenToe(id, { overHand = false, overSlot = false, vers = fal
     }
   }
   vergelijk(kaart, t.beats, ander);
+  // De "1" tegen de lage band (maatMening, BEATGRID.md §14): bewaard in laag.bin, anders nu
+  // uitgerekend (ffmpeg op media/: op de achtergrond pas als er geen deck speelt).
+  let laag = null, laagBron = null;
+  if (mag) {
+    laag = vers ? null : await leesLaag(MEDIA, id, LAAG_VERSIE);
+    if (laag) laagBron = 'bewaard';
+    else {
+      if (achtergrond) await zolangErEenDeckSpeelt();
+      const l = await maakLaag(opSchijf((lib.track(id) ?? track).audio), join(MEDIA, id, LAAG_BESTAND));
+      if (l.ok && await bewaarLaagMeta(MEDIA, id, l)) { laag = await leesLaag(MEDIA, id, LAAG_VERSIE); laagBron = laag ? 'uitgerekend' : null; }
+    }
+    if (laag) maatMening(kaart, laag);
+  }
   const b = lib.bewaarAutoGrid(id, kaart, { overHand, overSlot });
-  const duur = `${((Date.now() - t0) / 1000).toFixed(1)} s, tweede mening ${tweede ?? 'geen'}`;
+  const duur = `${((Date.now() - t0) / 1000).toFixed(1)} s, tweede mening ${tweede ?? 'geen'}, lage band ${laagBron ?? 'geen'}`;
   if (b.bewaard) console.log(`[tellen] ${track.titel}: ${gridSamenvatting(b.grid)}${b.samples ? ` (${b.samples} sampler-pad${b.samples === 1 ? '' : 's'} naar het nieuwe octaaf)` : ''} — ${duur}`);
   else if (track.grid) {
     const m = meetGrid(new Beatgrid(track.grid), t.beats, t.downbeats).totaal;

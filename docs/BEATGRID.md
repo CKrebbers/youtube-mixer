@@ -686,3 +686,94 @@ Uitkomsten (drukken inclusief "grid-modus aan"; de cijfers in het verslag van 14
 - De bpm-encoder blijft 0,01 per tik (shift 0,1): exact komt het tempo pas met **vast**.
 - Een ringknop voor de bpm in de grid-modus is niet gebouwd: de device knobs sturen absolute
   waarden (127 stappen per slag) en `grid.bpm` loopt over 40–300 bpm: 2 bpm per tik.
+
+## 14. Snappen naar de tel, en een tweede mening over de "1" (15 oktober 2026)
+
+Spoor B van de architectuurronde (tak `arch/beatgrid`, verslag
+`docs/verslagen/2026-10-15/arch-beatgrid.md`). Twee dingen, allebei gemeten op de benchmark van §12.
+
+### Snappen naar de tel van Beat This! (`snapNaarTel` in beatgrid.js)
+
+"Tel 1 hier", "tellen hier", vast en de klik in de golfvorm snapten naar de klap (`deck.onsets`): de
+pieken van de onset-envelope met één vaste ijking (`PIEK_GEIJKT`, 68,5 ms). Een scherpe aanslag valt
+daardoor te vroeg, een zachte te laat; op Clay's fragmenten gemiddeld −6 tot −12 ms (§2, `rest/tel1.txt`).
+Nu eerst de tel uit `deck.tellen.beats` binnen 30 ms, anders de klap, anders de positie zelf. Vast telt op
+de tellen en de klappen samen (`klappenEnTellen`): met alleen de tellen zou bij een netwerk op het halve
+tempo de helft van de gridlijnen naast vallen (score 0,5, de grens van `pin`).
+
+Gemeten (`node tools/beatmeting/synth/snap.mjs`, 20 nummers, elke derde tel, ±25 ms naast gedrukt, 12 505
+drukken; fout t.o.v. de echte tel):
+
+| | gem | \|p50\| | \|p90\| | > 10 ms |
+|---|---|---|---|---|
+| klap (tot 15 okt) | −3,1 | 10,4 | 25,0 | 53% |
+| … alleen waar een klap binnen 30 ms lag (10 080×) | **−8,9** | 9,0 | 14,1 | 42% |
+| tel (nep-Beat This! `bt`, σ 6 ms, geen vaste afwijking) | −0,2 | 2,3 | 6,6 | 6% |
+| … met het netwerk 5 / 10 / 15 ms scheef | +2,7 / +5,2 / +7,8 | 5,1 / 9,9 / 13,7 | 10,6 / 14,1 / 18,2 | 12 / 48 / 79% |
+| tel, `half` (Beat This! op het halve tempo: ertussen de klap) | −1,4 | 4,5 | 15,2 | 26% |
+
+De klap is synthetisch even scheef als op Clay's muziek (−8,9 ms). Dat de tellen hier beter zijn, zit er
+deels in gebouwd: de nep-tellen hebben geen vaste afwijking per instrument. Het omslagpunt is een
+netwerk dat ~10 ms scheef ligt; op echte muziek gemeten ~5 ms mediaan (§11). Het echte antwoord geeft
+`rest/tel1-echt.mjs` op de Mac (kolom T).
+
+### Een tweede mening over de "1" (`maatMening` in tellen.js)
+
+De "1" rustte alleen op de downbeats van Beat This! (`maatVan`); zat het netwerk consequent een tel
+naast (`eenfout`), dan zag niets dat, ook `vergelijk` niet. Nu een tweede mening uit de **lage band**
+(`laagEnvelope` in detect.js: de energie onder 150 Hz per 4 ms, gefilterd per sample): per tel van de maat
+de mediaan van wat er na de lijn BIJ komt (venster na min venster ervoor, een vijfde tel, hooguit 60 ms).
+Is de "1" van het grid zwakker dan 0,6 × de sterkste tel (`MAAT_LAAG`), en komt de sterkste tel boven 2 ×
+de vloer uit (wat er midden tussen twee tellen bijkomt, `MAAT_LAAG_VLOER`), met minstens 8 maten
+(`MAAT_LAAG_MATEN`), dan `twijfel: 'maat'`. Nooit een andere "1" kiezen (met een kick op 1 en 3 zegt de bas
+niet welke het is); de zekerheid blijft (sync en loops mogen, zoals bij downbeats die het onderling oneens
+zijn); op het scherm "?" met de uitleg. Een stuk dat al een twijfel heeft, houdt die.
+
+De eerste versie mat een FFT-flux in frames van 11,6 ms: de plek van de aanslag tussen twee frames schoof
+per tel op, en op 122,3 bpm (42,25 frames per tel: één ronde per maat) lag de "1" van vier op de vloer
+30–45% zwakker dan tel 4. Energie per sample opgeteld hangt daar niet van af.
+
+De server: `maakLaag` (worker) schrijft `media/<id>/laag.bin` (float32, 250 per s: 180 kB voor 3 minuten)
+en `laag.json` (`LAAG_VERSIE`, envRate, frames) PAS daarna; `pasTellenToe` leest hem of rekent hem (op de
+achtergrond pas als er geen deck speelt) en past `maatMening` toe na `vergelijk`. `wisTellen` haalt hem weg
+bij nieuwe audio. Kost: 0,45 s voor 3 minuten, 4–5 s voor een uur (ffmpeg plus het filter, gemeten in deze
+container).
+
+Gemeten (`bench.mjs` met en zonder `--geen-maat`, 21 nummers × 8 soorten fouten = 168 gevallen, de oude
+analyse als tweede mening zoals de server):
+
+| | zonder | met |
+|---|---|---|
+| vals zeker (tellen-route) | 0 | 0 |
+| dekking, tempo, DJ-tempo, naast | 90 / 71 / 81 / 5% | gelijk (in elk geval) |
+| eenfout: de "1" fout ZONDER twijfel | 99% | 50% |
+| … nummers waar het gemarkeerd wordt (≥ 80% van de "1"-en) | 0 van 20 | 10 van 20 |
+| dubbel-laat / dubbel-kaal: "1" fout zonder twijfel | 70 / 65% | 1 / 1% |
+| een GOEDE "1" met twijfel 'maat' (onterecht) | 0 | **0** (in alle 168) |
+
+Gemarkeerd worden alle nummers met een accent op de "1" in de lage band: rock (vast-72/96/160), shuffle,
+wals, reggae, jungle, half-time, opmaat en de band op 154 (87%). Niet: vier op de vloer (house, techno,
+178/186/192, break, intro, de mix, de versnelling: elke tel een kick, de bas zegt niets) en de live band
+(daar staat al 'rubato'). Dat is een bekende grens: in Clay's house en techno vindt de lage band een
+verkeerde "1" niet.
+
+**De kaart-VERSIE is NIET verhoogd.** Zonder verhoging krijgen alleen nieuwe nummers en ↻ de tweede mening
+over de "1"; met VERSIE 3 rekent de server bij de eerste start elk automatisch grid uit de tellen opnieuw:
+gridUitTellen + vergelijk (milliseconden, de tweede mening is sinds §12 bewaard) plus één keer de lage band
+per nummer (~0,5 s per 3 minuten), wachtend zolang er een deck speelt. Alleen de twijfel verandert; tempo,
+tellen en "1" blijven precies zoals ze waren. Vraag voor Clay (verslag van 15 okt).
+
+### Het echte Beat This! op de benchmark (GA3)
+
+Kon hier niet: PyPI is bereikbaar (torch zou kunnen), maar het checkpoint staat alleen op
+cloud.cp.jku.at, en die (en huggingface.co, zenodo.org) geeft 403 van de proxy. `bench.mjs --beatthis
+<python>` draait het echte `server/tellen/tellen.py` op de wav's van de benchmark en neemt het mee als
+variant `echt` (tellen.json onthouden in de tijdelijke map, per audio, python en tellen.py). Op de Mac:
+
+```
+node tools/beatmeting/synth/bench.mjs --beatthis ~/.varve/stems-venv/bin/python --varianten bt,eenfout --json /tmp/echt.json
+node tools/beatmeting/synth/groep.mjs /tmp/echt.json
+```
+
+`groep.mjs` zet `bt` (de nep) en `echt` naast elkaar per soort; per nummer staan ze in de tabel van
+bench.mjs onder elkaar.
