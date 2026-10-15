@@ -6,7 +6,8 @@
 dit bestand, de open keuzes voor Clay in §14). Stand: **stap 1-6 gebouwd** (kern, sondes,
 CLI, route, tegel, docs), twee herstelrondes en het punt uit review ronde 3 (`fix/draagbaar`).
 Open: **7a/7b** (de uitvoer van aangesloten hardware zien en de uittrekproef met Clay); tot
-dan staat `hardwareBevestigd` op `false`.*
+dan staat `hardwareBevestigd` op `false`. Sinds 15 okt (spoor C, `arch/linux`) meet het
+pakket per platform: op Linux eerlijk grijs wat daar niet bestaat (§9b).*
 
 ## 1. Wat het is
 
@@ -51,7 +52,7 @@ klik van Clay zelf. Of `system_profiler` onder het geluid een tik geeft, is niet
 | bestand | wat |
 |---|---|
 | `server/avondpakket.js` | **puur**: parsers (`pmset -g batt`/`ac`, `ioreg` accu en USB, `df -k`, `defaults read com.apple.bird optimize-storage`, `system_profiler` audio/Bluetooth/USB-host, `tailscale status --json`, `find -exec stat` en `find -flags +dataless`), `leesProfielen`, `heeftProfiel`, `paklijstVan`, `herkenUsb`, `kiesFase`, `verwachteBestanden`/`verwachtePaden`/`vergelijkCompleet`, `schoon` (privacy), `beoordeel`. Geen I/O, `nu` van buiten |
-| `server/avondpakket-meet.js` | de sondes in **kindprocessen** met een time-out per sonde (`voerUit`: `execFile`, 8 MB, SIGKILL), `poortOpen`, `meet`, `maakCache` (één lopende meting, 10 s, bevriezing, `auto`), `maakNep` (fixtures), `maakAvondpakket` (de bundel voor de route; `profielen.json` met een grens van 1 s), `backupMeting`, `achtergrondMeting`, `speellijstStand`, `extraPaden` |
+| `server/avondpakket-meet.js` | de sondes in **kindprocessen** met een time-out per sonde (`voerUit`: `execFile`, 8 MB, SIGKILL, `ONBEKENDE_OPTIE`), per platform (`metersVoor`, §9b), `poortOpen`, `meet`, `maakCache` (één lopende meting, 10 s, bevriezing, `auto`), `maakNep` (fixtures), `maakAvondpakket` (de bundel voor de route; `profielen.json` met een grens van 1 s), `backupMeting`, `achtergrondMeting`, `speellijstStand`, `extraPaden` |
 | `avondpakket/profielen.json` | de data: apparaten (hoe te herkennen), vijf profielen, grenzen, `bekend`, `paklijst`, `hardwareBevestigd`. Niet via HTTP te lezen (niet in `MAG`) |
 | `server/index.js` | één import, `maakAvondpakket({ … speeltDeck … })`, de route na `/api/backups` |
 | `server/backup.js` | `stand().gewijzigdSinds`: een wijziging die nog in geen kopie zit (false/true/null) |
@@ -225,6 +226,50 @@ naam en alleen die het profiel noemt (`peers`).
 - **Het kaartbestand** (`varve-kaart.json`, in iCloud) telt bij de instellingen: uitgeplaatst
   = rood (zonder internet geen kaart).
 
+## 9b. Op Linux (de Omarchy-pc; spoor C, 15 okt)
+
+Het avondpakket is voor de **Mac**: daar draait de live-mixer, daar hangen APC, Scarlett en
+geluid. Op de pc (beeld met de Stroommachine, ontwikkelen, testen) draait de suite en soms een
+proefserver, en daar moet het pakket **eerlijk** zijn: geen vals rood, geen vals groen.
+
+**Wat er misging.** De sondes waren die van de Mac. GNU `find` kent `-flags` niet en GNU
+`stat -f` betekent "bestandssysteem"; beide stoppen met **exit 1**, en die code mocht (bij
+`find` betekent 1 ook "een map niet leesbaar, de rest wel"). Media werd daardoor "leeg",
+library compleet **vals rood** ("N mist") en instellingen **vals groen** ("lokaal").
+
+**Nu.** `meet({ platform })` (standaard `process.platform`; `nep.json` noemt het platform van
+zijn fixtures) kiest de sondes met `metersVoor(platform)`. Een commando dat een optie niet kent
+(`ONBEKENDE_OPTIE`: "unknown predicate", "unrecognized option", "cannot read file system
+information" …) is **nooit geslaagd**, welke exitcode er ook bij hoort: "`<naam>: optie onbekend
+op dit platform`" (grijs). Op Linux draait elk commando met `LC_ALL=C`.
+
+| punt | op Linux | hoe |
+|---|---|---|
+| media lokaal | gemeten | `find -H <media> -type f -exec stat -c '%s %n' {} +` (GNU); de iCloud-vlag bestaat niet: groen zegt "iCloud-uitplaatsing n.v.t. op dit platform" |
+| library compleet | gemeten (met server) | dezelfde vergelijking als op de Mac, nu op de juiste bestandslijst |
+| instellingen lokaal, iCloud | **grijs** "niet op dit platform" | uitgeplaatste bestanden en "Optimaliseer opslag" zijn van macOS; nooit "lokaal" |
+| schijf | gemeten | `df -k` (GNU) |
+| accu en lader | gemeten als er een accu is | `/sys/class/power_supply/*/uevent` via `find -L … -exec grep -H ''` in een kindproces (nooit fs in het serverproces); een accu met `SCOPE=Device` (muis, koptelefoon) telt niet; geen accu = grijs "geen accu (vaste pc?)"; vermogen alleen uit een USB-PD-bron (`VOLTAGE_MAX × CURRENT_MAX`, een **aanname**), een netadapter zegt geen W |
+| USB-apparaten | gemeten | `lsusb` en `/sys/bus/usb/devices` samen (de `vid:pid` uit `profielen.json` werken op beide; root hubs tellen niet); allebei weg = grijs |
+| geluid, Bluetooth | **grijs** "niet op dit platform (de live-mixer draait op de Mac)" | de zaaluitgang telt alleen op de Mac |
+| AV-hub, servers, Tailscale | gemeten | poort 7700; `lsof`/`pgrep`; `tailscale` (ook `/usr/bin/tailscale`) |
+
+Elk ander platform: alleen de AV-hub, de rest grijs. In de goedkope ronde (er speelt een deck)
+meet Linux `df`, `pgrep` en de accu uit sysfs (ook een `find`, maar op `/sys`, niet op media/).
+
+**Gemeten in de container (15 okt, Ubuntu 24.04, Node 22; geen accu, geen USB, geen
+tailscale).** Vóór: media "leeg", instellingen ● "lokaal". Na, de CLI op een kladmediamap: media
+● "7 lokaal", instellingen/iCloud/accu/geluid ○ grijs met de reden, fase ◐ "niet te bepalen" (USB
+niet te zien), exit 0. De route op een proefserver (poort 8952, echte sondes, een library van drie
+nummers waarvan één met een 0-byte audio en een ontbrekende video): compleet ✕ "2 mist" (echt:
+`nrC/video.mp4 (ontbreekt), nrC/audio.wav (0 B)`), media ● 7 lokaal, 0,3 s. Nergens een vals rood
+of vals groen.
+
+**Niet gezien:** de uitvoer van een echte Linux-laptop (accu, USB-PD) en van de APC, Scarlett en
+Maschine in `lsusb` en sysfs: die fixtures zijn HANDGEMAAKT (`test/fixtures/avondpakket/linux/`,
+LEESMIJ). Op de Omarchy-pc één keer `node tools/avondpakket.mjs --json` met de APC eraan
+bevestigt het.
+
 ## 10. Voor agents
 
 ```sh
@@ -255,7 +300,7 @@ node tools/avondpakket.mjs [--profiel <naam>] [--vertrek|--aankomst] [--streng] 
 
 ```sh
 node test/avondpakket.test.mjs          # puur, < 1 s: parsers, profielen, fase, oordeel, paklijst, tegel, privacy
-node test/avondpakket-meet.test.mjs     # sondes met een nep-exec (50 ms), cache, bevriezing, de CLI (exit 0-3)
+node test/avondpakket-meet.test.mjs     # sondes met een nep-exec (50 ms), cache, bevriezing, de CLI (exit 0-3); groep 11-13: per platform (§9b)
 node test/avondpakket-server.test.mjs   # de route op een eigen server met NEP-fixtures (~3 s)
 node test/backup.test.mjs               # o.a. gewijzigdSinds
 node tools/headless/avondpakket.mjs [uitmap]   # de tegel in Chromium (~45 s; poorten 8914/9514)
