@@ -1,9 +1,13 @@
 # Back-up en herstel van het hele instrument
 
-*11 oktober 2026, tak `visie/backup-kopie`. Achtergrond: `docs/VISIE.md` (de draagbare set) en
-SYNTHESE §4b.3 (mini-spoor 3). Dit document gaat over de DATA van het instrument, niet over de
-code (die staat op GitHub). De uurlijkse kopie van de library door de server zelf staat in
-`docs/LIBRARY.md` "Backup"; die blijft zoals hij is.*
+*11 oktober 2026, tak `visie/backup-kopie` (PR #28); bijgewerkt 15 okt op `studio/backup-instellingen`,
+samen met de instrument-sleutels op de server (PR #31) en na de werkruimte (#42). Achtergrond:
+`docs/VISIE.md` (de draagbare set) en SYNTHESE §4b.3 (mini-spoor 3). Dit document gaat over de DATA
+van het instrument, niet over de code (die staat op GitHub). De uurlijkse kopie van de library door
+de server zelf staat in `docs/LIBRARY.md` "Backup"; die blijft zoals hij is.*
+
+*De keuzecodes BK1–BK6 komen uit het backup-ontwerp van 11 okt (daar B1–B6); hernoemd zodat ze
+niet botsen met blok B (de APC, B1–B4) in `docs/VRAGEN.md`.*
 
 ## 1. Waarom: iCloud is geen backup
 
@@ -46,8 +50,8 @@ alleen-lezen verbinding in een worker, fsync, quick_check). Ook met de hand: `sq
 | `tools/backup/herstel.mjs --van <map>/varve --naar <checkout>` | zet set A terug; weigert als er al een `library.db` staat; overschrijft nooit iets |
 | `tools/backup/launchd/` | `maak.sh` + sjabloon + `dagelijks.sh`: elke ochtend 08:00 set A. **Standaard niet geïnstalleerd** (§6) |
 
-Alle drie lezen dezelfde `VARVE_*`-variabelen als de server en werken standaard op de checkout
-waar ze in staan; `--bron <checkout>` (kopie, controleer) leest een andere. Geen server nodig; ze
+Alle drie lezen dezelfde `VARVE_*`-variabelen als de server (en zonder `VARVE_MEDIA` ook
+`~/.varve/media-pad`, zoals VARVE.app; §5) en werken standaard op de checkout waar ze in staan; `--bron <checkout>` (kopie, controleer) leest een andere. Geen server nodig; ze
 mogen draaien terwijl de server draait (in WAL blokkeert een lezer geen schrijver). Geen
 dependency: node, sqlite (`node:sqlite`) en rsync.
 
@@ -57,9 +61,16 @@ dependency: node, sqlite (`node:sqlite`) en rsync.
 <doel>/varve/staat/
   MANIFEST.json            wanneer, host, commit, tellingen (nummers, hotcues, racks, pads, grids
                            op slot, stems, secties, schema), per bestand bytes en SHA-256
-  library.db, kaart.db     VACUUM INTO-kopie: één bestand, journal-modus, quick_check ok
-  nacht.json, stems-rij.json
-  patronen/ plannen/ proef/ standen/ racks/ mappings/ Input/     met hun .versies/
+  library.db, kaart.db     VACUUM INTO-kopie: één bestand, journal-modus, quick_check ok. In
+                           library.db zit ook de tabel instellingen: de mapping (ook per apparaat),
+                           de browser-sleutels van het instrument (PR #31: master-rack, klankschaal,
+                           poorten, beeld, stems, cue-wissel, vormen, bus-racks) en de snel-tags;
+                           en de tags en categorieën (S11)
+  nacht.json, stems-rij.json, paneel-apparaten.json               ← naast de library / in media/
+  uitzend/doelen.json      ← <checkout>/uitzend/ (niet in git; zonder bestand de ingebouwde doelen)
+  patronen/ plannen/ proef/ standen/ sets/ werkruimtes/ racks/ mappings/ Input/   met hun .versies/
+                           (sets/ = VARVE_SETS, werkruimtes/ = VARVE_WERKRUIMTES; racks/ met eigen.json)
+  sjablonen/eigen.json     alleen als VARVE_SJABLONEN de eigen sjablonen buiten racks/ legt
   handelingen/set-*.acties.jsonl                                  ← opnames/ (alleen de logs)
   hub/staat.json           ← ~/.varve-hub/staat.json (of $VARVE_HUB_STAAT)
   kaart/varve-kaart.json   ← VARVE_KAART, de instelling kaart_pad, of ~/Desktop/3. Resources/Data/Muziekkaart/
@@ -68,7 +79,7 @@ dependency: node, sqlite (`node:sqlite`) en rsync.
 ```
 
 Een map of bestand dat in de bron ontbreekt wordt overgeslagen en staat in het manifest onder
-`ontbreekt` (bv. `standen/` tot die tak gemerged is). `.DS_Store` gaat niet mee; conflictkopieën
+`ontbreekt` (bv. `uitzend/doelen.json` zolang je geen eigen doelen hebt). `.DS_Store` gaat niet mee; conflictkopieën
 ("… 2") wel: ook dat is data.
 
 ### Set B "media" (groot, vóór elke reis en na een nacht-run of opname)
@@ -79,30 +90,41 @@ Een map of bestand dat in de bron ontbreekt wordt overgeslagen en staat in het m
 set A), lopend ingest-werk (`.bezig-*`) ook niet; `media/backups/` (de VACUUM-kopieën van de
 server) wel. Set B is tegelijk de reiskopie: op reis kan `VARVE_MEDIA` naar de SSD wijzen.
 
+### Chrome: wat erin zit en wat niet
+
+De sleutels die het instrument zijn (`varve.master.rack`, `varve.klankschaal`, `varve.midi.ports`,
+`varve.beeld.adres/.latentie/.aan`, `varve.stems.standaard`, `varve.koptelefoon.omgewisseld`,
+`varve.vormen`, en sinds 15 okt `varve.send.a.rack`/`.b.rack`) staan sinds PR #31 (keuze BK4) ook
+op de server, in de tabel `instellingen` van `library.db`, en gaan dus mee in set A. Het manifest
+telt ze (`instrument`). Een nieuw Chrome-profiel krijgt ze bij de eerste start van de server terug
+(`docs/LIBRARY.md` "De zeven browser-instellingen op de server"). Let op: wat je in Chrome
+instelde vóór de eerste start van een server mét PR #31, gaat pas bij die start omhoog.
+
 ### Wat er NIET in zit (nog)
 
-- **Zeven sleutels die alleen in Chrome staan**: `varve.master.rack`, `varve.klankschaal`,
-  `varve.midi.ports`, `varve.beeld.adres/.latentie/.aan`, `varve.stems.standaard`,
-  `varve.koptelefoon.omgewisseld`, `varve.vormen`. Een nieuw Chrome-profiel of een nieuwe Mac =
-  master-rack en klankschaal weg. Volgende stap (PR 2, keuze B4): spiegelen naar de library zoals de
-  mapping, dan zitten ze vanzelf in elke kopie.
+- **Gemak in Chrome**: panelen open/dicht, sorteringen, de gekozen werkruimte per scherm
+  (`varve.werkruimte`), de schermplek van vensters, de pins van de companion. Bewust per browser
+  (LIBRARY.md); na een herstel even opnieuw kiezen.
 - **De track-scènes van de Stroommachine** (op de pc, in de browser): alleen via haar knop
-  "Track-scènes als JSON" (handwerk, B6). Leg zo'n export in `<doel>/varve/staat/beeld/`; herstel
+  "Track-scènes als JSON" (handwerk, BK6). Leg zo'n export in `<doel>/varve/staat/beeld/`; herstel
   meldt hem dan.
 - **De bronnen van de muziekkaart** (`~/Desktop/3. Resources/Data/`, de exports) en de code van de
-  muziekkaart (geen remote; B5). De kaart zelf (`varve-kaart.json`) gaat wel mee.
+  muziekkaart (geen remote; BK5). De kaart zelf (`varve-kaart.json`) gaat wel mee.
+- De sets van de AV-app-hub (`~/Projects/AV-app-hub/sets/`): die staan in de git van de hub. De
+  hub-staat (`~/.varve-hub/staat.json`) gaat wel mee.
 - De code: die staat op GitHub.
 
 ## 4. De herstelprocedure
 
 1. **Code**: `git clone git@github.com:CKrebbers/youtube-mixer.git` (+ AV-app-hub, stroommachine,
-   maschine-lab, av-kern, en na B5 de muziekkaart). 1 minuut.
+   maschine-lab, av-kern, en na BK5 de muziekkaart). 1 minuut.
 2. **Gereedschap**: node, ffmpeg, yt-dlp, de Demucs-venv (`docs/STEMS.md`), Tailscale. ~30 min
    (schatting; niet gemeten).
 3. **Set A**: `node tools/backup/herstel.mjs --van /Volumes/<SSD>/varve --naar <checkout>`.
    Zonder tool kan het ook met de Finder: `staat/library.db` → `media/library.db` (zonder -wal/-shm:
    de kopie is al in journal-modus), `kaart.db`, `nacht.json` en `stems-rij.json` ernaast, de mappen
-   op hun plek, `handelingen/*` → `opnames/`, `hub/staat.json` → `~/.varve-hub/`,
+   op hun plek, `paneel-apparaten.json` → `media/`, `uitzend/doelen.json` → `uitzend/`,
+   `handelingen/*` → `opnames/`, `hub/staat.json` → `~/.varve-hub/`,
    `kaart/varve-kaart.json` → `~/Desktop/3. Resources/Data/Muziekkaart/`. 1 minuut.
    `herstel.mjs` weigert als er al een `library.db` (of een `-wal`, `-shm` of `-journal`) staat,
    of een losse `kaart.db-wal`/`-shm`/`-journal` zonder `kaart.db` (SQLite zou die op het
@@ -118,9 +140,11 @@ server) wel. Set B is tegelijk de reiskopie: op reis kan `VARVE_MEDIA` naar de S
 5. **Server starten** (VARVE.app of `node server/index.js`): de schema-migratie gebeurt vanzelf als
    de kopie ouder is dan de code (`SCHEMA` in `library.js`); andersom (nieuwere kopie, oudere code)
    niet — dus de code altijd eerst bijwerken.
-6. **Chrome**: tot B4 het master-rack, de klankschaal, de MIDI-poorten, het beeld-adres, de
-   stems-standaard, de cue-wissel en de vormen-vlag opnieuw instellen (dat is het werk dat nu
-   verloren gaat).
+6. **Chrome**: niets voor het instrument: de browser-sleutels zitten in `library.db` en de mixer
+   haalt ze bij de eerste start op (`herstel.mjs` zegt hoeveel er in de kopie staan). Een kopie
+   van vóór PR #31 heeft ze niet: dan master-rack, klankschaal, MIDI-poorten, beeld-adres,
+   stems-standaard, cue-wissel en vormen-vlag opnieuw instellen. Gemak (panelen, sortering,
+   werkruimte per scherm) altijd opnieuw.
 7. **Beeld**: op de pc de Stroommachine → Live → "Importeer track-scènes" met
    `staat/beeld/track-scenes-<datum>.json` (als die er is).
 8. **Controle**: `node tools/backup/controleer.mjs --doel /Volumes/<SSD> --bron <checkout>` en de
@@ -147,10 +171,15 @@ Gemeten (11 okt, extra-3 §1.6): een verse worktree met een hersteldataset van 8
   kopiëren). Hij vergelijkt de echte paden (symlinks opgelost), van de checkout, `media/`,
   `opnames/`, de map van de library en elke map van set A: een symlink of een alias-pad (iCloud
   `…/com~apple~CloudDocs/Desktop` → `~/Desktop`) komt er niet langs.
-- Welke library: dezelfde als de server. `VARVE_DB`; anders `<media>/library.db` met media =
-  `VARVE_MEDIA`, `<checkout>/media` of (na de verhuizing VI2) het pad uit `media-VERHUISD.txt`;
-  anders `<checkout>/media/library.db` (de server van vóór VI2). Bestaan er twee verschillende,
-  dan kiest hij niet stil: "twee libraries … zet VARVE_DB", exit 2.
+- Welke library: dezelfde als de server (`server/index.js`, `kiesMedia` in `server/media-plek.js`,
+  dat `gedeeld.mjs` importeert): `VARVE_DB`, anders `<media>/library.db`. Media = `VARVE_MEDIA`;
+  anders `~/.varve/media-pad` (zoals VARVE.app de server start: launchd heeft geen `VARVE_MEDIA`);
+  anders `<checkout>/media`, of (na de verhuizing VI2) het pad uit `media-VERHUISD.txt`. Een
+  testomgeving (`VARVE_TESTSERVER=1`) leest het media-pad en het briefje nooit. Paden zonder slash
+  aan het eind (`/x/media/` = `/x/media`). Ligt er daarnaast nog een `<checkout>/media/library.db`
+  (die een server zonder `VARVE_MEDIA` zou pakken), dan gaat de gekozen mee en zegt hij "LET OP
+  er staan twee libraries … zet VARVE_DB" (kopie, controleer, herstel). Het manifest noemt de
+  library en de media (`library_pad`, `media.via`).
 - Eén run tegelijk per doel: een slot in `staat/.werk/slot` (pid, host, tijd). Een tweede run
   (launchd om 08:00 en een run met de hand) zegt "er loopt al een kopie" en stopt (exit 2). Een
   slot van een proces dat niet meer leeft gaat opzij naar `.werk/slot-<tijd>`.
@@ -175,15 +204,16 @@ zsh tools/backup/launchd/maak.sh --doel /Volumes/<SSD> --installeer  # zet hem i
 
 `--installeer` weigert als er al een `nl.varve.backup.plist` staat. Stoppen: `launchctl bootout
 gui/$UID/nl.varve.backup` en de plist zelf opzij zetten. Log: `~/.varve-backup.log`. Is het doel
-een git-repo (de privé-repo `varve-staat`, keuze B1), dan doet `dagelijks.sh` daarna `git add -A
+een git-repo (de privé-repo `varve-staat`, keuze BK1), dan doet `dagelijks.sh` daarna `git add -A
 -- varve/staat`, commit en push. Zo'n repo bevat titels, YouTube-id's en luistergeschiedenis:
 **altijd privé**, nooit in `AV-app-hub` (publiek), en nooit `media/` of `muziekkaart.db` erin.
 
 **Het avondpakket.** `kopie.mjs` schrijft na elke run `~/.varve/backup-laatste.json`
 (`{ doel, tijd, setA, setB, bytes, zelfdeSchijf, tracks, host }`). Het punt "backup" van het
-avondpakket (tak `visie/draagbaar`) kan daar "kopie buiten de laptop: n dagen geleden" uit halen
-(groen ≤ 1 dag, oranje ≤ 7, rood ouder of nooit; `zelfdeSchijf` telt niet als buiten de laptop).
-Nog niet gebouwd: dat raakt die tak (PR 3 van het ontwerp, na de merge daarvan).
+avondpakket (sinds 11 okt in main, `docs/AVONDPAKKET.md`) kan daar "kopie buiten de laptop: n dagen
+geleden" uit halen (groen ≤ 1 dag, oranje ≤ 7, rood ouder of nooit; `zelfdeSchijf` telt niet als
+buiten de laptop). Nog niet gebouwd: dat is de sonde "reiskopie" (AVONDPAKKET.md §13 punt 10), een
+kleine eigen PR.
 
 ## 7. Getest en niet getest
 
@@ -195,7 +225,10 @@ het oude van een veranderd bestand staat in `.vorige/`; versies sorteren op tijd
 `…_33.db`); een tweede run tegelijk stopt op het slot, een slot van een dood proces gaat opzij;
 `--droog` schrijft niets (geen doel, geen stempel, bron ongewijzigd); zelfde schijf, een doel binnen
 de bron (ook via een symlink), een `/Volumes/<x>` die er niet is en geen library = exit 2; welke
-library (`media-VERHUISD.txt`, `VARVE_DB`, twee libraries = exit 2); `--overslaan-zonder-doel`; `--media` met
+library (`media-VERHUISD.txt`, `~/.varve/media-pad`, `VARVE_MEDIA` gaat voor, een testomgeving leest
+geen media-pad, `VARVE_DB`, twee libraries = de gekozen plus LET OP, een slash aan het eind);
+sets/, werkruimtes/, `racks/eigen.json`, `paneel-apparaten.json`, `uitzend/doelen.json` en de
+instrument-sleutels in `library.db` gaan mee en komen terug; `--overslaan-zonder-doel`; `--media` met
 een nep-rsync via `PATH` (altijd `-a`, nooit `--delete`, de databases uitgesloten,
 `--backup-dir`); controleer (alles ok, nummers nieuwer dan de kopie, nummers zonder media-kopie, een
 veranderd bestand = NIET OK); herstel (`--droog`, terugzetten, een ander bestand niet
@@ -204,6 +237,10 @@ overschreven, weigeren bij een bestaande `library.db`, alleen een `-wal`, een lo
 
 Niet als test: twee runs na elkaar in dezelfde seconde (de stempel krijgt dan `-2`; de code staat
 er, maar zonder nepklok is dat niet betrouwbaar te toetsen).
+
+Met de hand, 15 okt (`studio/backup-instellingen`): kopie, controleer en herstel naar een lege map
+op tijdelijke kopieën van een library (`VARVE_*` naar `/private/tmp/…`), met sets, werkruimtes en
+instrument-sleutels; nooit de echte library als bron met een echte plek.
 
 Met de hand, 11 okt: `kopie.mjs --droog` tegen de echte checkout (alleen lezen), één echte run naar
 `~/Backups/varve-staat --zelfde-schijf`, `controleer.mjs` daarop, en een herstel in een tijdelijke

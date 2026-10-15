@@ -19,8 +19,12 @@ node tools/backup/kopie.mjs --doel /Volumes/SSD --media        # ook set B: medi
 - Weigert een doel op dezelfde schijf als de bron; `--zelfde-schijf` voor een versie op de laptop
   zelf (bv. `~/Backups/varve-staat`). Weigert een doel binnen de bron, ook via een symlink of
   alias-pad (op de echte paden).
-- Zoekt de library waar de server hem zoekt (`VARVE_DB`, `VARVE_MEDIA`, `media-VERHUISD.txt`); zijn
-  er twee verschillende, dan stopt hij: zet `VARVE_DB`.
+- Zoekt de library waar de server hem zoekt (`VARVE_DB`, `VARVE_MEDIA`, `~/.varve/media-pad` zoals
+  VARVE.app, `media-VERHUISD.txt`); ligt er nog een tweede, dan zegt hij LET OP (zet `VARVE_DB`).
+- Set A: library.db (met de instrument-sleutels uit Chrome, de mappings en de tags), kaart.db,
+  patronen/, plannen/, proef/, standen/, sets/, werkruimtes/, racks/, mappings/, Input/, de
+  handelingenlogs, nacht.json, stems-rij.json, paneel-apparaten.json, uitzend/doelen.json, de
+  hub-staat en varve-kaart.json.
 - Eén run tegelijk per doel (slot in `staat/.werk/slot`): een tweede zegt "er loopt al een kopie".
 - `--bron <checkout>` om vanuit een worktree de echte checkout te lezen (alleen lezen).
 - `--overslaan-zonder-doel`: bestaat het doel niet (schijf niet aangesloten), één regel en exit 0
@@ -48,7 +52,7 @@ node tools/backup/herstel.mjs --van /Volumes/SSD/varve --naar <checkout>
 Weigert als er al een `library.db` (of een `-wal`, `-shm`, `-journal`) staat, of een losse
 `kaart.db-wal` zonder `kaart.db`. Overschrijft nooit iets: wat er al staat blijft staan en wordt
 gemeld als het anders is. Drukt daarna de handstappen af (set B, server,
-Chrome, beeld, controleren).
+Chrome — sinds PR #31 alleen gemak, het instrument zit in library.db —, beeld, controleren).
 
 ## Elke ochtend (launchd)
 
