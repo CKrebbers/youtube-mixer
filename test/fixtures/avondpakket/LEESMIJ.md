@@ -94,7 +94,9 @@ meten de tests met de juiste sondes, op welk platform ze ook draaien.
 | `stat-f-stderr.txt`, `stat-f-stdout.txt` | `find … -exec stat -f '%z %N' {} +` (de Mac-opdracht) | GNU stat leest `-f` als "bestandssysteem": geen enkele regel `<bytes> <pad>`, exit 1 |
 | `sys-usb-ontbreekt-stderr.txt` | `find -L /sys/bus/usb/devices …` | de map bestaat niet in de container |
 
-`lsusb` en `tailscale` zijn er niet (ENOENT): in `nep.json` als `{ "fout": "… niet gevonden" }`.
+`lsusb` en `tailscale` zijn er niet (ENOENT): in `nep.json` als `{ "fout": "… niet gevonden" }`. Ook
+`/sys/class/drm` bestaat niet (`"drm": { "fout": "bestaat niet" }`), de relay op 7702 is dicht
+(`"relay": false`) en de Node is v22.22.0 tegen `.node-version` 26.8.2 (`"node"`, AR13/AR14).
 
 **HANDGEMAAKT** (niet gezien; de vorm uit de kernel-documentatie en usbutils, de waarden verzonnen):
 
@@ -106,3 +108,9 @@ meten de tests met de juiste sondes, op welk platform ze ook draaien.
 | `lsusb-apc-scarlett-maschine-HANDGEMAAKT.txt` | Maschine (17cc:1140), Scarlett (1235:8210), een hub, de APC zonder naam (09e8:0029), root hubs | usb.ids kent de APC misschien niet: dan herkent de id hem |
 | `lsusb-leeg-HANDGEMAAKT.txt` | alleen root hubs en een muisontvanger | |
 | `sys-usb-apc-scarlett-HANDGEMAAKT.txt` | `grep -H ''` op idVendor/idProduct/product/manufacturer: APC, Scarlett, een hub, de root hub | |
+| `drm-hdmi-HANDGEMAAKT.txt` | `grep -H ''` op `/sys/class/drm/card1-*/status` (AR13): eDP-1 intern verbonden, HDMI-A-1 verbonden (de beamer), DP-1 los | poortnamen zoals de kernel ze geeft (`card<n>-<type>-<nr>`) |
+| `drm-geen-beamer-HANDGEMAAKT.txt` | hetzelfde, maar HDMI-A-1 los | |
+
+De echte uitvoer van de pc komt met `node tools/avondpakket.mjs --vastleggen <map>` (AR12): per sonde
+`<sleutel>.txt` plus een `nep.json`, de thuismap als `/home/test` en Tailscale kaal (naam, OS, online,
+"direct", relay). Nakijken vóór het hierheen gaat.

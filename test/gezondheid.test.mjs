@@ -2,7 +2,7 @@
 // opzet met een nep-context, nep-klok en nep-MIDI. Zonder browser.
 // Draai met: node test/gezondheid.test.mjs
 const G = await import('../src/ui/gezondheid.js');
-const { audioMelding, KlokWachter, opzetGezondheid, AUDIO_SLEUTEL, WEER_GOED, KLOK_MS } = G;
+const { audioMelding, KlokWachter, opzetGezondheid, AUDIO_SLEUTEL, WEER_GOED, KLOK_MS, ZELF_MS } = G;
 
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
@@ -48,7 +48,8 @@ console.log('\nopzetGezondheid (nep-context)');
   const midi = { onInput(fn) { invoer = fn; } };
   const venster = new EventTarget();
   let wand = 0, tikFn = null, tikMs = null;
-  const g = opzetGezondheid({ ctx, meld, midi, venster, nu: () => wand, elke: (fn, ms) => { tikFn = fn; tikMs = ms; } });
+  // zelf: false = alleen de weg van vóór AR6 (een druk zet hem weer aan); het zelf proberen staat hieronder.
+  const g = opzetGezondheid({ ctx, meld, midi, venster, nu: () => wand, elke: (fn, ms) => { tikFn = fn; tikMs = ms; }, zelf: false });
   ok('meet elke seconde, en luistert naar de controller', tikFn && tikMs === KLOK_MS && typeof invoer === 'function');
   invoer({ sig: 'note:0:53' });
   venster.dispatchEvent(new Event('keydown'));
@@ -95,6 +96,37 @@ console.log('\nopzetGezondheid (nep-context)');
   ok('loopt de klok weer: "audio loopt weer"', meldingen.length === voor + 2 && meldingen.at(-1).tekst === WEER_GOED.tekst);
   ctx.zet('closed');
   ok('dicht (closed): geen fout', meldingen.at(-1).soort !== 'fout');
+}
+
+console.log('\nAR6: meteen zelf proberen (zonder druk)');
+{
+  class NepCtx extends EventTarget {
+    constructor() { super(); this.state = 'running'; this.currentTime = 0; this.hervat = 0; this.kanHervatten = true; }
+    zet(state) { this.state = state; this.dispatchEvent(new Event('statechange')); }
+    resume() { this.hervat++; if (this.kanHervatten) queueMicrotask(() => this.zet('running')); return new Promise(() => {}); }
+  }
+  const ctx = new NepCtx();
+  const meldingen = [];
+  let wand = 0;
+  const g = opzetGezondheid({ ctx, meld: (tekst, soort) => meldingen.push({ tekst, soort }), nu: () => wand, elke: () => {} });
+  ctx.zet('suspended');
+  ok('stil na de start: meteen één resume(), zonder druk', ctx.hervat === 1 && g.stand().zelfKeer === 1);
+  await new Promise((r) => setTimeout(r, 0));
+  ok('… lukt het, dan "audio loopt weer" na de fout (dezelfde sleutel)', ctx.state === 'running' && meldingen.at(-1).tekst === WEER_GOED.tekst && meldingen.at(-2).soort === 'fout');
+  ctx.zet('suspended');
+  await new Promise((r) => setTimeout(r, 0));
+  ok('binnen 10 s nog eens stil: niet zelf (geen lus); de fout blijft tot een druk', ctx.hervat === 1 && ctx.state === 'suspended' && meldingen.at(-1).soort === 'fout');
+  wand += ZELF_MS;
+  ctx.kanHervatten = false;
+  ctx.zet('interrupted');
+  await new Promise((r) => setTimeout(r, 0));
+  ok('na 10 s weer wel; lukt het niet (geen gebaar), dan blijft de melding staan', ctx.hervat === 2 && ctx.state === 'interrupted' && meldingen.at(-1).soort === 'fout');
+  const c2 = new NepCtx(); c2.state = 'suspended';
+  opzetGezondheid({ ctx: c2, meld: () => {}, nu: () => 0, elke: () => {} });
+  c2.zet('suspended');
+  ok('vóór de audio ooit liep: niets zelf (dat is de beginstand)', c2.hervat === 0);
+  c2.zet('running'); c2.zet('closed');
+  ok('dicht (closed): niets zelf', c2.hervat === 0);
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

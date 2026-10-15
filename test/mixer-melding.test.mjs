@@ -3,7 +3,7 @@
 // deze Mac), en de stand die iPad en iPhone lezen (leeftijd, twee mixers). Geen
 // server, geen klok van zichzelf.
 // Draai met: node test/mixer-melding.test.mjs
-const { isMelding, vanDezeMac, MixerStand, TRACKS, MAX_BYTES, TWEE_MS } = await import('../server/mixer-melding.js');
+const { isMelding, vanDezeMac, MixerStand, TRACKS, MAX_BYTES, TWEE_MS, KIJK_MS } = await import('../server/mixer-melding.js');
 const { maakStatus } = await import('../src/ui/status-zender.js');
 const { DECK_IDS } = await import('../src/engine/engine.js');
 
@@ -69,6 +69,15 @@ stand.zet(melding, 16_100);
 ok(`de tweede zwijgt langer dan ${TWEE_MS / 1000} s: weer één`, stand.lees(16_100).twee === false);
 ok('... en de laatste melding is die van de eerste', stand.lees(16_100).melding.tab === 'tab-proef-1' && stand.lees(16_100).leeftijd_ms === 0);
 ok('na 5 s stilte van allebei: niet twee, de leeftijd loopt op', stand.lees(30_000).twee === false && stand.lees(30_000).leeftijd_ms === 13_900);
+
+// AR16: kijkt er iemand (GET /api/mixer)? Het antwoord op de POST zegt het de mixer.
+{
+  const k = new MixerStand();
+  ok('AR16: nog nooit gelezen → geen kijker', k.kijker(1000) === false);
+  k.kijk(5000);
+  ok(`AR16: gelezen op 5 s → kijker tot ${(5000 + KIJK_MS) / 1000} s, daarna niet`, k.kijker(5000) && k.kijker(5000 + KIJK_MS - 1) && !k.kijker(5000 + KIJK_MS));
+  ok('AR16: KIJK_MS ruim boven de 4 s van de rustige mixer (anders valt een kijker tussen twee POSTs weg)', KIJK_MS > 4000 * 2);
+}
 
 // Review ronde 2, fix 2: herladen (app.js maakt per laden een nieuwe TAB_ID) is geen tweede mixer.
 console.log('\nherladen is geen tweede mixer; twee echte mixers wel');

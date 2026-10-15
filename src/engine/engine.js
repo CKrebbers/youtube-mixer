@@ -14,6 +14,11 @@ import { VOORUIT, VOORUIT_HOORBAAR } from './stream-kern.js';
 
 /** Vanaf hier telt een track als hoorbaar voor het vooruit halen (−60 dB; een dichte fader is −70). */
 const HOORBAAR_MIN = 0.001;
+/**
+ * Zo lang (s, audioklok) houdt een track die je NIET meer hoort nog 60 s vooruit (AR11, 16 okt): een fader die even
+ * dicht gaat (een cut, een overgang die terugkomt) haalt anders bij elke beweging de extra 40 s opnieuw op.
+ */
+export const VOORUIT_NA = 30;
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -33,6 +38,9 @@ const nrVan = (id) => DECK_IDS.indexOf(id) + 1;
 /** De melding als sync of een beat-loop weigert omdat het grid daar onzeker is. */
 export const ONZEKER_WAT = 'tik eerst het tempo of zet het grid op slot';
 export const ONZEKER = `grid hier onzeker — ${ONZEKER_WAT}`;
+/** De melding als sync of een beat-loop weigert omdat de "1" er in twijfel staat (AR3, Beatgrid.syncBij). */
+export const EEN_TWIJFEL_WAT = 'zet de "1" in de grid-modus (Device ◀ ▶), keur hem goed (✓) of zet het grid op slot';
+export const EEN_TWIJFEL = `de "1" is hier niet zeker — ${EEN_TWIJFEL_WAT}`;
 
 /**
  * De twee send-bussen. Gewone racks in een gewone insert-slot, maar dan
@@ -169,6 +177,8 @@ export class Engine extends Emitter {
     // Wie de maat geeft (zie volgMaatgever): bijgehouden, niet elke keer opnieuw gekozen.
     this._maat = { id: null, sinds: null };
     this._maatTimer = null;
+    this._hoorbaarOp = {};          // per deck: { sleutel, hoort, t } — t = audioklok van de laatste overgang hoorbaar → niet (AR11)
+    this._vooruitTimer = null;
     this._maatMelden = false;        // er staat al een 'change' klaar voor een wissel
 
     this.sends = {};
@@ -729,9 +739,28 @@ export class Engine extends Emitter {
    * Bij elke 'change' van een deck of de mixer (volgMaat).
    */
   _volgVooruit() {
+    const nu = this.ctx.currentTime;
+    let volgende = Infinity;              // wanneer (audioklok) er een track terug moet naar 20 s
     for (const k of DECK_IDS) {
       const d = this.decks[k];
-      d.zetVooruit(d.buffer && d.playing && this._maatGain(k) > HOORBAAR_MIN ? VOORUIT_HOORBAAR : VOORUIT);
+      if (!d.buffer) { delete this._hoorbaarOp[k]; d.zetVooruit(VOORUIT); continue; }
+      // Per nummer: `bron.bestand` is één object per laad (niet deck.buffer: de StreamBron geeft daar elke keer een nieuw).
+      const sleutel = d.bron?.bestand ?? d.bron?.buffer ?? d.buffer;
+      const hoort = d.playing && this._maatGain(k) > HOORBAAR_MIN;
+      // AR11: hysterese. Pas VOORUIT_NA s nadat je hem niet meer hoort terug naar 20 s; een nieuw nummer begint opnieuw.
+      // Hoorbaarheid verandert alleen met een 'change' (en die roept dit aan): tussen twee aanroepen hoorde je hem
+      // dus tot NU, en het moment van de overgang telt, niet dat van de vorige aanroep.
+      let h = this._hoorbaarOp[k];
+      if (!h || h.sleutel !== sleutel) h = this._hoorbaarOp[k] = { sleutel, hoort: false, t: -Infinity };
+      if (h.hoort !== hoort) { h.hoort = hoort; h.t = nu; }
+      const nog = hoort ? Infinity : h.t + VOORUIT_NA - nu;
+      d.zetVooruit(nog > 0 ? VOORUIT_HOORBAAR : VOORUIT);
+      if (!hoort && nog > 0) volgende = Math.min(volgende, nog);
+    }
+    // De timer zegt alleen WANNEER er opnieuw gekeken wordt (de tijd zelf komt van de audioklok, regel 3).
+    if (volgende < Infinity && !this._vooruitTimer) {
+      this._vooruitTimer = setTimeout(() => { this._vooruitTimer = null; this._volgVooruit(); }, volgende * 1000 + 50);
+      this._vooruitTimer?.unref?.();
     }
   }
 
@@ -787,6 +816,8 @@ export class Engine extends Emitter {
     // de sync lijkt te lukken en loopt na een paar maten een tel weg.
     if (!slave.gridZekerHier) return { ok: false, reden: ONZEKER };
     if (!master.gridZekerHier) return { ok: false, reden: `grid van track ${nrVan(master.id)} is daar onzeker — ${ONZEKER_WAT}` };
+    if (!slave.gridSyncHier) return { ok: false, reden: EEN_TWIJFEL };
+    if (!master.gridSyncHier) return { ok: false, reden: `de "1" van track ${nrVan(master.id)} is daar niet zeker — ${EEN_TWIJFEL_WAT}` };
 
     // Tempo op de plek waar beide NU zijn: met een tempokaart verschilt dat per stuk.
     const doelBpm = master.bpm;
@@ -852,7 +883,8 @@ export class Engine extends Emitter {
       id: d.id, title: d.title, loaded: !!d.buffer,
       playing: d.playing, position: d.position, duration: d.duration,
       rate: d.rate, cuePoint: d.cuePoint,
-      grid: d.grid ? d.grid.toJSON() : null, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
+      // Gedeeld en bevroren per gridVersie (deck.gridJson, AR7): niet elk beeld 14–17 kB opnieuw.
+      grid: d.gridJson, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
       // Telt bij elke gridwijziging (deck.gridVersie): een sleutel zonder het grid elk beeld als tekst te maken.
       gridVersie: d.gridVersie,
       // Toonsoort die je HOORT op de positie (of null): zie deck.toonsoort.

@@ -28,13 +28,16 @@ Draai met `node tools/beatmeting/<script>.mjs` vanuit de projectmap.
 | synth/snap.mjs `[namen] [--varianten bt,ruis,half]` | "tel 1 hier" snappen naar de klap (tot 15 okt) tegen snappen naar de tel (`snapNaarTel`), op de synthetische nummers; ook met een vaste scheefheid van het netwerk (BEATGRID.md §14) |
 | synth/groep.mjs `voor.json na.json ...` | de uitkomst van `bench.mjs --json` per soort fout, en de gewone gevallen (zes soorten; met en zonder vast-72/reggae-75) |
 | synth/opstart.mjs `[--poort 8866] [namen]` | wat een nieuwe kaartversie bij het opstarten kost: een eigen proefserver (VARVE_TESTSERVER=1, tijdelijke map) met grids uit de tellen van versie 1, twee keer gestart (zonder en met `tweede-mening.json`); de `[tellen]`-regels met de tijd per nummer |
+| ar2.mjs `[--meet]` | VRAGEN AR2 (16 okt): de twee metingen van docs/verslagen/2026-10-15/arch-beatgrid.md §5 in één opdracht. Droog (standaard) zegt hij wat er ontbreekt (de Python met beat-this: `VARVE_TELLEN_PY`, `VARVE_STEMS_PY` of ~/.varve/stems-venv; het checkpoint: `VARVE_TELLEN_MODEL` of ~/.varve/modellen/, met de curl om het te halen; exit 2); `--meet` draait bench `--beatthis`, groep en tel1-echt en schrijft één verslag in `tools/beatmeting/uit/ar2-<datum>.txt` (niet in git) |
+| vloer.mjs `[--media m] [--db d] [--json]` | VRAGEN AR4 (16 okt): per nummer (op een KOPIE van de db, alleen lezen) de tellen en de lage band: hoeveel stukken hebben vier op de vloer (de lage band zegt niets) en downbeats die niet op de "1" vallen (`vloerOordeel`: vloer, mening, twijfel, stil, te kort); exit 0 = niets verdachts, 2 = verdacht, 1 = niets gemeten |
 De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; die in
 `rest/` van 25 september. `rest/` leest geen server maar de bestanden zelf (ook vanuit een
 worktree: de media-map komt via git) en knipt audio naar de tijdelijke map van het systeem.
 
 ## avondpakket.mjs
 `node tools/avondpakket.mjs [--profiel apc] [--vertrek|--aankomst] [--streng] [--json] [--poort 8777]`:
-het avondpakket vanaf de opdrachtregel (docs/AVONDPAKKET.md). Leest `/api/avondpakket` als de
+het avondpakket vanaf de opdrachtregel (docs/AVONDPAKKET.md). `--vastleggen <map>` (AR12) schrijft in plaats
+daarvan de ruwe uitvoer van elke sonde als fixtures (thuismap `/home/test`, Tailscale kaal; docs/AVONDPAKKET.md §9b). Leest `/api/avondpakket` als de
 server draait (dan zegt hij hetzelfde als de tegel), meet anders zelf; alleen lezen, opent
 `library.db` nooit. Exit 0 = geen rood, 1 = oranje (alleen met `--streng`), 2 = rood, 3 = fout
 in de aanroep. Met `VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket` uit fixtures, zonder server.
@@ -60,8 +63,9 @@ in de Controlekamer "herstart om … · N keer sinds …".
 - **Stoppen**: `sh tools/varve-app/server-lus.sh stop` (lus én server, wacht tot ze weg zijn). Het oude
   `pkill -f server/index.js` werkt ook: een SIGTERM is "bewust gestopt", de lus stopt dan mee.
 - `sh tools/varve-app/server-lus.sh status`: draait hij (exit 0) of niet (exit 1).
-- Niet samen met de LaunchAgent uit docs/TAILSCALE.md (`KeepAlive`): twee starters botsen op 8777. Wie
-  hem had: `launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist`.
+- De LaunchAgent uit docs/TAILSCALE.md start sinds AR8 (16 okt) deze lus (`/bin/sh tools/varve-app/server-lus.sh`,
+  zonder `KeepAlive`), niet `node`: dan botsen ze niet (een tweede lus zegt "draait al"). Wie de OUDE had (node
+  direct, met `KeepAlive`): `launchctl unload`, het blok uit TAILSCALE.md erin, `launchctl load`.
 - De test: `test/server-lus.test.mjs` (nep-`node` op PATH die op bestelling omvalt of luistert en dan met
   SIGSTOP vastgezet wordt; poorten 8964/8965).
 

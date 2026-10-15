@@ -574,7 +574,7 @@ export class Automaat extends Emitter {
     const nd = this.engine.deck(v.deckId);
     const pos = Math.max(d.position, Math.min(this.eind, d.duration - 6));
     const kIn = kenmerken(v.track, v.van);
-    const inn = { ...kIn, grid: nd.grid, gridZeker: !!nd.grid && nd.grid.zekerBij(v.van), bpm: nd.grid ? nd.grid.bpmAt(v.van) : kIn.bpm };
+    const inn = { ...kIn, grid: nd.grid, gridZeker: !!nd.grid && nd.grid.syncBij(v.van), bpm: nd.grid ? nd.grid.bpmAt(v.van) : kIn.bpm };
     const overgang = kiesOvergang(this._uitKenmerken(d, pos), inn, { voorkeur });
     const eind = Math.min(this.eind ?? d.duration, d.duration - 6);
     const kaart = this._kaartVan(this.hoofd);
@@ -622,7 +622,7 @@ export class Automaat extends Emitter {
   /** Wat we van de uitgaande weten op tracktijd t, met `bpm` = wat je HOORT (rate, transpositie, keylock). */
   _uitKenmerken(d, t) {
     const h = d.toonKaart?.hoorbaarBij(t, { rate: d.rate, transpositie: d.transpositie, keylock: d.keylock });
-    return { grid: d.grid, gridZeker: !!d.grid && d.grid.zekerBij(t), bpm: d.grid ? d.grid.bpmAt(t) * d.rate : null,
+    return { grid: d.grid, gridZeker: !!d.grid && d.grid.syncBij(t), bpm: d.grid ? d.grid.bpmAt(t) * d.rate : null,
       k: h?.k ?? null, toonZeker: h?.soort === 'zeker' };
   }
 

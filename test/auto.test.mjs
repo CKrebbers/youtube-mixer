@@ -49,6 +49,12 @@ const zeker = (bpm, toon) => ({ grid: {}, gridZeker: true, bpm, k: k(toon), toon
   ok('toonsoorten botsen (Am → D): filter', P.kiesOvergang(zeker(124, 'Am'), zeker(124, 'D')).type === 'filter');
   ok('grid van de uitgaande onzeker: beatloos', P.kiesOvergang({ ...zeker(124, 'Am'), gridZeker: false }, zeker(124, 'Am')).type === 'ambient');
   ok('grid van de nieuwe onzeker: filter', P.kiesOvergang(zeker(124, 'Am'), { ...zeker(124, 'Am'), gridZeker: false }).type === 'filter');
+  // AR3 (16 okt): twijfel over de "1" (maatMening) = sync weigert, dus geen blend: kenmerken zegt gridZeker false.
+  {
+    const nr = (twijfel) => ({ grid: { stukken: [{ van: 0, bpm: 124, anker: 0, maat: 0, zekerheid: 0.9, ...(twijfel ? { twijfel: 'maat' } : {}) }] }, toon: null });
+    ok('AR3: kenmerken van een nummer met twijfel over de "1": gridZeker false (sync zou weigeren)', P.kenmerken(nr(true), 10).gridZeker === false && P.kenmerken(nr(false), 10).gridZeker === true);
+    ok('AR3: dus geen blend naar een nieuwe met twijfel over de "1": filter', P.kiesOvergang(zeker(124, 'Am'), { ...zeker(124, 'Am'), gridZeker: P.kenmerken(nr(true), 10).gridZeker }).type === 'filter');
+  }
   // Sync schuift de toon mee: Am op 121 gesynct naar 128 = +5,8% ≈ een halve toon → B♭m, en dat past niet bij Am.
   const s = P.kiesOvergang(zeker(128, 'Am'), zeker(121, 'Am'));
   ok('Am op 121 → 128 gesynct klinkt als B♭m: geen blend', s.type === 'filter' && /botsen/.test(s.redenen.join(' ')));

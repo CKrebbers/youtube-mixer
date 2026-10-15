@@ -242,3 +242,52 @@ node tools/proef/ar-na.mjs           # droog; na de avond met --meet [--venster 
   en oranje, na herladen dezelfde regel, na SIGSTOP "· 2 keer", past op 1440 en 390 px, 0 fouten van de pagina.
 - **Toets**: herstart.test (22 checks: lezen, regel, tegel, een echte server), server-lus.test (7 checks erbij:
   wat elke start meekrijgt, de hang, het merkbestand weg, de grens van 20).
+
+## 11. De rest van blok AR (16 okt, tak `studio/ar-alles`)
+
+Clay: "bouw AR1, 2, 4, 8, 12 en alle andere die nog in het plan staan". Gevraagd en beantwoord: AR3, AR6, AR10 en
+AR13 ook tegen het advies "zo laten" in ("alles bouwen"), AR15 alleen de Varve-kant, blok HA niet.
+
+- **AR1**: `VERSIE = 3` in src/engine/tellen.js. Bij de eerste start rekent de server elk auto-grid uit de tellen
+  opnieuw (de bestaande achtergrondweg: wacht zolang er een deck speelt). Niets anders veranderd.
+- **AR2**: `tools/beatmeting/ar2.mjs`. Droog zegt hij wat er ontbreekt; `--meet` draait bench `--beatthis`, groep
+  en tel1-echt en zet alles in één verslag in `tools/beatmeting/uit/` (in .gitignore). Hier niet gemeten: de proxy
+  van de container geeft 403 op cloud.cp.jku.at (en op Hugging Face en GitHub releases), dus geen checkpoint.
+- **AR3**: `Beatgrid.syncBij(t)` = `zekerBij(t)` en geen `twijfel: 'maat'` zonder `ok`; `deck.gridSyncHier`; sync
+  en beat-loops weigeren met `EEN_TWIJFEL`. Bewust smal: beatjump, quantize, starten op de maat en secties blijven
+  op `zekerBij` (die hebben een goede tel nodig, niet een goede "1"). De bewakers van de auto-DJ volgen `syncBij`,
+  anders kiest hij een blend die sync daarna weigert. **Trade-off met AR1**: meer nummers met twijfel 'maat', dus
+  vaker een sync die weigert tot Clay ✓ drukt of de "1" zet. Dat is de prijs van eerlijk; meten op de proefavond
+  (ar-een).
+- **AR4**: geen nieuwe detector (een gok die samen met AR3 sync blokkeert is erger dan een "1" zonder "?"), maar
+  een meter: `tools/beatmeting/vloer.mjs` noemt de stukken waar de lage band niets zegt (vier op de vloer) en de
+  downbeats van Beat This! niet op de "1" vallen. Komt het voor, dan is dat de lijst om de volgende bron op te
+  bouwen.
+- **AR5**: `metWorklet` (fx-meer.js): fout = melding, de dode node eruit (stop, poort dicht, los), één keer een
+  nieuwe die invloeit (`HERBOUW_MAX`). effecten-s10.test: na de eerste fout een nieuwe node, na de tweede stil.
+- **AR6**: bij elke statechange naar niet-'running' één `resume()`, hooguit eens per `ZELF_MS` (10 s). gezondheid.test.
+- **AR7**: `deck.gridJson`: per `gridVersie` één object, diep bevroren. engine.test: bevroren, gedeeld tussen
+  snapshots, nieuw na een gridwijziging. In headless Chromium (zie onder) geen TypeError van een schrijvende lezer.
+- **AR8**: de LaunchAgent in TAILSCALE.md start `/bin/sh tools/varve-app/server-lus.sh` zonder KeepAlive; de lus
+  herstart zelf en een tweede starter (VARVE.app) zegt "draait al". server-lus.test controleert het plist-blok.
+- **AR10**: opname, videostukken en handelingenlog laten bij een volle rij het NIEUWE stuk vallen. opnemer.test en
+  handelingenlog.test: de eerste 5 minuten (in de test: de rijgrens) aaneengesloten, de rest een gat.
+- **AR11**: `VOORUIT_NA` = 30 s audioklok; een eigen timer op die grens (zonder 'change' kijkt niemand), per nummer.
+- **AR12–14**: `--vastleggen <map>`, en op Linux de punten Relay beeld (7702), Beamer (HDMI, `/sys/class/drm`),
+  De Mac (macOS-peer in de tailnet) en Node (`.node-version`). Op de Mac ongewijzigd (`ALLEEN_PC`).
+  avondpakket-meet.test groep 14 (fixtures `drm-*-HANDGEMAAKT.txt`; de container heeft geen /sys/class/drm).
+- **AR15**: hub.js stuurt een scherm als binair frame zodra de hub `kan: ['scherm-bin']` zegt; elke nieuwe
+  verbinding begint met JSON. De hub zelf kent het nog niet, dus in de praktijk verandert er nu niets.
+- **AR16**: het POST-antwoord zegt `kijker` (een GET in de laatste 10 s); zonder kijker één POST per 4 s, onder de
+  5 s van de companion. Een oudere server: zoals altijd.
+
+**Nagelopen in headless Chromium 1194** (de headless shell met `--no-sandbox`: als root start de volle Chrome
+zonder scherm niet, en dan faalt elk headless-script al bij `/json/list`): kijk.mjs 77 ok, grid-bediening 4,
+uitlijn 31, precisie 14, rijen 276 ok (de time-out van 500 s viel vóór het eind, 0 FAIL), auto 16 ok en 1 FAIL
+("plan: DAARNA mist"), maar die faalt op een schone kopie van main precies zo: niet van deze ronde. Nergens een
+TypeError van een lezer die het bevroren grid wilde aanpassen (AR7).
+
+**Gevonden bij het nalezen**: de eerste versie van AR11 nam als "laatst hoorbaar" het moment van de vorige
+aanroep, niet dat van het dichtgaan. Een track die 100 s speelde zonder 'change' en dan dicht ging, viel meteen
+terug naar 20 s. Nu telt het moment van de overgang (hoorbaarheid verandert alleen met een 'change', en die roept
+`_volgVooruit` aan); engine.test heeft er een check voor die met de oude code faalt.

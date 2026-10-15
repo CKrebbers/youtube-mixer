@@ -1,5 +1,34 @@
 # Overdracht — waar we staan (15 oktober 2026)
 
+## 16 OKT: DE REST VAN BLOK AR (tak `studio/ar-alles`)
+
+Clay: "bouw AR1, 2, 4, 8, 12 en alle andere die nog in het plan staan". AR3, AR6, AR10 en AR13 ook tegen het advies
+"zo laten" in (Clay: alles bouwen); AR15 alleen de Varve-kant; blok HA niet. Verslag: §11 van
+`docs/verslagen/2026-10-15/ar-proef.md`; VRAGEN blok AR is bijgewerkt.
+
+| AR | wat | waar |
+|---|---|---|
+| 1 | kaart-VERSIE 3: de eerste start rekent elk auto-grid uit de tellen opnieuw (tweede mening over de "1") | src/engine/tellen.js |
+| 2 | de twee metingen in één opdracht (droog / `--meet`, verslag in `tools/beatmeting/uit/`) | tools/beatmeting/ar2.mjs |
+| 3 | twijfel 'maat' = sync en beat-loops weigeren (`syncBij`), auto-DJ-bewakers mee | beatgrid.js, deck.js, engine.js, planner.js, automaat.js |
+| 4 | meter: stukken met vier op de vloer waar de downbeats niet op de "1" vallen | tools/beatmeting/vloer.mjs |
+| 5 | een effect bouwt zijn worklet na een fout één keer opnieuw | fx-meer.js `metWorklet` |
+| 6 | stille AudioContext: zelf `resume()`, hooguit 1×/10 s | src/ui/gezondheid.js |
+| 7 | het grid in de snapshot gedeeld en diep bevroren (per gridVersie) | deck.js `gridJson` |
+| 8 | de LaunchAgent start de lus (geen KeepAlive): één weg naar de server | docs/TAILSCALE.md |
+| 10 | rij vol: het NIEUWSTE stuk valt weg (de eerste 5 minuten blijven) | opnemer.js, handelingen.js |
+| 11 | vooruit 60 → 20 s pas na 30 s niet-hoorbaar (hysterese, per nummer) | engine.js `_volgVooruit` |
+| 12 | `--vastleggen <map>`: de ruwe uitvoer van elke sonde als fixtures | tools/avondpakket.mjs |
+| 13/14 | op de pc: Relay beeld, Beamer (HDMI), De Mac, Node | server/avondpakket*.js |
+| 15 | schermen binair als de hub `kan: ['scherm-bin']` zegt (de hub nog niet) | src/control/hub.js |
+| 16 | zonder kijker meldt de mixer zich 1×/4 s (POST-antwoord `kijker`) | status-zender.js, mixer-melding.js |
+
+**Wat alleen jij kunt:** AR2 `node tools/beatmeting/ar2.mjs --meet` op de Mac (het checkpoint kwam de container
+niet in); AR4 `node tools/beatmeting/vloer.mjs`; AR8 VARVE.app opnieuw bouwen en een oude LaunchAgent vervangen;
+AR12 `node tools/avondpakket.mjs --vastleggen <map>` op de pc (met APC en beamer); AR14 Node 26.8.2 op de pc; AR1
+de eerste start na de merge op een dag zonder optreden (alle auto-grids worden opnieuw gerekend). Let op AR1 + AR3
+samen: meer nummers krijgen twijfel 'maat', en daar weigert sync tot je ✓ drukt of de "1" zet.
+
 ## 15 OKT (avond): DE ARCHITECTUURRONDE (tak `studio/architectuur`)
 
 Een externe audit van vijf punten, gelegd naast de winst-analyses van 13 okt en nagelopen in de code. Twee punten
@@ -18,10 +47,11 @@ VRAGEN blok **AR** (AR1–AR16).
 
 **Wat jij moet doen na de merge**
 - VARVE.app opnieuw bouwen: `zsh tools/varve-app/maak.sh` (anders start hij de server zonder de lus). Had je de
-  LaunchAgent uit TAILSCALE.md geladen: eerst `launchctl unload` (AR8).
-- Op de Mac meten (AR2): het echte Beat This! op de bench, en het snappen op je eigen fragmenten. De opdrachten
-  staan in `docs/verslagen/2026-10-15/arch-beatgrid.md` §5; het checkpoint was in de cloud niet te downloaden.
-- Bestaande grids krijgen de tweede mening over de "1" pas met kaart-VERSIE 3 (AR1, niet verhoogd).
+  OUDE LaunchAgent uit TAILSCALE.md geladen (node direct, met KeepAlive): `launchctl unload`, het nieuwe blok
+  uit TAILSCALE.md erin (dat start de lus, AR8), en `launchctl load`.
+- Op de Mac meten (AR2): het echte Beat This! op de bench, en het snappen op je eigen fragmenten. Sinds 16 okt in
+  één opdracht: `node tools/beatmeting/ar2.mjs --meet`; het checkpoint was in de cloud niet te downloaden.
+- Bestaande grids krijgen de tweede mening over de "1" met kaart-VERSIE 3 (AR1, sinds 16 okt verhoogd).
 - De proefpunten staan in de speellijst van de Controlekamer (ids `ar-`), op 16 okt herschreven na een herleiding
   vanaf de diff en een droogloop (`docs/verslagen/2026-10-15/ar-proef.md`): ar-app als eerste punt van het
   opstarten; avond 1 "Tel 1 snapt naar de tel", aan het eind het geheugen, "De server mag even weg" (één opname,

@@ -272,10 +272,26 @@ nummers waarvan één met een 0-byte audio en een ontbrekende video): compleet �
 `nrC/video.mp4 (ontbreekt), nrC/audio.wav (0 B)`), media ● 7 lokaal, 0,3 s. Nergens een vals rood
 of vals groen.
 
-**Niet gezien:** de uitvoer van een echte Linux-laptop (accu, USB-PD) en van de APC, Scarlett en
-Maschine in `lsusb` en sysfs: die fixtures zijn HANDGEMAAKT (`test/fixtures/avondpakket/linux/`,
-LEESMIJ). Op de Omarchy-pc één keer `node tools/avondpakket.mjs --json` met de APC eraan
-bevestigt het.
+**Wat de pc zelf meet (16 okt, AR13/AR14).** Op Linux komen er vier punten bij, op de Mac geen enkel (daar
+gooien de sondes `ALLEEN_PC`, "alleen op de pc (de beeld-machine)", en het oordeel laat ze weg):
+
+| punt | hoe | oordeel |
+|---|---|---|
+| Relay beeld | één TCP-verbinding op poort 7702 (zoals de AV-hub op 7700), 800 ms | open = ● "draait"; dicht bij aankomst met beeld `verwacht` = ✕ met hoe je hem start (`node tools/varve-relay.js 7702` in de Stroommachine-repo); anders ○ |
+| Beamer (HDMI) | `find -L /sys/class/drm -mindepth 2 -maxdepth 2 -name status -exec grep -H '' {} +` (sleutel `drm`, `parseDrm`): per poort `card<n>-<type>-<nr>` en connected | een HDMI- of DP-poort verbonden = ●; beeld bij aankomst en niets verbonden = oranje (rood met `--streng`/hardware bevestigd); bij vertrek "inpakken"; geen sysfs = grijs |
+| De Mac | `tailscale status --json`: een peer met OS macOS (`peers[].os`) | online = ● (direct of via relay); offline bij aankomst met beeld = ◐; Tailscale uit = ◐ of grijs |
+| Node | `process.version` tegen `.node-version` (`nodeVersie`) | gelijk = ●; anders ◐ "de Mac draait 26.8.2 (.node-version): installeer die" |
+
+**De ruwe uitvoer vastleggen (AR12).** `node tools/avondpakket.mjs --vastleggen <map>` draait alle sondes van dit
+platform met de echte commando's en schrijft per commando `<sleutel>.txt` plus een `nep.json` die precies die
+bestanden aanwijst (ook `avhub`, `relay`, `node`, `platform`, `paden`). De thuismap wordt `/home/test`, Tailscale
+gaat door `kaalTailscale` (alleen toestand, naam, OS, online, "direct" en de relay; geen adressen, sleutels of
+gebruikers). `VARVE_AVONDPAKKET_NEP=<map>` leest hem terug. Kijk de map na voordat hij in `test/fixtures` gaat.
+
+**Niet gezien:** de uitvoer van een echte Linux-laptop (accu, USB-PD), van de APC, Scarlett en Maschine in
+`lsusb` en sysfs, en van `/sys/class/drm` met een beamer: die fixtures zijn HANDGEMAAKT
+(`test/fixtures/avondpakket/linux/`, LEESMIJ). Op de Omarchy-pc één keer `--vastleggen` met de APC en de beamer
+eraan bevestigt het (speellijst ar-pakket).
 
 ## 10. Voor agents
 

@@ -13,9 +13,10 @@
  * DE SERVER MAG EVEN WEG ZIJN (docs/WINST.md punt 3): een stuk dat niet aankomt
  * omdat de server niet antwoordt (geen verbinding, of een 5xx van een proxy
  * zoals `tailscale serve`), blijft op volgorde in de rij en wordt opnieuw
- * geprobeerd met een oplopende pauze (0,25 → 2 s) zolang de opname loopt. Pas
- * als de rij langer is dan `rijSeconden` (5 min, ~57 MB) valt het OUDSTE stuk
- * weg (gat = stilte, op zijn plek), en een volle schijf geeft meteen op. Bij
+ * geprobeerd met een oplopende pauze (0,25 → 2 s) zolang de opname loopt. Is
+ * de rij vol (`rijSeconden`, 5 min, ~57 MB), dan valt het NIEUWSTE stuk weg
+ * (gat = stilte, op zijn plek): je houdt de eerste 5 minuten van de storing
+ * (VRAGEN AR10, 16 okt; tot dan het oudste). Een volle schijf geeft meteen op. Bij
  * stoppen krijgt de rij nog `stopGrens` (10 s) om leeg te lopen; daarna de
  * oude regel. `onStand` meldt het verloop (één melding die meegroeit,
  * opname-knop.js); `onFout` blijft per stuk dat echt kwijt is.
@@ -67,6 +68,9 @@ export function meldingVan(st) {
   if (st.goed && !st.verloren) return { soort: 'info', tekst: 'opname: weer goed, niets verloren' };
   return { soort: 'fout', tekst: `opname: ${st.goed ? 'weer goed' : 'server antwoordde niet'}, ${s(st.verloren)} verloren (stilte op die plek)` };
 }
+
+/** De lengte van de rij als tekst voor een melding: "5 minuten", of "30 s" (AR10). */
+const rijDuur = (sec) => (sec >= 60 ? `${Math.round(sec / 60)} minuten` : `${sec} s`);
 
 export class Opnemer {
   /**
@@ -218,16 +222,22 @@ export class Opnemer {
       // herhalen na een verloren antwoord schrijft dan dezelfde bytes op dezelfde plek.
       const plek = van;
       van += data.size;
+      // De rij is vol (AR10): dit NIEUWE stuk valt weg (een gat op zijn plek), wat al wacht blijft wachten.
+      if (this._videoInRij >= this.rijSeconden) {
+        this.fout = `videostuk kwijt: ${this.storing?.fout ?? 'de server antwoordt niet'} (de rij is vol: de eerste ${rijDuur(this.rijSeconden)} blijven)`;
+        this.onFout?.(this.fout);
+        return;
+      }
       this._videoInRij++;
       // Ook hier strikt op volgorde: een videobestand met stukken door elkaar is kapot.
       this._videoRij = this._videoRij.then(async () => {
         try {
           if (this._opgeven()) throw new Error(this.storing.fout);   // na de grens bij stoppen, de server hangt
           const body = await data.arrayBuffer();
-          // Wacht zolang de server weg is, zoals de audio; is de rij vol, dan valt het oudste stuk weg.
+          // Wacht zolang de server weg is, zoals de audio (een vol rij laat het NIEUWE stuk vallen, hierboven).
           const r = await this._herhaal(() => this.haal(`/api/opname/${id}/video.${ext}?van=${plek}`, {
             method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body, signal: tijdslot(),
-          }), () => this._magNog() && this._videoInRij <= this.rijSeconden);
+          }), () => this._magNog());
           if (!r.ok) throw new Error(r.fout);
           await leesWeg(r.res);             // ook gelukt: een ongelezen antwoord blijft in Chrome hangen (WINST.md punt 1)
           this.videoBytes += data.size;
@@ -262,14 +272,18 @@ export class Opnemer {
    * de server schrijft daar, dus herhalen is veilig en een gat blijft een gat.
    *
    * Antwoordt de server niet, dan wacht het stuk (en alles erachter) en wordt
-   * het opnieuw geprobeerd zolang de opname loopt en de rij niet langer is
-   * dan `rijSeconden`. Wordt hij te lang, dan valt het OUDSTE stuk weg (het
-   * stuk dat nu wacht): de rij blijft begrensd, en wat de server straks wel
-   * krijgt is het meest recente.
+   * het opnieuw geprobeerd zolang de opname loopt. Past een NIEUW stuk niet
+   * meer in de rij (`rijSeconden`), dan valt dat stuk weg (stilte op zijn
+   * plek, AR10): de rij blijft begrensd, en wat de server straks krijgt is
+   * het begin van de storing, aaneengesloten na wat er al stond.
    */
   _verstuur(data, frames) {
     const frame = this.frames;
     this.frames += frames;
+    if (this._inRij + frames > this.rijSeconden * SR) {
+      this._kwijt(frame, frames, { ok: false, fout: `${this.storing?.fout ?? 'de server antwoordt niet'} (de rij is vol: de eerste ${rijDuur(this.rijSeconden)} blijven)`, weg: true });
+      return;
+    }
     this._inRij += frames;
     const id = this.id;
     this._rij = this._rij.then(async () => {
@@ -294,7 +308,7 @@ export class Opnemer {
       () => this.haal(`/api/opname/${id}/stuk?frame=${frame}`, {
         method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: data, signal: tijdslot(),
       }),
-      () => this._magNog() && this._inRij <= this.rijSeconden * SR,
+      () => this._magNog(),
       (fout) => {
         // Eén melding die meegroeit: de eerste mislukte poging begint de storing, elke volgende werkt hem bij.
         if (!this.storing) this.storing = { fout, verloren: 0 };
@@ -309,6 +323,11 @@ export class Opnemer {
       this._laatsteGoed = true;
       return;
     }
+    this._kwijt(frame, frames, r);
+  }
+
+  /** Een stuk is kwijt (opgegeven, of de rij was vol): stilte op zijn plek, tellen en melden. */
+  _kwijt(frame, frames, r) {
     const sec = frames / SR;
     this.verloren += sec;
     this._laatsteGoed = false;

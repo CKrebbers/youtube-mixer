@@ -244,6 +244,19 @@ export class Beatgrid {
   zekerBij(t) { return this.zekerheidBij(t) === 'zeker'; }
 
   /**
+   * Mag je op t SYNCEN en BEAT-LOOPEN (VRAGEN AR3, 16 okt)? Als zekerBij, maar ook niet als de "1" er in twijfel
+   * staat (twijfel 'maat', maatMening): tempo en tel kloppen dan wel, maar een sync of een loop op een "1" die
+   * een tel naast staat hoor je meteen. Op slot, of met het oor goedgekeurd (`ok`, keurGoed), wel. Beatjump,
+   * quantize, secties en starten op de maat blijven op zekerBij: die rekenen in tellen.
+   */
+  syncBij(t) {
+    if (!this.zekerBij(t)) return false;
+    if (this.slot) return true;
+    const s = this._stukken[this.stukIndex(t)];
+    return s.ok === true || s.twijfel !== 'maat';
+  }
+
+  /**
    * De zekerheidsstrook onder de golfvorm: per stuk { van, tot, soort },
    * aaneengesloten van 0 tot `duur`. Buren met dezelfde soort blijven
    * aparte stukken: de grens is ook informatie.

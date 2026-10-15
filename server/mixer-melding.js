@@ -28,6 +28,8 @@ export const MAX_BYTES = 16 * 1024;
  * geen alarm (review ronde 2, fix 2).
  */
 export const TWEE_MS = 5000;
+/** Zo lang (ms) na een GET /api/mixer telt er een kijker (AR16): het antwoord op de POST zegt het de mixer. */
+export const KIJK_MS = 10_000;
 
 const eindig = (x) => typeof x === 'number' && Number.isFinite(x);
 
@@ -72,7 +74,13 @@ export class MixerStand {
     this.ontvangen = null;      // ms volgens de klok van de server
     this.tabs = new Map();      // tab-id -> { laatst (ms), eersteNr, laatsteNr }
     this.nr = 0;                // telt elke melding
+    this.gekeken = -Infinity;   // de laatste GET (ms), voor `kijker` (AR16)
   }
+
+  /** Iemand las de stand (GET /api/mixer). */
+  kijk(nu) { this.gekeken = nu; }
+  /** Las iemand de laatste KIJK_MS? Dan stuurt de mixer elke 900 ms, anders elke 4 s (status-zender.js). */
+  kijker(nu) { return nu - this.gekeken < KIJK_MS; }
 
   zet(melding, nu) {
     this.melding = melding;

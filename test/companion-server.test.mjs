@@ -120,6 +120,7 @@ try {
     eind: { zwart: false, bevroren: true, master: 0.8 } });
   const m1 = await post('/api/mixer', melding());
   ok('POST zonder Origin (de mixer op deze Mac, zoals fetch van localhost): 200', m1.status === 200 && m1.j.ok === true);
+  ok('AR16: net een GET gedaan → het antwoord zegt kijker: true (de mixer blijft op 900 ms)', m1.j.kijker === true);
   const na1 = await get('/api/mixer');
   ok(`GET: acht tracks, leeftijd ${na1.j.leeftijd_ms} ms (< 1000), de beeldstand erbij`, na1.j.melding?.tracks?.length === 8 && na1.j.leeftijd_ms < 1000
     && na1.j.melding.eind.bevroren === true && na1.j.twee === false);

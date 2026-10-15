@@ -15,6 +15,11 @@
  * tweede zolang de eerste onderweg is, na een 404 of een weigering een minuut
  * rust, na een netwerkfout 10 s. Nooit wachten in de interval: de POST loopt
  * los, en wat hij ook doet (gooien, afwijzen, hangen) komt niet in de mixer.
+ *
+ * AR16 (16 okt): het antwoord zegt `kijker` (las iemand GET /api/mixer de laatste KIJK_MS?). Zonder kijker
+ * gaat er hooguit één per SERVER_RUST_MS (4 s, onder VERS_MS 5 s van de companion: wie gaat kijken, ziet
+ * nooit een oude stand, en het antwoord daarna zet hem terug op 900 ms). Een oudere server zonder `kijker`:
+ * zoals altijd.
  */
 import { beeldBericht } from './beeld-weergave.js';
 import { leesWeg } from '../lib/antwoord.js';
@@ -77,6 +82,8 @@ export function maakStatus({ snap, midi, audio = null, auto = false, opname = fa
 
 /** Hooguit één POST naar de server per zoveel ms (en ook de time-out van één POST). */
 export const SERVER_MS = 900;
+/** Hooguit één POST per zoveel ms als het vorige antwoord zei dat niemand kijkt (AR16). */
+export const SERVER_RUST_MS = 4000;
 /** Rust na een 404 (een oudere server) of een weigering (403, 400, 413). */
 export const RUST_WEIGER_MS = 60_000;
 /** Rust na een netwerkfout of een 5xx. */
@@ -97,10 +104,11 @@ export function startStatusZender({ lees, isEerste = () => true, interval = 1000
   const kanaal = heeftKanaal ? new BroadcastChannel(KANAAL) : null;
 
   let onderweg = false, laatstePost = -Infinity, rustTot = -Infinity;
+  let kijker = true;                      // tot de server iets anders zegt: zoals altijd (AR16)
   const naarDeServer = (bericht) => {
     if (!naarServer || onderweg || typeof haalFn !== 'function') return;
     const nu = klok();
-    if (nu - laatstePost < SERVER_MS || nu < rustTot) return;
+    if (nu - laatstePost < (kijker ? SERVER_MS : SERVER_RUST_MS) || nu < rustTot) return;
     laatstePost = nu;
     onderweg = true;
     const ac = typeof AbortController === 'function' ? new AbortController() : null;
@@ -111,8 +119,12 @@ export function startStatusZender({ lees, isEerste = () => true, interval = 1000
         body: JSON.stringify(bericht), cache: 'no-store', signal: ac?.signal }));
     } catch (err) { p = Promise.reject(err); }
     p.then((r) => {
-      leesWeg(r);                         // elke 900 ms een antwoord: ongelezen blijft het in Chrome hangen
-      if (r?.ok) return;
+      if (r?.ok) {
+        // Elke 900 ms een antwoord: ongelezen blijft het in Chrome hangen. Hier lezen we het echt (kijker, AR16).
+        try { Promise.resolve(r.json?.()).then((j) => { kijker = j?.kijker !== false; }, () => {}); } catch (_) { /* gelezen genoeg */ }
+        return;
+      }
+      leesWeg(r);
       rustTot = klok() + (r?.status >= 400 && r?.status < 500 ? RUST_WEIGER_MS : RUST_FOUT_MS);
     }, (err) => {
       // Te traag (onze eigen time-out): gewoon de volgende keer weer. Weg of kapot: 10 s rust.
@@ -130,5 +142,5 @@ export function startStatusZender({ lees, isEerste = () => true, interval = 1000
   if (kanaal) kanaal.onmessage = (e) => { if (e.data?.vraag === 'status') stuur(); };
   const id = setInterval(stuur, interval);
   stuur();
-  return { stuur, stop() { clearInterval(id); kanaal?.close(); } };
+  return { stuur, stop() { clearInterval(id); kanaal?.close(); }, get kijker() { return kijker; } };
 }

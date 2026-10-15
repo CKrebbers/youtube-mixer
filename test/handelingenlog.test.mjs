@@ -224,7 +224,7 @@ try {
       && !readFileSync(join(dir, `set-${r.id}.acties.jsonl`), 'latin1').includes('\0') && l.eind !== null);
   }
   {
-    // De rij is vol: het oudste stuk valt weg (een gat op zijn plek), de rest komt erachter.
+    // De rij is vol: het NIEUWSTE stuk valt weg (een gat op zijn plek), het begin blijft (AR10, 16 okt; tot dan het oudste).
     const dir = join(map, 'rijvol');
     let klokT = 0;
     const timers = nepTimers();
@@ -242,8 +242,8 @@ try {
     const ruw = readFileSync(join(dir, `set-${r.id}.acties.jsonl`), 'latin1');
     const l = H.leesLog(ruw);
     const tijden = l.regels.filter(Array.isArray).map((a) => a[0]);
-    ok(`rij vol: de oudste stukken weg en gemeld (${fouten.length}), een gat van nullen`, fouten.length >= 1 && /stuk kwijt/.test(fouten[0]) && ruw.includes('\0'));
-    ok(`rij vol: de nieuwste staan er, op volgorde (${tijden.join(' ')})`, tijden.length >= 5 && tijden.at(-1) === 10
+    ok(`rij vol: de nieuwste stukken weg en gemeld (${fouten.length}), een gat van nullen`, fouten.length >= 1 && /stuk kwijt/.test(fouten[0]) && /de rij is vol/.test(fouten[0]) && ruw.includes('\0'));
+    ok(`rij vol: het begin staat er, op volgorde, vanaf de eerste seconde (${tijden.join(' ')})`, tijden.length >= 3 && tijden[0] === 1 && tijden.at(-1) < 10
       && tijden.every((t, i) => i === 0 || t > tijden[i - 1]) && l.eind !== null);
   }
   {
