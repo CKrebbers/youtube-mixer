@@ -23,7 +23,14 @@ VRAGEN blok **AR** (AR1–AR16).
   staan in `docs/verslagen/2026-10-15/arch-beatgrid.md` §5; het checkpoint was in de cloud niet te downloaden.
 - Bestaande grids krijgen de tweede mening over de "1" pas met kaart-VERSIE 3 (AR1, niet verhoogd).
 
-**Niet getest:** alles op de Mac zelf, de echte APC, een echte opname van een uur met de server weg, de lus onder
+**De suite:** op een schone Mac (de workflow `test`, `macos-14`, Node 26.8.2, met de hand gestart) **137 bestanden,
+11.778 checks, alles groen** (run 3 van 15 okt). De eerste twee runs vonden wat er op een runner anders is en nooit
+eerder gezien was (de workflow had nooit gedraaid): geen yt-dlp (nu in de workflow), videotoolbox die op een virtuele
+Mac wel in de lijst staat maar niet codeert (uitzenden probeert hem nu echt en neemt anders libx264), een afvalmeting
+in de pool (analyse.test loopt nu alleen), nice relatief, en `alles.mjs` die de FAIL-regels niet toonde. In de
+Linux-container (Node 22) 137 bestanden met alleen de twee bekende afvalmetingen van V8 rood (VERSIEGEVOELIG).
+
+**Niet getest:** de echte Mac van Clay, de echte APC, een echte opname van een uur met de server weg, de lus onder
 macOS `/bin/sh`. De Linux-fixtures van accu, USB-PD en de APC zijn HANDGEMAAKT (AR12).
 
 ## 15 OKT: DE WERKRUIMTE IS AF (S0–S11)
