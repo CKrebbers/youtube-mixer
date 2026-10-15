@@ -71,6 +71,30 @@ console.log('de speellijst');
   const onbekend = codes.filter((c) => !new RegExp(`\\*\\*${c}[. ]`).test(vragen));
   ok(`elke vraagcode in de speellijst staat in docs/VRAGEN.md (${codes.length} codes${onbekend.length ? `; onbekend: ${onbekend.join(', ')}` : ''})`,
     codes.length > 0 && !onbekend.length);
+  // `citeert` (16 okt, docs/verslagen/2026-10-15/ar-proef.md): de letterlijke teksten van de app die een punt
+  // aanhaalt ("audio staat stil (", "opname: weer goed, niets verloren"). Elk stuk staat in de doe of de let (anders
+  // citeert het punt niets), en ergens in de code: verandert een melding, dan moet de speellijst mee.
+  const codeTekst = (() => {
+    const delen = [];
+    const loop = (map) => {
+      for (const n of readdirSync(new URL(`../${map}/`, import.meta.url), { withFileTypes: true })) {
+        const pad = `${map}/${n.name}`;
+        if (n.isDirectory()) { if (n.name !== 'vendor' && n.name !== 'node_modules') loop(pad); }
+        else if (/\.(m?js|sh|applescript)$/.test(n.name)) delen.push(readFileSync(new URL(`../${pad}`, import.meta.url), 'utf8'));
+      }
+    };
+    for (const map of ['src', 'server', 'tools']) loop(map);
+    delen.push(readFileSync(new URL('./node-versie.mjs', import.meta.url), 'utf8'));
+    for (const n of readdirSync(new URL('../', import.meta.url))) if (n.endsWith('.html')) delen.push(readFileSync(new URL(`../${n}`, import.meta.url), 'utf8'));
+    return delen.join('\n');
+  })();
+  const citaten = punten.filter((p) => p.citeert);
+  const buitenTekst = citaten.flatMap((p) => p.citeert.filter((c) => !`${p.doe}\n${p.let}`.includes(c)).map((c) => `${p.id}: "${c}"`));
+  const buitenCode = citaten.flatMap((p) => p.citeert.filter((c) => !codeTekst.includes(c)).map((c) => `${p.id}: "${c}"`));
+  ok(`citeert: elk stuk staat in de doe of de let van zijn punt (${citaten.length} punten${buitenTekst.length ? `; niet: ${buitenTekst.join(', ')}` : ''})`,
+    citaten.length > 0 && citaten.every((p) => Array.isArray(p.citeert) && p.citeert.length && p.citeert.every((c) => typeof c === 'string' && c.length >= 6)) && !buitenTekst.length);
+  ok(`citeert: elk stuk staat letterlijk in de code (src/, server/, tools/, test/node-versie.mjs, de .html-pagina's)${buitenCode.length ? `; niet: ${buitenCode.join(', ')}` : ''}`, !buitenCode.length);
+  ok('citeert: de check vangt een tekst die niet in de code staat', !codeTekst.includes('audio staat héél stil (dit staat nergens)'));
 }
 
 console.log('\nde opslag (proef/sessie.json)');

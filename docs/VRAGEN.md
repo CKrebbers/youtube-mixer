@@ -163,6 +163,29 @@ Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even 
 - [ ] **AR16. De status-zender rustiger zonder kijker** (het POST-antwoord krijgt `kijker`; zonder kijker 1× per
   4 s, onder VERS_MS)? 💬 **Advies:** klein, maar pas na de proefavond.
 
+**Uit de droogloop van de proefpunten (16 okt, docs/verslagen/2026-10-15/ar-proef.md)**
+- [ ] **AR17. "stream hapert" tijdens een storing.** 💬 Is de server even weg, dan krijgt elke hoorbare track één
+  rode melding "track N: stream hapert: Failed to fetch" die blijft staan tot je hem wegklikt, naast de ene
+  opname-melding die meegroeit (gemeten: 30 s weg, twee tracks = drie meldingen). Het geluid loopt door (60 s
+  vooruit). Liever ook één melding per track met een sleutel, die "weer goed" wordt als de pagina's weer komen?
+  **Advies:** ja, klein (de sleutel bestaat al: `meld(…, { sleutel })`); eerst zien of het je op de avond stoort.
+- [ ] **AR18. Een server die HANGT** (geen antwoord, wel een poort: SIGSTOP, een volle schijf die blokkeert)
+  ziet de herstartlus niet: hij herstart alleen een server die stopt. De mixer redt het 60 s (gemeten: 30 s
+  hangen = geen gat, de opname-melding pas na de time-out van 10 s); daarna wordt het stil. Een hang-detectie in
+  de lus (bv. `curl -m 2 /api/proef` elke 5 s, drie keer niets = kill -9)? **Advies:** ja, maar pas na de
+  proefavond: eerst zien of het ooit gebeurt (CLAUDE.md "De server mag even weg": niet gebouwd).
+- [ ] **AR19. Het avondpakket op een machine zonder library** (de pc) zegt rood "backup: nog nooit" en dus "nog
+  niet vertrekken" (exit 2), en zonder `VARVE_MEDIA` stopt hij meteen (exit 3, "geen mediamap"). Op de pc is
+  dat vals rood. Grijs maken als er geen library is ("geen library op deze machine")? En zegt de regel "servers"
+  daar "op deze Mac". **Advies:** ja, bij het eerstvolgende werk aan het avondpakket; de proef (ar-pakket) zegt
+  het er nu bij.
+- [ ] **AR20. Een tweede server ruimt eerst op, en stopt pas daarna.** 💬 Start je met de hand een tweede
+  `node server/index.js` terwijl er al een draait, dan wist hij bij het opstarten de `.bezig-*`-werkmappen (een
+  ingest of split die NU loopt mislukt) en zet hij de stems-rij terug, en pas bij het luisteren ziet hij de
+  bezette poort (exit 3). De herstartlus en VARVE.app starten nooit een tweede (ze kijken eerst naar de poort);
+  met de hand of met de LaunchAgent naast de lus kan het wel. De poort eerst proberen, vóór het opruimen?
+  **Advies:** ja, klein; tot dan: nooit met de hand een server starten als VARVE draait.
+
 ## GA. Afmaken: controllers en beatgrid (14 okt, tak `studio/afmaken`, PR #41)
 
 De vragen uit de vier verslagen van afmaken, letterlijk overgenomen en ingekort (bronnen:

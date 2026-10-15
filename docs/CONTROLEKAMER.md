@@ -83,8 +83,8 @@ De Controlekamer kent geen avonden: de bloktitel groepeert ("Avond 1 · …").
 Sinds 9 okt (na het verbeteronderzoek) staat alles erin, ook wat hierboven niet in de
 tabel staat (luisteren, secties, de Maschine als DJ-bediening, beeld):
 
-**Avond 1** (mixen): 102 punten, ~3,6 uur (214 min), zonder hub (de mixer opent de APC
-zelf). De **kern** vooraan is ~45 min (26 punten, 47 min): opstarten, luisteren, draaien
+**Avond 1** (mixen): 104 punten, ~3,8 uur (230 min), zonder hub (de mixer opent de APC
+zelf). De **kern** vooraan is ~50 min (27 punten, 50 min; sinds 16 okt begint het opstarten met ar-app): opstarten, luisteren, draaien
 op de APC, koptelefoon, keylock. De rest van avond 1 als er tijd en zin is.
 **Avond 2** (spelen en programmeren): 80 punten, ~4,3 uur (260 min), met de hub (de
 Maschine kan alleen via de hub). Sinds 10 okt met het blok crossover (5 punten, 8 min, PR #26;
@@ -94,10 +94,15 @@ Sinds 11 okt (`visie/handen`) staat de **hub-middag** als eerste blok van avond 
 hub of een Varve-tab met de APC. Avond 2 zelf ("2b", 74 punten, 180 min) begint daarna met
 `npm run check -- studio`. Het blok `ga-proef` (14 okt) vraagt twee antwoorden die de hub-middag al
 geeft; wie die deed, neemt ze over.
-**Avond 3** (beeld, met de Omarchy-pc): 8 punten, ~35 min.
-Sinds 15 okt (avond) de **architectuurronde** (VRAGEN AR, ids `ar-`): op avond 1 "Tel 1 snapt naar de tel"
-(5 punten, 12 min), "De audio blijft gezond" (3, 10) en "De server mag even weg" (4, 15; VARVE.app eerst
-opnieuw bouwen), op avond 3 "Het avondpakket en de tests op de pc" (2, 10).
+**Avond 3** (beeld, met de Omarchy-pc): 8 punten, ~40 min.
+Sinds 15 okt (avond) de **architectuurronde** (VRAGEN AR, ids `ar-`), op 16 okt herschreven na een herleiding
+vanaf de diff en een droogloop (`docs/verslagen/2026-10-15/ar-proef.md`): ar-app (VARVE.app opnieuw bouwen) als
+eerste punt van het opstarten; op avond 1 "Tel 1 snapt naar de tel" (6 punten, 15 min, met ar-ok: het grid
+nagemeten), en aan het eind "Het geheugen over een lange avond" (1, 5), "De server mag even weg" (4, 20: één
+opname over drie storingen, stoppen, omvallen en hangen) en als laatste "Slaap en een uitgang die wegvalt" (2,
+10: daarna moet je misschien herladen); op avond 3 "Het avondpakket en de tests op de pc" (2, 15). Wat ze
+beweren rekent `node tools/proef/ar-na.mjs` na de avond uit Clay's eigen bestanden na (WAV, handelingenlog,
+`~/.varve-server.log`, grid tegen de tellen); alleen lezen, op kopieën, standaard droog.
 **Eerder werk**: 26 punten, ~45 min.
 
 **De volgorde** (9 okt; `test/controle.test.mjs` eist alle avond 1 vóór avond 2 vóór
@@ -105,13 +110,17 @@ avond 3 vóór "Eerder werk", en de kern vooraan):
 - Avond 1: opstarten, luisteren, draaien op de APC, koptelefoon, keylock (de kern), daarna
   zonder lag, modus klank, beatgrid, beatgrid gelijkzetten op de APC, tel 1 snapt naar de tel, stems,
   master en effecten, secties, secties op het toetsenbord, een sectie in de sampler, secties terugspelen,
-  de audio blijft gezond, de server mag even weg.
+  het geheugen over een lange avond, de server mag even weg, slaap en een uitgang die wegvalt.
 - Avond 2: opstarten met de hub, spelen, patronen, planvenster met secties, auto-DJ met
   secties, secties op de Maschine, secties in beeld, secties naar de hub, de Maschine als
   DJ-bediening, bladeren en sampler op de Maschine, crossover (een knip als drumpad).
 - Avond 3: beeld met de Stroommachine, het avondpakket en de tests op de pc.
 - Eerder werk: toonsoort, binnenhalen, auto-DJ, planvenster, klankschaal, beamer, kleine dingen.
 
+- **Citaten** (16 okt): een punt dat een melding of logregel van de app letterlijk aanhaalt, zet die in
+  `citeert`. `test/controle.test.mjs` eist dat elk citaat in de doe of de let staat én letterlijk in de code
+  (src/, server/, tools/, test/node-versie.mjs, de .html-pagina's): verandert een melding, dan zegt de test dat de
+  speellijst mee moet.
 - **Vraagcodes**: een code tussen haakjes in de let-tekst ("(S21)") is de open vraag uit
   `docs/VRAGEN.md` die je bij dat punt beantwoordt; je antwoord gaat in de notitie.
   Bij elk punt alleen de vraag die erbij past. Bij geen enkel punt: N4 en S12 (alleen

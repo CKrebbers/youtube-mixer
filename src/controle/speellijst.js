@@ -39,15 +39,24 @@
  * met de hub en "Zonder lag met de hub" erna. De sporen S9 (sets), S10 (effecten) en S11 (tags) als
  * "Werkruimte · S9/S10/S11" na D (VRAGEN S9, S10, S11), en in D de vakken plan, sets, sjablonen en tags
  * op de iPad. Vraagcodes als "S9-1" telt de test ook. Geen id veranderd.
- * Erbij (15 okt, avond): de architectuurronde (VRAGEN AR, docs/verslagen/2026-10-15/arch-*.md). Op avond 1
- * "Tel 1 snapt naar de tel" na het gelijkzetten op de APC, en aan het eind "De audio blijft gezond" en "De
- * server mag even weg"; op avond 3 "Het avondpakket en de tests op de pc". Alleen blokken erbij (ids `ar-`).
+ * Erbij (15 okt, avond): de architectuurronde (VRAGEN AR, docs/verslagen/2026-10-15/arch-*.md), ids `ar-`.
+ * Herschreven (16 okt) na een herleiding vanaf de diff en een droogloop (docs/verslagen/2026-10-15/ar-proef.md):
+ * ar-app vooraan in het opstarten; op avond 1 "Tel 1 snapt naar de tel" (met ar-ok: ar-na meet het grid),
+ * aan het eind het geheugen, de server (één opname over drie storingen: stoppen, omvallen, hangen; ar-na
+ * rekent hem na) en als laatste slaap en de Scarlett; op avond 3 de pc. Geen id veranderd of weg.
+ * `citeert` (16 okt): de letterlijke teksten van de app die een punt aanhaalt. controle.test eist dat elk
+ * stuk in de doe of de let staat, en in de code (src/, server/, tools/, test/node-versie.mjs, de .html-pagina's): verandert
+ * een melding, dan zegt de test dat de speellijst mee moet.
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
   // ---- Avond 1: mixen (APC + koptelefoon) ----------------------------------------
   // De kern (~45 min): opstarten, luisteren, draaien, koptelefoon, keylock.
-  { id: 'start', titel: 'Avond 1 · Opstarten', minuten: 2, punten: [
+  { id: 'start', titel: 'Avond 1 · Opstarten', minuten: 5, punten: [
+    // De architectuurronde (VRAGEN AR8): vóór alles, want "De server mag even weg" rekent op de herstartlus.
+    { id: 'ar-app', doe: 'Vóór de avond, in Terminal in de projectmap: had je de LaunchAgent uit docs/TAILSCALE.md geladen, dan eerst launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist. Stop een server die nog los draait (pkill -f server/index.js), bouw VARVE.app opnieuw (zsh tools/varve-app/maak.sh) en start VARVE vanuit het Dock.',
+      let: 'sh tools/varve-app/server-lus.sh status zegt "de lus draait (pid …)", en ~/.varve-server.log heeft de regel "[lus] … server gestart (pid …)". Zegt hij "de lus draait niet", dan draait er een server zonder lus (VARVE.app start geen tweede): stop hem en klik VARVE opnieuw. Mag de LaunchAgent weg? (AR8)',
+      citeert: ['de lus draait (pid', 'de lus draait niet', 'server gestart (pid'] },
     { id: 'start-apc', doe: 'Sluit de APC40 aan (Logic en andere muziekprogramma\'s dicht) en open de mixer met de knop hierboven.',
       let: 'APC hierboven groen, geen melding "verkeerde poort".' },
     { id: 'start-audio', doe: 'Klik in de mixer op "audio starten".', let: 'Audio hierboven: aan.' },
@@ -163,18 +172,24 @@ export const SPEELLIJST = [
     { id: 'ga-dj', doe: 'Laad Ciel (Beat This! hoorde eerst 77) en een reggae- of downtempo-nummer dat je zelf traag telt. Kijk naar de bpm in de kolom. Klopt hij niet: grid-modus scene 3 (½) of scene 2 (×2).',
       let: 'Ciel nu ~154, zoals jij tikt? Krijgt het trage nummer het dubbele (150 in plaats van 75), en draai je genoeg van zulke muziek om het per krat te willen? Alleen na de herberekening bij de eerste start. (GA1, GA2)' },
   ] },
-  // De architectuurronde (15 okt, spoor B, VRAGEN AR): snappen naar de tel van Beat This!, de "1" tegen de lage band.
-  { id: 'ar-grid', titel: 'Avond 1 · Tel 1 snapt naar de tel', minuten: 12, punten: [
-    { id: 'ar-snap', doe: 'Nummer met ✓ naast de bpm, spelend, grid-modus (Shift + Metronome). Druk scene 1 (tel 1 hier) een paar keer net naast een kick: iets te vroeg, iets te laat.',
-      let: 'Valt de "1" telkens precies op de kick, en niet ergens ertussen? Ook bij een rommelige klap?' },
-    { id: 'ar-tellen', doe: 'Zelfde nummer: Clip/Device View (tellen hier) op een kick, en een paar minuten later Shift + scene 1 (vast) op een kick. Grid-modus uit en laat hem doorspelen.',
-      let: 'Liggen de lijnen daarna nog op de kicks, ook een paar minuten verder?' },
-    { id: 'ar-een', doe: 'Haal een nieuw nummer binnen met een duidelijke "1" en geen kick op elke tel (breakbeat, dub of hiphop), laad het en zet de grid-modus aan.',
-      let: 'Staat de "1" goed? Brandt scene 1 oranje (twijfel): staat de "1" dan echt een tel naast, en werkt sync nog? Liever dat sync bij zo\'n twijfel weigert? (AR3)' },
-    { id: 'ar-vloer', doe: 'Hetzelfde met een house- of technonummer (een kick op elke tel).',
-      let: 'Staat de "1" daar ooit een tel naast zonder dat scene 1 oranje brandt? Bij welk nummer? (AR4)' },
+  // De architectuurronde (15 okt, spoor B, VRAGEN AR; docs/verslagen/2026-10-15/ar-proef.md): snappen naar de
+  // tel van Beat This! en de "1" tegen de lage band. Geen storing: kan op elk moment van de avond. Het bewijs
+  // komt achteraf uit ar-na (ar-ok), niet alleen uit wat je ziet.
+  { id: 'ar-grid', titel: 'Avond 1 · Tel 1 snapt naar de tel', minuten: 15, punten: [
+    { id: 'ar-snap', doe: 'Een nummer met ✓ naast de bpm, spelend. Grid-modus (Shift + Metronome). Druk scene 1 (tel 1 hier) net naast een kick: één keer iets te vroeg, één keer iets te laat. Schrijf de titel in de notitie (voor ar-ok).',
+      let: 'Springen de lijnen in de zoom meteen mee (niet een beeld later of pas na scrollen)? Valt de "1" na allebei op dezelfde plek op de kick, hoe je ook naast drukte?' },
+    { id: 'ar-tellen', doe: 'Zelfde nummer: Clip/Device View (tellen hier) op een kick, en ruim 5 minuten later Shift + scene 1 (vast) op een kick. Grid-modus uit en laat hem doorspelen.',
+      let: 'Liggen de lijnen ook aan het eind nog op de kicks? (ar-ok meet het: raak bijna 100%, grootste afwijking niet meer dan een paar ms.)' },
+    { id: 'ar-een', doe: 'Haal een nieuw nummer binnen met een duidelijke "1" en geen kick op elke tel (breakbeat, dub of hiphop). Wacht op de regel "[tellen] <titel>: … lage band uitgerekend" in ~/.varve-server.log (Beat This! moet het eerst tellen; komt hij er na 5 min niet, schrijf dat op en doe dit punt een andere keer). Laad het, zet de grid-modus aan en kijk naar scene 1.',
+      let: 'Staat de "1" op de echte "1"? Brandt scene 1 oranje en zegt het oordeel naast de bpm (aanklikken) "de "1" is niet zeker …": staat de "1" dan echt een tel naast (de tweede mening klopt) of niet (vals alarm)? Werkt sync dan nog? (AR3)',
+      citeert: ['[tellen] ', 'lage band ', 'de "1" is niet zeker'] },
+    { id: 'ar-vloer', doe: 'Hetzelfde met een nieuw house- of technonummer (een kick op elke tel).',
+      let: 'Staat de "1" daar ooit een tel naast zonder dat scene 1 oranje brandt? Dat is de bekende grens (vier op de vloer zegt de lage band niets): bij welk nummer? (AR4)' },
     { id: 'ar-meet', doe: 'Overdag of na afloop, in Terminal: de twee metingen uit docs/verslagen/2026-10-15/arch-beatgrid.md §5 (bench.mjs --beatthis met de python van ~/.varve/tellen-venv, en tel1-echt.mjs).',
       let: 'Zet de getallen in de notitie (AR2). Daarna kun je beslissen of de hele library de tweede mening over de "1" krijgt (AR1).' },
+    { id: 'ar-ok', doe: 'Na de avond, in Terminal: node tools/proef/ar-na.mjs --titel "<titel van ar-snap>" --titel "<titel van ar-een>" (droog: zegt wat hij zou lezen), dan hetzelfde met --meet erbij.',
+      let: 'Zegt hij bij ar-snap "oordeel: op de tel (≤ 5 ms)" en "1" klopt? Bij ar-een: wat zegt "1" op de downbeats? Plak het rapport in de notitie; "NAAST de tel" is een fout, ook als het er goed uitzag.',
+      citeert: ['oordeel: ', 'op de tel (≤ ', 'NAAST de tel'] },
   ] },
   { id: 'stems', titel: 'Avond 1 · Stems', minuten: 14, punten: [
     { id: 'st-zang', doe: 'Laad Loving arms (vier stems), knop stems in de balk, kill bij de zang aan en weer uit.',
@@ -262,25 +277,34 @@ export const SPEELLIJST = [
     { id: 'sl-loop', doe: 'Zet eerst shift + pad (sectie-loop) aan, dan pas ○ log. Na een paar maten shift + dezelfde pad (loop eraf), ○ log uit, en terugspelen.',
       let: 'Begint het terugspelen in die loop (pad wit) en gaat hij er op dezelfde maat af? Hoor je ergens anders een tel of maat verschil, ook bij hotcues of start op de maat? (SVL3)' },
   ] },
-
-  // De architectuurronde (15 okt, sporen A en D, VRAGEN AR): de audio blijft gezond, de server mag even weg.
-  { id: 'ar-audio', titel: 'Avond 1 · De audio blijft gezond', minuten: 10, punten: [
-    { id: 'ar-slaap', doe: 'Muziek op pauze, mixer open: laat de Mac even slapen (deksel dicht, of Apple-menu → Sluimer) en maak hem weer wakker.',
-      let: 'Staat er een rode melding "audio staat stil …"? Gaat het geluid weer bij de eerste druk op de APC, en wordt de melding "audio loopt weer"? Liep de audio gewoon door zonder melding: ook goed, schrijf het op. (AR6)' },
-    { id: 'ar-scarlett', doe: 'Masterfader laag, er speelt iets. Trek de USB van de Scarlett eruit, wacht een paar seconden, en steek hem terug.',
-      let: 'Welke melding kwam er ("audio-uitgang staat stil" of "audio staat stil")? Wat moest je doen om weer geluid te hebben: een druk, de uitgang opnieuw kiezen, of herladen?' },
-    { id: 'ar-wissel', doe: 'Open het Taakbeheer van Chrome (Venster → Taakbeheer) en kijk naar het geheugen van de mixer. Wissel op track 3 twintig keer tussen een instrument (INSTRUMENT-rij) en een nummer.',
-      let: 'Komt het geheugen terug na het wisselen (hooguit een paar MB erbij), of groeit het blijvend?' },
+  // De architectuurronde (15 okt, sporen A en D, VRAGEN AR; docs/verslagen/2026-10-15/ar-proef.md). Op volgorde:
+  // eerst wat niets stoort (geheugen), dan de server (één opname over drie storingen, ar-na rekent hem na), en
+  // als laatste wat de audio-uitgang raakt (slaap, de Scarlett): daarna moet je misschien herladen.
+  { id: 'ar-audio', titel: 'Avond 1 · Het geheugen over een lange avond', minuten: 5, punten: [
+    { id: 'ar-wissel', doe: 'Open het Taakbeheer van Chrome (menu Venster → Taakbeheer) en noteer de Geheugenvoetafdruk van het mixer-tabblad. Wissel op track 3 twintig keer tussen een instrument (INSTRUMENT-rij) en een nummer, wacht een minuut, en lees hem opnieuw af.',
+      let: 'Hooguit +20 MB (de eis van de lekproef; headless na 20 wissels −5 MB, vóór de fix +68 MB na 50)? Lees de Geheugenvoetafdruk, geen ander getal: het gedeelde geheugen van Chrome groeit wel mee (headless +41 MB) zonder dat het een lek is.' },
   ] },
-  { id: 'ar-server', titel: 'Avond 1 · De server mag even weg', minuten: 15, punten: [
-    { id: 'ar-app', doe: 'Vóór de avond: had je de LaunchAgent uit docs/TAILSCALE.md geladen, dan eerst launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist. Bouw VARVE.app opnieuw (zsh tools/varve-app/maak.sh) en start VARVE vanuit het Dock.',
-      let: 'Opent de Controlekamer? Zegt sh tools/varve-app/server-lus.sh status "de lus draait"? Mag de LaunchAgent weg? (AR8)' },
-    { id: 'ar-weg', doe: 'Twee tracks spelen, opname aan (●) en het log aan. In Terminal: sh tools/varve-app/server-lus.sh stop. Mix 30 s door (faders, EQ, een loop; spring niet ver weg in een nummer en laad niets), en start VARVE dan weer vanuit het Dock.',
-      let: 'Speelt de muziek door zonder gat? Eén melding bij de opname die meetelt ("opname: server antwoordt niet, … in de wacht"), en na de herstart "opname: weer goed, niets verloren"?' },
-    { id: 'ar-wav', doe: 'Stop de opname en open de WAV uit opnames/ in QuickTime of Logic, rond het moment waarop de server weg was.',
-      let: 'Geen stilte en geen tik op die plek? Klopt de lengte met hoe lang je opnam?' },
-    { id: 'ar-val', doe: 'Er speelt iets. Laat de server omvallen: in Terminal pkill -9 -f server/index.js.',
-      let: 'Is hij binnen een paar seconden vanzelf terug (de tegel Server in de Controlekamer weer groen), zonder dat je iets hoort? Wil je zo\'n herstart in de Controlekamer zien? (AR9)' },
+  { id: 'ar-server', titel: 'Avond 1 · De server mag even weg', minuten: 20, punten: [
+    { id: 'ar-weg', doe: 'Twee tracks spelen hoorbaar, opname aan met beeld (de keuze naast ●: "audio + video") en het log aan. Na een minuut, in Terminal: sh tools/varve-app/server-lus.sh stop. Mix 30 s door (faders, EQ, een loop; spring niet ver weg en laad niets: dat moet van de server komen) en start VARVE weer: open ~/Applications/VARVE.app. VARVE haalt de Controlekamer naar voren: klik daarna terug naar het mixer-tabblad.',
+      let: 'Geen gat in het geluid? Eén opname-melding die meetelt ("opname: server antwoordt niet, … in de wacht") en na de start "opname: weer goed, niets verloren". Verwacht erbij (de droogloop zag het): per hoorbare track één rode "track N: stream hapert: …" die blijft staan tot je hem wegklikt. Stoort die? (AR17)',
+      citeert: ['audio + video', 'opname: server antwoordt niet, ', ' in de wacht', 'opname: weer goed, niets verloren', 'stream hapert: '] },
+    { id: 'ar-val', doe: 'Dezelfde opname, een minuut later: laat de server omvallen met pkill -9 -f server/index.js. Is hij na 5 s niet terug: open ~/Applications/VARVE.app.',
+      let: 'Binnen een paar seconden terug (de droogloop: 1,3 s) zonder dat je iets hoort? In ~/.varve-server.log "de server viel om (exitcode 137)" en "server gestart (pid …) — herstart 1". De tegel Server kijkt elke 2 s en kan het missen: wil je zo\'n herstart in de Controlekamer zien? (AR9)',
+      citeert: ['de server viel om (exitcode', '— herstart '] },
+    { id: 'ar-hang', doe: 'Dezelfde opname, een minuut later: laat de server 30 s hangen. In Terminal, in één regel: date +%T; kill -STOP $(pgrep -f server/index.js); sleep 30; kill -CONT $(pgrep -f server/index.js); date +%T. Schrijf de twee tijden op (de lus ziet een hang niet; ar-na krijgt ze met --venster).',
+      let: 'Geen gat in het geluid? De opname-melding ("opname: server antwoordt niet, … in de wacht") komt pas na ~10 s (de time-out) en springt in stappen van ~10 s; geen "stream hapert". Binnen een seconde na de 30 s "opname: weer goed, niets verloren". Langer dan 60 s hangen wordt stil (60 s vooruit): de weg terug is kill -9 $(pgrep -f server/index.js), dan start de lus hem opnieuw. Moet de lus een hang zelf zien? (AR18)',
+      citeert: ['opname: server antwoordt niet, ', 'opname: weer goed, niets verloren'] },
+    { id: 'ar-wav', doe: 'Stop de opname (●, tweede klik). In Terminal: node tools/proef/ar-na.mjs (droog), dan node tools/proef/ar-na.mjs --meet --venster <de twee tijden van ar-hang, als 22:41:07-22:41:37>. Open daarna set-<id>.mp4 in QuickTime en spring naar de drie storingen.',
+      let: 'ar-na: drie storingen (gestopt, omgevallen, met de hand), "waarvan in een storing: 0", het log met eind-regel en 0 gaten, en onderaan "NIETS MIS GEVONDEN" (exit 0)? Een regel met "IN DE STORING" is een verloren stuk. Loopt de video over die drie momenten door, zonder bevriezen of sprong? Plak het rapport in de notitie.',
+      citeert: ['NIETS MIS GEVONDEN', 'IN DE STORING', 'waarvan in een storing: '] },
+  ] },
+  { id: 'ar-uitgang', titel: 'Avond 1 · Slaap en een uitgang die wegvalt (als laatste)', minuten: 10, punten: [
+    { id: 'ar-slaap', doe: 'Muziek op pauze, mixer open. Laat de Mac slapen (Apple-menu → Sluimer), wacht een halve minuut en maak hem wakker.',
+      let: 'Staat er een rode "audio staat stil (…)", en zet de eerste druk op de APC het geluid terug ("audio loopt weer")? Liep de audio gewoon door zonder melding: ook goed, schrijf het op. Doen de lampjes van de APC het nog? Weg terug: klik in de mixer, anders herladen (Cmd+R vraagt eerst). (AR6)',
+      citeert: ['audio staat stil (', 'audio loopt weer'] },
+    { id: 'ar-scarlett', doe: 'Masterfader en Cue Level laag, koptelefoon af. Er speelt iets: trek de USB van de Scarlett eruit, wacht 5 s en steek hem terug.',
+      let: 'Welke melding kwam er ("audio-uitgang staat stil …" of "audio staat stil (…)"), en wat moest je doen om weer geluid te hebben: een druk, de uitgang opnieuw kiezen, of herladen? Kwam het geluid intussen uit de MacBook zelf? Werkt de koptelefoon (vier kanalen) daarna nog?',
+      citeert: ['audio-uitgang staat stil', 'audio staat stil ('] },
   ] },
 
   // ---- Avond 2: spelen en programmeren (met de hub) -------------------------------
@@ -495,12 +519,15 @@ export const SPEELLIJST = [
       let: 'Hooguit één melding, en daarna komt alles vanzelf terug (tel, scène, macro\'s), zonder dat het spelen hapert? Is "zoeken zonder pc" stil genoeg? (BE7)' },
   ] },
 
-  // De architectuurronde (15 okt, spoor C, VRAGEN AR): het avondpakket en de suite op de Omarchy-pc.
-  { id: 'ar-pc', titel: 'Avond 3 · Het avondpakket en de tests op de pc', minuten: 10, punten: [
-    { id: 'ar-pakket', doe: 'Op de Omarchy-pc, in een kopie van de repo, met de APC eraan: node tools/avondpakket.mjs --json > avondpakket-pc.json. Heeft de pc een accu: nog eens zonder lader.',
-      let: 'Geen rood dat niet klopt? Grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth? Stuur de json mee, dan vervallen de handgemaakte Linux-fixtures. Is eerlijk grijs genoeg? (AR12, AR13)' },
-    { id: 'ar-node', doe: 'Op de pc: node --version, daarna node test/alles.mjs.',
-      let: 'Staat er 26.8.2? Anders: welke checks waren rood (alles.mjs zegt welke op een andere Node anders uitvallen)? (AR14)' },
+  // De architectuurronde (15 okt, spoor C, VRAGEN AR): het avondpakket en de suite op de Omarchy-pc. De pc heeft geen
+  // library: zonder VARVE_MEDIA stopt de CLI meteen (exit 3), en "backup" is daar rood (de droogloop van 16 okt).
+  { id: 'ar-pc', titel: 'Avond 3 · Het avondpakket en de tests op de pc', minuten: 15, punten: [
+    { id: 'ar-pakket', doe: 'Op de Omarchy-pc, in een kopie van de repo, met de APC eraan: mkdir -p /tmp/leeg-media && VARVE_MEDIA=/tmp/leeg-media node tools/avondpakket.mjs --json > avondpakket-pc.json. Voor de fixtures ook de ruwe uitvoer: lsusb > lsusb.txt, en find -L /sys/class/power_supply -mindepth 2 -maxdepth 2 -name uevent -exec grep -H "" {} + > power.txt. Heeft de pc een accu: alles nog eens zonder lader.',
+      let: 'Zonder VARVE_MEDIA zegt hij "geen server op 8777 en geen mediamap" (exit 3). Verwacht: grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth, de APC herkend, en rood "backup: nog nooit" (vals rood: de pc heeft geen library, AR19). Klopt de rest? Stuur de drie bestanden mee, dan worden de HANDGEMAAKT-fixtures echt. Is eerlijk grijs genoeg? (AR12, AR13)',
+      citeert: ['niet op dit platform', 'geen server op ', 'nog nooit'] },
+    { id: 'ar-node', doe: 'Op de pc: node --version, daarna node test/alles.mjs (een paar minuten).',
+      let: 'Staat er v26.8.2? Anders zegt alles.mjs bovenaan "LET OP: Node v…, .node-version zegt 26.8.2" met de checks die op een andere V8 anders uitvallen: rood daarbuiten is echt. Welke? (AR14)',
+      citeert: ['LET OP: Node v', '.node-version zegt '] },
   ] },
 
   // ---- De werkruimte (docs/WERKRUIMTE.md D3, docs/werkruimte/S8.md) ---------------
