@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const K = await import('../src/engine/stream-kern.js');
-const { PAGINA, positieOp, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen, renderBlok } = K;
+const { PAGINA, positieOp, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen, renderBlok, VOORUIT, VOORUIT_HOORBAAR } = K;
 
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
@@ -240,6 +240,17 @@ console.log('\npagina-plan');
   ok('reeksen voegen samen', JSON.stringify(reeksen([5, 3, 4, 9, 10, 20])) ===
     JSON.stringify([{ van: 3, tot: 5 }, { van: 9, tot: 10 }, { van: 20, tot: 20 }]));
   ok('reeksen hooguit max lang', reeksen([1, 2, 3, 4, 5], 2).length === 3);
+  // Wat je hoort houdt een minuut vooruit (docs/WINST.md punt 3): de server mag even weg zijn.
+  ok('standaard vooruit = VOORUIT (20 s)', VOORUIT === 20 && VOORUIT_HOORBAAR === 60
+    && JSON.stringify(plan({ positie: 100, duur: 3600, sr, vooruit: undefined })) === JSON.stringify(plan({ positie: 100, duur: 3600, sr })));
+  const lang = plan({ positie: 100, duur: 3600, sr, vooruit: VOORUIT_HOORBAAR });
+  ok('vooruit 60: tot ~160 s, niet verder', lang.includes(Math.floor(159 / s)) && !lang.includes(Math.floor(165 / s)));
+  ok('vooruit 60: wat nu klinkt nog steeds vooraan, en achteruit blijft 5 s', lang[0] === Math.floor(100 / s)
+    && lang.includes(Math.floor(96 / s)) && !lang.includes(Math.floor(90 / s)));
+  const extra = (lang.length - plan({ positie: 100, duur: 3600, sr }).length) * PAGINA * 4;
+  ok(`vooruit 60 kost ${(extra / 1e6).toFixed(1)} MB extra per stereotrack (~8 MB)`, extra > 7e6 && extra < 9e6);
+  const snel60 = plan({ positie: 100, rate: 1.5, duur: 3600, sr, vooruit: 60 });
+  ok('vooruit 60 op 1,5×: 90 s tracktijd vooruit', snel60.includes(Math.floor(189 / s)) && !snel60.includes(Math.floor(195 / s)));
 }
 
 // ---- StreamBron met een nagemaakte browser ------------------------------------
@@ -305,6 +316,16 @@ console.log('\nStreamBron');
   ok('hotcue blijft staan na de sprong',
     bron.geladen.has(Math.floor(1800 * SR / PAGINA)));
   ok(`geheugen blijft klein: ${(bron.geheugen / 1e6).toFixed(1)} MB`, bron.geheugen < 16e6);
+  // Het deck geeft een getal door (bron.vooruit, de engine beslist): de bron houdt dan 60 s vooruit.
+  const voor20 = bron.geladen.size;
+  bron.vooruit = VOORUIT_HOORBAAR;
+  for (let i = 0; i < 4; i++) await bron.bijvullen();
+  const pos = bron.positie;
+  ok(`bron.vooruit = 60: pagina's tot een minuut verder (${voor20} -> ${bron.geladen.size})`,
+    bron.geladen.has(Math.floor((pos + 59) * SR / PAGINA)) && bron.geladen.size > voor20 + 25);
+  bron.vooruit = VOORUIT;
+  await bron.bijvullen();
+  ok('terug naar 20: wat verder ligt gaat weer weg', !bron.geladen.has(Math.floor((pos + 59) * SR / PAGINA)) && bron.geladen.size <= voor20 + 1);
 
   bron.pauzeer();
   const stil = bron.positie;
