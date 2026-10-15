@@ -1,4 +1,212 @@
-# Overdracht — waar we staan (7 oktober 2026)
+# Overdracht — waar we staan (15 oktober 2026)
+
+## 15 OKT: DE WERKRUIMTE IS AF (S0–S11)
+
+Alles staat op **`werkruimte/integratie`**. Met de werkruimte `standaard` doet VARVE bit voor bit wat hij deed; alles
+wat nieuw is, zet je zelf aan. Agenten bouwden het mechaniek als data. De knoppenverdeling, de schermen en panelen en
+de effecten en combinaties maak je zelf. Van elke soort staat er hooguit één voorbeeld.
+
+### Wat er af is
+
+**Afmaken (14 okt, `studio/afmaken`)**
+- **Controllers zonder lag:** het invoerpad wacht niet meer op het restylen van het scherm, en een lampje gaat meteen
+  na een druk aan. Het echofilter geldt alleen nog voor CC, dus het slikt geen drukken meer in.
+- **Beatgrid:** de tellen-route met het DJ-tempo (×2 onder 88 bpm), halveren alleen als het bevestigd is, nergens vals
+  zeker. Op de APC (grid-modus) ← 1, tellen hier, controle/✓, ↶ en een pin die meeloopt.
+- **Snelle winst:** het opnamelek is dicht, de video's verdringen de audio niet meer, `UV_THREADPOOL_SIZE=16`, Cmd+R
+  vraagt eerst, en de tests draaien in een pool.
+
+**De werkruimte (S0–S11)**
+- **S0 aanhaakpunten:** elf aanhakers, meta-vlaggen (log, beginstand, overneem, alleenScherm), mapjes en fragmenten
+  erbij en eraf. Geen gedrag veranderd.
+- **S1 precisie:** de fase tegen de maatgever als draaiknop (3,81 ms per tik, fijn 0,48 ms), jog, ±1 ms, beatjump ¼/½,
+  "op de 1", bend-sterkte en de duoklik. Op de APC met `?uitlijn=1`.
+- **S2 uitlijnweergave:** alle tracks tegelijk in tellen van de maatgever (`uitlijn.html`, het werkvak en de strook).
+- **S3 werkruimtes als data:** acht delen op tabs en F1–F8, THUIS, "leg vast in <deel>" en peilen. `werkruimtes/<naam>.json`.
+- **S4 combinaties:** druk/latch/stappen in een regel, houd-mapjes, superknoppen `super.1–16`, worpen, solo per stem
+  en bus-racks.
+- **S5 elk apparaat een eigen mapping:** APC, Maschine, Xboard en het toetsenbord (`mappings/toetsen.json`), elk als
+  verschil met de standaard. Koppelen per apparaat, plus de Maschine-ijkproef (poort M).
+- **S6 de Maschine per deel:** padmodi, pagina's, wiel en schermen als data, houd-knoppen, de fasescoop op het scherm,
+  kaarten en een spiekbrief.
+- **S7 schermen en de iPad:** `werk.html?s=<scherm>`, vrije panelen en bouwstenen (fx, strip, mixer, stems, master,
+  sampler, library), de xy-pad en de kaart.
+- **S8 bedienen vanaf iPad en iPhone:** standaard uit, een koppelcode en een cookie, en alleen wat het scherm `mag`.
+  ✎ inrichten zonder JSON en de totaalmeting C6.
+- **S9 een set klaarzetten:** in drie handelingen uit een selectie, een krat of "past bij". Live bijmixen met eigen
+  tracks voor de automaat, GO, lagen en NU/VOLGENDE/DAARNA; sets opslaan en terugladen.
+- **S10 meer effecten:** 25 nieuwe sjablonen (33 in totaal) en zeven nieuwe effecten. Modulators, droog/nat, knop →
+  knop, A/B, muteren, eigen sjablonen en de XY-pad van een rack.
+- **S11 categorieën en tags:** eigen en slimme categorieën, tags met kleur en snel-tags 1–8. Het zoekveld is het
+  filter (`#dub bpm:70-90 grid:zeker`). Het werkt ook op de bus, de Maschine, de iPad, in het planvenster en in de
+  kaart-tab.
+
+### Het bewijs in cijfers (headless in de container; op de M1 zijn de getallen anders, de richting niet)
+
+| wat | vóór | na |
+|---|---|---|
+| fader → geluid gepland, p50 | 4,2 ms | 0,8 ms (afmaken), 0,34 ms (S10), **0,31 ms (S11)** |
+| via de hub | 6,6 ms | 1,2 ms |
+| stijlwerk in rust (8 tracks spelend) | 180 ms/s | 33 ms/s (afmaken), 21,3 (S10), **17,9 ms/s (S11)** |
+| druk → lampje via de hub, p50 | ~51 ms | ~6 ms |
+| mapje → laatste lampje | 56 ms | 11 ms |
+| ingeslikte drukken op een knipperende knop | 13% | 0% |
+| beatgrid: vals zeker | 1 | 0 |
+| beatgrid: op het DJ-tempo | 52% | 95% |
+| beatgrid: echt octaaf | 58% | 85% |
+| beatgrid: druk → grid op de server | 707 ms | 212 ms |
+| beatgrid: pin bij 0,1% drift | 579 ms naast | goed |
+| opname: blijvende groei | 26,6 MB/min | 0,2 MB/min |
+| video naast de audio: audio wacht, p90 | 4,1 s | 0,04 s |
+| video naast de audio: gat per deck, max | 7,7 s | 0,9 s |
+| de hele testsuite | 533 s | ~250 s |
+
+Lag- en beatgridcijfers: zie de verslagen.
+
+**De suite nu:** `node test/alles.mjs` telt 129 bestanden en 11.168 checks (10 overgeslagen); 2 bestanden rood, en
+allebei zijn het bekende omgevingsfouten van deze Linux-container die ook op de basis rood zijn:
+- wachtrij "yt-dlp en zijn kind" (2×);
+- renderblok "keylock met wissels" (bytes van de WASM, 0 GC).
+
+Twee checks wisselen hier: instrumenten-fm-schaal "geen afval per blok" (deze ronde groen) en midi "na één tik een hap".
+
+**Wat niet gehaald is:** het C6-budget (≤ +2 ms per beeld met alles aan) is headless niet aangetoond. Meten op de M1.
+
+### Hoe je zelf begint
+
+**Een werkruimte**
+- Kopieer `tools/werkruimtes/voorbeelden/twee-handen.json` (of `apc-alleen.json`) naar `werkruimtes/mijn.json`.
+- Open `http://localhost:8777/?werk=mijn`, of kies hem in de kiezer op de werk-balk.
+- `?werk=standaard` brengt je terug.
+- Stap voor stap: `docs/werkruimte/S3.md` §2.
+
+**Een deel**
+- Per deel noem je in de werkruimte (`delen`, hooguit 8: tab 1–8 = F1–F8) de mapjes en rijen.
+- Of zet ze met de hand open en druk twee keer op "leg vast in <deel>".
+
+**Een paneel (scherm, mac-2, iPad, iPhone)**
+- ✎ op de werk-balk: kies een paneel, wijs aan, "zet op scherm" en "wijs toe aan".
+- Wat een scherm mag, staat in `schermen.<s>.mag`.
+- De bouwstenen staan in `src/paneel/vrij.js`.
+- Docs: `docs/werkruimte/S7.md` en `S8.md` (§4 inrichten, §5 een iPad en een iPhone koppelen).
+
+**De knoppenverdeling**
+- Koppelen per apparaat in het MIDI-paneel: kies het apparaat, klik een action en raak de control aan. Op de Maschine
+  met CONTROL.
+- Wat herbruikbaar is, gaat in de werkruimte (`regels`) of als stuk in `mappings/stukken/<naam>.json`.
+- Welke plekken vrij zijn, zie je op `apc.html` en `maschine.html`.
+- Docs: `docs/werkruimte/S4.md`, `S5.md`, `S6.md` en `docs/APC40.md`.
+
+**Effecten en sjablonen**
+- In de rack-editor: bouwen, A/B, en "als sjabloon" (komt in `racks/eigen.json`).
+- De kant-en-klare sjablonen staan in `racks/sjablonen.json`.
+- Superknoppen en worpen: `docs/werkruimte/S4.md`.
+- Docs: `docs/EFFECTEN-MEER.md`.
+
+**Tags en sets**
+- **B** opent de library; alt+T tagt. Zie `docs/LIBRARY-TAGS.md`.
+- Een set maak je in het planvenster met "uit…": zie `docs/PLAN-SET.md`.
+
+**De voorbeelden** (hooguit één per soort, gemarkeerd als VOORBEELD)
+- werkruimtes in `tools/werkruimtes/voorbeelden/`: `apc-alleen` en `twee-handen` (`standaard` is gewoon VARVE);
+- stukken in `mappings/stukken/`:
+  - `fx-matrix` (worpen);
+  - `maschine-delen` en `maschine-houd`;
+  - `uitlijn`;
+  - `set-voorbeeld` (GO);
+  - `indeling-voorbeeld` (categorieën bij BROWSE);
+  - `mix-extra` (⇧ A|B = thru);
+  - `basis` (THUIS, het enige echte stuk).
+
+Een voorbeeld aanpassen maakt er een eigen bestand van.
+
+### Alleen op de M1 en de echte apparaten te testen
+
+De proefavonden staan in de Controlekamer (blokken "Werkruimte · E0 … D"; naar main pas na A–C).
+
+**APC**
+- [ ] Het gevoel van de lag: is "laggy" weg?
+- [ ] `midi.status().echoes` na een avond. Staat hij op 0, dan mag het echofilter uit.
+- [ ] De hub-proef V1 (ring-overname).
+- [ ] De grid-modus beatgrid (← 1, tellen hier, ✓, ↶).
+
+**Maschine via de hub**
+- [ ] Poort M, de ijkproef (`tools/proef/maschine-ijk.html`).
+- [ ] F1–F8 per deel en de houd-knoppen.
+- [ ] De schermen op 25 beelden/s: vertragen ze de pads? Dat is de hub-proef `ms-scherm`.
+
+**iPad en iPhone**
+- [ ] Safari via een echte `tailscale serve`, en het cookie op de ts.net-naam.
+- [ ] De vertraging van de xy-pad met een vinger op wifi (W10; headless p50 13 ms).
+- [ ] De positie binnen 5 ms (W12).
+
+**De M1**
+- [ ] De totaalmeting C6 (`tools/headless/werk-alles.mjs`), ook met Demucs erbij: zakt stems niet meer dan 10%?
+- [ ] De CPU van de nieuwe effecten. Band is het zwaarste (6,7% van een kern voor acht).
+
+**Met de oren**
+- [ ] Alle 33 sjablonen en de zeven nieuwe effecten (S10-1 … S10-4).
+- [ ] De niveaus van een laag (S9-2).
+- [ ] De duoklik (W16).
+
+**Echte nummers**
+- [ ] Een set met overnames door de automaat: GO, lagen op de maat, buiten plan en terug (S9-8).
+- [ ] Een set met acht tracks terugladen.
+- [ ] Acht tracks met stems tegelijk.
+- [ ] Het echte Beat This! op de benchmark (beatgrid-vraag 3). De eerste start rekent de automatische grids één keer
+  opnieuw (4–20 minuten op de achtergrond).
+- [ ] Taggen en echt slepen met de muis.
+- [ ] Een kaartkrat → categorie.
+
+### Open vragen
+
+Waar je niets zegt, geldt het advies; zo is het gebouwd.
+
+| blok | open | waar het over gaat |
+|---|---|---|
+| **W** (werkruimte S0–S8, met de vragen van S4, S6 en S7) | 39 (W2–W40) | hoe de controllers op tafel staan, wat de iPad/iPhone mag, tijdkritisch uit, de Maschine-padmodi en -pagina's die je echt wilt, de voorbeelden houden |
+| **S9** (set klaarzetten) | 8 | de boog, de niveaus van een laag, tracks voor de automaat, GO/terugladen vanaf de iPad, wat er in een set zit, de backup van sets, een tegel in de Controlekamer |
+| **S10** (effecten) | 9 | welke sjablonen blijven, modulators als besturing, kam/klinker/band, master-lijm, de volgende stap (parallelle ketens of stutter) |
+| **S11** (tags) | 9 | plat of mappen, een krat als kopie, de kolom links, taggen vanaf de iPad, welke snel-tags, de Maschine bij BROWSE, "energie", zoeken vindt tags, wissen |
+| **afmaken** (14 okt; staan in de verslagen, nog niet in VRAGEN.md) | 18 | beatgrid-analyse §8 (5: dansbereik, VERSIE 2 herrekenen, echt Beat This!, oude analyse een versie, het dubbele tempo), beatgrid-bediening (5: wat de grid-modus overneemt, On/Off op een stilstaand deck, een grid op twee tracks, oranje, tap op slot), controller-invoer C1–C4 en controller-uitvoer (4: echofilter uit, wat laggy voelde, hub-proef V1, schermtempo) |
+
+Alles in `docs/VRAGEN.md`. HANDOFF noemde bij afmaken een blok "VRAGEN GA"; dat blok bestaat niet: de beatgridvragen
+staan in `docs/verslagen/2026-10-14/beatgrid-analyse.md` §8. De oudere blokken (BE, SV, S, J …) staan er nog zoals
+eerder.
+
+### Opties voor de volgende versie
+
+1. **Het echofilter voor de APC uit, en de hub-patch erin.**
+   - Kost: 10 minuten meten met de APC, plus review en merge in AV-app-hub.
+   - Winst: geen enkele ingeslikte draai meer, en ~1 ms per lampje.
+2. **De server mag even weg zijn, en herstel na herladen** (WINST 3 en 6).
+   - Kost: ½ dag plus ~1 dag.
+   - Winst: een herstart of een Cmd+R midden in een set kost geen opname en geen mixstand.
+3. **Een isolator-EQ voor de kill** (WINST 10).
+   - Kost: 1 dag, plus A/B luisteren.
+   - Winst: "bas weg" haalt alleen de bas weg.
+4. **Lineair normaliseren in plaats van loudnorm** (WINST 9).
+   - Kost: 1 dag, plus een nacht opnieuw verwerken.
+   - Winst: albums en ambient houden hun dynamiek.
+5. **Een WebSocket voor de iPad en iPhone** (W10), als de xy-pad op wifi traag voelt.
+   - Kost: ~1 dag (de schrijfweg blijft).
+   - Winst: geen staart van een nieuwe POST per beweging.
+6. **Parallelle ketens of stutter in een rack** (S10-9).
+   - Kost: groot (`bouwKeten` en de editor).
+   - Winst: echte splits en beat repeat binnen een effect.
+   - Doe eerst de sjablonen op het gehoor.
+
+### De git-stand (15 okt)
+
+- **`werkruimte/integratie` is de tak met alles:** S0–S11 en de hele afmaken-tak.
+- **`studio/afmaken` zit erin.** `git merge-base --is-ancestor origin/studio/afmaken origin/werkruimte/integratie`
+  slaagt. Afmaken is ook al via PR #41 in `main` samengevoegd (14 okt).
+- **Main loopt niet inhoudelijk vooruit.** `git log origin/werkruimte/integratie..origin/main` geeft één commit:
+  f97cfd2, de merge van PR #41. De bestanden zijn gelijk aan `studio/afmaken`, en beide ouders zitten al in de
+  integratietak.
+- **Naar main gaat het via een PR.** Die is er nog niet; jij beslist wanneer, na de proefavonden A–C.
+- PR #39 (`fix/draagbaar`) en #40 (`fix/uitzenden`) staan nog open naar `studio/integratie`. Hun tips zitten
+  allebei al in `werkruimte/integratie` (nagelopen met `merge-base --is-ancestor`), dus ze kunnen dicht.
 
 ## Stand 15 okt (nacht): S11 — categorieën en tags in de library (tak `werk/S11`)
 
@@ -9,7 +217,7 @@
   `library.quick*`, `track.N.tag.K`), de Maschine (het filter in de kop), werk.html/iPad (vak library,
   bouwsteen `tags`), het planvenster (een set uit een categorie of filter), de kaart-tab (krat →
   categorie). Schema v10 in library.db; export/import `/api/indeling`.
-- **Ongecommit**: niets; alles op `werk/S11` (gepusht), nog samen te voegen in `werkruimte/integratie`.
+- **Ongecommit**: niets; samengevoegd in `werkruimte/integratie` (15 okt, fast-forward, `werk-int-S11.md`).
   Na het samenvoegen: server herstarten (schema v10 migreert vanzelf; elk openen rekent k_* na).
 - **Niet getest**: echt slepen met de muis, op de M1, de iPad en de Maschine. Vragen: `docs/VRAGEN.md`
   blok S11. Verslag: `docs/verslagen/2026-10-14/werk-S11.md`.
