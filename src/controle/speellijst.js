@@ -39,6 +39,9 @@
  * met de hub en "Zonder lag met de hub" erna. De sporen S9 (sets), S10 (effecten) en S11 (tags) als
  * "Werkruimte · S9/S10/S11" na D (VRAGEN S9, S10, S11), en in D de vakken plan, sets, sjablonen en tags
  * op de iPad. Vraagcodes als "S9-1" telt de test ook. Geen id veranderd.
+ * Erbij (15 okt, avond): de architectuurronde (VRAGEN AR, docs/verslagen/2026-10-15/arch-*.md). Op avond 1
+ * "Tel 1 snapt naar de tel" na het gelijkzetten op de APC, en aan het eind "De audio blijft gezond" en "De
+ * server mag even weg"; op avond 3 "Het avondpakket en de tests op de pc". Alleen blokken erbij (ids `ar-`).
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
@@ -160,6 +163,19 @@ export const SPEELLIJST = [
     { id: 'ga-dj', doe: 'Laad Ciel (Beat This! hoorde eerst 77) en een reggae- of downtempo-nummer dat je zelf traag telt. Kijk naar de bpm in de kolom. Klopt hij niet: grid-modus scene 3 (½) of scene 2 (×2).',
       let: 'Ciel nu ~154, zoals jij tikt? Krijgt het trage nummer het dubbele (150 in plaats van 75), en draai je genoeg van zulke muziek om het per krat te willen? Alleen na de herberekening bij de eerste start. (GA1, GA2)' },
   ] },
+  // De architectuurronde (15 okt, spoor B, VRAGEN AR): snappen naar de tel van Beat This!, de "1" tegen de lage band.
+  { id: 'ar-grid', titel: 'Avond 1 · Tel 1 snapt naar de tel', minuten: 12, punten: [
+    { id: 'ar-snap', doe: 'Nummer met ✓ naast de bpm, spelend, grid-modus (Shift + Metronome). Druk scene 1 (tel 1 hier) een paar keer net naast een kick: iets te vroeg, iets te laat.',
+      let: 'Valt de "1" telkens precies op de kick, en niet ergens ertussen? Ook bij een rommelige klap?' },
+    { id: 'ar-tellen', doe: 'Zelfde nummer: Clip/Device View (tellen hier) op een kick, en een paar minuten later Shift + scene 1 (vast) op een kick. Grid-modus uit en laat hem doorspelen.',
+      let: 'Liggen de lijnen daarna nog op de kicks, ook een paar minuten verder?' },
+    { id: 'ar-een', doe: 'Haal een nieuw nummer binnen met een duidelijke "1" en geen kick op elke tel (breakbeat, dub of hiphop), laad het en zet de grid-modus aan.',
+      let: 'Staat de "1" goed? Brandt scene 1 oranje (twijfel): staat de "1" dan echt een tel naast, en werkt sync nog? Liever dat sync bij zo\'n twijfel weigert? (AR3)' },
+    { id: 'ar-vloer', doe: 'Hetzelfde met een house- of technonummer (een kick op elke tel).',
+      let: 'Staat de "1" daar ooit een tel naast zonder dat scene 1 oranje brandt? Bij welk nummer? (AR4)' },
+    { id: 'ar-meet', doe: 'Overdag of na afloop, in Terminal: de twee metingen uit docs/verslagen/2026-10-15/arch-beatgrid.md §5 (bench.mjs --beatthis met de python van ~/.varve/tellen-venv, en tel1-echt.mjs).',
+      let: 'Zet de getallen in de notitie (AR2). Daarna kun je beslissen of de hele library de tweede mening over de "1" krijgt (AR1).' },
+  ] },
   { id: 'stems', titel: 'Avond 1 · Stems', minuten: 14, punten: [
     { id: 'st-zang', doe: 'Laad Loving arms (vier stems), knop stems in de balk, kill bij de zang aan en weer uit.',
       let: 'Valt de zang helemaal weg en komt hij precies terug? Hoor je nog resten zang? (N2)' },
@@ -245,6 +261,26 @@ export const SPEELLIJST = [
       let: 'Springt het terugspelen naar de plekken van toen, niet naar de nieuwe secties? (SVL1, SVL2)' },
     { id: 'sl-loop', doe: 'Zet eerst shift + pad (sectie-loop) aan, dan pas ○ log. Na een paar maten shift + dezelfde pad (loop eraf), ○ log uit, en terugspelen.',
       let: 'Begint het terugspelen in die loop (pad wit) en gaat hij er op dezelfde maat af? Hoor je ergens anders een tel of maat verschil, ook bij hotcues of start op de maat? (SVL3)' },
+  ] },
+
+  // De architectuurronde (15 okt, sporen A en D, VRAGEN AR): de audio blijft gezond, de server mag even weg.
+  { id: 'ar-audio', titel: 'Avond 1 · De audio blijft gezond', minuten: 10, punten: [
+    { id: 'ar-slaap', doe: 'Muziek op pauze, mixer open: laat de Mac even slapen (deksel dicht, of Apple-menu → Sluimer) en maak hem weer wakker.',
+      let: 'Staat er een rode melding "audio staat stil …"? Gaat het geluid weer bij de eerste druk op de APC, en wordt de melding "audio loopt weer"? Liep de audio gewoon door zonder melding: ook goed, schrijf het op. (AR6)' },
+    { id: 'ar-scarlett', doe: 'Masterfader laag, er speelt iets. Trek de USB van de Scarlett eruit, wacht een paar seconden, en steek hem terug.',
+      let: 'Welke melding kwam er ("audio-uitgang staat stil" of "audio staat stil")? Wat moest je doen om weer geluid te hebben: een druk, de uitgang opnieuw kiezen, of herladen?' },
+    { id: 'ar-wissel', doe: 'Open het Taakbeheer van Chrome (Venster → Taakbeheer) en kijk naar het geheugen van de mixer. Wissel op track 3 twintig keer tussen een instrument (INSTRUMENT-rij) en een nummer.',
+      let: 'Komt het geheugen terug na het wisselen (hooguit een paar MB erbij), of groeit het blijvend?' },
+  ] },
+  { id: 'ar-server', titel: 'Avond 1 · De server mag even weg', minuten: 15, punten: [
+    { id: 'ar-app', doe: 'Vóór de avond: had je de LaunchAgent uit docs/TAILSCALE.md geladen, dan eerst launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist. Bouw VARVE.app opnieuw (zsh tools/varve-app/maak.sh) en start VARVE vanuit het Dock.',
+      let: 'Opent de Controlekamer? Zegt sh tools/varve-app/server-lus.sh status "de lus draait"? Mag de LaunchAgent weg? (AR8)' },
+    { id: 'ar-weg', doe: 'Twee tracks spelen, opname aan (●) en het log aan. In Terminal: sh tools/varve-app/server-lus.sh stop. Mix 30 s door (faders, EQ, een loop; spring niet ver weg in een nummer en laad niets), en start VARVE dan weer vanuit het Dock.',
+      let: 'Speelt de muziek door zonder gat? Eén melding bij de opname die meetelt ("opname: server antwoordt niet, … in de wacht"), en na de herstart "opname: weer goed, niets verloren"?' },
+    { id: 'ar-wav', doe: 'Stop de opname en open de WAV uit opnames/ in QuickTime of Logic, rond het moment waarop de server weg was.',
+      let: 'Geen stilte en geen tik op die plek? Klopt de lengte met hoe lang je opnam?' },
+    { id: 'ar-val', doe: 'Er speelt iets. Laat de server omvallen: in Terminal pkill -9 -f server/index.js.',
+      let: 'Is hij binnen een paar seconden vanzelf terug (de tegel Server in de Controlekamer weer groen), zonder dat je iets hoort? Wil je zo\'n herstart in de Controlekamer zien? (AR9)' },
   ] },
 
   // ---- Avond 2: spelen en programmeren (met de hub) -------------------------------
@@ -457,6 +493,14 @@ export const SPEELLIJST = [
       let: 'Doet elke knop wat hij zegt? Mis je dat het lampje laat zien of vasthouden en paniek aan staan? Wint je spiergeheugen van de Stroommachine-indeling? (BE4, BE5)' },
     { id: 'bp-weg', doe: 'Trek de netwerkkabel van de pc eruit (of zet de wifi uit), wacht 20 s, en sluit hem weer aan. Herlaad daarna de Stroommachine.',
       let: 'Hooguit één melding, en daarna komt alles vanzelf terug (tel, scène, macro\'s), zonder dat het spelen hapert? Is "zoeken zonder pc" stil genoeg? (BE7)' },
+  ] },
+
+  // De architectuurronde (15 okt, spoor C, VRAGEN AR): het avondpakket en de suite op de Omarchy-pc.
+  { id: 'ar-pc', titel: 'Avond 3 · Het avondpakket en de tests op de pc', minuten: 10, punten: [
+    { id: 'ar-pakket', doe: 'Op de Omarchy-pc, in een kopie van de repo, met de APC eraan: node tools/avondpakket.mjs --json > avondpakket-pc.json. Heeft de pc een accu: nog eens zonder lader.',
+      let: 'Geen rood dat niet klopt? Grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth? Stuur de json mee, dan vervallen de handgemaakte Linux-fixtures. Is eerlijk grijs genoeg? (AR12, AR13)' },
+    { id: 'ar-node', doe: 'Op de pc: node --version, daarna node test/alles.mjs.',
+      let: 'Staat er 26.8.2? Anders: welke checks waren rood (alles.mjs zegt welke op een andere Node anders uitvallen)? (AR14)' },
   ] },
 
   // ---- De werkruimte (docs/WERKRUIMTE.md D3, docs/werkruimte/S8.md) ---------------

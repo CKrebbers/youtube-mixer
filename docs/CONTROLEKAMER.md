@@ -83,7 +83,7 @@ De Controlekamer kent geen avonden: de bloktitel groepeert ("Avond 1 · …").
 Sinds 9 okt (na het verbeteronderzoek) staat alles erin, ook wat hierboven niet in de
 tabel staat (luisteren, secties, de Maschine als DJ-bediening, beeld):
 
-**Avond 1** (mixen): 76 punten, ~2,5 uur (149 min), zonder hub (de mixer opent de APC
+**Avond 1** (mixen): 102 punten, ~3,6 uur (214 min), zonder hub (de mixer opent de APC
 zelf). De **kern** vooraan is ~45 min (26 punten, 47 min): opstarten, luisteren, draaien
 op de APC, koptelefoon, keylock. De rest van avond 1 als er tijd en zin is.
 **Avond 2** (spelen en programmeren): 80 punten, ~4,3 uur (260 min), met de hub (de
@@ -94,18 +94,22 @@ Sinds 11 okt (`visie/handen`) staat de **hub-middag** als eerste blok van avond 
 hub of een Varve-tab met de APC. Avond 2 zelf ("2b", 74 punten, 180 min) begint daarna met
 `npm run check -- studio`. Het blok `ga-proef` (14 okt) vraagt twee antwoorden die de hub-middag al
 geeft; wie die deed, neemt ze over.
-**Avond 3** (beeld, met de Omarchy-pc): 6 punten, ~25 min.
+**Avond 3** (beeld, met de Omarchy-pc): 8 punten, ~35 min.
+Sinds 15 okt (avond) de **architectuurronde** (VRAGEN AR, ids `ar-`): op avond 1 "Tel 1 snapt naar de tel"
+(5 punten, 12 min), "De audio blijft gezond" (3, 10) en "De server mag even weg" (4, 15; VARVE.app eerst
+opnieuw bouwen), op avond 3 "Het avondpakket en de tests op de pc" (2, 10).
 **Eerder werk**: 26 punten, ~45 min.
 
 **De volgorde** (9 okt; `test/controle.test.mjs` eist alle avond 1 vóór avond 2 vóór
 avond 3 vóór "Eerder werk", en de kern vooraan):
 - Avond 1: opstarten, luisteren, draaien op de APC, koptelefoon, keylock (de kern), daarna
-  modus klank, beatgrid, stems, master en effecten, secties, secties op het toetsenbord,
-  een sectie in de sampler, secties terugspelen.
+  zonder lag, modus klank, beatgrid, beatgrid gelijkzetten op de APC, tel 1 snapt naar de tel, stems,
+  master en effecten, secties, secties op het toetsenbord, een sectie in de sampler, secties terugspelen,
+  de audio blijft gezond, de server mag even weg.
 - Avond 2: opstarten met de hub, spelen, patronen, planvenster met secties, auto-DJ met
   secties, secties op de Maschine, secties in beeld, secties naar de hub, de Maschine als
   DJ-bediening, bladeren en sampler op de Maschine, crossover (een knip als drumpad).
-- Avond 3: beeld met de Stroommachine.
+- Avond 3: beeld met de Stroommachine, het avondpakket en de tests op de pc.
 - Eerder werk: toonsoort, binnenhalen, auto-DJ, planvenster, klankschaal, beamer, kleine dingen.
 
 - **Vraagcodes**: een code tussen haakjes in de let-tekst ("(S21)") is de open vraag uit
