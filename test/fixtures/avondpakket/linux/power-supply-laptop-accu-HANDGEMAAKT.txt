@@ -1,0 +1,12 @@
+/sys/class/power_supply/AC/uevent:POWER_SUPPLY_NAME=AC
+/sys/class/power_supply/AC/uevent:POWER_SUPPLY_TYPE=Mains
+/sys/class/power_supply/AC/uevent:POWER_SUPPLY_ONLINE=0
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_NAME=BAT0
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_TYPE=Battery
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_STATUS=Discharging
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_PRESENT=1
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_CYCLE_COUNT=0
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_CHARGE_FULL_DESIGN=4000000
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_CHARGE_FULL=3600000
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_CHARGE_NOW=648000
+/sys/class/power_supply/BAT0/uevent:POWER_SUPPLY_CAPACITY=18

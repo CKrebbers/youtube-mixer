@@ -1,0 +1,45 @@
+  File: "/tmp/varve-linux/media/backups/library-2026-10-15_08-00-00.db"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331
+  File: "/tmp/varve-linux/media/nr00_test/onset.bin"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331
+  File: "/tmp/varve-linux/media/nr00_test/peaks.bin"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331
+  File: "/tmp/varve-linux/media/nr00_test/video.mp4"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331
+  File: "/tmp/varve-linux/media/nr00_test/audio.wav"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331
+  File: "/tmp/varve-linux/media/nr01_test/peaks.bin"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331
+  File: "/tmp/varve-linux/media/nr01_test/audio.wav"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331
+  File: "/tmp/varve-linux/media/lokaal-0a1b2c3d4e5f/audio.wav"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331
+  File: "/tmp/varve-linux/media/library.db"
+    ID: b3fc38e392889065 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 66053021   Free: 61510007   Available: 5667889
+Inodes: Total: 16777216   Free: 16453331

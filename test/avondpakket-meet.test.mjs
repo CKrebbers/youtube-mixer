@@ -17,12 +17,16 @@ const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? ' 
 
 const M = await import('../server/avondpakket-meet.js');
 const { leesProfielen, beoordeel } = await import('../server/avondpakket.js');
-const { voerUit, poortOpen, meet, maakCache, maakNep, maakAvondpakket, backupMeting, backupUitNamen, achtergrondMeting, extraPaden,
-  speellijstStand, GOEDKOOP, SONDES, KAART_STANDAARD } = M;
+const { voerUit, poortOpen, maakCache, maakNep, maakAvondpakket, backupMeting, backupUitNamen, achtergrondMeting, extraPaden,
+  speellijstStand, GOEDKOOP, SONDES, KAART_STANDAARD, ONBEKENDE_OPTIE, NIET_HIER, NIET_HIER_MIXER, metersVoor } = M;
+// De fixtures in FX zijn uitvoer van de Mac: meet() met de sondes van de Mac, op welk platform
+// de test ook draait (spoor C, arch/linux). De Linux-sondes toetsen groep 11-13 met platform 'linux'.
+const meet = (o = {}) => M.meet({ platform: 'darwin', ...o });
 const { allePunten } = await import('../src/controle/speellijst.js');
 
 const WORTEL = fileURLToPath(new URL('..', import.meta.url));
 const FX = join(WORTEL, 'test/fixtures/avondpakket');
+const FXL = join(FX, 'linux');
 const PROFIELEN = join(WORTEL, 'avondpakket/profielen.json');
 const DATA = leesProfielen(readFileSync(PROFIELEN, 'utf8'));
 const tmp = mkdtempSync(join(tmpdir(), 'varve-avondpakket-'));
@@ -346,6 +350,120 @@ try {
     const tekst = cli(['--profiel', 'laptop']).stdout;
     ok('tekst: paklijst van laptop met regel 9, geen /Users/', /Paklijst \(laptop\):/.test(tekst) && /☐ een kopie van library\.db/.test(tekst) && !tekst.includes('/Users/'));
     ok('tekst: maschine vertrek → AV-hub grijs "straks bij aankomst"', /○ AV-hub\s+dicht\s+straks bij aankomst/.test(cli(['--profiel', 'maschine']).stdout));
+  }
+
+  console.log('11. voerUit: een optie die het commando niet kent is nooit geslaagd (spoor C)');
+  {
+    // De echte stderr van GNU find en GNU stat uit de container (test/fixtures/avondpakket/linux).
+    const flags = readFileSync(join(FXL, 'find-flags-stderr.txt'), 'utf8');
+    const statF = readFileSync(join(FXL, 'stat-f-stderr.txt'), 'utf8');
+    const naStderr = (stderr, stdout, code) => ['-e', `process.stderr.write(${JSON.stringify(stderr)}); process.stdout.write(${JSON.stringify(stdout)}); process.exit(${code})`];
+    const a = await voerUit(process.execPath, naStderr(flags, '', 1), { codes: [0, 1] }).then(() => 'geslaagd', (e) => e.message);
+    ok(`GNU find "unknown predicate" met code 1 en codes [0, 1] → fout, niet "geslaagd" (${a})`, a === 'node: optie onbekend op dit platform');
+    const b = await voerUit(process.execPath, naStderr(statF, '  File: "/x/a"\n', 1), { codes: [0, 1] }).then(() => 'geslaagd', (e) => e.message);
+    ok(`GNU stat -f (bestandssysteem, met "No such file") → optie onbekend, niet "bestaat niet" (${b})`, b === 'node: optie onbekend op dit platform');
+    const c = await voerUit(process.execPath, naStderr('find: -flags: unknown primary or operator\n', '', 1), { codes: [0, 1] }).then(() => 'geslaagd', (e) => e.message);
+    ok('BSD find "unknown primary" → ook', c === 'node: optie onbekend op dit platform');
+    ok('ONBEKENDE_OPTIE: "Permission denied" en "No such file" vallen er niet onder', !ONBEKENDE_OPTIE.test('find: /x: Permission denied') && !ONBEKENDE_OPTIE.test('No such file or directory'));
+    ok('ONBEKENDE_OPTIE: GNU in het Nederlands ook', ONBEKENDE_OPTIE.test("find: onbekend predicaat '-flags'") && ONBEKENDE_OPTIE.test("stat: ongeldige optie -- 'q'"));
+    ok('voerUit env: LC_ALL komt bij het kind aan', (await voerUit(process.execPath, ['-e', 'process.stdout.write(process.env.LC_ALL || "")'], { env: { LC_ALL: 'C' } })) === 'C');
+    if (process.platform === 'linux') {
+      const echt = await voerUit('find', ['-H', tmp, '-type', 'f', '-flags', '+dataless'], { codes: [0, 1], env: { LC_ALL: 'C' } }).then(() => 'geslaagd', (e) => e.message);
+      ok(`(Linux, echt) find -flags op GNU find → "find: optie onbekend op dit platform" (${echt})`, echt === 'find: optie onbekend op dit platform');
+    } else ok('(Linux, echt) find -flags: overgeslagen, niet op Linux', true);
+  }
+
+  console.log('12. de sondes per platform (spoor C: Linux eerlijk)');
+  {
+    ok('metersVoor: darwin, linux en de rest zijn verschillende sets met elke sonde', ['darwin', 'linux', 'win32'].every((p) => SONDES.every((id) => typeof metersVoor(p)[id] === 'function'))
+      && metersVoor('darwin') !== metersVoor('linux') && metersVoor('linux') !== metersVoor('win32'));
+    // Een exec die alles opschrijft: welke commando's elk platform echt zou starten.
+    const opname = (antwoord = () => '') => {
+      const log = [];
+      return { log, exec: async (cmd, args, o) => { log.push({ cmd, args, sleutel: o.sleutel, env: o.env, codes: o.codes }); return antwoord(o.sleutel); } };
+    };
+    const lin = opname();
+    await M.meet({ exec: lin.exec, verbind: async () => false, paden: NEP_PADEN, platform: 'linux' });
+    const lijn = lin.log.map((x) => `${x.cmd} ${x.args.join(' ')}`).join('\n');
+    ok('linux: nooit -flags, nooit stat -f, nooit pmset/ioreg/system_profiler/defaults', !/-flags|stat -f|pmset|ioreg|system_profiler|defaults/.test(lijn));
+    const fs = lin.log.find((x) => x.sleutel === 'find-stat')?.args.join(' ') || '';
+    ok(`linux: media via GNU stat -c '%s %n' (${fs})`, / -exec stat -c %s %n \{\} \+$/.test(fs));
+    ok('linux: accu en usb via sysfs in een kindproces (find -L … -exec grep), plus lsusb', lin.log.some((x) => x.sleutel === 'power-supply' && x.args.includes('/sys/class/power_supply'))
+      && lin.log.some((x) => x.sleutel === 'sys-usb' && x.args.includes('/sys/bus/usb/devices')) && lin.log.some((x) => x.cmd === 'lsusb'));
+    ok('linux: media, schijf, accu en usb met LC_ALL=C (stderr in het Engels)', lin.log.filter((x) => ['find-stat', 'df', 'power-supply', 'lsusb', 'sys-usb'].includes(x.sleutel))
+      .every((x) => x.env?.LC_ALL === 'C') && lin.log.filter((x) => ['find-stat', 'df', 'power-supply', 'lsusb', 'sys-usb'].includes(x.sleutel)).length === 5);
+    ok('linux: alleen find-stat en df raken media/ (geen fs in het serverproces)', lin.log.filter((x) => x.args.includes(NEP_PADEN.media)).map((x) => x.sleutel).sort().join() === 'df,find-stat');
+    const mac = opname();
+    await meet({ exec: mac.exec, verbind: async () => false, paden: NEP_PADEN });
+    const macLijn = mac.log.map((x) => `${x.cmd} ${x.args.join(' ')}`).join('\n');
+    ok('darwin: de Mac-commando\'s van vóór spoor C (-flags +dataless, stat -f %z %N, pmset, system_profiler), zonder env', /-flags \+dataless/.test(macLijn)
+      && macLijn.includes('stat -f %z %N') && mac.log.some((x) => x.cmd === 'pmset') && mac.log.some((x) => x.cmd === 'system_profiler') && mac.log.every((x) => x.env === undefined));
+    const and = opname();
+    const w = await M.meet({ exec: and.exec, verbind: async () => true, paden: NEP_PADEN, platform: 'win32' });
+    ok('een ander platform: geen enkel commando, alles grijs "niet op dit platform" behalve de AV-hub', and.log.length === 0 && w.avhub.draait === true
+      && SONDES.filter((id) => id !== 'avhub').every((id) => w[id].onbekend === NIET_HIER));
+
+    const n = maakNep(FXL);
+    ok('de nep-map van Linux zegt zelf zijn platform (en die van de Mac de zijne)', n.platform === 'linux' && maakNep(FX).platform === 'darwin');
+    const m = await M.meet({ exec: n.exec, verbind: n.verbind, paden: n.paden, platform: n.platform });
+    ok(`linux (echte uitvoer uit de container): media 9 bestanden, datalessNvt (${m.bestanden.totaal})`, m.bestanden.totaal === 9 && m.bestanden.bestaat === true && m.bestanden.datalessNvt === true
+      && m.bestanden.dataless.length === 0);
+    ok('linux: instellingen en iCloud "niet op dit platform"; geluid en Bluetooth met de reden van de Mac', m.instellingen.onbekend === NIET_HIER && m.icloud.onbekend === NIET_HIER
+      && m.audio.onbekend === NIET_HIER_MIXER && m.bluetooth.onbekend === NIET_HIER_MIXER);
+    ok(`linux: geen accu → "geen accu (vaste pc?)"; geen lsusb en geen sysfs → één reden zonder pad (${m.accu.onbekend}; ${m.usb.onbekend})`, m.accu.onbekend === 'geen accu (vaste pc?)'
+      && m.usb.onbekend === 'geen lsusb en geen USB in sysfs');
+    ok('linux: schijf uit GNU df, servers (lsof leeg, pgrep 1), tailscale niet geïnstalleerd na drie plekken', Math.round(m.schijf.vrijGiB) === 22 && m.servers.opDb === 0
+      && m.servers.varve === 1 && m.tailscale.onbekend === 'tailscale niet geïnstalleerd' && n.geteld.get('tailscale') === 3);
+    const nepMapL = (naam, wijzig) => {
+      const basis = JSON.parse(readFileSync(join(FXL, 'nep.json'), 'utf8'));
+      const cfg = { ...basis, ...wijzig };
+      for (const [k, v] of Object.entries(cfg)) if (typeof v === 'string' && /\.(txt|json)$/.test(v)) cfg[k] = join(FXL, v);
+      const map = join(tmp, `linux-${naam}`);
+      mkdirSync(map, { recursive: true });
+      writeFileSync(join(map, 'nep.json'), JSON.stringify(cfg));
+      return map;
+    };
+    const metL = async (naam, wijzig) => { const x = maakNep(nepMapL(naam, wijzig)); return M.meet({ exec: x.exec, verbind: x.verbind, paden: x.paden, platform: 'linux' }); };
+    const ml = await metL('laptop', { 'power-supply': 'power-supply-laptop-ac-HANDGEMAAKT.txt', lsusb: 'lsusb-apc-scarlett-maschine-HANDGEMAAKT.txt', 'sys-usb': 'sys-usb-apc-scarlett-HANDGEMAAKT.txt' });
+    ok(`linux-laptop: accu 72 % aan 65 W; usb uit lsusb en sysfs samen, de APC één keer (${ml.usb.length})`, ml.accu.procent === 72 && ml.accu.laderW === 65
+      && ml.usb.filter((x) => x.vid === '0x09e8').length === 1);
+    ok('linux zonder lsusb: usb uit sysfs', (await metL('sys', { 'sys-usb': 'sys-usb-apc-scarlett-HANDGEMAAKT.txt' })).usb.some((x) => x.naam === 'APC40 mkII'));
+    ok('linux: mediamap bestaat niet → { bestaat: false }', (await metL('geen', { 'find-stat': { fout: 'bestaat niet' } })).bestanden.bestaat === false);
+    ok('linux: een find die de optie niet kent → media onbekend (grijs), nooit "leeg" of "0 lokaal"',
+      (await metL('optie', { 'find-stat': { fout: 'find: optie onbekend op dit platform' } })).bestanden.onbekend === 'find: optie onbekend op dit platform');
+    ok('linux: /sys/class/power_supply ontbreekt → "geen voeding in sysfs"', (await metL('geenps', { 'power-supply': { fout: 'bestaat niet' } })).accu.onbekend === 'geen voeding in sysfs');
+
+    const n2 = maakNep(FXL);
+    const vorige = await M.meet({ exec: maakNep(FXL).exec, verbind: async () => false, paden: n2.paden, platform: 'linux' });
+    await M.meet({ exec: n2.exec, verbind: n2.verbind, paden: n2.paden, platform: 'linux', alleen: GOEDKOOP, vorige });
+    const gevraagd = [...n2.geteld.keys()].sort().join();
+    ok(`linux, goedkope ronde: alleen df, pgrep en de accu uit sysfs; nooit media, lsof of usb (${gevraagd})`, gevraagd === 'df,pgrep,power-supply');
+
+    // De bundel voor de route op Linux: compleet met de echte find-uitvoer.
+    const ap = maakAvondpakket({ paden: { media: '/x/media', wortel: '/x', db: '/x/media/library.db', backups: '/x/media/backups' }, profielenPad: PROFIELEN, nep: FXL,
+      backupStand: () => ({ laatste: { tijd: Date.now() - 3600e3, bytes: 5e6 }, aantal: 1, gekeken: Date.now(), fout: null, bezig: false, gewijzigdSinds: false }),
+      rijen: () => ({ ingest: [], stems: [], nacht: { aan: false, speeldagen: [] } }),
+      library: () => ({ sleutel: 'l', tracks: () => [{ id: 'nr00_test', audio: 'media/nr00_test/audio.wav', video: 'media/nr00_test/video.mp4', peaks: { bestand: 'media/nr00_test/peaks.bin' },
+        onset: { bestand: 'media/nr00_test/onset.bin' } }, { id: 'lokaal-0a1b2c3d4e5f', audio: 'media/lokaal-0a1b2c3d4e5f/audio.wav' }] }) });
+    const r = await ap.rapport({ profiel: 'apc' });
+    const p = (id) => r.punten.find((q) => q.id === id);
+    ok(`route op Linux: compleet groen (2 nummers), media groen, geen rood (${r.telling.fout} rood, ${p('compleet').waarde})`, p('compleet').licht === 'ok' && p('media').licht === 'ok' && r.telling.fout === 0);
+    ok('route op Linux: instellingen, iCloud, accu grijs; het licht nooit groen zolang USB niet gemeten is', ['instellingen', 'icloud', 'accu'].every((id) => p(id).licht === 'uit') && r.licht !== 'ok');
+    const expliciet = maakAvondpakket({ paden: { media: '/x/media', wortel: '/x' }, profielenPad: PROFIELEN, nep: FXL, platform: 'darwin' });
+    ok('maakAvondpakket: een gegeven platform gaat voor dat van de nep-map', /geen fixture/.test((await expliciet.rapport({})).punten.find((q) => q.id === 'accu').sub));
+  }
+
+  console.log('13. de CLI op Linux-fixtures');
+  {
+    const j = spawnSync(process.execPath, ['tools/avondpakket.mjs', '--json'], { cwd: WORTEL, encoding: 'utf8', env: { ...process.env, VARVE_TESTSERVER: '1', VARVE_AVONDPAKKET_NEP: FXL }, timeout: 20000 });
+    let r = null;
+    try { r = JSON.parse(j.stdout); } catch { /* */ }
+    const p = (id) => r?.punten.find((q) => q.id === id);
+    ok(`--json: exit 0, geen rood (${j.status}, ${r?.telling?.fout})`, j.status === 0 && r?.telling?.fout === 0);
+    ok('--json: media "9 lokaal", instellingen en iCloud grijs "niet op dit platform"', p('media')?.waarde === '9 lokaal' && p('instellingen')?.licht === 'uit'
+      && /niet op dit platform/.test(p('instellingen')?.sub) && p('icloud')?.licht === 'uit');
+    ok('--json: geen enkel punt groen dat op Linux niet gemeten is (instellingen, iCloud, geluid, accu, Bluetooth)', ['instellingen', 'icloud', 'geluid', 'accu', 'bluetooth']
+      .every((id) => !p(id) || p(id).licht !== 'ok'));
   }
 } finally {
   rmSync(tmp, { recursive: true, force: true });
