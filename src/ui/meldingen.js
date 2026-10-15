@@ -120,5 +120,16 @@ export function meldOpKnop(knop, tekst, goed) {
 export function koppelMeldingen(engine) {
   engine.on('melding', ({ tekst, soort, duur, sleutel }) => meld(tekst, soort, duur, { sleutel }));
   for (const id of DECK_IDS) engine.deck(id).on('fout', (tekst) => meld(`track ${trackVanDeck(id)}: ${tekst}`, 'fout'));
+  // Een stream die hapert (de server is even weg): ÉÉN melding per track met een sleutel, die "weer goed"
+  // wordt zodra de pagina's weer binnenkomen, en stil weggaat bij een ander nummer (AR17). Vroeger bleef er
+  // per track een rode staan tot je hem wegklikte.
+  for (const id of DECK_IDS) {
+    const sleutel = `stream:${id}`;
+    engine.deck(id).on('hapert', (s) => {
+      if (s?.hapert) meld(`track ${trackVanDeck(id)}: ${s.tekst}`, 'fout', undefined, { sleutel });
+      else if (s?.weerGoed) meld(`track ${trackVanDeck(id)}: stream weer goed`, 'info', 4000, { sleutel });
+      else wisMelding(sleutel);
+    });
+  }
   bijFout((id, err) => meld(`${id} faalde: ${err.message}`, 'fout'));
 }

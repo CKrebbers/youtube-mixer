@@ -17,6 +17,7 @@ import { maakOnset, verfijnUitBestand, maakGrid, maakOnsets, maakToon, maakSecti
 import { toonSamenvatting } from './toon.js';
 import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
 import { kiesMedia, iCloudReden, VERHUISD_BESTAND, isTestserver } from './media-plek.js';
+import { poortBezet } from './poort.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
@@ -47,6 +48,13 @@ import { queryNaarFilter } from '../src/library/indeling.js';
 
 const WORTEL = fileURLToPath(new URL('..', import.meta.url));
 const POORT = Number(process.env.PORT) || 8777;
+// Eerst kijken of de poort vrij is, vóór er iets op schijf gebeurt (AR20, server/poort.js): een tweede
+// server ruimde anders eerst de werkmappen van de lopende op en zette de stems-rij terug, en stopte pas bij
+// het luisteren. Bezet = stoppen met exit 3, zoals hieronder bij listen(): de herstartlus start dan niet opnieuw.
+if (await poortBezet(POORT)) {
+  console.error(`[server] poort ${POORT} is bezet: er draait al een server (of iets anders). Deze stopt (er is niets aangeraakt).`);
+  process.exit(3);
+}
 // De mediamap: VARVE_MEDIA, anders <projectmap>/media, anders (als die na een
 // verhuizing weg is) het pad uit media-VERHUISD.txt (server/media-plek.js, VI2).
 // VARVE_MEDIA mag Clay's map buiten iCloud zijn (~/Varve-media) én de map van

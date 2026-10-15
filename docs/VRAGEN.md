@@ -164,7 +164,9 @@ Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even 
   4 s, onder VERS_MS)? 💬 **Advies:** klein, maar pas na de proefavond.
 
 **Uit de droogloop van de proefpunten (16 okt, docs/verslagen/2026-10-15/ar-proef.md)**
-- [ ] **AR17. "stream hapert" tijdens een storing.** 💬 Is de server even weg, dan krijgt elke hoorbare track één
+- [x] **AR17. "stream hapert" tijdens een storing.** 💬 **Gebouwd 16 okt** (`studio/ar-vervolg`): één melding per track met de
+  sleutel `stream:<deck>`, die "track N: stream weer goed" wordt bij de eerste pagina die weer binnenkomt (bron.js `onHapert`).
+  De vraag was: Is de server even weg, dan krijgt elke hoorbare track één
   rode melding "track N: stream hapert: Failed to fetch" die blijft staan tot je hem wegklikt, naast de ene
   opname-melding die meegroeit (gemeten: 30 s weg, twee tracks = drie meldingen). Het geluid loopt door (60 s
   vooruit). Liever ook één melding per track met een sleutel, die "weer goed" wordt als de pagina's weer komen?
@@ -174,12 +176,16 @@ Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even 
   hangen = geen gat, de opname-melding pas na de time-out van 10 s); daarna wordt het stil. Een hang-detectie in
   de lus (bv. `curl -m 2 /api/proef` elke 5 s, drie keer niets = kill -9)? **Advies:** ja, maar pas na de
   proefavond: eerst zien of het ooit gebeurt (CLAUDE.md "De server mag even weg": niet gebouwd).
-- [ ] **AR19. Het avondpakket op een machine zonder library** (de pc) zegt rood "backup: nog nooit" en dus "nog
+- [x] **AR19. Het avondpakket op een machine zonder library** — **Gebouwd 16 okt**: op een machine die geen Mac is
+  en geen library.db heeft, is backup grijs "geen library"; zonder mediamap gaat de CLI daar door (exit 3 alleen op de Mac);
+  "op deze machine" in plaats van "op deze Mac". De vraag was: (de pc) zegt rood "backup: nog nooit" en dus "nog
   niet vertrekken" (exit 2), en zonder `VARVE_MEDIA` stopt hij meteen (exit 3, "geen mediamap"). Op de pc is
   dat vals rood. Grijs maken als er geen library is ("geen library op deze machine")? En zegt de regel "servers"
   daar "op deze Mac". **Advies:** ja, bij het eerstvolgende werk aan het avondpakket; de proef (ar-pakket) zegt
   het er nu bij.
-- [ ] **AR20. Een tweede server ruimt eerst op, en stopt pas daarna.** 💬 Start je met de hand een tweede
+- [x] **AR20. Een tweede server ruimt eerst op, en stopt pas daarna.** 💬 **Gebouwd 16 okt**: de server kijkt EERST of de
+  poort vrij is (`server/poort.js`), vóór hij iets op schijf doet; bezet = exit 3 en niets aangeraakt (test/server-poort.test.mjs).
+  De vraag was: Start je met de hand een tweede
   `node server/index.js` terwijl er al een draait, dan wist hij bij het opstarten de `.bezig-*`-werkmappen (een
   ingest of split die NU loopt mislukt) en zet hij de stems-rij terug, en pas bij het luisteren ziet hij de
   bezette poort (exit 3). De herstartlus en VARVE.app starten nooit een tweede (ze kijken eerst naar de poort);

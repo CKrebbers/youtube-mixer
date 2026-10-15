@@ -1040,6 +1040,44 @@ console.log('\nstems: meer kanalen');
   await b2.laad({ url: '/media/x/stems.wav', kanalen: 8 });
   ok('opnieuw laden neemt het nieuwe bestand gewoon', b2.kanalen === 8 && !b2.bestand.vervangen && b2.bestand.totaal === wav8.byteLength);
   b2.vernietig();
+
+  // AR17 (16 okt): de server even weg. Eén melding bij de eerste fout (onHapert), niet bij elke volgende,
+  // "weer goed" bij de eerste reeks die weer binnenkomt, en stil weg bij een nieuwe laad of vernietig.
+  let weg = false;
+  const wegHaal = async (u, init) => { if (weg) throw new TypeError('Failed to fetch'); return geheugenHaal(wav4)(u, init); };
+  const b3 = new StreamBron(ctx, ingangen, { interval: 1e9, haal: wegHaal });
+  const standen = [], oud = [];
+  b3.onHapert = (st) => standen.push(st);
+  b3.onFout = (t) => oud.push(t);
+  await b3.laad({ url: '/media/x/stems.wav', kanalen: 4 });
+  ok('AR17: geladen zonder hapering: geen melding', standen.length === 0 && !b3.hapert);
+  weg = true;
+  for (let k = 0; k < 5; k++) { b3.geladen.clear(); await b3.bijvullen(); }
+  ok(`AR17: de server weg: één melding "stream hapert: …" via onHapert, niet via onFout (${standen.length} meldingen, ${b3.fouten} fouten)`,
+    standen.length === 1 && standen[0].hapert === true && /^stream hapert: Failed to fetch$/.test(standen[0].tekst) && oud.length === 0 && b3.hapert && b3.fouten > 1);
+  weg = false;
+  b3.geladen.clear(); await b3.bijvullen();
+  ok('AR17: weer binnen: één keer "weer goed", de teller terug op 0', standen.length === 2 && standen[1].hapert === false && standen[1].weerGoed === true && b3.fouten === 0 && !b3.hapert);
+  b3.geladen.clear(); await b3.bijvullen();
+  ok('AR17: daarna niets meer (het liep al)', standen.length === 2);
+  weg = true;
+  b3.geladen.clear(); await b3.bijvullen();
+  weg = false;
+  await b3.laad({ url: '/media/x/stems.wav', kanalen: 4 });
+  ok('AR17: hapert, dan een nieuwe laad: de melding gaat stil weg (geen "weer goed")', standen.length === 4 && standen[3].hapert === false && standen[3].weerGoed === false);
+  weg = true;
+  b3.geladen.clear(); await b3.bijvullen();
+  b3.vernietig();
+  ok('AR17: hapert, dan vernietig: ook stil weg', standen.length === 6 && standen[5].weerGoed === false && !b3.hapert);
+  const b4 = new StreamBron(ctx, ingangen, { interval: 1e9, haal: wegHaal });
+  const oud4 = [];
+  b4.onFout = (t) => oud4.push(t);
+  weg = false;
+  await b4.laad({ url: '/media/x/stems.wav', kanalen: 4 });
+  weg = true;
+  b4.geladen.clear(); await b4.bijvullen();
+  ok('AR17: zonder onHapert gaat het zoals vroeger via onFout', oud4.length === 1 && /^stream hapert: /.test(oud4[0]));
+  b4.vernietig();
 }
 
 // ---- opruimen en worklet-fouten (spoor A, 15 okt) -----------------------------------

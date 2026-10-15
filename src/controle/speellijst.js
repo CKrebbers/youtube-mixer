@@ -47,6 +47,7 @@
  * `citeert` (16 okt): de letterlijke teksten van de app die een punt aanhaalt. controle.test eist dat elk
  * stuk in de doe of de let staat, en in de code (src/, server/, tools/, test/node-versie.mjs, de .html-pagina's): verandert
  * een melding, dan zegt de test dat de speellijst mee moet.
+ * Bijgewerkt (16 okt, AR17/AR19/AR20 gebouwd): ar-weg verwacht nu "stream weer goed", ar-pakket grijs "geen library".
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
@@ -286,8 +287,8 @@ export const SPEELLIJST = [
   ] },
   { id: 'ar-server', titel: 'Avond 1 · De server mag even weg', minuten: 20, punten: [
     { id: 'ar-weg', doe: 'Twee tracks spelen hoorbaar, opname aan met beeld (de keuze naast ●: "audio + video") en het log aan. Na een minuut, in Terminal: sh tools/varve-app/server-lus.sh stop. Mix 30 s door (faders, EQ, een loop; spring niet ver weg en laad niets: dat moet van de server komen) en start VARVE weer: open ~/Applications/VARVE.app. VARVE haalt de Controlekamer naar voren: klik daarna terug naar het mixer-tabblad.',
-      let: 'Geen gat in het geluid? Eén opname-melding die meetelt ("opname: server antwoordt niet, … in de wacht") en na de start "opname: weer goed, niets verloren". Verwacht erbij (de droogloop zag het): per hoorbare track één rode "track N: stream hapert: …" die blijft staan tot je hem wegklikt. Stoort die? (AR17)',
-      citeert: ['audio + video', 'opname: server antwoordt niet, ', ' in de wacht', 'opname: weer goed, niets verloren', 'stream hapert: '] },
+      let: 'Geen gat in het geluid? Eén opname-melding die meetelt ("opname: server antwoordt niet, … in de wacht") en na de start "opname: weer goed, niets verloren". Per hoorbare track één rode "track N: stream hapert: …" die na de start vanzelf "track N: stream weer goed" wordt (sinds 16 okt, AR17); bleef er een rode staan, dan is dat een fout.',
+      citeert: ['audio + video', 'opname: server antwoordt niet, ', ' in de wacht', 'opname: weer goed, niets verloren', 'stream hapert: ', 'stream weer goed'] },
     { id: 'ar-val', doe: 'Dezelfde opname, een minuut later: laat de server omvallen met pkill -9 -f server/index.js. Is hij na 5 s niet terug: open ~/Applications/VARVE.app.',
       let: 'Binnen een paar seconden terug (de droogloop: 1,3 s) zonder dat je iets hoort? In ~/.varve-server.log "de server viel om (exitcode 137)" en "server gestart (pid …) — herstart 1". De tegel Server kijkt elke 2 s en kan het missen: wil je zo\'n herstart in de Controlekamer zien? (AR9)',
       citeert: ['de server viel om (exitcode', '— herstart '] },
@@ -520,11 +521,11 @@ export const SPEELLIJST = [
   ] },
 
   // De architectuurronde (15 okt, spoor C, VRAGEN AR): het avondpakket en de suite op de Omarchy-pc. De pc heeft geen
-  // library: zonder VARVE_MEDIA stopt de CLI meteen (exit 3), en "backup" is daar rood (de droogloop van 16 okt).
+  // library: sinds 16 okt (AR19) zegt de CLI daar grijs "geen library" en stopt hij niet meer zonder mediamap.
   { id: 'ar-pc', titel: 'Avond 3 · Het avondpakket en de tests op de pc', minuten: 15, punten: [
-    { id: 'ar-pakket', doe: 'Op de Omarchy-pc, in een kopie van de repo, met de APC eraan: mkdir -p /tmp/leeg-media && VARVE_MEDIA=/tmp/leeg-media node tools/avondpakket.mjs --json > avondpakket-pc.json. Voor de fixtures ook de ruwe uitvoer: lsusb > lsusb.txt, en find -L /sys/class/power_supply -mindepth 2 -maxdepth 2 -name uevent -exec grep -H "" {} + > power.txt. Heeft de pc een accu: alles nog eens zonder lader.',
-      let: 'Zonder VARVE_MEDIA zegt hij "geen server op 8777 en geen mediamap" (exit 3). Verwacht: grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth, de APC herkend, en rood "backup: nog nooit" (vals rood: de pc heeft geen library, AR19). Klopt de rest? Stuur de drie bestanden mee, dan worden de HANDGEMAAKT-fixtures echt. Is eerlijk grijs genoeg? (AR12, AR13)',
-      citeert: ['niet op dit platform', 'geen server op ', 'nog nooit'] },
+    { id: 'ar-pakket', doe: 'Op de Omarchy-pc, in een kopie van de repo, met de APC eraan: node tools/avondpakket.mjs --json > avondpakket-pc.json. Voor de fixtures ook de ruwe uitvoer: lsusb > lsusb.txt, en find -L /sys/class/power_supply -mindepth 2 -maxdepth 2 -name uevent -exec grep -H "" {} + > power.txt. Heeft de pc een accu: alles nog eens zonder lader.',
+      let: 'Verwacht: geen exit 3, grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth, de APC herkend, backup grijs "geen library" en "op deze machine" (nergens "deze Mac"; sinds 16 okt, AR19). Een rood punt is nu echt: welk? Klopt de rest? Stuur de drie bestanden mee, dan worden de HANDGEMAAKT-fixtures echt. Is eerlijk grijs genoeg? (AR12, AR13)',
+      citeert: ['niet op dit platform', 'geen library', 'op deze machine'] },
     { id: 'ar-node', doe: 'Op de pc: node --version, daarna node test/alles.mjs (een paar minuten).',
       let: 'Staat er v26.8.2? Anders zegt alles.mjs bovenaan "LET OP: Node v…, .node-version zegt 26.8.2" met de checks die op een andere V8 anders uitvallen: rood daarbuiten is echt. Welke? (AR14)',
       citeert: ['LET OP: Node v', '.node-version zegt '] },

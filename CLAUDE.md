@@ -280,6 +280,7 @@ server/             draait apart: `node server/index.js`
                     nakijken, master vastleggen), verschil, vastleggen, terug (.vorige/ met `raakt`), .actief.json; VARVE_STANDEN;
                     lezen uit het geheugen zolang stat niets nieuws zegt, één lees per pad en hooguit 2 tegelijk voor de hele
                     server (MAX_DRADEN: iCloud mag de threadpool niet vullen, de andere 2 draden blijven voor de audio)
+  poort.js          poortBezet(poort): vóór alles kijken of de poort vrij is (AR20); index.js stopt dan met exit 3 zonder iets aan te raken
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
   routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel/sets/sjablonen/indeling.js ({ routes, mag }), vlak vóór de 404;
@@ -457,6 +458,7 @@ test/
   handen.test.mjs   de handenkaart: controls, register, vrije plekken (exact), voorstel/uitzonderingen, puur, de telling, blok hub-f0, VRAGEN HA
   gezondheid.test.mjs  src/ui/gezondheid.js: suspend, resume bij invoer, klok stil, geen alarm vóór de start
   meldingen.test.mjs  de meldingen met een sleutel (één die meegroeit) op een nagebouwd document
+  server-poort.test.mjs  AR20: een tweede server op een bezette poort stopt met exit 3 vóór hij .bezig-*, de stems-rij of library.db aanraakt
   notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node; de Node-waarschuwing van alles.mjs
   alles.mjs         alle tests in één keer met overzicht (een andere Node dan .node-version: waarschuwing boven en onder, niets overgeslagen)
 docs/
@@ -1981,7 +1983,9 @@ Verslag `docs/verslagen/2026-10-15/arch-server-weg.md`. Wat een bouwer niet mag 
   WAV van 49 s zonder nullen, één opname-melding die op "weer goed" eindigt (zonder dit: 10 s stilte, 20 s
   nullen, 20 meldingen). Niet gebouwd: hang-detectie en de noodlus op de maat (volgende versie). Met
   `VARVE_WEG_SOORT=hang` (16 okt) hangt de server 30 s: ook goed, de melding pas na de time-out van 10 s (AR18).
-  Een tweede server ruimt bij het opstarten eerst `.bezig-*` en de stems-rij, vóór hij de bezette poort ziet (AR20).
+  De server kijkt EERST of zijn poort vrij is (`server/poort.js`, AR20, 16 okt), vóór de library, de mappen en het opruimen
+  van `.bezig-*`: een tweede server raakt niets aan. Een stream die hapert geeft één melding per track (sleutel
+  `stream:<deck>`, `onHapert` in bron.js) die "stream weer goed" wordt (AR17).
 
 ## Het avondpakket per platform (15 okt, docs/AVONDPAKKET.md §9b)
 
@@ -1993,7 +1997,8 @@ Verslag `docs/verslagen/2026-10-15/arch-server-weg.md`. Wat een bouwer niet mag 
   dat telde als geslaagd (vals rood op compleet, vals groen op instellingen). Een nieuwe sonde: per platform,
   met een fixture en `"platform"` in nep.json. Uitzenden hercodeert met videotoolbox op de Mac en libx264
   elders (`hercodeerEncoder`); `tools/headless/beeld-lokaal.mjs` meet pmset/sysctl/plutil/swiftc alleen
-  achter `isMac()`.
+  achter `isMac()`. Op een machine die geen Mac is en geen library.db heeft (de pc, AR19): backup grijs "geen library",
+  geen exit 3 zonder mediamap, "op deze machine" (`metingen.platform` in het oordeel). Op de Mac verandert niets.
 
 ## Waar media/ staat (11 okt, VI2)
 

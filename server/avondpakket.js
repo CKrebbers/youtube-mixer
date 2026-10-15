@@ -644,6 +644,8 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
   const inpakken = [];
   const punt = (id, naam, licht, waarde, sub = '') => punten.push({ id, naam, licht, waarde: schoon(waarde), sub: schoon(sub) });
   const nietGemeten = (x) => `niet gemeten${x?.onbekend ? `: ${x.onbekend}` : ''}`;
+  // Waar dit gemeten is (metingen.platform, van meet): op de Mac "deze Mac", elders "deze machine" (AR19).
+  const machine = !m.platform || m.platform === 'darwin' ? 'deze Mac' : 'deze machine';
 
   // profiel en fase
   const naam = gevraagd && heeftProfiel(data, gevraagd) ? gevraagd : data.standaard;
@@ -852,7 +854,7 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
     const s = m.servers;
     if (onbekend(s)) punt('servers', 'Servers', 'uit', '?', nietGemeten(s));
     else {
-      const varve = Number.isFinite(s.varve) ? `${s.varve} Varve-server${s.varve === 1 ? '' : 's'} op deze Mac` : '';
+      const varve = Number.isFinite(s.varve) ? `${s.varve} Varve-server${s.varve === 1 ? '' : 's'} op ${machine}` : '';
       if (Number.isFinite(s.opDb) && s.opDb >= 2) punt('servers', 'Servers', 'fout', `${s.opDb} op library.db`, `twee processen op library.db: stop er één${varve ? ` · ${varve}` : ''}`);
       else if (s.opDb === 1) punt('servers', 'Servers', 'ok', 'één op library.db', varve);
       else if (s.opDb === 0) punt('servers', 'Servers', 'uit', 'geen', `geen proces op library.db${varve ? ` · ${varve}` : ''}`);
@@ -886,8 +888,10 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
   // backup van library.db
   {
     const b = m.backup;
-    const tas = 'kopie staat op deze Mac (gaat mee in de tas)';
-    if (onbekend(b)) punt('backup', 'Backup', 'uit', '?', nietGemeten(b));
+    const tas = `kopie staat op ${machine} (gaat mee in de tas)`;
+    // Een machine zonder library (de pc, AR19): niets om te kopiëren, dus grijs, nooit rood.
+    if (b?.geenLibrary) punt('backup', 'Backup', 'uit', 'geen library', `geen library.db op ${machine}: niets om te kopiëren (de live-mixer draait op de Mac)`);
+    else if (onbekend(b)) punt('backup', 'Backup', 'uit', '?', nietGemeten(b));
     else if (b.fout) punt('backup', 'Backup', 'fout', 'mislukt', tekst(b.fout));
     else if (b.bezig) punt('backup', 'Backup', 'uit', 'bezig…', tas);
     else if (!b.laatste) punt('backup', 'Backup', 'fout', 'nog nooit', 'library.db heeft nog geen kopie: start de server, die maakt er een');
