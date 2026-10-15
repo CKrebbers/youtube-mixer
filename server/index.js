@@ -1618,7 +1618,9 @@ const server = createServer(async (req, res) => {
     if (mVideo && req.method === 'POST') {
       const stuk = await leesRuw(req, 16 * 1024 * 1024);
       if (!stuk) return json(res, 413, { ok: false, fout: 'videostuk te groot' });
-      const r = await opname.voegVideoToe(OPNAMES, mVideo[1], mVideo[2], stuk);
+      // ?van=N: de plek in het videobestand (herhalen is dan veilig). Zonder: erachter, zoals vroeger.
+      const van = url.searchParams.has('van') ? Number(url.searchParams.get('van')) : undefined;
+      const r = await opname.voegVideoToe(OPNAMES, mVideo[1], mVideo[2], stuk, van);
       return json(res, r.ok ? 200 : 400, r);
     }
     const mOpname = /^\/api\/opname\/([\w-]+)\/(stuk|klaar)$/.exec(pad);
