@@ -51,7 +51,7 @@ let lib;
 try {
   // ---- een verzonnen checkout ------------------------------------------------
   for (const m of ['media', 'opnames', 'patronen/.versies/set', 'plannen/.versies', 'proef', 'racks', 'mappings', 'Input',
-    'media/abc123def45', '.varve-hub']) mkdirSync(join(m === '.varve-hub' ? thuis : bron, m), { recursive: true });
+    'sets/.versies/vrijdag', 'werkruimtes', 'uitzend', 'media/abc123def45', '.varve-hub']) mkdirSync(join(m === '.varve-hub' ? thuis : bron, m), { recursive: true });
   writeFileSync(join(bron, 'patronen/set.json'), '{"versie":3,"patronen":[]}\n');
   writeFileSync(join(bron, 'patronen/.versies/set/1.json'), '{"versie":1}\n');
   writeFileSync(join(bron, 'plannen/auto-plan.json'), '{"v":2,"stappen":[]}\n');
@@ -59,6 +59,13 @@ try {
   writeFileSync(join(bron, 'racks/sjablonen.json'), '[]\n');
   writeFileSync(join(bron, 'mappings/apc40mk2.json'), '{"device":"apc40mk2"}\n');
   writeFileSync(join(bron, 'Input/blueprint.json'), '{}\n');
+  // Sinds de werkruimte (14 okt): sets/, werkruimtes/, de eigen sjablonen, de paneel-apparaten, de uitzenddoelen.
+  writeFileSync(join(bron, 'sets/vrijdag.json'), '{"versie":1,"naam":"vrijdag"}\n');
+  writeFileSync(join(bron, 'sets/.versies/vrijdag/1.json'), '{"versie":1}\n');
+  writeFileSync(join(bron, 'werkruimtes/mijn.json'), '{"naam":"mijn"}\n');
+  writeFileSync(join(bron, 'racks/eigen.json'), '{"versie":1,"racks":[]}\n');
+  writeFileSync(join(bron, 'media/paneel-apparaten.json'), '{"versie":1,"apparaten":[]}\n');
+  writeFileSync(join(bron, 'uitzend/doelen.json'), '{"versie":1,"doelen":[]}\n');
   writeFileSync(join(bron, 'patronen/.DS_Store'), 'finder');
   writeFileSync(join(bron, 'opnames/set-20261010-190959.acties.jsonl'), '[0,"stand",{}]\n');
   writeFileSync(join(bron, 'opnames/set-20261010-190959.wav'), 'RIFF-nep');
@@ -91,6 +98,9 @@ try {
   lib.db.prepare('INSERT INTO samples (track_id, pad, van, tot, gemaakt) VALUES (?, ?, ?, ?, ?)').run('abc123def45', 1, 1, 3, nu);
   lib.db.prepare('INSERT INTO racks (track_id, naam, data, gemaakt, gewijzigd) VALUES (?, ?, ?, ?, ?)').run('abc123def45', 'r', '{}', nu, nu);
   lib.zet('mapping', { kind: 'diff', version: 3 });
+  // Twee browser-sleutels van het instrument (PR #31: /api/instellingen schrijft zo in de tabel).
+  lib.zet('varve.master.rack', '{"rack":"nep"}');
+  lib.zet('varve.send.a.rack', 'Dub-echo');
 
   // ---- de fout zelf: alleen het bestand kopiëren mist de WAL --------------------
   console.log('de WAL');
@@ -129,30 +139,46 @@ try {
     ok('/Volumes/<x> die er niet is: exit 2 "niet aangesloten", niet "dezelfde schijf"', v.code === 2 && /niet aangesloten/.test(v.uit) && !/dezelfde schijf/.test(v.uit));
   }
 
-  // ---- welke library: VARVE_DB, <media>/library.db of <bron>/media/library.db (#29) ----
+  // ---- welke library: zoals de server (VARVE_DB, anders <media>/library.db) ----
   console.log('welke library');
   {
     const b2 = join(tmp, 'bron-verhuisd');
     const ver = join(tmp, 'verhuisde-media');
     mkdirSync(b2); mkdirSync(ver);
     writeFileSync(join(b2, 'media-VERHUISD.txt'), `media/ is verhuisd.\n\nVARVE_MEDIA=${ver}\n`);
-    const p2 = paden(b2, {});
-    ok('media-VERHUISD.txt: media en library op de nieuwe plek', p2.media === ver && p2.db === join(ver, 'library.db') && !p2.dbFout);
+    const p2 = paden(b2, { HOME: thuis });
+    ok('media-VERHUISD.txt: media en library op de nieuwe plek', p2.media === ver && p2.db === join(ver, 'library.db') && !p2.waarschuwing);
     ok('… kaart.db, nacht.json en stems-rij.json ernaast', p2.kaartDb === join(ver, 'kaart.db') && p2.stemsRij === join(ver, 'stems-rij.json'));
-    ok('… een testserver (VARVE_TESTSERVER=1) volgt het briefje niet', paden(b2, { VARVE_TESTSERVER: '1' }).media === join(b2, 'media'));
+    ok('… een testserver (VARVE_TESTSERVER=1) volgt het briefje niet', paden(b2, { VARVE_TESTSERVER: '1', HOME: thuis }).media === join(b2, 'media'));
     // Een echte library op de verhuisde plek (de VACUUM-kopie van hierboven komt later; nu de bron).
     { const d = new DatabaseSync(join(ver, 'library.db')); d.exec('CREATE TABLE tracks (id TEXT PRIMARY KEY, audio TEXT); INSERT INTO tracks VALUES (\'een00000001\', \'media/een00000001/audio.wav\')'); d.close(); }
     const r = draai('kopie.mjs', ['--doel', join(tmp, 'doel-verhuisd'), '--bron', b2, '--droog'], VK);
     ok('kopie --droog na de verhuizing: exit 0, vindt de library (1 nummer)', r.code === 0 && /1 nummers/.test(r.uit));
 
-    // VARVE_MEDIA gezet en nog een oude library in <bron>/media: niet stil kiezen.
-    const twee = { VARVE_MEDIA: ver };
-    ok('twee libraries (VARVE_MEDIA en <bron>/media): dbFout', /twee libraries/.test(paden(bron, twee).dbFout || ''));
-    const t = draai('kopie.mjs', ['--doel', join(tmp, 'doel-twee'), '--bron', bron, '--zelfde-schijf'], { ...VK, ...twee });
-    ok('… kopie weigert: exit 2 "twee libraries: … zet VARVE_DB", niets geschreven', t.code === 2 && /twee libraries/.test(t.uit) && /VARVE_DB/.test(t.uit) && !existsSync(join(tmp, 'doel-twee')));
-    ok('… met VARVE_DB is het eenduidig', paden(bron, { ...twee, VARVE_DB: dbPad }).db === dbPad && !paden(bron, { ...twee, VARVE_DB: dbPad }).dbFout);
-    ok('… en alleen de oude bestaat: die (de server van main)', paden(bron, { VARVE_MEDIA: join(tmp, 'lege-media') }).db === dbPad);
-    ok('zonder variabelen: <bron>/media/library.db, zoals altijd', paden(bron, {}).db === dbPad && !paden(bron, {}).dbFout);
+    // VARVE_MEDIA gezet en nog een oude library in <bron>/media: de server neemt <media>/library.db,
+    // de kopie dus ook, maar hij zegt dat er een tweede ligt. (VARVE_TESTSERVER: zie media-verhuis.test.)
+    const twee = { VARVE_MEDIA: ver, VARVE_TESTSERVER: '1', HOME: thuis };
+    const pt = paden(bron, twee);
+    ok('twee libraries (VARVE_MEDIA en <bron>/media): die van de server, met een waarschuwing', pt.db === join(ver, 'library.db') && /twee libraries/.test(pt.waarschuwing || ''));
+    const t = draai('kopie.mjs', ['--doel', join(tmp, 'doel-twee'), '--bron', bron, '--droog'], { ...VK, ...twee });
+    ok('… kopie --droog zegt het (LET OP … zet VARVE_DB) en telt de library van de server (1 nummer)', t.code === 0 && /LET OP er staan twee libraries/.test(t.uit) && /VARVE_DB/.test(t.uit) && /1 nummers/.test(t.uit));
+    ok('… met VARVE_DB geen waarschuwing', paden(bron, { ...twee, VARVE_DB: dbPad }).db === dbPad && !paden(bron, { ...twee, VARVE_DB: dbPad }).waarschuwing);
+    ok('… VARVE_MEDIA naar een lege map: <media>/library.db, zoals de server (geen terugval op de oude)', paden(bron, { VARVE_MEDIA: join(tmp, 'lege-media'), VARVE_TESTSERVER: '1', HOME: thuis }).db === join(tmp, 'lege-media', 'library.db'));
+    ok('zonder variabelen: <bron>/media/library.db, zoals altijd', paden(bron, { HOME: thuis }).db === dbPad && !paden(bron, { HOME: thuis }).waarschuwing);
+    ok('een slash aan het eind telt niet (VARVE_MEDIA=/x/media/)', paden(b2, { VARVE_MEDIA: `${ver}/`, VARVE_TESTSERVER: '1', HOME: thuis }).media === ver
+      && paden(b2, { VARVE_MEDIA: `${ver}/`, VARVE_TESTSERVER: '1', HOME: thuis }).db === join(ver, 'library.db'));
+
+    // ~/.varve/media-pad (VARVE.app zet daarmee VARVE_MEDIA): launchd heeft geen ~/.zprofile.
+    const thuis3 = join(tmp, 'thuis-mediapad');
+    mkdirSync(join(thuis3, '.varve'), { recursive: true });
+    writeFileSync(join(thuis3, '.varve', 'media-pad'), `${ver}/\n`);
+    const pm = paden(bron, { HOME: thuis3 });
+    ok('~/.varve/media-pad (en geen VARVE_MEDIA): die map (zonder slash), zoals VARVE.app de server start', pm.media === ver && pm.mediaBron === '~/.varve/media-pad' && pm.db === join(ver, 'library.db'));
+    ok('… met een waarschuwing, want <bron>/media/library.db ligt er ook', /twee libraries/.test(pm.waarschuwing || ''));
+    ok('… VARVE_MEDIA gaat voor', paden(bron, { HOME: thuis3, VARVE_MEDIA: join(bron, 'media'), VARVE_TESTSERVER: '1' }).media === join(bron, 'media'));
+    ok('… een testomgeving (VARVE_TESTSERVER=1) leest het bestand nooit', paden(bron, { HOME: thuis3, VARVE_TESTSERVER: '1' }).media === join(bron, 'media'));
+    const pmd = draai('kopie.mjs', ['--doel', join(tmp, 'doel-mediapad'), '--bron', bron, '--droog'], { ...VK, HOME: thuis3 });
+    ok('… kopie --droog via media-pad: vindt de verhuisde library (1 nummer) en zegt waarvandaan', pmd.code === 0 && /1 nummers/.test(pmd.uit) && /via ~\/\.varve\/media-pad/.test(pmd.uit));
   }
 
   // ---- versies sorteren op tijd, niet op naam ------------------------------------
@@ -200,6 +226,11 @@ try {
     ok('manifest: .versies van patronen mee', paden.includes('patronen/.versies/set/1.json'));
     ok('manifest: alleen de logs uit opnames/, geen wav', paden.includes('handelingen/set-20261010-190959.acties.jsonl') && !paden.some((p) => p.endsWith('.wav')));
     ok('manifest: hub, kaart, stems-rij, Input', ['hub/staat.json', 'kaart/varve-kaart.json', 'stems-rij.json', 'Input/blueprint.json'].every((p) => paden.includes(p)));
+    ok('manifest: sets/ (met .versies), werkruimtes/, racks/eigen.json', ['sets/vrijdag.json', 'sets/.versies/vrijdag/1.json', 'werkruimtes/mijn.json', 'racks/eigen.json'].every((p) => paden.includes(p)));
+    ok('manifest: paneel-apparaten.json en uitzend/doelen.json', ['paneel-apparaten.json', 'uitzend/doelen.json'].every((p) => paden.includes(p)));
+    ok('de browser-sleutels van het instrument zitten in library.db', tel(db, "SELECT COUNT(*) FROM instellingen WHERE sleutel IN ('varve.master.rack', 'varve.send.a.rack')") === 2
+      && m.library.tellingen.instrument === 2);
+    ok('manifest: welke library en welke media', m.library_pad === dbPad && m.media?.pad === join(bron, 'media') && m.media?.via === 'standaard');
     ok('geen .DS_Store meegenomen', !paden.some((p) => p.endsWith('.DS_Store')));
     ok('manifest: wat ontbrak staat erin (standen/, nacht.json)', m.ontbreekt.includes('standen/') && m.ontbreekt.includes('nacht.json'));
     ok('manifest: sha256 per bestand klopt', m.bestanden.every((b) => b.sha256.length === 64 && b.bytes === statSync(join(staat, b.pad)).size));
@@ -303,6 +334,10 @@ try {
       && manifest().library.tellingen.tracks === 4 && tel(db, 'PRAGMA quick_check') === 'ok');
     ok('herstel: zonder -wal/-shm', !existsSync(db + '-wal'));
     ok('herstel: kaart.db en stems-rij.json naast de library', existsSync(join(naar, 'media/kaart.db')) && existsSync(join(naar, 'media/stems-rij.json')));
+    ok('herstel: paneel-apparaten.json in media/, uitzend/doelen.json, sets/ en werkruimtes/', existsSync(join(naar, 'media/paneel-apparaten.json'))
+      && existsSync(join(naar, 'uitzend/doelen.json')) && existsSync(join(naar, 'sets/.versies/vrijdag/1.json')) && existsSync(join(naar, 'werkruimtes/mijn.json')));
+    ok('herstel: de instrument-sleutels staan weer in de library, en herstel zegt dat Chrome niets hoeft', tel(db, "SELECT COUNT(*) FROM instellingen WHERE sleutel = 'varve.send.a.rack'") === 1
+      && /2 instrument-sleutels/.test(r.uit));
     ok('herstel: patronen met .versies', existsSync(join(naar, 'patronen/.versies/set/1.json')) && readFileSync(join(naar, 'patronen/set.json'), 'utf8').includes('anders'));
     ok('herstel: de logs in opnames/', existsSync(join(naar, 'opnames/set-20261010-190959.acties.jsonl')));
     ok('herstel: hub-staat terug in een lege thuismap', existsSync(join(thuis2, '.varve-hub/staat.json')));

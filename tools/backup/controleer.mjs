@@ -27,7 +27,8 @@ Leest alleen. Zie docs/BACKUP.md.`;
 
 /** Elke telling die in de kopie en nu kan verschillen, met hoe hij heet. */
 const NAMEN = [['tracks', 'nummers'], ['hotcues', 'hotcues'], ['racks', 'racks'], ['samples', 'pads'],
-  ['gridsOpSlot', 'grids op slot'], ['stems', 'stems-sets'], ['secties', 'sectiekaarten']];
+  ['gridsOpSlot', 'grids op slot'], ['stems', 'stems-sets'], ['secties', 'sectiekaarten'],
+  ['instrument', 'instrument-sleutels'], ['tags', 'tags'], ['categorieen', 'categorieën']];
 
 export function controleer({ doel, bron = WORTEL, env = process.env, nu = Date.now() }) {
   const regels = [], waarschuwingen = [], fouten = [];
@@ -60,7 +61,9 @@ export function controleer({ doel, bron = WORTEL, env = process.env, nu = Date.n
     const qc = snelleControle(db);
     if (qc !== 'ok') fouten.push(`library.db: quick_check zegt ${qc}`);
     kopieTel = telLibrary(db);
-    const anders = NAMEN.filter(([k]) => kopieTel[k] !== manifest.library?.tellingen?.[k]);
+    // Alleen wat het manifest kent: een kopie van vóór een nieuwe telling (instrument, tags) blijft heel.
+    const bekend = manifest.library?.tellingen ?? {};
+    const anders = NAMEN.filter(([k]) => k in bekend && kopieTel[k] !== bekend[k]);
     if (anders.length) fouten.push(`library.db telt anders dan het manifest: ${anders.map(([k, n]) => `${n} ${kopieTel[k]} ≠ ${manifest.library?.tellingen?.[k]}`).join(', ')}`);
     const versie = manifest.library?.versie && join(staat, manifest.library.versie);
     if (versie && (!existsSync(versie) || sha256(versie) !== manifest.library.sha256)) fouten.push(`versie ${manifest.library.versie} ontbreekt of is anders`);
@@ -78,8 +81,8 @@ export function controleer({ doel, bron = WORTEL, env = process.env, nu = Date.n
 
   // 2. bij?
   const P = paden(bron, env);
-  if (kopieTel && P.dbFout) waarschuwingen.push(`niet vergeleken met nu: ${P.dbFout}`);
-  else if (kopieTel && existsSync(P.db)) {
+  if (kopieTel && P.waarschuwing) waarschuwingen.push(P.waarschuwing);
+  if (kopieTel && existsSync(P.db)) {
     const nuTel = telLibrary(P.db);
     regels.push(NAMEN.slice(0, 5).map(([k, n]) => `${kopieTel[k]}/${nuTel[k]} ${n}`).join(', ') + ' (kopie/nu)');
     const inKopie = nummersVan(db);

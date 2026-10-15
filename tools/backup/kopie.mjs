@@ -8,9 +8,11 @@
 //   library.db en kaart.db als VACUUM INTO-kopie via de Backups-klasse van de server
 //   (server/backup.js: eigen alleen-lezen verbinding, quick_check, fsync) — NOOIT het
 //   bestand kopiëren, want recent werk staat alleen in library.db-wal (docs/BACKUP.md §2);
-//   patronen/ plannen/ proef/ standen/ racks/ mappings/ Input/ (met .versies/),
+//   patronen/ plannen/ proef/ standen/ sets/ werkruimtes/ racks/ mappings/ Input/ (met .versies/),
 //   de handelingenlogs (opnames/*.acties.jsonl), nacht.json, stems-rij.json,
-//   ~/.varve-hub/staat.json en varve-kaart.json; plus MANIFEST.json met tellingen.
+//   paneel-apparaten.json, uitzend/doelen.json, ~/.varve-hub/staat.json en varve-kaart.json;
+//   plus MANIFEST.json met tellingen. De browser-sleutels van het instrument en de mappings
+//   per apparaat zitten in library.db (tabel instellingen).
 // Set B "media" (groot) alleen met --media: rsync -a van media/ en opnames/ naar
 //   <doel>/varve/media/ en <doel>/varve/opnames/, ZONDER --delete.
 //
@@ -43,8 +45,8 @@ const HULP = `gebruik: node tools/backup/kopie.mjs --doel <map> [opties]
   --bron <checkout>         een andere checkout dan deze (alleen lezen); standaard ${WORTEL}
   --overslaan-zonder-doel   bestaat het doel niet (schijf niet aangesloten): één regel en exit 0
 
-Dezelfde VARVE_*-variabelen als de server (VARVE_DB, VARVE_MEDIA, VARVE_OPNAMES, …).
-Zie docs/BACKUP.md.`;
+Dezelfde VARVE_*-variabelen als de server (VARVE_DB, VARVE_MEDIA, VARVE_OPNAMES, …);
+zonder VARVE_MEDIA ook ~/.varve/media-pad, zoals VARVE.app. Zie docs/BACKUP.md.`;
 
 const VLAGGEN = ['media', 'controleer', 'droog', 'zelfde-schijf', 'overslaan-zonder-doel', 'help'];
 
@@ -67,7 +69,6 @@ export async function kopie(opties, env = process.env, uit = console.log) {
   const staat = join(varve, 'staat');
   const droog = !!opties.droog;
 
-  if (P.dbFout) { uit(`kopie: ${P.dbFout}`); return 2; }
   if (!existsSync(P.db)) {
     uit(`kopie: geen library op ${P.db} — verkeerde --bron of VARVE_DB?`);
     return 2;
@@ -92,6 +93,10 @@ export async function kopie(opties, env = process.env, uit = console.log) {
   const losse = [
     { naam: 'nacht.json', bron: P.nacht, doel: 'nacht.json' },
     { naam: 'stems-rij.json', bron: P.stemsRij, doel: 'stems-rij.json' },
+    { naam: 'paneel-apparaten.json', bron: P.paneelApparaten, doel: 'paneel-apparaten.json' },
+    { naam: 'uitzend/doelen.json', bron: P.uitzendDoelen, doel: 'uitzend/doelen.json' },
+    // Met VARVE_SJABLONEN staan de eigen sjablonen buiten racks/: dan apart.
+    ...(P.sjablonenApart ? [{ naam: 'sjablonen/eigen.json', bron: P.sjablonen, doel: 'sjablonen/eigen.json' }] : []),
     { naam: 'hub/staat.json', bron: P.hub, doel: 'hub/staat.json' },
     { naam: 'kaart/varve-kaart.json', bron: P.kaartJson, doel: 'kaart/varve-kaart.json' },
   ];
@@ -100,6 +105,8 @@ export async function kopie(opties, env = process.env, uit = console.log) {
   uit(`kopie${droog ? ' (droog: er wordt niets geschreven)' : ''}`);
   uit(`  bron   ${P.bron}${commit ? `  (commit ${commit})` : ''}`);
   uit(`  doel   ${staat}${existsSync(staat) ? '' : '  (nieuw)'}`);
+  uit(`  media  ${P.media}  (via ${P.mediaBron})`);
+  if (P.waarschuwing) uit(`  LET OP ${P.waarschuwing}`);
   if (zelfdeSchijf) uit(`  LET OP zelfde schijf als de bron: een versie, geen backup buiten de laptop${opties['zelfde-schijf'] ? '' : ' (een echte run weigert zonder --zelfde-schijf)'}`);
 
   const walBytes = existsSync(P.db + '-wal') ? statSync(P.db + '-wal').size : 0;
@@ -285,6 +292,9 @@ export async function kopie(opties, env = process.env, uit = console.log) {
       host: hostname(),
       bron: P.bron,
       commit,
+      library_pad: P.db,
+      media: { pad: P.media, via: P.mediaBron },
+      waarschuwing: P.waarschuwing,
       doel: varve,
       zelfdeSchijf,
       library: { versie: lib.versie, sha256: lib.sha256, tellingen: libTel },
@@ -364,7 +374,8 @@ function pakSlot(staat) {
 
 function telTekst(t) {
   return `${t.tracks} nummers, ${t.hotcues} hotcues, ${t.racks} rack${t.racks === 1 ? '' : 's'}, ${t.samples} pads, `
-    + `${t.gridsOpSlot} grid${t.gridsOpSlot === 1 ? '' : 's'} op slot, schema v${t.schema}`;
+    + `${t.gridsOpSlot} grid${t.gridsOpSlot === 1 ? '' : 's'} op slot, ${t.instrument} instrument-sleutel${t.instrument === 1 ? '' : 's'}, `
+    + `${t.tags} tag${t.tags === 1 ? '' : 's'}, schema v${t.schema}`;
 }
 const perTekst = (p) => `${p.nieuw} nieuw, ${p.bijgewerkt} bijgewerkt, ${p.gelijk} gelijk`;
 

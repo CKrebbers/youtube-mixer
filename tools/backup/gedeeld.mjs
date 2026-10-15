@@ -1,23 +1,30 @@
 // Gedeeld door kopie.mjs, controleer.mjs en herstel.mjs (docs/BACKUP.md).
 // Geen test zelf en geen CLI: paden, tellingen, hashes en kleine hulpjes.
 //
-// De paden zijn die van de server (server/index.js): dezelfde VARVE_*-variabelen,
-// en zonder variabelen de mappen in de checkout. `bron` is de checkout; standaard
+// De paden zijn die van de server (server/index.js, server/routes/, server/media-plek.js):
+// dezelfde VARVE_*-variabelen, en zonder variabelen de mappen in de checkout. `bron` is de checkout; standaard
 // die waar dit bestand in staat, met --bron een andere (bv. de echte Bureaublad-map
 // vanuit een worktree, alleen lezen).
-import { existsSync, statSync, lstatSync, readFileSync, readdirSync, openSync, fsyncSync, closeSync, realpathSync } from 'node:fs';
+import { existsSync, statSync, lstatSync, readFileSync, readdirSync, openSync, fsyncSync, closeSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join, dirname, resolve, basename, sep } from 'node:path';
+import { join, dirname, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { kiesMedia as kiesMediaServer, echtPad, isTestserver } from '../../server/media-plek.js';
+import { INSTELLING_SLEUTELS } from '../../src/ui/instellingen-lijst.js';
+
+export { echtPad };
 
 /** De checkout waar deze tools in staan. */
 export const WORTEL = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
-/** De mappen van set A die als geheel meegaan (inclusief .versies/ e.d.). */
-export const MAPPEN = ['patronen', 'plannen', 'proef', 'standen', 'racks', 'mappings', 'Input'];
+/**
+ * De mappen van set A die als geheel meegaan (inclusief .versies/ e.d.). sets/ en
+ * werkruimtes/ sinds de werkruimte (14 okt, S3 en S9; VARVE_SETS, VARVE_WERKRUIMTES).
+ */
+export const MAPPEN = ['patronen', 'plannen', 'proef', 'standen', 'sets', 'werkruimtes', 'racks', 'mappings', 'Input'];
 
 /** Nooit meenemen: rommel van de Finder. Al het andere wel, ook conflictkopieën ("… 2"). */
 const ROMMEL = new Set(['.DS_Store']);
@@ -50,7 +57,7 @@ export const thuisPad = (p) => resolve(p.replace(/^~(?=$|\/)/, homedir()));
 
 /** Het pad van de kaart zoals de server het kiest: VARVE_KAART, de instelling `kaart_pad`, het standaardpad. */
 function kaartPad(db, env) {
-  if (env.VARVE_KAART) return env.VARVE_KAART;
+  if (env.VARVE_KAART) return schoon(env.VARVE_KAART);
   if (existsSync(db)) {
     try {
       const d = new DatabaseSync(db, { readOnly: true, timeout: 5000 });
@@ -61,25 +68,7 @@ function kaartPad(db, env) {
       } finally { d.close(); }
     } catch (_) { /* geen tabel of geen geldige waarde: het standaardpad */ }
   }
-  return join(homedir(), 'Desktop', '3. Resources', 'Data', 'Muziekkaart', 'varve-kaart.json');
-}
-
-/**
- * Het echte pad (symlinks opgelost), ook als het (nog) niet bestaat: de
- * dichtstbijzijnde map die wel bestaat gaat door realpathSync, de rest komt
- * erachter. Zoals echtPad() in server/media-plek.js (#29); op macOS is /tmp
- * bijvoorbeeld /private/tmp.
- */
-export function echtPad(pad) {
-  let p = resolve(pad);
-  const rest = [];
-  for (;;) {
-    try { return join(realpathSync(p), ...rest.reverse()); } catch (_) { /* hoger kijken */ }
-    const boven = dirname(p);
-    if (boven === p) return resolve(pad);
-    rest.push(basename(p));
-    p = boven;
-  }
+  return join(env.HOME || homedir(), 'Desktop', '3. Resources', 'Data', 'Muziekkaart', 'varve-kaart.json');
 }
 
 /** Ligt `pad` in `map` (of is het `map` zelf)? Op de echte paden: een symlink of alias telt mee. */
@@ -88,70 +77,85 @@ export function ligtIn(pad, map) {
   return a === m || a.startsWith(m.endsWith(sep) ? m : m + sep);
 }
 
-/** Het pad uit <bron>/media-VERHUISD.txt (de regel VARVE_MEDIA=…), of null. Zoals verhuisdNaar() in #29. */
-export function verhuisdNaar(bron) {
+/** Een pad zonder slash aan het eind, met ~ uitgeschreven (`/x/media/` en `/x/media` zijn één map). */
+const schoon = (p) => (p ? thuisPad(String(p).trim()) : p);
+
+/** ~/.varve/media-pad: waar VARVE.app VARVE_MEDIA vandaan haalt (tools/varve-app/VARVE.applescript). */
+export const mediaPadBestand = (env = process.env) => join(env.HOME || homedir(), '.varve', 'media-pad');
+
+/** De eerste regel van ~/.varve/media-pad (een absoluut pad), of null. */
+export function leesMediaPad(env = process.env) {
   let tekst;
-  try { tekst = readFileSync(join(bron, 'media-VERHUISD.txt'), 'utf8'); } catch (_) { return null; }
-  const m = /^\s*(?:export\s+)?VARVE_MEDIA=("?)(\/[^"\n]+)\1\s*$/m.exec(tekst);
-  return m ? m[2].trim() : null;
+  try { tekst = readFileSync(mediaPadBestand(env), 'utf8'); } catch (_) { return null; }
+  const regel = tekst.split('\n')[0].trim();
+  return regel.startsWith('/') || regel.startsWith('~') ? schoon(regel) : null;
 }
 
 /**
- * De mediamap zoals de server hem kiest (kiesMedia() in #29): VARVE_MEDIA, anders
- * <bron>/media, en als die er niet meer is (VI2 hernoemde hem) het pad uit
- * media-VERHUISD.txt. Een testserver (VARVE_TESTSERVER=1) volgt het briefje nooit.
+ * De mediamap zoals de server hem krijgt. Zoals de server (kiesMedia in
+ * server/media-plek.js): VARVE_MEDIA, anders <bron>/media, en als die er niet meer
+ * is het pad uit media-VERHUISD.txt (een testserver volgt dat nooit). Daartussen,
+ * zoals VARVE.app de server start: ~/.varve/media-pad als VARVE_MEDIA niet gezet is.
+ * Zo vindt een kopie uit launchd (geen ~/.zprofile, dus geen VARVE_MEDIA) dezelfde
+ * map als de server uit het Dock. Een testomgeving (VARVE_TESTSERVER=1) leest het
+ * bestand nooit. Geeft { map, bron } met map zonder slash aan het eind.
  */
 function kiesMedia(bron, env) {
-  if (env.VARVE_MEDIA) return env.VARVE_MEDIA;
-  const standaard = join(bron, 'media');
-  if (env.VARVE_TESTSERVER !== '1' && !existsSync(standaard)) return verhuisdNaar(bron) || standaard;
-  return standaard;
+  if (env.VARVE_MEDIA) return { map: schoon(env.VARVE_MEDIA), bron: 'VARVE_MEDIA' };
+  if (!isTestserver(env)) {
+    const pad = leesMediaPad(env);
+    if (pad) return { map: pad, bron: '~/.varve/media-pad' };
+  }
+  const k = kiesMediaServer({ env, wortel: bron });
+  return { map: schoon(k.map), bron: k.bron };
 }
 
 /**
- * Welke library.db de server gebruikt. VARVE_DB wint altijd. Anders zijn er twee
- * plekken: <media>/library.db (de server na #29) en <bron>/media/library.db (de
- * server tot dan). Zijn dat twee verschillende bestanden die allebei bestaan, dan
- * kiezen we NIET stil (dan kopieert en controleert hij misschien een andere
- * library dan de server gebruikt): `fout` zegt het. Geeft { db, fout }.
+ * Waar alles staat, zoals de server het ziet. De library is die van de server:
+ * VARVE_DB, anders <media>/library.db (server/index.js). `waarschuwing` is gezet
+ * als er nog een andere library ligt die een server zonder VARVE_MEDIA zou pakken
+ * (<bron>/media/library.db naast een media-pad of VARVE_MEDIA elders): de kopie
+ * gaat door met de gekozen library en zegt het.
  */
-function kiesDb(bron, media, env) {
-  if (env.VARVE_DB) return { db: env.VARVE_DB, fout: null };
-  const nieuw = join(media, 'library.db');
-  const oud = join(bron, 'media', 'library.db');
-  if (echtPad(nieuw) === echtPad(oud)) return { db: nieuw, fout: null };
-  const er = [nieuw, oud].filter((p) => existsSync(p));
-  if (er.length === 2) {
-    return { db: nieuw, fout: `twee libraries: ${nieuw} en ${oud}. Welke de server gebruikt hangt af van zijn versie; zet VARVE_DB op de goede` };
-  }
-  return { db: er[0] ?? nieuw, fout: null };
-}
-
-/** Waar alles staat, zoals de server het ziet. `dbFout` is gezet als de library niet eenduidig is. */
 export function paden(bron = WORTEL, env = process.env) {
   bron = resolve(bron);
-  const media = kiesMedia(bron, env);
-  const { db, fout: dbFout } = kiesDb(bron, media, env);
+  const { map: media, bron: mediaBron } = kiesMedia(bron, env);
+  const db = schoon(env.VARVE_DB) || join(media, 'library.db');
   const naast = dirname(db);
+  let waarschuwing = null;
+  const oud = join(bron, 'media', 'library.db');
+  if (!env.VARVE_DB && existsSync(oud) && existsSync(db) && echtPad(oud) !== echtPad(db)) {
+    waarschuwing = `er staan twee libraries: ${db} (via ${mediaBron}, deze gaat mee) en ${oud} `
+      + '(die pakt een server die zonder VARVE_MEDIA start); zet VARVE_DB als je de andere bedoelt';
+  }
   const mappen = {
-    patronen: env.VARVE_PATRONEN || join(bron, 'patronen'),
-    plannen: env.VARVE_PLANNEN || join(bron, 'plannen'),
-    proef: env.VARVE_PROEF || join(bron, 'proef'),
-    standen: env.VARVE_STANDEN || join(bron, 'standen'),
+    patronen: schoon(env.VARVE_PATRONEN) || join(bron, 'patronen'),
+    plannen: schoon(env.VARVE_PLANNEN) || join(bron, 'plannen'),
+    proef: schoon(env.VARVE_PROEF) || join(bron, 'proef'),
+    standen: schoon(env.VARVE_STANDEN) || join(bron, 'standen'),
+    sets: schoon(env.VARVE_SETS) || join(bron, 'sets'),
+    werkruimtes: schoon(env.VARVE_WERKRUIMTES) || join(bron, 'werkruimtes'),
     racks: join(bron, 'racks'),
     mappings: join(bron, 'mappings'),
     Input: join(bron, 'Input'),
   };
   return {
-    bron, db, dbFout, mappen,
-    media,
-    opnames: env.VARVE_OPNAMES || join(bron, 'opnames'),
-    kaartDb: env.VARVE_KAART_DB || join(naast, 'kaart.db'),
-    nacht: env.VARVE_NACHT || join(naast, 'nacht.json'),
+    bron, db, waarschuwing, mappen,
+    media, mediaBron,
+    opnames: schoon(env.VARVE_OPNAMES) || join(bron, 'opnames'),
+    kaartDb: schoon(env.VARVE_KAART_DB) || join(naast, 'kaart.db'),
+    nacht: schoon(env.VARVE_NACHT) || join(naast, 'nacht.json'),
     stemsRij: join(naast, 'stems-rij.json'),
-    hub: env.VARVE_HUB_STAAT || join(homedir(), '.varve-hub', 'staat.json'),
+    // Sinds 14 okt (server/routes/): de apparaten van het paneel naast media/, de eigen
+    // sjablonen (staan normaal in racks/, met VARVE_SJABLONEN ergens anders) en de
+    // uitzenddoelen (uitzend/doelen.json, niet in git).
+    paneelApparaten: schoon(env.VARVE_PANEEL_APPARATEN) || join(media, 'paneel-apparaten.json'),
+    sjablonen: schoon(env.VARVE_SJABLONEN) || join(bron, 'racks', 'eigen.json'),
+    sjablonenApart: !!env.VARVE_SJABLONEN,
+    uitzendDoelen: join(bron, 'uitzend', 'doelen.json'),
+    hub: schoon(env.VARVE_HUB_STAAT) || join(env.HOME || homedir(), '.varve-hub', 'staat.json'),
     kaartJson: kaartPad(db, env),
-    stempel: env.VARVE_BACKUP_STEMPEL || join(homedir(), '.varve', 'backup-laatste.json'),
+    stempel: schoon(env.VARVE_BACKUP_STEMPEL) || join(env.HOME || homedir(), '.varve', 'backup-laatste.json'),
   };
 }
 
@@ -224,7 +228,7 @@ export function telLibrary(pad) {
   try {
     const tabellen = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name));
     const kolommen = tabellen.has('tracks') ? new Set(db.prepare('PRAGMA table_info(tracks)').all().map((r) => r.name)) : new Set();
-    const tel = (sql) => Number(Object.values(db.prepare(sql).get())[0]);
+    const tel = (sql, waarden = []) => Number(Object.values(db.prepare(sql).get(...waarden))[0]);
     const telTabel = (t) => (tabellen.has(t) ? tel(`SELECT COUNT(*) FROM ${t}`) : 0);
     const telKolom = (k, waar) => (kolommen.has(k) ? tel(`SELECT COUNT(*) FROM tracks WHERE ${waar}`) : 0);
     return {
@@ -237,6 +241,11 @@ export function telLibrary(pad) {
       stems: telKolom('stems_json', 'stems_json IS NOT NULL'),
       secties: telKolom('secties_json', 'secties_json IS NOT NULL'),
       instellingen: telTabel('instellingen'),
+      // De browser-sleutels van het instrument (/api/instellingen, PR #31) en de indeling (S11).
+      instrument: tabellen.has('instellingen')
+        ? tel(`SELECT COUNT(*) FROM instellingen WHERE sleutel IN (${INSTELLING_SLEUTELS.map(() => '?').join(', ')})`, INSTELLING_SLEUTELS) : 0,
+      tags: telTabel('tags'),
+      categorieen: telTabel('categorieen'),
     };
   } finally { db.close(); }
 }

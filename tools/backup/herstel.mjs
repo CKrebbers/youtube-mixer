@@ -10,8 +10,10 @@
 //   - elk ander bestand dat er al staat blijft staan; is het anders dan in de kopie, dan zegt
 //     hij dat (je kiest zelf).
 // Zet terug: library.db en kaart.db (de VACUUM-kopieën, zonder -wal/-shm: ze staan al in
-// journal-modus), nacht.json, stems-rij.json, de mappen van set A, de handelingenlogs naar
-// opnames/, en — alleen als ze er nog niet zijn — de hub-staat en varve-kaart.json.
+// journal-modus; de browser-sleutels van het instrument en de mappings zitten in library.db),
+// nacht.json, stems-rij.json, paneel-apparaten.json, uitzend/doelen.json, de mappen van set A
+// (ook sets/ en werkruimtes/), de handelingenlogs naar opnames/, en — alleen als ze er nog
+// niet zijn — de hub-staat en varve-kaart.json.
 // Daarna de handstappen: set B (media), Chrome, beeld, server starten, controleren.
 // Exit: 0 klaar · 1 mislukt · 2 geweigerd of verkeerd aangeroepen.
 import { existsSync, mkdirSync, copyFileSync, statSync, readdirSync, utimesSync, constants } from 'node:fs';
@@ -41,7 +43,7 @@ export function herstel(opties, env = process.env, uit = console.log) {
   }
   if (!existsSync(naar)) { uit(`herstel: ${naar} bestaat niet — eerst de code ophalen (git clone), zie docs/BACKUP.md §4`); return 2; }
   const P = paden(naar, env);
-  if (P.dbFout) { uit(`herstel: weigert — ${P.dbFout}`); return 2; }
+  if (P.waarschuwing) uit(`herstel: LET OP ${P.waarschuwing}`);
   // Ook een losse -wal, -shm of -journal: SQLite past een achtergebleven -wal of hot journal
   // toe op het teruggezette bestand, en dat is een stille beschadiging. Voor kaart.db ook,
   // want die zet herstel ook terug (als hij er nog niet is).
@@ -86,7 +88,8 @@ export function herstel(opties, env = process.env, uit = console.log) {
   terug(join(staat, 'library.db'), P.db);
   uit(`  library.db      → ${P.db}`);
   if (existsSync(join(staat, 'kaart.db'))) uit(`  kaart.db        ${terug(join(staat, 'kaart.db'), P.kaartDb) ? '→' : 'staat er al:'} ${P.kaartDb}`);
-  for (const [naam, doel] of [['nacht.json', P.nacht], ['stems-rij.json', P.stemsRij]]) {
+  for (const [naam, doel] of [['nacht.json', P.nacht], ['stems-rij.json', P.stemsRij], ['paneel-apparaten.json', P.paneelApparaten],
+    ['uitzend/doelen.json', P.uitzendDoelen], ['sjablonen/eigen.json', P.sjablonen]]) {
     if (existsSync(join(staat, naam))) uit(`  ${naam.padEnd(15)} ${terug(join(staat, naam), doel) ? '→' : 'staat er al:'} ${doel}`);
   }
   for (const m of MAPPEN) {
@@ -133,9 +136,10 @@ export function herstel(opties, env = process.env, uit = console.log) {
     uit('     (of VARVE_MEDIA naar de backup laten wijzen en later verhuizen)');
   } else uit('  4. set B staat niet in deze backup: de server start, de library kent de nummers, en elk nummer is opnieuw\n     binnen te halen vanuit tracks.url (plus Demucs). Uren; nooit op een speeldag.');
   uit('  5. server starten (VARVE.app of node server/index.js); de code eerst bijwerken: een nieuwere kopie op oudere code migreert niet terug');
-  uit(existsSync(join(staat, 'browser'))
-    ? `  6. Chrome: ${join(staat, 'browser')} importeren`
-    : '  6. Chrome: master-rack, klankschaal, MIDI-poorten, beeld-adres, stems-standaard, cue-wissel en vormen opnieuw instellen\n     (die staan alleen in localStorage; nog geen kopie, zie docs/BACKUP.md §3)');
+  const inst = telLibrary(join(staat, 'library.db')).instrument;
+  uit(inst
+    ? `  6. Chrome: niets: de ${inst} instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems, cue-wissel, vormen,\n     bus-racks) staan in library.db en komen bij de eerste start vanzelf in de browser. Alleen gemak (panelen\n     open/dicht, sortering, gekozen werkruimte) opnieuw (docs/BACKUP.md §3)`
+    : '  6. Chrome: deze kopie heeft geen instrument-sleutels (van vóór PR #31, of nooit ingesteld): master-rack, klankschaal,\n     MIDI-poorten, beeld-adres, stems-standaard, cue-wissel en vormen opnieuw instellen (docs/BACKUP.md §3)');
   if (!hubTerug && existsSync(hub)) uit(`  -  hub: ${hub} staat in de backup; de huidige ${P.hub} is niet overschreven`);
   uit(existsSync(join(staat, 'beeld'))
     ? `  7. beeld: op de pc de Stroommachine → Live → "Importeer track-scènes" met ${join(staat, 'beeld')}`
