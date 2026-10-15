@@ -1,5 +1,20 @@
 # Overdracht — waar we staan (15 oktober 2026)
 
+## 16 OKT (later): DE CONTROLEKAMER BIJGEWERKT EN OP VOLGORDE (tak `studio/controle-volgorde`)
+
+De speellijst (`src/controle/speellijst.js`, docs/CONTROLEKAMER.md "De speellijst") had geen punten voor wat er sinds
+10 okt gebouwd is: de kaart en de nacht, de opstellingen, het avondpakket op de Mac, de companion, past bij en de
+bpm-kolom, de instellingen op de server, de backup buiten de laptop, media buiten iCloud, de eigen muziek, het setboek,
+MIDI naar Logic, het niveau in beeld, het zaalbeeld, beeld op één machine en uitzenden stap 1. Nu wel: 325 punten in 61
+blokken (was 258 in 51), met een nieuw deel **Vooraf** (overdag, vóór avond 1) en per avond een blok **Na afloop**.
+Volgorde en waarom: docs/CONTROLEKAMER.md "Waarom deze volgorde". Geen id veranderd of weg.
+
+**Gevonden:** VARVE.app start sinds 13 okt altijd de hub (als AV-app-hub er staat). Avond 1 is zonder hub, en ar-weg en
+ar-val lieten VARVE.app opnieuw openen: dan pakt de hub de APC terwijl de mixer hem ook heeft. De speellijst omzeilt het
+(start-apc stopt de hub, ar-weg/ar-val starten de lus zelf); de vraag of VARVE.app de hub alleen moet starten als de
+opstelling het zegt is **AR21** (VRAGEN). Ook: de opstelling "Avond 1 · APC direct" zet "vannacht niet" (nacht-eerste
+zet het terug) en "vandaag speeldag" op de companion blokkeert de nacht (dat punt staat pas na avond 2).
+
 ## 16 OKT: DE REST VAN BLOK AR (tak `studio/ar-alles`)
 
 Clay: "bouw AR1, 2, 4, 8, 12 en alle andere die nog in het plan staan". AR3, AR6, AR10 en AR13 ook tegen het advies

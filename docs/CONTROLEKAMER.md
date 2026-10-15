@@ -63,7 +63,7 @@ de mixer.
    notitie. "Nieuwe ronde" (twee keer klikken) zet de sessie in
    `proef/archief/<tijd>.json` en begint leeg. Wat erin staat: hieronder.
 
-## De speellijst: de proef in drie avonden (6 okt; volgorde 9 okt)
+## De speellijst: de proef in drie avonden (6 okt; volgorde 9 okt; herschikt 16 okt)
 
 Clay probeert alles wat sinds 5 okt gebouwd is voor het eerst op zijn echte hardware
 (APC40 mkII, Xboard49, Maschine MK2, de koptelefoon via het samengestelde apparaat,
@@ -87,42 +87,38 @@ De Controlekamer kent geen avonden: de bloktitel groepeert ("Avond 1 · …").
 | Avond 2 · Patronen | 8 | 22 | PATRONEN §7, MASCHINE §5, STUDIO S4: stappen op de Maschine, baslijn van de Xboard, starten vanaf de APC, mixen, sprong, herladen | S15, S16, S17 |
 | Eerder werk · … (zeven blokken) | 26 | 45 | wat er vóór 6 okt al in stond: toonsoort, binnenhalen, auto-DJ, plan, klankschaal, beamer, kleine dingen | AU2, AU3, PL3, KS2, KS3 |
 
-Sinds 9 okt (na het verbeteronderzoek) staat alles erin, ook wat hierboven niet in de
-tabel staat (luisteren, secties, de Maschine als DJ-bediening, beeld):
+Sinds 16 okt (herschikt na de architectuurronde) staat alles erin wat sinds 10 okt gebouwd is, op de volgorde
+waarin het moet: 325 punten in 61 blokken.
 
-**Avond 1** (mixen): 104 punten, ~3,8 uur (230 min), zonder hub (de mixer opent de APC
-zelf). De **kern** vooraan is ~50 min (27 punten, 50 min; sinds 16 okt begint het opstarten met ar-app): opstarten, luisteren, draaien
-op de APC, koptelefoon, keylock. De rest van avond 1 als er tijd en zin is.
-**Avond 2** (spelen en programmeren): 80 punten, ~4,3 uur (260 min), met de hub (de
-Maschine kan alleen via de hub). Sinds 10 okt met het blok crossover (5 punten, 8 min, PR #26;
-VRAGEN CX4: wordt er pas na avond 2 gemerged, dan gaat het naar avond 3).
-Sinds 11 okt (`visie/handen`) staat de **hub-middag** als eerste blok van avond 2 (6 punten,
-80 min): eigenlijk een eigen dagdeel ("2a", overdag), want de F0-proef kan niet naast een draaiende
-hub of een Varve-tab met de APC. Avond 2 zelf ("2b", 74 punten, 180 min) begint daarna met
-`npm run check -- studio`. Het blok `ga-proef` (14 okt) vraagt twee antwoorden die de hub-middag al
-geeft; wie die deed, neemt ze over.
-**Avond 3** (beeld, met de Omarchy-pc): 8 punten, ~40 min.
-Sinds 15 okt (avond) de **architectuurronde** (VRAGEN AR, ids `ar-`), op 16 okt herschreven na een herleiding
-vanaf de diff en een droogloop (`docs/verslagen/2026-10-15/ar-proef.md`): ar-app (VARVE.app opnieuw bouwen) als
-eerste punt van het opstarten; op avond 1 "Tel 1 snapt naar de tel" (6 punten, 15 min, met ar-ok: het grid
-nagemeten), en aan het eind "Het geheugen over een lange avond" (1, 5), "De server mag even weg" (4, 20: één
-opname over drie storingen, stoppen, omvallen en hangen) en als laatste "Slaap en een uitgang die wegvalt" (2,
-10: daarna moet je misschien herladen); op avond 3 "Het avondpakket en de tests op de pc" (2, 15). Wat ze
-beweren rekent `node tools/proef/ar-na.mjs` na de avond uit Clay's eigen bestanden na (WAV, handelingenlog,
-`~/.varve-server.log`, grid tegen de tellen); alleen lezen, op kopieën, standaard droog.
-**Eerder werk**: 26 punten, ~45 min.
+| deel | blokken | punten | min | wat |
+|---|---|---|---|---|
+| **Vooraf** (overdag, vóór avond 1) | 2 | 21 | 110 | eerst een kopie buiten de laptop (`tools/backup`, docs/BACKUP.md), dan media buiten iCloud (`tools/media-verhuis.mjs`, server uit), dan VARVE.app opnieuw (ar-app) en de herberekening van alle grids (AR1, ar-herreken: wacht op "[tellen] … grids uit bestaande tellen klaar"); daarna de opstelling (docs/STANDEN.md, eindigt op "Avond 1 · APC direct"), het avondpakket thuis (vertrek, aankomst), de instellingen op de server, de iPhone via Tailscale (co-adres) en de A4 van de handenkaart |
+| **Avond 1** (mixen, zonder hub) | 22 | 127 | 330 | de kern (opstarten, luisteren, draaien, koptelefoon, keylock: 27 punten, 50 min), zonder lag, de library (bpm, past bij, de kaart), klank, beatgrid, gelijkzetten, tel 1, stems, master, de secties, naast de mixer (Controlekamer en de companion, AR16), het geheugen, de server weg, slaap en de Scarlett, en "Na afloop en de ochtend erna" (echo's, de nacht aan, ar-na, het setboek, 7a, de proefherstel, de eigen muziek) |
+| **Avond 2** (spelen, met de hub) | 15 | 90 | 305 | de hub-middag (2a, overdag), V1 en de schermen, opstarten (VARVE.app start de hub: app-hub; de opstelling via de hub; de opname van uitzenden stap 0), zonder lag met de hub, spelen, patronen, de secties met plan, auto-DJ, Maschine, beeld en hub, de Maschine als DJ-bediening, bladeren en sampler, crossover, en "Na afloop" (de opname, Logic, de speeldag) |
+| **Avond 3** (beeld) | 6 | 21 | 135 | met de pc: de Stroommachine, het niveau, het avondpakket en de suite op de pc; zonder de pc: het zaalbeeld, beeld op één machine (overdag, geen speeldag), uitzenden stap 1 |
+| **Werkruimte** | 9 | 40 | 225 | E0, poort M, A–D, S9–S11 (ongewijzigd, met de W-vragen bij hun punt) |
+| **Eerder werk** | 7 | 26 | 45 | als er tijd over is |
 
-**De volgorde** (9 okt; `test/controle.test.mjs` eist alle avond 1 vóór avond 2 vóór
-avond 3 vóór "Eerder werk", en de kern vooraan):
-- Avond 1: opstarten, luisteren, draaien op de APC, koptelefoon, keylock (de kern), daarna
-  zonder lag, modus klank, beatgrid, beatgrid gelijkzetten op de APC, tel 1 snapt naar de tel, stems,
-  master en effecten, secties, secties op het toetsenbord, een sectie in de sampler, secties terugspelen,
-  het geheugen over een lange avond, de server mag even weg, slaap en een uitgang die wegvalt.
-- Avond 2: opstarten met de hub, spelen, patronen, planvenster met secties, auto-DJ met
-  secties, secties op de Maschine, secties in beeld, secties naar de hub, de Maschine als
-  DJ-bediening, bladeren en sampler op de Maschine, crossover (een knip als drumpad).
-- Avond 3: beeld met de Stroommachine, het avondpakket en de tests op de pc.
-- Eerder werk: toonsoort, binnenhalen, auto-DJ, planvenster, klankschaal, beamer, kleine dingen.
+**Waarom deze volgorde** (16 okt):
+- **De kopie eerst.** Alles erna herschrijft de library (de verhuizing, de herberekening van de grids): eerst een kopie
+  buiten de laptop, en launchd pas na de verhuizing (anders kijkt hij naar de oude plek).
+- **Media buiten iCloud vóór VARVE.app**: de app leest `~/.varve/media-pad`; de verhuizing kan alleen met de server uit.
+- **De herberekening vóór avond 1.** De eerste start na 16 okt rekent elk automatisch grid opnieuw (kaart-VERSIE 3); pas
+  daarna kloppen ga-dj en ar-een, en de tegel Server zegt dan of de secties actueel zijn.
+- **Avond 1 is zonder hub, maar VARVE.app start hem** (sinds 13 okt, VRAGEN AR21): start-apc stopt hem en opent de mixer
+  met "zonder hub"; ar-weg en ar-val starten de server met de lus zelf, niet met VARVE.app (die zou de hub midden in
+  avond 1 starten, en dan praten de hub en de mixer allebei met de APC).
+- **De nacht.** De opstelling "Avond 1 · APC direct" zet "vannacht niet": nacht-eerste zet dat aan het eind van avond 1
+  terug. "Vandaag speeldag" op de companion blokkeert de nacht, dus dat punt staat pas na avond 2.
+- **Na afloop**: ar-na, het setboek en 7a lezen kopieën van de avond, dus pas daarna (het setboek leest het log van
+  sb-log, het vinkje "log altijd aan" vooraan in het opstarten).
+- **Avond 2**: de hub-middag en V1 kunnen niet naast een draaiende hub; daarna start VARVE.app de hub (app-hub) en is
+  de handmatige start de terugval (hb-start).
+- **Avond 3**: eerst wat de pc nodig heeft, dan wat zonder pc kan; beeld op één machine en uitzenden overdag.
+
+`test/controle.test.mjs` eist dit: Vooraf vóór avond 1 vóór avond 2 vóór avond 3 vóór Werkruimte vóór Eerder werk,
+de kern als eerste blokken van avond 1, kopie → verhuizing → VARVE.app → herberekening vóór avond 1, de speeldag na de
+nacht, het setboek na de avond, app-hub vóór hb-start, en dat start-apc de hub stopt en ar-weg de lus zonder de app start.
 
 - **Citaten** (16 okt): een punt dat een melding of logregel van de app letterlijk aanhaalt, zet die in
   `citeert`. `test/controle.test.mjs` eist dat elk citaat in de doe of de let staat én letterlijk in de code

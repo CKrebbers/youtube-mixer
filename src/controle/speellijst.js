@@ -48,19 +48,99 @@
  * stuk in de doe of de let staat, en in de code (src/, server/, tools/, test/node-versie.mjs, de .html-pagina's): verandert
  * een melding, dan zegt de test dat de speellijst mee moet.
  * Bijgewerkt (16 okt, AR17/AR19/AR20 gebouwd): ar-weg verwacht nu "stream weer goed", ar-pakket grijs "geen library".
+ * Herschikt (16 okt, na de architectuurronde): alles wat sinds 10 okt gebouwd is en nog geen punt had, en de volgorde
+ * waarin het moet. Bovenaan "Vooraf" (overdag, vóór avond 1): eerst een kopie buiten de laptop (tools/backup), dan media
+ * buiten iCloud (server uit), dan VARVE.app opnieuw (ar-app, hierheen uit het opstarten) en de herberekening van alle grids
+ * (AR1); daarna de opstelling (eindigt op "Avond 1 · APC direct"), het avondpakket thuis, de instellingen op de server, de
+ * iPhone via Tailscale en de A4 van de handenkaart. Op avond 1 na de kern de library (bpm, past bij, de kaart), vóór de
+ * architectuurpunten de companion naast de mixer, en aan het eind "Na afloop en de ochtend erna" (echo's, de nacht,
+ * ar-na, het setboek, 7a, de proefherstel, de eigen muziek). Op avond 2 eerst VARVE.app die de hub start (app-hub), de
+ * opstelling via de hub, de lange opname van uitzenden stap 0, en "Na afloop" (Logic, de speeldag pas daar: die blokkeert
+ * de nacht). Op avond 3 het niveau na beeld-pc, dan zonder de pc het zaalbeeld, beeld op één machine en uitzenden.
+ * VARVE.app start sinds 13 okt ook de hub (AR21): avond 1 stopt hem (start-apc) en ar-weg/ar-val starten de lus zonder
+ * de app. De open vragen op gevoel, gehoor en zicht (J, W, PL2, BE11–BE15, HA4–HA9, AP9, CX3) staan bij hun punt.
+ * Geen id veranderd of weg; ar-app, ar-meet, ar-ok en ga-echoes zijn alleen verhuisd (de stand hangt aan het id).
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
 export const SPEELLIJST = [
+  // ---- Vooraf (16 okt): overdag, vóór avond 1, in deze volgorde --------------------------
+  // Eerst een kopie buiten de laptop (alles hierna herschrijft de library), dan media buiten iCloud (server uit),
+  // dan VARVE.app opnieuw (de lus) en de herberekening van alle grids (AR1): pas daarna kloppen de beatgrid-punten.
+  { id: 'vooraf', titel: 'Vooraf · Backup, media buiten iCloud en VARVE.app (overdag, zonder muziek)', minuten: 60, punten: [
+    { id: 'bk-droog', doe: 'Overdag, zonder muziek. Externe SSD of stick aangesloten. In Terminal in de projectmap: node tools/backup/kopie.mjs --doel /Volumes/<naam> --droog.',
+      let: 'Bovenaan "(droog: er wordt niets geschreven)". Wijst de regel media naar je echte map? Geen "LET OP zelfde schijf als de bron" en geen "er staan twee libraries"? Set A rond 20 MB? (docs/BACKUP.md)',
+      citeert: ['(droog: er wordt niets geschreven)', 'LET OP zelfde schijf als de bron', 'er staan twee libraries'] },
+    { id: 'bk-eerste', doe: 'De eerste echte kopie, vóór alles wat de library herschrijft (de herberekening van ar-herreken, de verhuizing): node tools/backup/kopie.mjs --doel /Volumes/<naam> --controleer. Voor een reis later ook met --media erbij.',
+      let: '"… niets weggegooid", en als laatste regel van de controle "alles ok" (of "kopie in orde; LET OP: …": welke)? Met --media: hoe lang duurde het (nooit gemeten), en zegt de controle "set B: 0 nummers zonder media-kopie"?',
+      citeert: ['niets weggegooid', 'alles ok', 'kopie in orde; LET OP: ', 'zonder media-kopie'] },
+    { id: 'ap-icloud', doe: 'Alleen zolang media/ nog op het iCloud-Bureaublad staat (vóór mv-doe; anders overslaan): haal in de Finder één bestand in media/backups/ "van deze Mac verwijderen" en klik in de Controlekamer de tegel Avondpakket. Download het daarna weer en klik nog eens.',
+      let: 'Wordt Media lokaal oranje, "1 buiten de nummers", met "…: uitgeplaatst, onderweg niet nodig"? Dan ziet het avondpakket een uitgeplaatst bestand echt (stap 7b). Na het downloaden weer groen? (AP9)',
+      citeert: ['buiten de nummers', 'uitgeplaatst, onderweg niet nodig'] },
+    { id: 'mv-droog', doe: 'Media buiten iCloud (docs/LIBRARY.md "Waar media/ staat"). Geen deck, server uit: sh tools/varve-app/server-lus.sh stop. Dan in de projectmap: node tools/media-verhuis.mjs.',
+      let: '"droogloop, er verandert niets", "niets uitgeplaatst", "verhuizen breekt niets", het doel met "(zelfde schijf: hernoemen, geen kopie)", en onderaan "Kan: niets staat in de weg."? Zo niet: welke regel staat onder "Kan nu niet"? Bij "uitgeplaatst door iCloud": eerst in de Finder "Download nu", dan opnieuw.',
+      citeert: ['droogloop, er verandert niets', 'niets uitgeplaatst', 'verhuizen breekt niets', 'zelfde schijf: hernoemen, geen kopie', 'Kan: niets staat in de weg.', 'uitgeplaatst door iCloud'] },
+    { id: 'mv-doe', doe: 'node tools/media-verhuis.mjs --doe. Plak de twee regels die hij toont (VARVE_MEDIA in ~/.zprofile en ~/.varve/media-pad). Start nog niets: dat doet ar-app hierna.',
+      let: '"Verhuisd." en "media-VERHUISD.txt geschreven: …"? Staat er in de projectmap geen media/ meer, wel media-VERHUISD.txt?',
+      citeert: ['Verhuisd.', ' geschreven: '] },
+    { id: 'ar-app', doe: 'Na mv-doe (VARVE.app leest ~/.varve/media-pad), in Terminal in de projectmap: had je de LaunchAgent uit docs/TAILSCALE.md geladen, dan eerst launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist. Stop een server die nog los draait (pkill -f server/index.js), bouw VARVE.app opnieuw (zsh tools/varve-app/maak.sh) en start VARVE vanuit het Dock.',
+      let: 'sh tools/varve-app/server-lus.sh status zegt "de lus draait (pid …)", en ~/.varve-server.log heeft de regel "[lus] … server gestart (pid …)". Zegt hij "de lus draait niet", dan draait er een server zonder lus (VARVE.app start geen tweede): stop hem en klik VARVE opnieuw. Wil je de LaunchAgent houden (de server na het inloggen al aan): die start sinds 16 okt de lus zelf (docs/TAILSCALE.md, AR8); laad hem dan opnieuw en kijk of status hetzelfde zegt. Let op: VARVE.app start sinds 13 okt ook de hub (staat AV-app-hub in ~/Projects): lsof -i :7700 geeft dan een regel. Dat is goed voor avond 2; voor avond 1 stop je hem weer (start-apc).',
+      citeert: ['de lus draait (pid', 'de lus draait niet', 'server gestart (pid'] },
+    { id: 'ar-herreken', doe: 'Na ar-app, er speelt niets (dan wacht de tweede mening niet). Volg het log: tail -f ~/.varve-server.log, tot de regel "[tellen] … grids uit bestaande tellen klaar — … s". De eerste start na 16 okt rekent elk automatisch grid opnieuw uit de tellen (kaart-VERSIE 3). Kijk daarna naar de tegel Server in de Controlekamer.',
+      let: 'Hoe lang duurde het (het getal achter klaar)? Staat er in het log "[media] …" met je nieuwe map en GEEN "ligt binnen iCloud ("? Zegt de tegel Server daarna "secties: alles actueel", of hoeveel "verouderd" (die volgen bij het laden)? Pas hierna kloppen de beatgrid-punten van avond 1 (ga-dj, ar-een). (AR1)',
+      citeert: [' uit bestaande tellen klaar', '[media] ', 'ligt binnen iCloud (', 'secties: alles actueel'] },
+    { id: 'mv-na', doe: 'Open de mixer (mixer openen) en laad een nummer met stems, speel het en spring erin. Daarna: node tools/backup/kopie.mjs --doel /Volumes/<naam> --droog.',
+      let: 'Spelen, golfvorm en stems zoals altijd vanaf de nieuwe plek? Zegt kopie bij media "(via ~/.varve/media-pad)", zonder "er staan twee libraries"?',
+      citeert: ['er staan twee libraries'] },
+    { id: 'bk-launchd', doe: 'Na de verhuizing (anders kijkt hij naar de oude plek): zsh tools/backup/launchd/maak.sh --doel /Volumes/<naam> (alleen kijken), dan hetzelfde met --installeer.',
+      let: '"geïnstalleerd: …"? De ochtend erna (na 08:00, SSD eraan): tail ~/.varve-backup.log met "== … kopie naar /Volumes/…" en "klaar in …". Zonder SSD: "… schijf niet aangesloten?); overgeslagen". Weigerde macOS iets (de map op het Bureaublad, Volledige schijftoegang)? Schrijf de regel over.',
+      citeert: ['geïnstalleerd: ', 'kopie naar ', 'schijf niet aangesloten?); overgeslagen'] },
+  ] },
+  // Daarna wat de avonden klaarzet: de opstelling (eindigt op "Avond 1 · APC direct"), het avondpakket thuis
+  // (vertrek, dan aankomst met de spullen), de instellingen op de server, de iPhone via Tailscale, de A4.
+  { id: 'vooraf-stand', titel: 'Vooraf · Opstelling, avondpakket, instellingen, iPhone en de handenkaart', minuten: 50, punten: [
+    { id: 'sta-tegel', doe: 'Controlekamer, blok Openen: kies bij Opstelling "Avond 1 · APC direct" en lees de regel eronder. Druk activeer, en nog eens (de knop zegt dan "zeker? klik nog eens").',
+      let: 'Onder de kiezer "Activeren: …" (nacht vannacht niet, master Dub-worp …)? Daarna de tegel Opstelling met de titel, "sinds HH:MM" en wat je zelf nog doet ("… (kies hem in de kaart) · master Dub-worp: mixer volgt nog niet")? Lees je in één blik wat je nog moet doen? Op de iPad via Tailscale (/controle): lukt activeer daar ook, en mag dat? (W9)',
+      citeert: ['zeker? klik nog eens', 'Activeren: ', '(kies hem in de kaart)', ': mixer volgt nog niet'] },
+    { id: 'sta-bewerk', doe: 'Klik bewerk. Krat op Vertrouwd, nacht op "uit en vannacht niet". Typ "Proef1" in het naamveld en druk Enter (= bewaar als). Verander daarna één keuze en druk leg vast zonder bewaar.',
+      let: 'Komt hij als proef1 (kleine letters) in de kiezer? Weigert leg vast met "… klik eerst op bewaar, dan op leg vast"? Lukte het zonder JSON, en hoeveel klikken?',
+      citeert: ['uit en vannacht niet', 'klik eerst op bewaar, dan op leg vast'] },
+    { id: 'sta-mapping', doe: 'Mixer dicht, tegel Backup groen. bewerk: mapping op "standaard (je eigen regels eraf)", bewaar als proefmap, activeer en open de mixer; probeer een koppeling die je zelf leerde. Sluit de mixer, druk vorige terugzetten en open hem opnieuw. Activeer tot slot weer "Avond 1 · APC direct".',
+      let: 'Eerst doet je eigen koppeling niets, na het terugzetten weer wel? (De mapping geldt pas bij de volgende start van de mixer; nog nooit in de mixer geproefd, docs/STANDEN.md §6.)',
+      citeert: ['standaard (je eigen regels eraf)'] },
+    { id: 'sta-terug', doe: 'Activeer "Avond 1 · APC direct" opnieuw, zet in de mixer (library, tab KAART, NACHTWACHTRIJ) vandaag niet met de hand uit, en druk in de Controlekamer vorige terugzetten (twee klikken). Activeer daarna "Avond 1 · APC direct" nog eens: daarmee begin je avond 1.',
+      let: 'Melding "vorige teruggezet: niets (nacht met de hand veranderd na de activering)" en rood "nacht: met de hand veranderd na de activering: blijft zoals hij is"? Zonder handwerk ertussen: "vorige teruggezet: nacht"?',
+      citeert: ['vorige teruggezet: ', 'met de hand veranderd na de activering: blijft zoals hij is'] },
+    { id: 'ap-vertrek', doe: 'Alleen de lader eraan, mixer dicht. Controlekamer, tegel Avondpakket: open "Avondpakket: profiel, fase, punten en paklijst", profiel apc, fase auto. Daarna in Terminal: node tools/avondpakket.mjs --profiel apc; echo $?',
+      let: 'Springt de fase op vertrek, en zegt de tegel klaar (of klaar · let op N, met elk ◐ bewust gezien)? Met de telefoonlader: Accu "zwakke lader (8 W) …"? De CLI geeft hetzelfde oordeel, onderaan "Paklijst (apc):", exit 0 zonder rood. Gaat de LPD8 mee, blijft de Xboard49 thuis? (HA6, HA7)',
+      citeert: ['zwakke lader (', 'Paklijst ('] },
+    { id: 'ap-aankomst', doe: 'Aankomst-stappen 1–3 uit docs/AVONDPAKKET.md §7: de lader in de PD-hub, de hub in poort 2, de APC in poort 1, de Scarlett aan de hub, Bluetooth uit, uitvoer = het samengestelde apparaat. Klik de tegel. Trek dan om de beurt de APC en de Scarlett eruit en klik telkens de tegel.',
+      let: 'Springt de fase op aankomst, en zijn APC, Scarlett en Geluid (4 kanalen) groen? Maakt een getrokken apparaat precies dat punt oranje? Wordt het samengestelde apparaat herkend? Welk punt klopt niet? (Stap 7b; daarna mag hardwareBevestigd in avondpakket/profielen.json op true.)' },
+    { id: 'ins-server', doe: 'In Terminal: curl -s localhost:8777/api/instellingen',
+      let: 'Staan er varve.master.rack, varve.klankschaal, varve.midi.ports, varve.beeld.adres … met een waarde? Leeg ({"instellingen":{}}) = je Chrome stuurde ze nooit omhoog.' },
+    { id: 'ins-tweede', doe: 'Mixer-tabblad dicht, de APC niet aanraken. Open in Chrome http://127.0.0.1:8777/ (eigen opslag, zoals een nieuw profiel; Chrome vraagt opnieuw om MIDI: niet toestaan). Kijk in de library bij stems (2 · 4 · geen), naar het master-rack, de klankschaal en het beeld-adres.',
+      let: 'Alles zoals op localhost, zonder dat je iets instelde?' },
+    { id: 'ins-terug', doe: 'Op 127.0.0.1: zet stems op 4, wacht een seconde en sluit het tabblad. Open de mixer weer gewoon en zet stems daarna terug op 2.',
+      let: 'Staat stems daar op 4, met de melding "instellingen bijgewerkt bij het opstarten: stems.standaard — …"? Toont instellingen.vorige() in de console de oude 2?',
+      citeert: ['instellingen bijgewerkt bij het opstarten: '] },
+    { id: 'co-adres', doe: 'Eenmalig, niet op een speeldag (docs/COMPANION.md "Eenmalig instellen"): Tailscale op de iPhone en de iPad, tailscale serve --bg 8777, VARVE_HOSTS in ~/.zprofile, VARVE opnieuw vanuit het Dock. Dan: grep -E \'ook via|VARVE_HOSTS\' ~/.varve-server.log. Open op de iPhone https://<NAAM>/companion en kies Zet op beginscherm; op de iPad hetzelfde.',
+      let: 'Zegt het log "ook via … https://<NAAM>"? Staat er "VARVE_HOSTS is leeg: iPad en iPhone krijgen 403", dan klopt de aanname over ~/.zprofile niet (terugval in stap 4). Opent de pagina zonder "dit apparaat is te oud …"? Noteer de laadtijd en de iOS-versie van de iPad. Ook nodig voor werk-d.',
+      citeert: ['VARVE_HOSTS is leeg: iPad en iPhone krijgen 403', 'dit apparaat is te oud'] },
+    { id: 'hd-maak', doe: 'In de projectmap: node tools/handen/handenkaart.mjs --controleer, dan node tools/handen/handenkaart.mjs --html en git status.',
+      let: '"A4-afdruk: …/tools/handen/uit/handenkaart.html (open in Chrome, ⌘P)"? Staat docs/HANDEN.md daarna als gewijzigd (de top-40 uit je echte logs)? Laat dat staan voor Claude.',
+      citeert: ['A4-afdruk: ', '(open in Chrome, ⌘P)'] },
+    { id: 'hd-print', doe: 'Open handenkaart.html in Chrome, ⌘P, A4 liggend.',
+      let: 'Hoeveel bladen? Begint elk kopje (APC40 mkII, Maschine MK2, LPD8, Xboard49 …) op een nieuw blad, en is 9 pt te lezen? De afdruk én het document, of alleen het document? Leg hem klaar voor avond 2 (hd-naast). (HA9)' },
+  ] },
   // ---- Avond 1: mixen (APC + koptelefoon) ----------------------------------------
   // De kern (~45 min): opstarten, luisteren, draaien, koptelefoon, keylock.
   { id: 'start', titel: 'Avond 1 · Opstarten', minuten: 5, punten: [
-    // De architectuurronde (VRAGEN AR8): vóór alles, want "De server mag even weg" rekent op de herstartlus.
-    { id: 'ar-app', doe: 'Vóór de avond, in Terminal in de projectmap: had je de LaunchAgent uit docs/TAILSCALE.md geladen, dan eerst launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist. Stop een server die nog los draait (pkill -f server/index.js), bouw VARVE.app opnieuw (zsh tools/varve-app/maak.sh) en start VARVE vanuit het Dock.',
-      let: 'sh tools/varve-app/server-lus.sh status zegt "de lus draait (pid …)", en ~/.varve-server.log heeft de regel "[lus] … server gestart (pid …)". Zegt hij "de lus draait niet", dan draait er een server zonder lus (VARVE.app start geen tweede): stop hem en klik VARVE opnieuw. Wil je de LaunchAgent houden (de server na het inloggen al aan): die start sinds 16 okt de lus zelf (docs/TAILSCALE.md, AR8); laad hem dan opnieuw en kijk of status hetzelfde zegt.',
-      citeert: ['de lus draait (pid', 'de lus draait niet', 'server gestart (pid'] },
-    { id: 'start-apc', doe: 'Sluit de APC40 aan (Logic en andere muziekprogramma\'s dicht) en open de mixer met de knop hierboven.',
-      let: 'APC hierboven groen, geen melding "verkeerde poort".' },
+    { id: 'start-apc', doe: 'Sluit de APC40 aan (Logic en andere muziekprogramma\'s dicht). Avond 1 is zonder hub: startte VARVE.app er een (lsof -i :7700 geeft een regel), stop hem dan met kill $(lsof -nP -t -iTCP:7700 -sTCP:LISTEN). Open de mixer met de knop zonder hub (naast "mixer openen via de hub"; zonder ?hub= in de Controlekamer heet hij gewoon mixer openen).',
+      let: 'APC hierboven groen, geen melding "verkeerde poort", en in de adresbalk van de mixer geen ?hub=? (Met de hub erbij praten de hub en de mixer allebei met de APC.) (AR21)',
+      citeert: ['mixer openen via de hub', 'zonder hub'] },
     { id: 'start-audio', doe: 'Klik in de mixer op "audio starten".', let: 'Audio hierboven: aan.' },
+    { id: 'sb-log', doe: 'In de mixer: klik ↺ (naast de opname) en zet het vinkje "log altijd aan, vanaf het openen".',
+      let: 'Loopt ○ log vanaf nu vanzelf mee, ook na herladen? Dat log leest het setboek na de avond (sb-draai).',
+      citeert: ['log altijd aan, vanaf het openen'] },
     { id: 'start-scherm', doe: 'Kijk of de mixer op je MacBook-scherm past zonder scrollen.',
       let: 'Alle acht faders helemaal te zien? Is er iets te klein om te lezen?' },
   ] },
@@ -83,7 +163,7 @@ export const SPEELLIJST = [
     { id: 'dr-beatjump', doe: 'Bank ◀ ▶ = beatjump; shift + Bank = de lengte (½ of ×2).', let: 'Springt hij in de maat, zonder hapering?' },
     { id: 'dr-loop', doe: 'Pan = loop in, Sends = loop out, User = reloop.', let: 'Loopt de loop zonder tik op de naad?' },
     { id: 'dr-quantize', doe: 'Lock = quantize aan en uit.', let: 'Licht Lock op, vallen cues dan op de tel?' },
-    { id: 'dr-rem', doe: 'Stop All Clips = rem.', let: 'Klinkt het als een draaitafel die uitloopt?' },
+    { id: 'dr-rem', doe: 'Stop All Clips = rem.', let: 'Klinkt het als een draaitafel die uitloopt, en mis je een spin-up na loslaten? (J7)' },
     { id: 'dr-mix', doe: 'Mix een overgang met faders, EQ, filter en crossfader.', let: 'Reageert alles direct, zonder vertraging?' },
   ] },
   { id: 'koptelefoon', titel: 'Avond 1 · Koptelefoon', minuten: 12, punten: [
@@ -123,8 +203,33 @@ export const SPEELLIJST = [
       let: 'Wisselt de focus bij elke druk, ook precies als het lampje aan- of uitgaat? (Het echofilter slikte vroeger ~13% van zulke drukken.)' },
     { id: 'ga-endless', doe: 'Wissel de focus met Track Select en draai meteen één tik aan device knob 1.',
       let: 'Telt die eerste tik, of gaat hij verloren (bewust, tot bekend is wat de APC doet)? Merk je het tijdens het mixen?' },
-    { id: 'ga-echoes', doe: 'Aan het eind van de avond, met de mixer nog open: Controlekamer, tegel APC40, de regel "echo\'s: N" (of midi.status().echoes in de console van de mixer).',
-      let: 'Staat er 0 na een hele avond? Dan mag het echofilter voor de APC uit. (GA13, GA15)' },
+  ] },
+  // De library van 13 okt (bpm-kolom, past bij, PR #37/#38) en de muziekkaart (10 okt, docs/KAART.md): na de kern,
+  // want laden en mixen moeten al lopen; haal binnen alleen met een stil deck.
+  { id: 'library', titel: 'Avond 1 · Library: bpm, past bij en de kaart', minuten: 20, punten: [
+    { id: 'pb-bpm', doe: 'Library (B): kijk naar de kolom bpm en klik twee keer op de kolomkop bpm.',
+      let: 'Klopt het hoofdtempo met wat je tikt ("~" = live gespeeld, "128 / 117" = twee tempo\'s, "?" = geen zeker stuk), en staat er nergens meer "wisselend"? Valt het op dat sorteren op het begin gaat, niet op het getal dat er staat?' },
+    { id: 'pb-knop', doe: 'Laad een nummer met ✓ naast de bpm op track 1 (focus) en klik past bij in de balk van de library.',
+      let: 'Een kop "past bij "<titel>" (track 1) …: N goed, M bijna" met de kolommen past · titel · bpm · toon · tempo · waarom? Snap je "toon gegokt" en de ? achter de toon?',
+      citeert: ['toon gegokt'] },
+    { id: 'pb-mix', doe: 'Laad een "goed" op track 2 (de knop 2 in zijn rij), sync en mix. Daarna een "bijna" met "keylock en ±1 transponeren" of "ver pitchen, keylock aan".',
+      let: 'Klinkt goed ook goed samen? Is bijna met de keylock bruikbaar?',
+      citeert: ['keylock en ±1 transponeren', 'ver pitchen, keylock aan'] },
+    { id: 'pb-volg', doe: 'Past bij aan. Wissel de focus naar een lege track en daarna naar track 2. Speelt er een nummer met een outro zonder beat: kijk naar de kop.',
+      let: 'Leeg: "geen nummer op de focus-track: laad er eerst een"? Rekent hij binnen een seconde opnieuw voor track 2? Bij de outro "(gemeten op het zekere deel)"?',
+      citeert: ['geen nummer op de focus-track: laad er eerst een', 'gemeten op het zekere deel'] },
+    { id: 'kaart-zoek', doe: 'Library-paneel, tab KAART. Typ een artiest die je vaak draaide in het zoekveld. Kies daarna in de kiezer (hele kaart) een krat, bijvoorbeeld Proefkrat.',
+      let: 'Staan de rijen er meteen en volgt "… gevonden voor …" vlot op je typen? Met de krat: de kolom krat vooraan (1, 2, 3 …)? Vlot in je eigen Chrome naast de mixer?',
+      citeert: [' gevonden voor '] },
+    { id: 'kaart-haal', doe: 'Er speelt niets. Druk bij een nummer dat niet binnen is op haal binnen. Zet daarna het filter geen video aan, kies een ♫-nummer en druk zoek; kies een kandidaat als er geen zekere is.',
+      let: 'Melding "1 naar de wachtrij", en de rij gaat via bezig… naar binnen met laadknoppen (de eerste echte yt-dlp vanuit de kaart)? Bij zoek: "zeker gevonden (…)" of "N kandidaten voor …": klopt de versie? Bij "zoeken mislukt: …" weigert YouTube zonder cookies: plak de regel.',
+      citeert: ['naar de wachtrij', 'zeker gevonden (', ' kandidaten voor ', 'zoeken mislukt: '] },
+    { id: 'kaart-deck', doe: 'Laat track 1 spelen en houd de muis op haal binnen. Pauzeer en klik meteen haal binnen; na een halve minuut nog eens.',
+      let: 'Tijdens het spelen is de knop grijs met de tooltip "er speelt een deck — binnenhalen en zoeken wachten tot het stil is …"? Vlak na de pauze weigert de server ("er speelt een deck"), na ~30 s lukt het? (De 30 s-regel, nog nooit met een echt deck.)',
+      citeert: ['er speelt een deck — binnenhalen en zoeken wachten tot het stil is'] },
+    { id: 'kaart-krat', doe: 'Kies een kleine playlist en druk alles in deze krat op de wenslijst. Doe hetzelfde bij een krat met meer dan 20 nummers die niet binnen zijn en druk nee. Haal er daarna één van de lijst met ×.',
+      let: 'Boven 20 de vraag "… op de wenslijst zetten? Schatting: N × 50 MB = …" met ja, op de wenslijst / nee? Krijgen de rijen wacht en ×?',
+      citeert: ['op de wenslijst zetten? Schatting: ', 'ja, op de wenslijst'] },
   ] },
 
   // Daarna, als er tijd en zin is: klank, beatgrid, stems, master, en de secties (6 okt, docs/SECTIES.md; verweven §7).
@@ -132,7 +237,7 @@ export const SPEELLIJST = [
     { id: 'kl-modus', doe: 'Shift + scene 5: modus klank.', let: 'Scene 5 brandt magenta.' },
     { id: 'kl-kill', doe: 'Rij 1–3 vasthouden = kill hoog, mid, laag. Shift + pad = vast.', let: 'Valt de band echt weg, ook bij zware bas?' },
     { id: 'kl-kleuren', doe: 'Kijk naar de pads: rood = kill, oranje = rem, groen = op de maat, grijs = stil.',
-      let: 'Zijn de kleuren op het apparaat uit elkaar te houden?' },
+      let: 'Zijn de kleuren op het apparaat uit elkaar te houden? (J30)' },
     { id: 'kl-knipper', doe: 'Kijk naar Pan, Sends en User terwijl er een loop loopt.', let: 'Knipperen ze op de tel?' },
   ] },
   { id: 'beatgrid', titel: 'Avond 1 · Beatgrid', minuten: 18, punten: [
@@ -186,11 +291,6 @@ export const SPEELLIJST = [
       citeert: ['[tellen] ', 'lage band ', 'de "1" is niet zeker', 'de "1" is hier niet zeker — '] },
     { id: 'ar-vloer', doe: 'Hetzelfde met een nieuw house- of technonummer (een kick op elke tel).',
       let: 'Staat de "1" daar ooit een tel naast zonder dat scene 1 oranje brandt? Dat is de bekende grens (vier op de vloer zegt de lage band niets): bij welk nummer? Na afloop noemt node tools/beatmeting/vloer.mjs de stukken in je library met zo\'n vloer waar de downbeats niet op de "1" vallen (AR4).' },
-    { id: 'ar-meet', doe: 'Overdag of na afloop, in Terminal: node tools/beatmeting/ar2.mjs (droog: zegt wat ontbreekt), dan hetzelfde met --meet (de twee metingen uit docs/verslagen/2026-10-15/arch-beatgrid.md §5, met de Python van ~/.varve/stems-venv of VARVE_TELLEN_PY; het verslag in tools/beatmeting/uit/).',
-      let: 'Zet de getallen in de notitie (AR2). De hele library krijgt de tweede mening over de "1" sinds 16 okt vanzelf bij de eerste start van de server (kaart-VERSIE 3, AR1): klopten de oranje "1"-en daarna?' },
-    { id: 'ar-ok', doe: 'Na de avond, in Terminal: node tools/proef/ar-na.mjs --titel "<titel van ar-snap>" --titel "<titel van ar-een>" (droog: zegt wat hij zou lezen), dan hetzelfde met --meet erbij.',
-      let: 'Zegt hij bij ar-snap "oordeel: op de tel (≤ 5 ms)" en "1" klopt? Bij ar-een: wat zegt "1" op de downbeats? Plak het rapport in de notitie; "NAAST de tel" is een fout, ook als het er goed uitzag.',
-      citeert: ['oordeel: ', 'op de tel (≤ ', 'NAAST de tel'] },
   ] },
   { id: 'stems', titel: 'Avond 1 · Stems', minuten: 14, punten: [
     { id: 'st-zang', doe: 'Laad Loving arms (vier stems), knop stems in de balk, kill bij de zang aan en weer uit.',
@@ -278,6 +378,25 @@ export const SPEELLIJST = [
     { id: 'sl-loop', doe: 'Zet eerst shift + pad (sectie-loop) aan, dan pas ○ log. Na een paar maten shift + dezelfde pad (loop eraf), ○ log uit, en terugspelen.',
       let: 'Begint het terugspelen in die loop (pad wit) en gaat hij er op dezelfde maat af? Hoor je ergens anders een tel of maat verschil, ook bij hotcues of start op de maat? (SVL3)' },
   ] },
+  // De Controlekamer en de companion naast een spelende mixer (10–16 okt, docs/COMPANION.md, AR16). Vóór de
+  // architectuurpunten: die stoppen de server en de audio-uitgang.
+  { id: 'naast', titel: 'Avond 1 · Naast de mixer: Controlekamer en iPhone', minuten: 20, punten: [
+    { id: 'ap-deck', doe: 'Mixer open, niets speelt: kijk naar de tegel Avondpakket in de Controlekamer. Laat track 1 spelen en klik de tegel. Daarna alleen een patroon of instrument (geen deck), koptelefoon op, en klik de tegel nog eens.',
+      let: 'Met de mixer open: "niet gemeten" met "mixer open: klik om te meten"? Met een deck: "bevroren: er speelt een deck · HH:MM"? Zonder deck meet hij alles (system_profiler): hoor je een tik of hapering? Nooit gemeten.',
+      citeert: ['mixer open: klik om te meten', 'bevroren: '] },
+    { id: 'co-wens', doe: 'Op de iPhone (co-adres), tab kaart: zoek een nummer dat niet binnen is en tik wens. Op de Mac: library, tab KAART, dezelfde rij. Draai intussen aan de APC.',
+      let: 'Melding "1 op de wenslijst · …" met wat er daarna gebeurt (bijvoorbeeld "nacht staat uit: haal nu, of op de laptop")? Staat de rij op de Mac op wacht? Blijft de APC direct terwijl de companion open is? Zijn de tikdoelen groot genoeg?',
+      citeert: ['nacht staat uit: haal nu, of op de laptop'] },
+    { id: 'co-kies', doe: 'Op de iPhone: filter geen video, en wens een ♫-nummer. Op de Mac (er speelt niets): KAART, zoek bij dat nummer. Houd op de iPhone de kaart in beeld, tik kies en dan een kandidaat.',
+      let: 'Krijgt de rij binnen ~5 s vanzelf kies (bij een zekere versie kiest de laptop zelf)? Na de tik "gekozen: … · staat op de wenslijst"?',
+      citeert: [' · staat op de wenslijst'] },
+    { id: 'co-haalnu', doe: 'Er speelt niets en het is geen speeldag. Op de iPhone: haal de wenslijst nu op (n). Druk nog NIET op vandaag speeldag (dat blokkeert de nacht van nacht-eerste; dat punt komt na avond 2).',
+      let: '"run gestart: hooguit n van de wenslijst", de knop wordt "haal nu: er loopt al een run", en de rijen worden klaar? Met een spelend deck weigert hij ("er speelt een deck")?',
+      citeert: ['run gestart: hooguit ', 'haal nu: er loopt al een run'] },
+    { id: 'co-nu', doe: 'Mixer open, twee tracks spelen. In het mixer-tabblad: Cmd+Opt+I, Network, filter "mixer"; kijk een halve minuut zonder companion open. Open dan op de iPhone de tab nu, vergrendel hem 30 s en ontgrendel. Sluit als laatste het mixer-tabblad (daarna opent ar-audio hem weer).',
+      let: 'Zonder kijker één POST /api/mixer per ~4 s, met de iPhone op nu weer ~1 per s (AR16)? Per track titel, ▶ en "nog m:ss", gelijk met de mixer? Na het ontgrendelen hooguit even "≈ nog", nooit "mixer meldt zich niet (op de achtergrond?)"? Na het sluiten eerst die regel, na 60 s "mixer meldt zich niet · laatste melding … geleden"? Nooit een rode "twee mixers open"?',
+      citeert: ['mixer meldt zich niet (op de achtergrond?)', 'mixer meldt zich niet · laatste melding ', 'twee mixers open'] },
+  ] },
   // De architectuurronde (15 okt, sporen A en D, VRAGEN AR; docs/verslagen/2026-10-15/ar-proef.md). Op volgorde:
   // eerst wat niets stoort (geheugen), dan de server (één opname over drie storingen, ar-na rekent hem na), en
   // als laatste wat de audio-uitgang raakt (slaap, de Scarlett): daarna moet je misschien herladen.
@@ -286,10 +405,10 @@ export const SPEELLIJST = [
       let: 'Hooguit +20 MB (de eis van de lekproef; headless na 20 wissels −5 MB, vóór de fix +68 MB na 50)? Lees de Geheugenvoetafdruk, geen ander getal: het gedeelde geheugen van Chrome groeit wel mee (headless +41 MB) zonder dat het een lek is.' },
   ] },
   { id: 'ar-server', titel: 'Avond 1 · De server mag even weg', minuten: 20, punten: [
-    { id: 'ar-weg', doe: 'Twee tracks spelen hoorbaar, opname aan met beeld (de keuze naast ●: "audio + video") en het log aan. Na een minuut, in Terminal: sh tools/varve-app/server-lus.sh stop. Mix 30 s door (faders, EQ, een loop; spring niet ver weg en laad niets: dat moet van de server komen) en start VARVE weer: open ~/Applications/VARVE.app. VARVE haalt de Controlekamer naar voren: klik daarna terug naar het mixer-tabblad.',
+    { id: 'ar-weg', doe: 'Twee tracks spelen hoorbaar, opname aan met beeld (de keuze naast ●: "audio + video") en het log aan. Na een minuut, in Terminal: sh tools/varve-app/server-lus.sh stop. Mix 30 s door (faders, EQ, een loop; spring niet ver weg en laad niets: dat moet van de server komen) en start de server weer zonder de hub (VARVE.app zou nu ook de hub starten, en dan praten hub en mixer allebei met de APC): in de projectmap UV_THREADPOOL_SIZE=16 nohup sh tools/varve-app/server-lus.sh >> ~/.varve-server.log 2>&1 &',
       let: 'Geen gat in het geluid? Eén opname-melding die meetelt ("opname: server antwoordt niet, … in de wacht") en na de start "opname: weer goed, niets verloren". Per hoorbare track één rode "track N: stream hapert: …" die na de start vanzelf "track N: stream weer goed" wordt (sinds 16 okt, AR17); bleef er een rode staan, dan is dat een fout.',
       citeert: ['audio + video', 'opname: server antwoordt niet, ', ' in de wacht', 'opname: weer goed, niets verloren', 'stream hapert: ', 'stream weer goed'] },
-    { id: 'ar-val', doe: 'Dezelfde opname, een minuut later: laat de server omvallen met pkill -9 -f server/index.js. Is hij na 5 s niet terug: open ~/Applications/VARVE.app.',
+    { id: 'ar-val', doe: 'Dezelfde opname, een minuut later: laat de server omvallen met pkill -9 -f server/index.js. Is hij na 5 s niet terug: start hem zoals in ar-weg (niet met VARVE.app: die start ook de hub).',
       let: 'Binnen een paar seconden terug (de droogloop: 1,3 s) zonder dat je iets hoort? In ~/.varve-server.log "de server viel om (exitcode 137)" en "server gestart (pid …) — herstart 1". De tegel Server in de Controlekamer is oranje en zegt "herstart om … (viel om, exitcode 137) · 1 keer sinds …" (AR9); na 10 minuten weer groen, de regel blijft.',
       citeert: ['de server viel om (exitcode', '— herstart ', 'herstart om ', 'viel om, exitcode '] },
     { id: 'ar-hang', doe: 'Dezelfde opname, een minuut later: laat de server hangen en laat hem NIET los. In Terminal: date +%T; kill -STOP $(pgrep -f server/index.js). Kijk een halve minuut naar de mixer en de Controlekamer. Daarna: tail -n 4 ~/.varve-server.log.',
@@ -307,6 +426,44 @@ export const SPEELLIJST = [
       let: 'Welke melding kwam er ("audio-uitgang staat stil …" of "audio staat stil (…)"), en wat moest je doen om weer geluid te hebben: een druk, de uitgang opnieuw kiezen, of herladen? Kwam het geluid intussen uit de MacBook zelf? Werkt de koptelefoon (vier kanalen) daarna nog?',
       citeert: ['audio-uitgang staat stil', 'audio staat stil ('] },
   ] },
+  // Na afloop (16 okt): wat aan het eind van de avond moet (echo's, de nacht aan) en wat pas de ochtend erna kan
+  // (ar-na, het setboek, 7a, de proefherstel, de eigen muziek). Altijd op kopieën; nooit tijdens een set.
+  { id: 'na-1', titel: 'Avond 1 · Na afloop en de ochtend erna', minuten: 60, punten: [
+    { id: 'ga-echoes', doe: 'Aan het eind van de avond, met de mixer nog open: Controlekamer, tegel APC40, de regel "echo\'s: N" (of midi.status().echoes in de console van de mixer).',
+      let: 'Staat er 0 na een hele avond? Dan mag het echofilter voor de APC uit. (GA13, GA15)' },
+    { id: 'ins-weg', doe: 'Mixer nog open, geen deck: sh tools/varve-app/server-lus.sh stop, en zet in de mixer stems op 4. Start de server weer zoals in ar-weg, herlaad de mixer en: curl -s localhost:8777/api/instellingen. Zet stems daarna terug op 2.',
+      let: 'Melding "instelling varve.stems.standaard niet op de server bewaard (…) — staat wel in deze browser"? Na het herladen nog 4, en de server ook (de browser wint één keer)?',
+      citeert: ['niet op de server bewaard (', '— staat wel in deze browser'] },
+    { id: 'nacht-eerste', doe: 'Aan het eind van de avond, morgen geen speeldag. Library, tab KAART, NACHTWACHTRIJ: vandaag niet uit (de opstelling "Avond 1 · APC direct" zette hem aan), per nacht 5, dan uit → aan. Mac aan de lader, sluimeren op netstroom uit (docs/TAILSCALE.md), VARVE open laten. De volgende ochtend: de regel laatste run, en grep \'\\[nacht\\]\' ~/.varve-server.log.',
+      let: '"laatste run: … 5 gehaald"? In het log "[nacht] run … hooguit 5 nummers" en "… klaar: 5 gehaald, 0 mislukt"? Bij 403/429 of "sign in to confirm" stopt hij zelf; nooit cookies. Plak de regel. Goed gegaan: per nacht naar 20, dan 80.',
+      citeert: ['[nacht] run ', 'laatste run: '] },
+    { id: 'ar-ok', doe: 'Na de avond, in Terminal: node tools/proef/ar-na.mjs --titel "<titel van ar-snap>" --titel "<titel van ar-een>" (droog: zegt wat hij zou lezen), dan hetzelfde met --meet erbij.',
+      let: 'Zegt hij bij ar-snap "oordeel: op de tel (≤ 5 ms)" en "1" klopt? Bij ar-een: wat zegt "1" op de downbeats? Plak het rapport in de notitie; "NAAST de tel" is een fout, ook als het er goed uitzag.',
+      citeert: ['oordeel: ', 'op de tel (≤ ', 'NAAST de tel'] },
+    { id: 'sb-draai', doe: 'De ochtend erna, op een kopie (cp, nooit mv; recept in tools/setboek/LEESMIJ.md): de logs van avond 1, de nieuwste backup als library.db en proef/sessie.json naar een kladmap $K. Dan: taskpolicy -b node tools/setboek/setboek.mjs --dag <JJJJMMDD> --map "$K" --db "$K/library.db" --proef "$K/sessie.json".',
+      let: 'Lees eerst "## Logs": staat de opbouw van de middag erin, draai dan opnieuw met --vanaf 17:00. Geen melding "ligt in de opnames/ van een checkout" (dan las je de echte map)?',
+      citeert: ['## Logs', 'ligt in de opnames/ van een checkout'] },
+    { id: 'sb-lees', doe: 'Lees "## Tracklist (hoorbaar, benaderd)" en "## Geladen maar niet hoorbaar" naast wat je je herinnert, of naast de opname.',
+      let: 'Welk nummer klopt niet: ontbreekt het, staat het er te veel, of klopt de tijd of plek niet? Elke afwijking wordt een testgeval. Een mix staat bij Buma/Stemra als "titel onbekend: deel van …": goed zo?',
+      citeert: ['## Tracklist (hoorbaar, benaderd)', '## Geladen maar niet hoorbaar', 'titel onbekend: deel van'] },
+    { id: 'sb-proef', doe: 'Kijk onder "## Proefpunten (Controlekamer)".',
+      let: 'Staan je punten met fout of een notitie op het goede moment, met wat er toen hoorbaar was ("toen hoorbaar: …")?',
+      citeert: ['## Proefpunten (Controlekamer)', 'toen hoorbaar: '] },
+    { id: 'ap-7a', doe: 'De ochtend erna: mixer dicht, de apparaten nog aangesloten. In Terminal de twee alleen-lezen-commando\'s uit docs/AVONDPAKKET.md §14 punt 9 (system_profiler … > ~/Desktop/avondpakket-7a.json en ioreg … > ~/Desktop/avondpakket-7a-ioreg.txt).',
+      let: 'Twee bestanden op het Bureaublad? Niet delen: er staan serienummers in; een agent anonimiseert ze voor de fixtures. Of laat je het een agent doen? (AP9)' },
+    { id: 'ar-meet', doe: 'Overdag of na afloop, in Terminal: node tools/beatmeting/ar2.mjs (droog: zegt wat ontbreekt), dan hetzelfde met --meet (de twee metingen uit docs/verslagen/2026-10-15/arch-beatgrid.md §5, met de Python van ~/.varve/stems-venv of VARVE_TELLEN_PY; het verslag in tools/beatmeting/uit/).',
+      let: 'Zet de getallen in de notitie (AR2). De hele library krijgt de tweede mening over de "1" sinds 16 okt vanzelf bij de eerste start van de server (kaart-VERSIE 3, AR1): klopten de oranje "1"-en daarna?' },
+    { id: 'bk-herstel', doe: 'Proefherstel (~10 min, docs/BACKUP.md §4): git clone git@github.com:CKrebbers/youtube-mixer.git ~/varve-proefherstel; dan VARVE_MEDIA=~/varve-proefherstel/media node tools/backup/herstel.mjs --van /Volumes/<naam>/varve --naar ~/varve-proefherstel --droog, daarna zonder --droog, en VARVE_MEDIA=~/varve-proefherstel/media node tools/backup/controleer.mjs --doel /Volumes/<naam> --bron ~/varve-proefherstel.',
+      let: 'Zegt controle "quick_check ok; … (= manifest)"? Zeggen hub en kaart "staat er al (niet overschreven):"? Volgt "Nog met de hand (docs/BACKUP.md §4):"? Zegt controleer "alles ok"? (Zonder VARVE_MEDIA kiest herstel je echte library en weigert hij: veilig, maar dan test je niets.)',
+      citeert: [' (= manifest)', 'staat er al (niet overschreven):', 'Nog met de hand (docs/BACKUP.md §4):'] },
+    { id: 'lok-droog', doe: 'Ná de avond, niet op een speeldag, server aan. In de projectmap: node tools/lokaal/importeer.mjs --droog --map ~/Music/Music/Media.localized/Music --map ~/Music/Samples/Muziek --map "$HOME/Desktop/1. Projects/Youtube mixer/opnames".',
+      let: 'Onderaan "droogloop: er is niets geüpload en niets veranderd."? Klopt de totaalregel ongeveer met 10 okt (24 nieuw, 3 al binnen, 11 onleesbaar)? Kloppen titel en artiest achter de →, en krijgen je sets artiest "Clay (Varve)"? Wil je je eigen opnames echt in de library? (CX3)',
+      citeert: ['droogloop: er is niets geüpload en niets veranderd.', 'Clay (Varve)'] },
+    { id: 'lok-echt', doe: 'Er speelt geen deck. Hetzelfde zonder --droog, eerst alleen met --map ~/Music/Samples/Muziek.',
+      let: 'Per bestand "klaar: …", en als laatste regel "klaar: N gelukt, M mislukt …"? Hoe lang per nummer? Hapert de server (Controlekamer)?' },
+    { id: 'lok-na', doe: 'Library (B): zoek een geïmporteerd nummer, laad het op track 1 en speel het.',
+      let: 'Titel en artiest goed, grid (✓/?) en toonsoort erbij, geen stems (bewust)? Zet de titels van de onleesbare mp3\'s in de notitie: die moet je opnieuw halen.' },
+  ] },
 
   // ---- Avond 2: spelen en programmeren (met de hub) -------------------------------
   // Hub-middag (11 okt, tak visie/handen, docs/HANDEN.md §2): de F0-proef en de proef speelapparaten van
@@ -314,7 +471,7 @@ export const SPEELLIJST = [
   // draaiende hub of een Varve-tab met de APC, en avond 2 kan niet zonder hub: dus eerst dit blok. Het
   // draaiboek blijft in de hub-repo (docs/HARDWARE-AVOND.md blok 1, 2, 8 en 6); hier alleen afvinken.
   { id: 'hub-f0', titel: 'Avond 2 · Hub-middag: de F0-proef (zonder Varve)', minuten: 80, punten: [
-    { id: 'hf-dicht', doe: 'Overdag, zonder muziek. Sluit het mixer-tabblad (en elk tabblad van Varve of av-kern zonder ?hub=), Logic en Ableton. Er draait geen hub: in Terminal geeft lsof -i :7700 niets terug. De APC40 rechtstreeks in de Mac; Maschine, LPD8 en Xboard49 via de PD-hub.',
+    { id: 'hf-dicht', doe: 'Overdag, zonder muziek. Sluit het mixer-tabblad (en elk tabblad van Varve of av-kern zonder ?hub=), Logic en Ableton. Er draait geen hub: in Terminal geeft lsof -i :7700 niets terug (startte VARVE.app er een: kill $(lsof -nP -t -iTCP:7700 -sTCP:LISTEN)). De APC40 rechtstreeks in de Mac; Maschine, LPD8 en Xboard49 via de PD-hub.',
       let: 'Praat er nu niets met de APC? Anders vechten straks de lampjes en weet je niet wat de hub doet. (HA2)' },
     { id: 'hf-doctor', doe: 'In de map AV-app-hub: git pull, npm install, en dan node src/cli.js doctor.',
       let: 'MIDI werkt, de APC40 en de LPD8 gevonden, onder Speelapparaten de Xboard49 en de Maschine (17cc:1140), poort 7700 vrij, Maschine 2 en Controller Editor dicht?' },
@@ -335,11 +492,24 @@ export const SPEELLIJST = [
     { id: 'ga-msscherm', doe: 'Deed je de hub-middag al, neem dan de tijd van de stap ms-scherm uit hf-speel over. Anders, nog steeds zonder hub, Maschine aangesloten: node src/cli.js proef speelapparaten, en loop de stap "Maschine: de twee schermen" (ms-scherm); de rest met o + Enter.',
       let: 'Hoe lang duurt het schrijven van twee volle schermen? Veel meer dan ±20 ms betekent dat een druk scherm de pads kan vertragen: schrijf het getal in de notitie.' },
   ] },
-  { id: 'hub', titel: 'Avond 2 · Opstarten met de hub', minuten: 5, punten: [
-    { id: 'hb-start', doe: 'Varve draait al: start de hub pas daarna, dan gebruikt hij die server en laat hem bij stoppen staan. Mixer-tabblad dicht; APC, Xboard49 en Maschine aangesloten. Dubbelklik Start studio.command in de map AV-app-hub (of in Terminal: npm start -- studio --geen-drivers). Doet de Maschine niets: Invoermonitoring voor Terminal aan en opnieuw starten. Zegt de hub "Maschine: bezet"? Klik Studio uit (de app) en wacht een paar seconden.',
+  { id: 'hub', titel: 'Avond 2 · Opstarten met de hub', minuten: 20, punten: [
+    { id: 'app-hub', doe: 'Maschine aangesloten, lsof -i :7700 geeft niets, Controlekamer-tabblad dicht. Klik VARVE in het Dock en open de mixer met mixer openen via de hub.',
+      let: 'Opent de Controlekamer met "?hub=ws://localhost:7700/app" in de adresbalk, met de knop "mixer openen via de hub" en "zonder hub" ernaast? Staat in ~/.varve-hub.log "--- … gestart door VARVE.app"? Doet de Maschine mee? Kwam er een melding "De hub start niet: de Maschine doet niet mee …"?',
+      citeert: ['?hub=ws://localhost:', 'gestart door VARVE.app', 'mixer openen via de hub', 'De hub start niet: de Maschine doet niet mee'] },
+    { id: 'hb-start', doe: 'Varve draait al: start de hub pas daarna, dan gebruikt hij die server en laat hem bij stoppen staan. Mixer-tabblad dicht; APC, Xboard49 en Maschine aangesloten. Deed app-hub het al (VARVE.app startte de hub), dan is dit punt klaar. Anders: dubbelklik Start studio.command in de map AV-app-hub (in Terminal: npm start -- studio --geen-drivers). Doet de Maschine niets: Invoermonitoring voor Terminal aan en opnieuw starten. Zegt de hub "Maschine: bezet"? Klik Studio uit (de app) en wacht een paar seconden.',
       let: 'Chrome opent (na een paar seconden) de mixer met ?hub= in de adresbalk, en de APC werkt zoals op avond 1?' },
+    { id: 'app-erbij', doe: 'De hub draait. Open zelf http://localhost:8777/controle (zonder ?hub=) en klik VARVE nog eens in het Dock.',
+      let: 'Komt hetzelfde tabblad naar voren en krijgt het ?hub= erbij, zonder tweede Controlekamer? Geeft lsof -nP -iTCP:7700 -sTCP:LISTEN één regel (geen tweede hub)?' },
+    { id: 'sta-hub', doe: 'De hub draait, mixer dicht. Controlekamer: kies "Avond 2 · APC + Maschine via de hub", activeer, en open de mixer met mixer openen via de hub.',
+      let: 'Gaat het adres naar /?hub=ws://localhost:7700/app en werkt de APC via de hub? Zegt de tegel Opstelling "hub-set studio: start hem zelf (npm start -- studio)"?',
+      citeert: ['mixer openen via de hub', ': start hem zelf (npm start -- '] },
+    { id: 'uz-start', doe: 'Bij het begin van avond 2 (uitzenden stap 0, docs/UITZENDEN.md): kies naast ● "audio + video" en start een opname. Laat hem de hele avond lopen, minstens 45 min; stoppen pas bij uz-stap0.',
+      let: 'Loopt hij (de teller naast ●)? De langste opname met beeld tot nu toe was 5,6 min.',
+      citeert: ['audio + video'] },
     { id: 'hb-lpd8', doe: 'LPD8 (als hij aangesloten is): draai K1 terwijl er muziek speelt.',
       let: 'In VARVE gebeurt er niets (bewust). Wil je K1 ergens aan hangen, bijvoorbeeld de puls? (O1)' },
+    { id: 'hd-naast', doe: 'Leg de A4 van de handenkaart (hd-print) naast de APC en de Maschine, en zoek drie knoppen op voordat je ze drukt.',
+      let: 'Vond je ze zonder zoeken? En bij "Acties zonder plek op een controller": video.clips op Shift + master-knop, sampler.N.drums op rij 4 in de modus sampler? (HA4, HA5)' },
   ] },
   { id: 'ga-hub', titel: 'Avond 2 · Zonder lag met de hub', minuten: 8, punten: [
     { id: 'ga-hubvoel', doe: 'Mix een minuut op de APC zoals op avond 1: faders, filter, play, Track Select en een paar mapjes.',
@@ -503,6 +673,23 @@ export const SPEELLIJST = [
     { id: 'cx-patroon', doe: 'Als er tijd is: een patroon op track 8 met noot 48 (C3) op stap 1 en 9, en laat het meelopen met track 1. Herlaad daarna het mixer-tabblad.',
       let: 'Valt het stuk op de tel van de maat? Na herladen: komt de melding dat drumpads 9–16 leeg zijn? Mis je dat ze bewaard bleven? Mis je een knop om een drumpad leeg te maken? (CX2, CX5)' },
   ] },
+  // Na avond 2 (16 okt): de lange opname van stap 0 van uitzenden, de patronen naar Logic (overdag, mixer dicht),
+  // en als laatste de speeldag op de companion (die blokkeert de nacht).
+  { id: 'na-2', titel: 'Avond 2 · Na afloop: de opname, Logic en de speeldag', minuten: 30, punten: [
+    { id: 'uz-stap0', doe: 'Stop de opname van uz-start (●, tweede klik). Open set-<id>.mp4 in QuickTime en spring naar begin, midden en eind.',
+      let: 'Liep de opname de hele avond door, en het beeld zonder bevriezen? Hoe groot zijn set-<id>.wav en .mp4? Stap 3 van uitzenden (de routes) wacht hierop.' },
+    { id: 'midi-logic', doe: 'Overdag, niet op een speeldag, mixer dicht; APC, Maschine en Xboard los. Sleep kick-goud.mid, kick-goud-zonder-meta.mid en proef-set.mid uit test/fixtures/midi/ (in de projectmap) in een leeg Logic-project.',
+      let: 'Neemt Logic het tempo over (kick 120, proef-set 124)? Kanaal 10 als drums, en welke klank krijgen 36–39 en 44–51? Zie je de tekst "varve:patroon …", en stoort hij? Staat de spoornaam in de spoorkop?',
+      citeert: ['varve:patroon '] },
+    { id: 'midi-eigen', doe: 'Na de patronen van avond 2, in Terminal: K=<kladmap>/midi; mkdir -p "$K"; cp patronen/set.json "$K"/; node tools/patronen/midi.mjs --set "$K/set.json" --track 4 --plek 1 --omlopen 4 --uit "$K/set-T4P1.mid". Draai hem nog eens, en sleep het bestand in Logic.',
+      let: 'Eerst "midi: geschreven: … (N bytes)", de tweede keer exit 2 met "bestaat al; niets overschreven"? Staan in Logic de kicks op de stappen die je zette?',
+      citeert: ['midi: geschreven: ', 'bestaat al; niets overschreven'] },
+    { id: 'midi-48k', doe: 'Na Logic: Logic dicht, Audio-MIDI-configuratie: de Scarlett en het samengestelde apparaat.',
+      let: 'Staan ze nog op 48 kHz, of had Logic ze verzet? Doen de controllers het daarna weer in VARVE?' },
+    { id: 'co-speeldag', doe: 'Alleen op een dag dat je echt draait (dus niet vóór nacht-eerste): op de iPhone, tab kaart, vandaag speeldag.',
+      let: '"vandaag is nu een speeldag: niets binnenhalen tot morgen" en de knop "haal nu: vandaag speeldag"? Weghalen kan alleen met curl (docs/KAART.md §10.3).',
+      citeert: ['vandaag is nu een speeldag: niets binnenhalen tot morgen', 'haal nu: vandaag speeldag'] },
+  ] },
 
   // ---- Avond 3: beeld (met de Omarchy-pc) ------------------------------------------
   { id: 'beeld-pc', titel: 'Avond 3 · Beeld met de Stroommachine (met de pc)', minuten: 25, punten: [
@@ -519,6 +706,17 @@ export const SPEELLIJST = [
     { id: 'bp-weg', doe: 'Trek de netwerkkabel van de pc eruit (of zet de wifi uit), wacht 20 s, en sluit hem weer aan. Herlaad daarna de Stroommachine.',
       let: 'Hooguit één melding, en daarna komt alles vanzelf terug (tel, scène, macro\'s), zonder dat het spelen hapert? Is "zoeken zonder pc" stil genoeg? (BE7)' },
   ] },
+  // Het niveau voor de beeldzender (13 okt, src/koppel/niveau.js): op de schaal van wat nu klinkt. Meteen na beeld-pc.
+  { id: 'niveau', titel: 'Avond 3 · Het niveau in beeld (met de pc)', minuten: 15, punten: [
+    { id: 'niv-volume', doe: 'Na bp-start. Een nummer met een harde kick. Masterfader op 0,8, dan vol, dan een stuk lager, telkens een minuut.',
+      let: 'Pompt het beeld (haar bronnen Mic en Mic bas) op elk volume even sterk op de maat, ook met de master vol? Op 13 okt was dat een vlakke lijn tot je hem zachter zette (docs/BEELD.md §2a).' },
+    { id: 'niv-wissel', doe: 'Mix van een zacht, rustig nummer naar een luid nummer. Houd daarna in modus klank (Shift + scene 5) rij 3 vast (kill laag), een paar maten.',
+      let: 'Past het beeld zich binnen ~8 s aan, zonder dat een rustig stuk tot volle uitslag opblaast? Wat doet het beeld bij de kill?' },
+    { id: 'niv-pauze', doe: 'Zet alles ruim 10 s stil en start weer.',
+      let: 'Zakt het beeld in de pauze naar rust, en komt het bij de start zonder rare sprong terug?' },
+    { id: 'niv-klap', doe: 'Een nummer met drukke hats en snare (breakbeat of jungle). Kijk naar de flitsen.',
+      let: 'Flitst het nog tussen de kicks, nu laag/midden/hoog/luid meepompen? Dan de klap alleen op de bas, of alleen de tel? (BE15)' },
+  ] },
 
   // De architectuurronde (15 okt, spoor C, VRAGEN AR): het avondpakket en de suite op de Omarchy-pc. De pc heeft geen
   // library: sinds 16 okt (AR19) zegt de CLI daar grijs "geen library" en stopt hij niet meer zonder mediamap.
@@ -529,6 +727,37 @@ export const SPEELLIJST = [
     { id: 'ar-node', doe: 'Op de pc: node --version, daarna node test/alles.mjs (een paar minuten).',
       let: 'Staat er v26.8.2? Anders zegt alles.mjs bovenaan "LET OP: Node v…, .node-version zegt 26.8.2" met de checks die op een andere V8 anders uitvallen: rood daarbuiten is echt. Welke? Het avondpakket zegt het sinds 16 okt ook (punt Node, oranje als hij afwijkt, AR14): installeer dan 26.8.2.',
       citeert: ['LET OP: Node v', '.node-version zegt '] },
+  ] },
+  // Zaalbeeld en beeld op één machine (10 okt, docs/BEAMER.md "Zaalbeeld", docs/BEELD.md §8): zonder de pc.
+  { id: 'zaalbeeld', titel: 'Avond 3 · Zaalbeeld: de beamer aan de Mac', minuten: 15, punten: [
+    { id: 'zb-clips', doe: 'Beamer aan de Mac (60 Hz). Knop video in de bovenbalk → los venster naar de beamer, dubbelklik (volledig scherm). Vormen aan (VORM-rij). Twee tracks met video spelen. Druk CLIPS in de rij van de deck-video\'s (na MIX en PASSEND).',
+      let: 'Op het doek alleen nog de vormen, geen deck-video, en het geluid speelt door? Knop video amber, de statusregel "… clips uit"? Zijn CLIPS aan en uit uit elkaar te houden? Welke beamer (model, resolutie, Hz, de HDMI-weg)? (BE13)',
+      citeert: ['clips uit'] },
+    { id: 'zb-midden', doe: 'Midden in een set: CLIPS uit en een paar maten later weer aan. Met clips uit ook de master-knop (zwart) en nog eens.',
+      let: 'Geen hapering in geluid of beeld, en de clips daarna precies terug? Wordt het zaalbeeld echt zwart? Wat wil je op het doek: zaalbeeld of Stroommachine? (BE12)' },
+    { id: 'zb-opname', doe: 'Opname met "audio + video"; halverwege CLIPS uit; stop de opname en open set-<id>.mp4 in QuickTime.',
+      let: 'Tot het uitzetten de clips, daarna alleen de vormen, zoals de zaal (docs/BEAMER.md "Zaalbeeld")?',
+      citeert: ['audio + video'] },
+  ] },
+  { id: 'een-machine', titel: 'Avond 3 · Beeld op één machine (overdag, geen speeldag)', minuten: 50, punten: [
+    { id: 'zb-droog', doe: 'Overdag, niet op een speeldag. VARVE.app draait. In Terminal in de projectmap: zsh tools/beeld-lokaal.sh --droog, daarna zsh tools/beeld-lokaal.sh --installeer.',
+      let: 'Bij --droog elke controle ok, en bovenaan "droog, ik start niets"? Anders "zou stoppen: …": welke? --installeer zegt "geïnstalleerd: …" met een bundle-id die NIET com.google.Chrome is?',
+      citeert: ['droog, ik start niets', 'zou stoppen: ', 'geïnstalleerd: '] },
+    { id: 'zb-lokaal', doe: 'zsh tools/beeld-lokaal.sh en doe de vijf regels die hij afdrukt (BEELD-rij, knopje deze Mac, beeld aan; Stroommachine-venster naar de beamer …). Klik met de Stroommachine-bundel open op VARVE in het Dock. Tweede Terminal: node tools/headless/beeld-lokaal.mjs --kijk. Speel 30 min met de APC, ook het mapje beeld (Shift + Detail View). Daarna zsh tools/beeld-lokaal.sh --stop.',
+      let: 'Zegt hij "relay gestart op …"? Opent VARVE.app je gewone Chrome, niet de Stroommachine-Chrome? Hoor je ooit een tik of gat, loopt het beeld vlot, wordt de Mac warm of luid? Goed genoeg om de pc thuis te laten? (BE11, BE14)',
+      citeert: ['relay gestart op '] },
+    { id: 'zb-meet', doe: 'Overdag, niet op een speeldag, Mac vrij (geen geluid, geen andere testrun): node tools/headless/beeld-lokaal.mjs --zelftest, dan node tools/headless/beeld-lokaal.mjs (≈ 14 min).',
+      let: 'Per stand de regel "Stroommachine p50 … · p10 …": Licht op 1920×1080 p50 ≥ 55 en p10 ≥ 30, 0 gaten > 15 ms, < 1 kern? Een rode "meter blind: …" = de run telt niet. Plak het eind in de notitie. (BE11)',
+      citeert: ['Stroommachine p50 ', 'meter blind: '] },
+  ] },
+  // Uitzenden stap 1 (10 okt, docs/UITZENDEN.md): nog zonder route of knop, dus alleen de toets en de aannames.
+  { id: 'uitzenden', titel: 'Avond 3 · Uitzenden: de uitgang op de Mac (overdag)', minuten: 15, punten: [
+    { id: 'uz-snel', doe: 'Overdag, niet tijdens een speelavond, in de projectmap: node test/uitzend.test.mjs (~40 s).',
+      let: 'Onderaan "alles ok"? Elke FAIL-regel in de notitie. Een regel met "geen h264_videotoolbox": deze ffmpeg kan het beeld-profiel niet hercoderen.' },
+    { id: 'uz-echt', doe: 'Mac rustig (geen muziek, geen andere testrun): VARVE_TEST_ECHTETIJD=1 node test/uitzend.test.mjs (~72 s extra).',
+      let: 'E1 groen (achterstand ≤ 2,5 s) en E4 groen (max ≤ 5,5 s, niet groeiend)? Schrijf E5 en E6 (s user per 8 s) in de notitie: docs/UITZENDEN.md §7 is gemeten met load 2,6–6.' },
+    { id: 'uz-aannames', doe: 'Finder: staat ~/Movies buiten iCloud? Open OBS (uitgang uit): versie, het Twitch-doel en de bron "USB Video". Systeeminformatie → USB: wat is die stick?',
+      let: 'Geen wolkje bij ~/Movies? OBS met Twitch-doel en USB Video (docs/UITZENDEN.md §2)? Is de stick een MS2109?' },
   ] },
 
   // ---- De werkruimte (docs/WERKRUIMTE.md D3, docs/werkruimte/S8.md) ---------------
@@ -545,28 +774,28 @@ export const SPEELLIJST = [
   { id: 'werk-a', titel: 'Werkruimte · A · Uitlijnen', minuten: 20, punten: [
     { id: 'wa-ring', doe: 'Twee nummers, ⇧ Lock (fasemeters); duw track 2 met device knob 2 tot de ring in het midden staat.',
       let: 'Oordeel: binnen hoeveel tikken stond hij gelijk (tel)? Is de ring leesbaar als fasemeter (ja/nee)?' },
-    { id: 'wa-ms', doe: 'Duoklik aan (Maschine UITLIJN r4 pad 1 of koppelen); duw 1 ms met ±1 ms.', let: 'Oordeel: hoor je de flam van 1 ms (ja/nee)? Klopt "muziek Δ" in de uitlijnweergave met je oor (ja/nee)?' },
-    { id: 'wa-scherm', doe: 'Werkruimte apc-alleen, deel UITLIJN; "open schermen" (mac-2) op het tweede scherm.', let: 'Oordeel: loopt de uitlijnweergave op mac-2 zonder haperen 5 min mee (ja/nee)?' },
+    { id: 'wa-ms', doe: 'Duoklik aan (Maschine UITLIJN r4 pad 1 of koppelen); duw 1 ms met ±1 ms.', let: 'Oordeel: hoor je de flam van 1 ms (ja/nee)? Klopt "muziek Δ" in de uitlijnweergave met je oor (ja/nee)? Duoklik hoog op de gelijkgezette track goed? (W16)' },
+    { id: 'wa-scherm', doe: 'Werkruimte apc-alleen, deel UITLIJN; "open schermen" (mac-2) op het tweede scherm.', let: 'Oordeel: loopt de uitlijnweergave op mac-2 zonder haperen 5 min mee (ja/nee)? Twee maten per pagina goed, de knop uitlijn in de transportrij nog nodig, een track zonder tellen "grof"? (W20, W21, W22)' },
   ] },
   { id: 'werk-b', titel: 'Werkruimte · B · Delen en effecten', minuten: 25, punten: [
     { id: 'wb-delen', doe: 'apc-alleen, grid-modus uit (daarin is ⇧ On/Off ✓ van het grid): open stems (⇧ scene 3), fx-matrix (⇧ On/Off), terug; 10 keer wisselen.',
-      let: 'Oordeel: hoe vaak wist je niet in welk deel je zat (tel)? THUIS (⇧ master-knop) bracht je elke keer terug (ja/nee)?' },
-    { id: 'wb-dub', doe: 'Superknop DUB en de dub-worp in een overgang.', let: 'Oordeel: is de dub-worp wat je wilde (ja/nee + wat anders)? Hoeveel nieuwe plekken was te veel (het getal "⚠ N nieuw")?' },
+      let: 'Oordeel: hoe vaak wist je niet in welk deel je zat (tel)? THUIS (⇧ master-knop) bracht je elke keer terug (ja/nee)? Doet ⇧ On/Off in de mapjes master en instrument wat je verwacht? (W29)' },
+    { id: 'wb-dub', doe: 'Superknop DUB en de dub-worp in een overgang.', let: 'Oordeel: is de dub-worp wat je wilde (ja/nee + wat anders)? Hoeveel nieuwe plekken was te veel (het getal "⚠ N nieuw"), en is dat getal bij de eerste keer goed zo? Welke racks wil je op de echo- en galmbus? (W24, W28)' },
     { id: 'wb-inricht', doe: '✎ op de werk-balk: maak een paneel, wijs drie knoppen aan, zet het op het werkvak; wijs het toe aan de APC device knobs; ↶ terug.',
       let: 'Oordeel: lukte het zonder JSON (ja/nee)? Hoeveel minuten? Wat zocht je en vond je niet (notitie)?' },
   ] },
   { id: 'werk-c', titel: 'Werkruimte · C · Twee handen (met de hub)', minuten: 25, punten: [
     { id: 'wc-f', doe: 'twee-handen: F1–F8 op de Maschine, de houd-knoppen (VOLUME + draaiknop = fader), het wiel als jog.',
-      let: 'Oordeel: voelt APC breed / Maschine diep logisch (1–5)? Kom je met THUIS (SHIFT + F1) altijd terug (ja/nee)?' },
-    { id: 'wc-kaart', doe: 'Open de kaarten (apc.html, maschine.html) en het paneel "kaart" op mac-2.', let: 'Oordeel: kon je zonder kijken zeggen wat een knop doet in het deel van nu (ja/nee)?' },
+      let: 'Oordeel: voelt APC breed / Maschine diep logisch (1–5)? Kom je met THUIS (SHIFT + F1) altijd terug (ja/nee)? Hoe staan de controllers op tafel, koppelen op de Maschine alleen met CONTROL goed, en welke padmodi en pagina\'s wil je echt? (W2, W33, W40)' },
+    { id: 'wc-kaart', doe: 'Open de kaarten (apc.html, maschine.html) en het paneel "kaart" op mac-2.', let: 'Oordeel: kon je zonder kijken zeggen wat een knop doet in het deel van nu (ja/nee)? De deelnamen op de Maschine-schermen: zo, of alleen zolang een F-knop vastzit? (W38)' },
   ] },
   { id: 'werk-d', titel: 'Werkruimte · D · iPad en iPhone naast de Mac', minuten: 30, punten: [
     { id: 'wd-kijk', doe: 'iPad via Tailscale: werk.html?s=ipad op het beginscherm; laat hem 10 min naast de Mac staan, met auto-lock aan.',
-      let: 'Oordeel: loopt hij in de pas met wat je hoort (ja/nee)? Valt hij weg bij auto-lock, en komt hij binnen 5 s terug (ja/nee)?' },
+      let: 'Oordeel: loopt hij in de pas met wat je hoort (ja/nee), ook de positie (binnen 5 ms)? Valt hij weg bij auto-lock, en komt hij binnen 5 s terug (ja/nee)? (W12)' },
     { id: 'wd-koppel', doe: 'Zet hieronder "Bedienen vanaf iPad en iPhone" aan; koppelcode; typ hem op de iPad; dan op de iPhone (werk.html?s=iphone).',
       let: 'Oordeel: lukte koppelen in één keer (ja/nee)? Zie je beide apparaten in de lijst?' },
     { id: 'wd-xy', doe: 'Deel FX: veeg op de iPhone over de xy-pad (x = plek 1, y = echo; aanraken = worp, loslaten = terug).',
-      let: 'Oordeel: voelt de vertraging speelbaar (1–5)? Klinkt de worp op het moment van aanraken (ja/nee)? (De headless meting: zie docs/werkruimte/S8.md.)' },
+      let: 'Oordeel: voelt de vertraging speelbaar (1–5)? Klinkt de worp op het moment van aanraken (ja/nee)? Mis je twee vingers op één pad? (De headless meting: zie docs/werkruimte/S8.md.) (W10, W11)' },
     { id: 'wd-weg', doe: 'Houd een worp vast op de iPad en zet de wifi van de iPad uit.', let: 'Oordeel: laat de mixer binnen ~2 s los (ja/nee)?' },
     { id: 'wd-nooit', doe: 'Zet record.start of play in een paneel op de iPad en druk.', let: 'Oordeel: gebeurt er niets, met een melding op de iPad (ja/nee)?' },
     { id: 'wd-vakken', doe: 'Zet in je werkruimte de vakken van S9–S11 op de iPad (delen.<deel>.schermen.ipad.vakken: plan, sets, sjablonen, tags) en zet plan.*, set.* en track.*.tag.* in schermen.ipad.mag (track.*.fx.* en track.*.rack.* staan er in twee-handen al). Met de auto-DJ aan: druk op de iPad GO, ◀ set / set ▶ en laad set.',
@@ -582,7 +811,7 @@ export const SPEELLIJST = [
     { id: 's9-tracks', doe: 'Vul tracks auto in: 1,2. Dan gebruik dit plan en auto. Laad intussen zelf een nummer op track 5 en mix het erbij.',
       let: 'Blijft de automaat van track 3–8 af, ook van een lege track waar je net iets aan deed? 2 minuten als vangrail goed, of liever een vaste verdeling als standaard? (S9-3)' },
     { id: 's9-go', doe: 'Kies een stap en druk G (GO-stap), opslaan. Laat de overgang aankomen en druk GO (AUTO-rij of planvenster); bij een volgende GO-stap druk je niet.',
-      let: 'Begint de overgang pas na GO, en zonder GO op het laatste moment (de live-balk telt af)? Kloppen NU / VOLGENDE / DAARNA en de eindtijd? (S9-8)' },
+      let: 'Per stap kiezen tussen automatisch en GO: goed zo? Begint de overgang pas na GO, en zonder GO op het laatste moment (de live-balk telt af)? Kloppen NU / VOLGENDE / DAARNA en de eindtijd? (S9-8, PL2)' },
     { id: 's9-laag', doe: 'LAGEN VAN DE GEKOZEN STAP: vink rechts een nummer met stems aan, soort nummer, op: een sectie (bv. 3), track 5 (leeg laten!), stem zang, start vanzelf, + laag. Laat de stap spelen.',
       let: 'Valt de laag op de maat in, gaat hij in 4 maten open tot 0,8 en na zijn duur weer dicht? Is dat niveau goed bovenop de mix? Raak je de track aan, laat de automaat hem dan los? (S9-2, S9-8)' },
     { id: 's9-buiten', doe: 'Druk buiten plan, mix een minuut zelf op track 3–8, en druk terug.',
@@ -663,9 +892,9 @@ export const SPEELLIJST = [
   ] },
   { id: 'beeld', titel: 'Eerder werk · Beamer en vormen', minuten: 10, punten: [
     { id: 'be-los', doe: 'Videopaneel (knop video in de bovenbalk) → los venster naar het tweede scherm, dubbelklik voor volledig scherm.',
-      let: 'Eerst "beamer loopt in", dan "beamer": niets verspringt of ontbreekt.' },
+      let: 'Eerst "beamer loopt in", dan "beamer": niets verspringt of ontbreekt. Neemt het losse venster snel genoeg over, en hapert het hoofdvenster in die seconden? (J27, J28)' },
     { id: 'be-achter', doe: 'Zet in het mixervenster een ander tabblad vooraan.', let: 'Loopt het beeld op de beamer door?' },
-    { id: 'be-vormen', doe: 'Vormen aan; Device ◀ ▶ door alle 26 systemen.', let: 'Niets uitgerekt: rond blijft rond, breed blijft breed.' },
+    { id: 'be-vormen', doe: 'Vormen aan; Device ◀ ▶ door alle 26 systemen.', let: 'Niets uitgerekt: rond blijft rond, breed blijft breed. Bevalt de lucht naast het ronde vel van tv (Trommelvlies)? (J20)' },
     { id: 'be-zwart', doe: 'Master-knop (boven de masterfader) = zwart; nog eens = terug. Ook in het losse venster.',
       let: 'Wordt de beamer echt zwart, met een korte fade? Brandt het lampje?' },
     { id: 'be-nood', doe: 'Modus video (scene 4), rechts: flits, zwart vasthouden, zwart, bevriezen. MASTER in het videopaneel.',
