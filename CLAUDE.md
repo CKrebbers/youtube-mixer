@@ -2209,7 +2209,7 @@ Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
   (`LAAG_VERSIE`). Alleen `twijfel: 'maat'` (de zekerheid blijft, nooit een andere "1"); vier op de vloer zegt
   niets. Verander je `laagEnvelope`: `LAAG_VERSIE` omhoog. Verander je `maatMening`: `bench.mjs` met en zonder
   `--geen-maat` en `test/beatbench.test.mjs` (geen goede "1" onterecht, vals zeker 0). Een FFT-flux per frame is
-  hiervoor NIET goed (aliasing tegen de maat). Kaart-VERSIE is NIET verhoogd (VRAGEN AB1): bestaande grids
+  hiervoor NIET goed (aliasing tegen de maat). Kaart-VERSIE is NIET verhoogd (VRAGEN AR1): bestaande grids
   krijgen de tweede mening pas na een nieuwe meting.
 - Grid-modus op de APC: Shift + Metronome (mapje `edit`, een schakelaar, vooraan in GROEPEN).
   Scene 1 tel 1 hier (snapt ±30 ms naar een onset, vanaf wat je HOORT: positie min
