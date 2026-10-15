@@ -300,7 +300,9 @@ Niet tijdens een proefavond: `alles.mjs`, de servertest en de headless-check geb
 - **7b** (met Clay): elk apparaat uittrekken maakt precies dat punt rood; één bestand "van
   deze Mac verwijderen" en kijken of het pakket het ziet; dan `hardwareBevestigd: true`.
 - 8: de mixer meldt zijn uitgang (eigen PR). 9: het ritueel afvinkbaar op de iPhone. 10: een
-  sonde voor de reiskopie. Alle drie na een keuze van Clay.
+  sonde voor de reiskopie: de kopie zelf bestaat (`tools/backup/kopie.mjs`, docs/BACKUP.md) en
+  schrijft `~/.varve/backup-laatste.json`; de sonde leest dat nog niet (BACKUP.md §6). Alle drie na
+  een keuze van Clay.
 - "De speellijst" is nu de speellijst van de Controlekamer (`proef/sessie.json`), alleen als
   info ("speellijst: 12 van 172 punten gedaan"). Wordt het het plan of de krat van de avond
   (keuze 5), dan controleert `compleet` alleen die nummers.
@@ -317,8 +319,9 @@ het pakket tegen: tot er een keuze is, doet het wat hier als "nu" staat.
 2. **PD-doorvoer van de hub.** Heeft je USB-C-hub een PD-ingang (lader in de hub)? Zo nee: een
    PD-hub kopen, of onderweg op de accu spelen (looptijd niet gemeten)? Nu: paklijst "USB-C-hub
    met PD-ingang".
-3. **Een kopie buiten de laptop.** `VARVE_BACKUPS` naar een externe schijf of de pc? En een
-   tweede kopie van `media/` (32 GB), hoe vaak? Nu: paklijstregel "kopie blijft thuis", handwerk.
+3. **Een kopie buiten de laptop.** Het gereedschap is er (`tools/backup/kopie.mjs --doel <map>`, met
+   `--media` ook `media/`; docs/BACKUP.md), het doel nog niet: een stick, SSD of de pc? En hoe vaak
+   de 32 GB media? Nu: paklijstregel "kopie blijft thuis", met de hand.
 4. **iCloud en `media/`.** "Optimaliseer opslag" uitzetten, of `media/` buiten iCloud
    (`VARVE_MEDIA`)? Nu: `bekend: ["icloud"]` houdt het grijs zolang er ≥ 50 GiB vrij is.
 5. **"De speellijst"**: de speellijst van de Controlekamer (`proef/sessie.json`, nu als info)

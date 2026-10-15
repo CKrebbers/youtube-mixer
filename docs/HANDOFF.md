@@ -317,11 +317,11 @@ Lees in deze volgorde:
   bouwen (`zsh tools/varve-app/maak.sh`), server starten en in het log `[media] …/Varve-media` zien.
   Niet eerder: de server van vóór VI2 zou met `VARVE_MEDIA` geen stems maken en een lege library
   beginnen (het tool weigert dan ook).
-- **`VARVE_BACKUPS`:** een kopie BUITEN de laptop vraagt een externe SSD, en die is er nog niet. Tot
-  dan staan de backups van `library.db` naast de library (`~/Varve-media/backups/`) en is er van de
-  media (32 GB) geen tweede kopie; na de verhuizing haalt iCloud `media/` ook uit de cloud. Met een SSD:
-  `VARVE_BACKUPS=/Volumes/<naam>/varve-backups` en vóór elke reis `rsync -a ~/Varve-media/
-  /Volumes/<naam>/Varve-media/`. Het tool meldt dit ook.
+- **`VARVE_BACKUPS`:** de uurlijkse backups van `library.db` staan naast de library
+  (`~/Varve-media/backups/`). Een kopie BUITEN de laptop: `tools/backup/kopie.mjs --doel <stick, SSD of
+  pc>` (set A, ~20 MB; met `--media` ook de 32 GB media), `controleer.mjs` en `herstel.mjs`
+  (docs/BACKUP.md; sinds 15 okt op `studio/backup-instellingen`). Nog nergens naartoe gedraaid: er is
+  nog geen doel buiten de laptop gekozen (BACKUP.md §6, launchd standaard uit). Het tool meldt dit ook.
 - **Getest:** `node test/alles.mjs` groen (met `test/media-verhuis.test.mjs`); een testserver op 8811
   logt zijn mediamap; VARVE.app compileert (proefdoel) en de startregel is getoetst met een nep-thuismap.
   **Niet getest:** de echte verhuizing (rename uit de iCloud-Bureaublad-map), de herbouwde VARVE.app

@@ -23,7 +23,7 @@ Bouw daarbovenop een SET als geheel, op naam:
 - Overal: als actions op de bus (ook iPad/APC/Maschine; knoppenverdeling doet Clay), een sets-paneel dat op
   elk scherm kan (het paneelregister van S7), en in de Controlekamer (een set kiezen voor vanavond).
 - Opslag op de server in een eigen map (bv. `sets/<naam>.json`, `VARVE_SETS` voor tests), op de witte lijst
-  van wat de backup/kopie meeneemt (docs/BACKUP of PR #28, server/backup.js voor de library; sets zijn
-  bestanden zoals plannen), niet in git (zoals patronen/ en standen/).
+  van wat de backup/kopie meeneemt (`tools/backup`, docs/BACKUP.md: `sets/` zit sinds 15 okt in set A;
+  server/backup.js voor de library; sets zijn bestanden zoals plannen), niet in git (zoals patronen/ en standen/).
 - Tests: rondreis (bewaar → laad → zelfde stand), 409, .versies, ontbrekend nummer, tweede klik over een
   spelende track, oude sets laden na een formaatwijziging (normaliseerSet, puur, ook op de server).
