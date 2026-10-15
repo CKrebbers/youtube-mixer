@@ -151,7 +151,8 @@ export function paden(bron = WORTEL, env = process.env) {
     // uitzenddoelen (uitzend/doelen.json, niet in git).
     paneelApparaten: schoon(env.VARVE_PANEEL_APPARATEN) || join(media, 'paneel-apparaten.json'),
     sjablonen: schoon(env.VARVE_SJABLONEN) || join(bron, 'racks', 'eigen.json'),
-    sjablonenApart: !!env.VARVE_SJABLONEN,
+    // Alleen apart als hij niet al in racks/ ligt (dan gaat hij met de map mee).
+    sjablonenApart: !!env.VARVE_SJABLONEN && !ligtIn(schoon(env.VARVE_SJABLONEN), mappen.racks),
     uitzendDoelen: join(bron, 'uitzend', 'doelen.json'),
     hub: schoon(env.VARVE_HUB_STAAT) || join(env.HOME || homedir(), '.varve-hub', 'staat.json'),
     kaartJson: kaartPad(db, env),

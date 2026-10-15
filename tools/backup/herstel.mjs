@@ -138,7 +138,7 @@ export function herstel(opties, env = process.env, uit = console.log) {
   uit('  5. server starten (VARVE.app of node server/index.js); de code eerst bijwerken: een nieuwere kopie op oudere code migreert niet terug');
   const inst = telLibrary(join(staat, 'library.db')).instrument;
   uit(inst
-    ? `  6. Chrome: niets: de ${inst} instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems, cue-wissel, vormen,\n     bus-racks) staan in library.db en komen bij de eerste start vanzelf in de browser. Alleen gemak (panelen\n     open/dicht, sortering, gekozen werkruimte) opnieuw (docs/BACKUP.md §3)`
+    ? `  6. Chrome: niets voor het instrument: ${inst} instrument-sleutel${inst === 1 ? '' : 's'} (master-rack, klankschaal, poorten, beeld,\n     stems, cue-wissel, vormen, bus-racks: wat er ingesteld was) staan in library.db en komen bij de eerste start\n     vanzelf in de browser. Alleen gemak (panelen open/dicht, sortering, gekozen werkruimte) opnieuw (docs/BACKUP.md §3)`
     : '  6. Chrome: deze kopie heeft geen instrument-sleutels (van vóór PR #31, of nooit ingesteld): master-rack, klankschaal,\n     MIDI-poorten, beeld-adres, stems-standaard, cue-wissel en vormen opnieuw instellen (docs/BACKUP.md §3)');
   if (!hubTerug && existsSync(hub)) uit(`  -  hub: ${hub} staat in de backup; de huidige ${P.hub} is niet overschreven`);
   uit(existsSync(join(staat, 'beeld'))

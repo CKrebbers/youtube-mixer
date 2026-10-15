@@ -238,9 +238,14 @@ overschreven, weigeren bij een bestaande `library.db`, alleen een `-wal`, een lo
 Niet als test: twee runs na elkaar in dezelfde seconde (de stempel krijgt dan `-2`; de code staat
 er, maar zonder nepklok is dat niet betrouwbaar te toetsen).
 
-Met de hand, 15 okt (`studio/backup-instellingen`): kopie, controleer en herstel naar een lege map
-op tijdelijke kopieën van een library (`VARVE_*` naar `/private/tmp/…`), met sets, werkruimtes en
-instrument-sleutels; nooit de echte library als bron met een echte plek.
+Met de hand, 15 okt (`studio/backup-instellingen`), alles in een tijdelijke map (`VARVE_*` naar
+`/private/tmp/…`; nooit de echte library als bron): een testserver (8971) kreeg drie
+instrument-sleutels via `PUT /api/instellingen` (`varve.werkruimte` gaf 400), twee nummers stonden
+nog alleen in de `-wal` (library.db zelf 4 KB) terwijl de server draaide; `kopie.mjs --media
+--controleer --zelfde-schijf` (zonder `--zelfde-schijf` exit 2) → 14 bestanden, `alles ok`;
+`herstel.mjs` naar een lege map (een tweede herstel weigert), set B met rsync erbij, en een server
+(8972) op de teruggezette map gaf de drie sleutels, de set, de werkruimte, de eigen sjablonen en de
+nummers terug; `controleer.mjs` daarna `alles ok`.
 
 Met de hand, 11 okt: `kopie.mjs --droog` tegen de echte checkout (alleen lezen), één echte run naar
 `~/Backups/varve-staat --zelfde-schijf`, `controleer.mjs` daarop, en een herstel in een tijdelijke

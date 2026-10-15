@@ -165,6 +165,8 @@ try {
     ok('… met VARVE_DB geen waarschuwing', paden(bron, { ...twee, VARVE_DB: dbPad }).db === dbPad && !paden(bron, { ...twee, VARVE_DB: dbPad }).waarschuwing);
     ok('… VARVE_MEDIA naar een lege map: <media>/library.db, zoals de server (geen terugval op de oude)', paden(bron, { VARVE_MEDIA: join(tmp, 'lege-media'), VARVE_TESTSERVER: '1', HOME: thuis }).db === join(tmp, 'lege-media', 'library.db'));
     ok('zonder variabelen: <bron>/media/library.db, zoals altijd', paden(bron, { HOME: thuis }).db === dbPad && !paden(bron, { HOME: thuis }).waarschuwing);
+    ok('VARVE_SJABLONEN buiten racks/: apart mee; erin: met de map', paden(bron, { VARVE_SJABLONEN: join(tmp, 'eigen.json'), HOME: thuis }).sjablonenApart
+      && !paden(bron, { VARVE_SJABLONEN: join(bron, 'racks', 'eigen.json'), HOME: thuis }).sjablonenApart && !paden(bron, { HOME: thuis }).sjablonenApart);
     ok('een slash aan het eind telt niet (VARVE_MEDIA=/x/media/)', paden(b2, { VARVE_MEDIA: `${ver}/`, VARVE_TESTSERVER: '1', HOME: thuis }).media === ver
       && paden(b2, { VARVE_MEDIA: `${ver}/`, VARVE_TESTSERVER: '1', HOME: thuis }).db === join(ver, 'library.db'));
 
