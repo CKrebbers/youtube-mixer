@@ -130,7 +130,7 @@ byte voor byte en op tijd gelijk blijven en dat de kladmap weg is.
 
 ## 5. Bevindingen (uit de droogloop)
 
-AR17, AR19 en AR20 zijn op 16 okt gebouwd (tak `studio/ar-vervolg`, zie §8); AR18 niet (eerst zien of het ooit gebeurt).
+AR17, AR19 en AR20 zijn op 16 okt gebouwd (tak `studio/ar-vervolg`, zie §8), AR18 daarna (tak `studio/ar-hang`, §9).
 
 1. **"stream hapert" tijdens een storing** (AR17): per hoorbare track één rode melding die blijft staan, naast de
    ene opname-melding. Gemeten: 30 s weg, twee tracks = drie meldingen. Het geluid loopt door.
@@ -193,3 +193,32 @@ node tools/proef/ar-na.mjs           # droog; na de avond met --meet [--venster 
   `listen()` blijft voor de kleine kans dat twee tegelijk de proef halen. Toets: test/server-poort.test.mjs: met de
   fix blijft de `.bezig-*`-map staan en komt er geen library.db; zonder de fix (de oude index.js) faalden precies die
   twee checks.
+
+## 9. AR18: de wachter (16 okt, tak `studio/ar-hang`)
+
+- **Wat**: de herstartlus start naast elke server een wachter (een functie in de lus, op de achtergrond). Elke 5 s
+  `curl -fs -m 2 http://127.0.0.1:<poort>/api/leeft`; drie keer niets achter elkaar = de server hangt. De wachter
+  zoekt eerst wat de server startte (`pgrep -P`, ook de kleinkinderen: na de kill zijn die van init), schrijft
+  "de server antwoordt niet (laatste antwoord UU:MM:SS, 3 keer niets op /api/leeft binnen 2 s, pid N): kill -9 …" in
+  het log, en doet kill -9 op de server en die processen. De lus ziet exitcode 137 en start hem opnieuw zoals na elke
+  crash (telt mee in de 5 per minuut). Een nieuwe server telt pas mee na zijn eerste antwoord, of na 120 s zonder.
+- **`/api/leeft`** antwoordt uit het geheugen (`{ ok, server, pid }`, hetzelfde id als de ingest-rij), vóór alles
+  wat schijf of database raakt. Bewust: een event loop die vastzit lost een herstart op, een schijf die hangt niet
+  (de nieuwe server hangt dan ook, en de lus zou na vijf keer stoppen).
+- **Gemeten**: de echte server onder de lus, vastgezet met SIGSTOP: kill -9 na 19 s, een nieuwe server na 21 s.
+  Met de mixer erbij (`VARVE_WEG_SOORT=lus node tools/headless/server-weg.mjs`): 21,2 s, 0 stille vensters van 50 ms
+  in 851, WAV van 39 s zonder gat, het log met eind-regel, één opname-melding die "weer goed" werd; bij de kill
+  "stream hapert" per track, twee seconden later "stream weer goed". Onder dash én bash als `sh` (macOS).
+- **ar-na** leest de regel als soort `hang`, met het laatste antwoord als begin van de storing (de hang begon daarna,
+  hooguit één peiling later); de "viel om (exitcode 137)" erna hoort bij dezelfde storing. `--venster` is alleen nog
+  voor een hang zonder de lus. Op de kopie van de meting: één storing "hing (de wachter van de lus zette hem neer)",
+  "NIETS MIS GEVONDEN".
+- **ar-hang** laat hem nu hangen zonder `kill -CONT` en kijkt of de wachter het doet; **ar-wav** heeft geen `--venster`
+  meer nodig.
+- **Toets**: server-lus.test (15 checks erbij: vastgezet = neergezet en opnieuw, het kind ook weg, een server die
+  antwoordt of traag start blijft staan, een die nooit antwoordt na de opstarttijd niet, stop met een wachter erbij),
+  server.test (de route, en dat zijn regel niets leest), ar-na.test (hang, één storing, middernacht).
+- **Grens**: alles wat de event loop langer dan ~15 s vastzet wordt neergezet. Dat is ook wanneer de decks niets meer
+  krijgen; analyse, backup, ingest en Demucs draaien buiten de event loop (worker of kindproces). Niet getest: macOS
+  `pgrep -P` op een kleinkind van yt-dlp, en wat Demucs doet als hij midden in een stuk een kill -9 krijgt (de stems-rij
+  zet hem bij de volgende start terug, zoals na een crash).

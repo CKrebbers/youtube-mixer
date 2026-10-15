@@ -319,9 +319,10 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen; LEESM
                     headless/lek.mjs (groeit de renderer: PROEF=opname, laad (60×) en wissel (50× instrument ↔ nummer), eis ≤ +20 MB privé na GC), headless/gezondheid.mjs (suspend + nep-APC = weer aan, 'stop' komt aan, processorerror hersteld), headless/beeld-afval.mjs (afval per beeld met 8 spelende tracks) en headless/acht-video.mjs (acht decks + acht video's: wacht de audio?), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden), varve-app/ (de Dock-app VARVE: start de server via server-lus.sh, opent de Controlekamer;
-                    server-lus.sh: POSIX sh, herstart hooguit 5×/min, `stop`/`status`, ~/.varve/server-lus.pid),
+                    server-lus.sh: POSIX sh, herstart hooguit 5×/min, `stop`/`status`, ~/.varve/server-lus.pid;
+                    een wachter peilt /api/leeft en zet een server die hangt neer, AR18),
                     headless/server-weg.mjs (de server 30 s weg met twee decks, opname en log: 0 stille vensters, WAV zonder gat;
-                    VARVE_WEG_SOORT=hang = SIGSTOP/SIGCONT, VARVE_WEG_KOPIE = de opnames bewaren),
+                    VARVE_WEG_SOORT=hang = SIGSTOP/SIGCONT, =lus = onder de echte lus zonder SIGCONT, VARVE_WEG_KOPIE = de opnames bewaren),
                     proef/ar-na.mjs (na de proefavond van de architectuurronde: nullen in de WAV in een storing, het log, de herstartlus
                     in ~/.varve-server.log, het grid tegen de tellen; alleen lezen, op kopieën, droog standaard; docs/verslagen/2026-10-15/ar-proef.md),
                     setboek/ (lees.mjs: wat er op een avond KLONK uit de handelingenlogs, puur; gebruik.mjs: de teller;
@@ -459,7 +460,7 @@ test/
   gezondheid.test.mjs  src/ui/gezondheid.js: suspend, resume bij invoer, klok stil, geen alarm vóór de start
   meldingen.test.mjs  de meldingen met een sleutel (één die meegroeit) op een nagebouwd document
   server-poort.test.mjs  AR20: een tweede server op een bezette poort stopt met exit 3 vóór hij .bezig-*, de stems-rij of library.db aanraakt
-  notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node; de Node-waarschuwing van alles.mjs
+  notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node (ook de wachter: SIGSTOP); de Node-waarschuwing van alles.mjs
   alles.mjs         alle tests in één keer met overzicht (een andere Node dan .node-version: waarschuwing boven en onder, niets overgeslagen)
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
@@ -1982,7 +1983,12 @@ Verslag `docs/verslagen/2026-10-15/arch-server-weg.md`. Wat een bouwer niet mag 
 - Toets: `tools/headless/server-weg.mjs` (poorten 8961/8962): gemeten 0 stille vensters van 50 ms in 1040, een
   WAV van 49 s zonder nullen, één opname-melding die op "weer goed" eindigt (zonder dit: 10 s stilte, 20 s
   nullen, 20 meldingen). Niet gebouwd: hang-detectie en de noodlus op de maat (volgende versie). Met
-  `VARVE_WEG_SOORT=hang` (16 okt) hangt de server 30 s: ook goed, de melding pas na de time-out van 10 s (AR18).
+  `VARVE_WEG_SOORT=hang` (16 okt) hangt de server 30 s: ook goed, de melding pas na de time-out van 10 s.
+  HANGEN (AR18, 16 okt): een wachter in de lus peilt elke 5 s `GET /api/leeft` (uit het geheugen, NOOIT schijf of
+  database: een schijf die hangt lost een herstart niet op); drie keer niets binnen 2 s = kill -9 op de server en zijn
+  nazaten, en de lus start hem opnieuw (telt mee in de 5 per minuut); 120 s tot het eerste antwoord. Gemeten 21 s van
+  hangen tot een nieuwe server (`VARVE_WEG_SOORT=lus`). Wat de event loop langer dan ~15 s vastzet wordt dus neergezet:
+  zwaar werk hoort in een worker of kindproces.
   De server kijkt EERST of zijn poort vrij is (`server/poort.js`, AR20, 16 okt), vóór de library, de mappen en het opruimen
   van `.bezig-*`: een tweede server raakt niets aan. Een stream die hapert geeft één melding per track (sleutel
   `stream:<deck>`, `onHapert` in bron.js) die "stream weer goed" wordt (AR17).

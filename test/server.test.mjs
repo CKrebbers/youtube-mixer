@@ -3,13 +3,15 @@
 // opnamemap: je echte library en opnames blijven buiten schot.
 // Draai met: node test/server.test.mjs
 // @alleen: tijdsgrens op de wandklok (Range p95 < 50 ms en < 500 ms tijdens een analyse) (test/alles.mjs draait hem na de pool, zonder iets ernaast)
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { request } from 'node:http';
 import { stat } from 'node:fs/promises';
 
+const WORTEL = fileURLToPath(new URL('..', import.meta.url));
 const { Library } = await import('../server/library.js');
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
@@ -179,6 +181,16 @@ try {
   ok('zijn script, opmaak en indeling komen door', (await status('/src/companion/companion.js')) === 200
     && (await status('/src/companion/companion.css')) === 200 && (await status('/mappings/companion.json')) === 200);
   ok('proef/sessie.json zelf niet (alleen via de API)', (await status('/proef/sessie.json')) === 404);
+  // AR18: de wachter van de herstartlus peilt /api/leeft (uit het geheugen, nooit schijf of database).
+  {
+    const l = await (await fetch(`${B}/api/leeft`)).json();
+    ok('/api/leeft: ok, het id van deze run en het pid', l.ok === true && typeof l.server === 'string' && l.server.length > 8 && Number.isInteger(l.pid));
+    const rij = await (await fetch(`${B}/api/ingest`)).json();
+    ok('… hetzelfde id als de ingest-rij (de strook ziet er een herstart aan)', rij.server === l.server);
+    const bron = readFileSync(join(WORTEL, 'server/index.js'), 'utf8');
+    const regel = bron.split('\n').find((r) => r.includes("pad === '/api/leeft'")) ?? '';
+    ok('… en de route leest niets: geen lib, await of fs op zijn regel', regel && !/lib\.|await|read|stat|fs\./.test(regel));
+  }
   const zetPunt = (id, body, type = 'application/json') => fetch(`${B}/api/proef/${id}`, { method: 'PUT', headers: { 'content-type': type }, body: JSON.stringify(body) });
   ok('nog niets: leeg', Object.keys((await (await fetch(`${B}/api/proef`)).json()).items).length === 0);
   let rp = await zetPunt('dr-rem', { status: 'fout', notitie: 'klikt' });

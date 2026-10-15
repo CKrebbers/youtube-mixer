@@ -28,7 +28,7 @@
  *     --db <pad>           standaard VARVE_DB of <media>/library.db
  *     --nummer <id>        een nummer voor de gridmeting (mag vaker)
  *     --titel <tekst>      idem, op (een deel van) de titel; opgezocht in de kopie van library.db (mag vaker)
- *     --venster UU:MM:SS-UU:MM:SS   de storing met de hand (een hang staat niet in het log van de lus)
+ *     --venster UU:MM:SS-UU:MM:SS   de storing met de hand (een hang korter dan de wachter, of zonder de lus)
  *     --json               JSON in plaats van tekst
  * Exit: 0 gemeten en niets mis · 2 gemeten en iets gevonden (gat in een storing, log met gat,
  * grid naast de tellen) · 1 verkeerd aangeroepen of niets te lezen.
@@ -143,7 +143,9 @@ export function leesLog(tekst) {
 /**
  * De regels van de lus en de server uit ~/.varve-server.log. De lus schrijft "[lus] DD-MM UU:MM:SS …"
  * (lokale tijd, zonder jaar: `jaar` van buiten). Alleen wat over omvallen, stoppen en starten gaat.
- * @returns {Array<{ t: Date, soort: 'gestart'|'herstart'|'omgevallen'|'gestopt'|'bezet'|'crashlus', tekst: string }>}
+ * Een hang (AR18) schrijft de wachter als "de server antwoordt niet (laatste antwoord UU:MM:SS, …): kill -9": `t` is
+ * dan dat laatste antwoord (de hang begon daarna, hooguit één peiling van 5 s later), niet het moment van de kill.
+ * @returns {Array<{ t: Date, soort: 'gestart'|'herstart'|'omgevallen'|'hang'|'gestopt'|'bezet'|'crashlus', tekst: string }>}
  */
 export function leesServerlog(tekst, jaar) {
   const uit = [];
@@ -154,6 +156,13 @@ export function leesServerlog(tekst, jaar) {
       const t = new Date(jaar, +m[2] - 1, +m[1], +m[3], +m[4], +m[5]);
       laatste = t;
       const r = m[6];
+      const hang = /^de server antwoordt niet \(laatste antwoord (\d{2}):(\d{2}):(\d{2})/.exec(r);
+      if (hang) {
+        let laatst = new Date(jaar, +m[2] - 1, +m[1], +hang[1], +hang[2], +hang[3]);
+        if (laatst > t) laatst = new Date(laatst.getTime() - 86400000);  // over middernacht
+        uit.push({ t: laatst, soort: 'hang', tekst: r });
+        continue;
+      }
       const soort = /^server gestart .*herstart \d+/.test(r) ? 'herstart'
         : /^server gestart/.test(r) ? 'gestart'
           : /keer herstart in .* de lus stopt/.test(r) ? 'crashlus'
@@ -169,14 +178,17 @@ export function leesServerlog(tekst, jaar) {
   return uit;
 }
 
-/** De vensters waarin de server weg was: van omvallen of stoppen tot de volgende start. */
+/** De vensters waarin de server weg was: van omvallen, hangen of stoppen tot de volgende start. Na een hang komt
+ *  ook "viel om (exitcode 137)" (de kill -9): dat hoort bij dezelfde storing, die begon na het laatste antwoord. */
 export function storingen(gebeurtenissen) {
   const uit = [];
   let weg = null;
   for (const g of gebeurtenissen) {
-    if (g.soort === 'omgevallen' || g.soort === 'gestopt' || g.soort === 'crashlus') { if (!weg) weg = g; }
+    if (g.soort === 'omgevallen' || g.soort === 'hang' || g.soort === 'gestopt' || g.soort === 'crashlus') { if (!weg) weg = g; }
     else if ((g.soort === 'gestart' || g.soort === 'herstart') && weg) {
-      uit.push({ van: weg.t, tot: g.t, duur: (g.t - weg.t) / 1000, hoe: weg.soort === 'omgevallen' ? 'omgevallen (de lus startte hem)' : 'gestopt' });
+      const hoe = weg.soort === 'omgevallen' ? 'omgevallen (de lus startte hem)'
+        : weg.soort === 'hang' ? 'hing (de wachter van de lus zette hem neer)' : 'gestopt';
+      uit.push({ van: weg.t, tot: g.t, duur: (g.t - weg.t) / 1000, hoe });
       weg = null;
     }
   }

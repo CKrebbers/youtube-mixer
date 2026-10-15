@@ -145,7 +145,8 @@ onderzoeker dacht, en doen we alleen de goedkope delen.
 5. Toets: `duur.mjs` (doet de kill al). Wat je wilt zien: 0 stille vensters, een WAV zonder gat en
    hooguit één opnamemelding.
 6. *Volgende versie:* hang-detectie (hartslag plus kill) pas als er ooit een hang in `server.log`
-   opduikt, en dan ruim: ~10 s, met een gratieperiode bij het opstarten. Ook de noodlus op de maat, zoals
+   opduikt, en dan ruim: ~10 s, met een gratieperiode bij het opstarten. **Gebouwd 16 okt op verzoek (AR18)**:
+   drie keer geen antwoord in 5 s-stappen (~15 s), 120 s bij het opstarten (`tools/varve-app/server-lus.sh`). Ook de noodlus op de maat, zoals
    de "emergency loop" van de CDJ (vakgebied, kans 2).
 
 **Risico.** Klein. Een lus die eindeloos herstart wordt begrensd en gelogd.
