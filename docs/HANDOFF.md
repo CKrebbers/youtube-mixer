@@ -320,7 +320,7 @@ Lees in deze volgorde:
 - **`VARVE_BACKUPS`:** de uurlijkse backups van `library.db` staan naast de library
   (`~/Varve-media/backups/`). Een kopie BUITEN de laptop: `tools/backup/kopie.mjs --doel <stick, SSD of
   pc>` (set A, ~20 MB; met `--media` ook de 32 GB media), `controleer.mjs` en `herstel.mjs`
-  (docs/BACKUP.md; sinds 15 okt op `studio/backup-instellingen`). Nog nergens naartoe gedraaid: er is
+  (docs/BACKUP.md; sinds 15 okt in main). Nog nergens naartoe gedraaid: er is
   nog geen doel buiten de laptop gekozen (BACKUP.md §6, launchd standaard uit). Het tool meldt dit ook.
 - **Getest:** `node test/alles.mjs` groen (met `test/media-verhuis.test.mjs`); een testserver op 8811
   logt zijn mediamap; VARVE.app compileert (proefdoel) en de startregel is getoetst met een nep-thuismap.

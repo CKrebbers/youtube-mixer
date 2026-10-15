@@ -30,7 +30,7 @@ zelf opgemaakt. Daarvoor gebruikte ik hun notities en de natoetsen die de scepti
 | 4 | **Code in iCloud kan alle decks stilleggen**: vangnet nu, verhuizen later | ja | 5 | 1 (vangnet ½ u) | vangnet nu, verhuizen na de merge | `UV_THREADPOOL_SIZE=16` in de Dock-app |
 | 5 | **Scherm en Mac wakker houden** | ja | 3,5 | 1 (2–3 u) | na 2 min meten op de Mac | `pmset -g assertions` tijdens het spelen |
 | 6 | **Waarschuwen bij Cmd+R/Cmd+W, en herstel na herladen of crash** | ja | 6 | 3 (½ u + ~1 dag) | waarschuwing nu, herstel nu ná #1 | `beforeunload` in app.js |
-| 7 | **Een kopie van je instellingen die niet in de tas zit** | nee (verlies) | 6 | 2 (½ dag) | nu | `tools/backup` (PR #28 + #31, tak `studio/backup-instellingen`), doel: USB-stick of de pc |
+| 7 | **Een kopie van je instellingen die niet in de tas zit** | nee (verlies) | 6 | 2 (½ dag) | nu | `tools/backup` (in main sinds 15 okt, PR #28 + #31), doel: USB-stick of de pc |
 | 8 | **De werkplaats**: tests parallel, CI op elke PR, één integratielijn | nee (sneller) | 5 | 2 (~1 dag) | parallel en CI nu, opruimen na de proef | pool in `test/alles.mjs` |
 | 9 | **Loudnorm drukt stil de dynamiek plat** (albums, ambient): lineair normaliseren | nee (geluid) | 6 | 3 (1 dag + nachtwerk) | telling nu, bouwen nu als het veel nummers raakt | `loudnorm-telling.mjs` op je library |
 | 10 | **De kill snijdt veel breder dan "bas weg"**: een isolator-EQ | nee (geluid) | 6 | 3 (1 dag) | na de proef (jouw oor beslist) | prototype naast de oude, A/B luisteren |
@@ -235,13 +235,13 @@ beginwaarden zetten.
 ### 7. Een kopie van je instellingen die niet in de tas zit
 
 **Wat er mis is.** Op 11 okt waren er nul kopieën buiten de laptop (`docs/BACKUP.md` §1). Het
-gereedschap staat sinds 15 okt op `studio/backup-instellingen` (PR #28 samengevoegd met #31: de
+gereedschap staat sinds 15 okt in main (PR #28 samengevoegd met #31: de
 Chrome-sleutels zitten nu in library.db en dus in de kopie). De backups van de server staan naast de library, en volgens de paklijst
 gaan ze mee in de tas. Raakt de laptop kwijt, dan is alles weg wat je met de hand instelde: grids op
 slot, hotcues, racks, pads, patronen, plannen en opstellingen. Dat deel is maar 16–20 MB.
 
 **Toepassen.**
-1. `studio/backup-instellingen` naar main (PR #28 en #31 zitten erin). `tools/backup/kopie.mjs`
+1. Gedaan op 15 okt: het gereedschap staat in main (PR #28 en #31). `tools/backup/kopie.mjs`
    gebruikt `VACUUM INTO` en nooit `cp`; een `cp` mist hotcues terwijl `quick_check` toch "ok" zegt
    (BACKUP.md §2).
 2. Een doel dat je al hebt: een USB-stick die thuis blijft, of de Omarchy-pc via Tailscale (`rsync`).
