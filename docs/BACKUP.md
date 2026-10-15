@@ -179,7 +179,12 @@ Gemeten (11 okt, extra-3 §1.6): een verse worktree met een hersteldataset van 8
   aan het eind (`/x/media/` = `/x/media`). Ligt er daarnaast nog een `<checkout>/media/library.db`
   (die een server zonder `VARVE_MEDIA` zou pakken), dan gaat de gekozen mee en zegt hij "LET OP
   er staan twee libraries … zet VARVE_DB" (kopie, controleer, herstel). Het manifest noemt de
-  library en de media (`library_pad`, `media.via`).
+  library en de media (`library_pad`, `media.via`); de waarschuwing staat in het manifest én in
+  `~/.varve/backup-laatste.json` (`waarschuwing`), want een run uit launchd zegt het alleen in het log.
+  Hij stopt er niet voor (tot 15 okt: exit 2): de kopie volgt de server. Ligt de oude `media/` er
+  nog en staat `VARVE_MEDIA` alleen in `~/.zprofile` (geen `~/.varve/media-pad`), dan ziet launchd
+  maar één library, de oude, en is er niets te waarschuwen: zet na een verhuizing dus altijd ook
+  `~/.varve/media-pad` (`tools/media-verhuis.mjs` noemt die regel).
 - Eén run tegelijk per doel: een slot in `staat/.werk/slot` (pid, host, tijd). Een tweede run
   (launchd om 08:00 en een run met de hand) zegt "er loopt al een kopie" en stopt (exit 2). Een
   slot van een proces dat niet meer leeft gaat opzij naar `.werk/slot-<tijd>`.
@@ -209,7 +214,8 @@ een git-repo (de privé-repo `varve-staat`, keuze BK1), dan doet `dagelijks.sh` 
 **altijd privé**, nooit in `AV-app-hub` (publiek), en nooit `media/` of `muziekkaart.db` erin.
 
 **Het avondpakket.** `kopie.mjs` schrijft na elke run `~/.varve/backup-laatste.json`
-(`{ doel, tijd, setA, setB, bytes, zelfdeSchijf, tracks, host }`). Het punt "backup" van het
+(`{ doel, tijd, setA, setB, bytes, zelfdeSchijf, tracks, host, waarschuwing }`; `waarschuwing` is
+null, of "er staan twee libraries …", §5). Het punt "backup" van het
 avondpakket (sinds 11 okt in main, `docs/AVONDPAKKET.md`) kan daar "kopie buiten de laptop: n dagen
 geleden" uit halen (groen ≤ 1 dag, oranje ≤ 7, rood ouder of nooit; `zelfdeSchijf` telt niet als
 buiten de laptop). Nog niet gebouwd: dat is de sonde "reiskopie" (AVONDPAKKET.md §13 punt 10), een

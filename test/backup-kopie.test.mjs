@@ -181,6 +181,12 @@ try {
     ok('… een testomgeving (VARVE_TESTSERVER=1) leest het bestand nooit', paden(bron, { HOME: thuis3, VARVE_TESTSERVER: '1' }).media === join(bron, 'media'));
     const pmd = draai('kopie.mjs', ['--doel', join(tmp, 'doel-mediapad'), '--bron', bron, '--droog'], { ...VK, HOME: thuis3 });
     ok('… kopie --droog via media-pad: vindt de verhuisde library (1 nummer) en zegt waarvandaan', pmd.code === 0 && /1 nummers/.test(pmd.uit) && /via ~\/\.varve\/media-pad/.test(pmd.uit));
+    // Uit launchd leest niemand het log: de waarschuwing moet ook in de stempel voor het avondpakket.
+    const pme = draai('kopie.mjs', ['--doel', join(tmp, 'doel-mediapad-echt'), '--bron', bron, '--zelfde-schijf'], { ...VK, HOME: thuis3 });
+    if (pme.code !== 0) console.log(pme.uit);
+    let stm = null;
+    try { stm = JSON.parse(readFileSync(join(thuis3, '.varve', 'backup-laatste.json'), 'utf8')); } catch (_) { /* geen stempel */ }
+    ok('… een echte run zet "twee libraries" ook in ~/.varve/backup-laatste.json', pme.code === 0 && /twee libraries/.test(stm?.waarschuwing || ''));
   }
 
   // ---- versies sorteren op tijd, niet op naam ------------------------------------
@@ -239,6 +245,7 @@ try {
     ok('één versie van library en kaart', versiesVan('library').length === 1 && versiesVan('kaart').length === 1);
     const st = JSON.parse(readFileSync(join(thuis, '.varve/backup-laatste.json'), 'utf8'));
     ok('stempel ~/.varve/backup-laatste.json: setA, geen setB, doel, tracks', st.setA === true && st.setB === false && st.doel === varve && st.tracks === 2);
+    ok('… zonder waarschuwing (één library)', st.waarschuwing === null);
     ok('de echte bron is niet aangeraakt: wal staat er nog', existsSync(dbPad + '-wal'));
     eerst = alles(varve);
   }

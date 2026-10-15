@@ -318,6 +318,8 @@ export async function kopie(opties, env = process.env, uit = console.log) {
       writeFileSync(P.stempel, JSON.stringify({
         doel: varve, tijd: nu.toISOString(), setA: true, setB: !!setB, bytes, zelfdeSchijf,
         tracks: libTel.tracks, host: hostname(),
+        // "twee libraries" ook hier: uit launchd ziet niemand het log, het avondpakket leest dit wel.
+        waarschuwing: P.waarschuwing,
       }, null, 1) + '\n');
     } catch (err) { uit(`  (stempel ${P.stempel} niet geschreven: ${err.message})`); }
 
