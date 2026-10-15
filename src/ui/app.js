@@ -49,8 +49,9 @@ import { startInstellingen, toonInstellingMeldingen, vorigeInstellingen, herstel
  * aanroepen, krijgt een ReferenceError (TDZ).
  */
 
-// De zeven instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems,
-// koptelefoon, vormen) eerst van de server in localStorage: alles hieronder leest
+// De instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems,
+// koptelefoon, vormen en de twee bus-racks; elf namen in instellingen-lijst.js)
+// eerst van de server in localStorage: alles hieronder leest
 // ze daar. Zonder server (of na 1,5 s) blijft wat deze browser had.
 await startInstellingen();
 

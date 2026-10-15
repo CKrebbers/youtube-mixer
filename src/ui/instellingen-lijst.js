@@ -1,5 +1,6 @@
 /**
- * De witte lijst van de zeven instrument-sleutels (extra-3 B4), los van
+ * De witte lijst van de instrument-sleutels (extra-3 B4: zeven, beeld telt
+ * drie; sinds 14 okt ook de twee bus-racks, dus elf namen), los van
  * `instellingen-opslag.js` omdat de server hem ook importeert
  * (server/index.js, `/api/instellingen`).
  *
