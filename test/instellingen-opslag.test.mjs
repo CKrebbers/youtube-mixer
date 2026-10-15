@@ -403,7 +403,7 @@ console.log('\nde plekken in src/ die de sleutels lezen en schrijven');
   for (const [k, fs] of Object.entries(plekken)) for (const f of fs) {
     if (f.endsWith('instellingen-opslag.js') || f.endsWith('instellingen-lijst.js')) continue;
     const t = readFileSync(f, 'utf8');
-    const aangesloten = /from '\.\/instellingen-opslag\.js'/.test(t) || (f.endsWith('control/midi.js') && /this\.bewaar\(STORE_KEY/.test(t))
+    const aangesloten = /from '(?:\.|\.\.)\/instellingen-opslag\.js'/.test(t) || (f.endsWith('control/midi.js') && /this\.bewaar\(STORE_KEY/.test(t))
       || (f.endsWith('master-weergave.js') && /OPSLAG/.test(readFileSync('src/ui/master-paneel.js', 'utf8')) && /schrijfInstelling/.test(readFileSync('src/ui/master-paneel.js', 'utf8')));
     if (!aangesloten) los.push(`${k} in ${f}`);
   }

@@ -166,11 +166,23 @@ kopie van `server/backup.js` en in elke backupset die `library.db` meeneemt.
 | `varve.stems.standaard` | 2 / 4 / 0 stems bij binnenhalen | `ingest-strook.js` |
 | `varve.koptelefoon.omgewisseld` | zaal en koptelefoon gewisseld | `koptelefoon-paneel.js` |
 | `varve.vormen` | de vlag `?vormen=1` | `vlag.js` |
+| `varve.send.a.rack`, `varve.send.b.rack` | welk rack op de echo- en de galmbus zit (sinds de werkruimte, S4) | `aanhakers/combi.js` |
 
-Samen negen namen (beeld telt drie). De witte lijst staat op één plek,
+Samen elf namen (beeld telt drie; de twee bus-racks kwamen er op 15 okt bij, bij het
+samenvoegen met de werkruimte: ze zijn klank, net als het master-rack). De witte lijst staat op één plek,
 `INSTELLING_SLEUTELS` in `src/ui/instellingen-lijst.js` (puur, zonder DOM); de
 server en `instellingen-opslag.js` importeren hem. Gemak-sleutels (panelen open/dicht, sorteringen, `varve.log.altijd`) en de
 mapping (eigen route) staan er bewust niet op.
+
+Ook bewust NIET op de lijst (15 okt): wat de werkruimte per browser onthoudt. `varve.werkruimte`
+(de laatst gekozen werkruimte) en `varve.werkruimte.stand`/`.gezien.*` zijn de keuze van DIT
+scherm: de Mac, de iPad en een tweede venster mogen elk een andere werkruimte hebben, en met
+"de server wint bij het opstarten" zou de ene de andere overschrijven. De werkruimtes zelf staan al
+op de server (`werkruimtes/`, in de backup), en een stand neemt zijn werkruimte mee
+(`mixer.werkruimte`). Idem `varve.scherm.*` (welk scherm een venster heeft: per machine),
+`varve.uitlijn.vorm`/`.maten` (de weergave van één venster), `varve.uitlijn` (een proefvlag
+zolang de werkruimte de stukken nog niet zelf laadt), `varve.companion.pins`/`.tab` (per telefoon),
+`varve.avondpakket.profiel` (bewust per browser), `varve.library.indeling` en `varve.rack.klembord`.
 
 ### API
 
@@ -346,7 +358,8 @@ Er is geen Time Machine, dus de server maakt zelf kopieën (`server/backup.js`,
   fout, foutTijd, bezig }`, geen pad (behalve in de tekst van een fout).
 - **Ook de browser-sleutels (B4, 11 okt):** de zeven sleutels staan nu in library.db en
   gaan mee in de backup (master-rack, klankschaal, MIDI-poorten, beeld, stems-standaard,
-  koptelefoon-wissel, vormen-vlag; zie "De zeven browser-instellingen" hierboven).
+  koptelefoon-wissel, vormen-vlag, en sinds 15 okt de racks op de echo- en galmbus; zie
+  "De zeven browser-instellingen" hierboven).
 
 ### Gemeten (2 okt, deze container, 4 kernen, rustig)
 

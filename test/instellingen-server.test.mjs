@@ -53,11 +53,17 @@ const put = (sleutel, body, headers = { 'Content-Type': 'application/json' }) =>
 
 try {
   console.log('de witte lijst');
-  ok('zeven instrument-sleutels (beeld telt drie): negen namen', INSTELLING_SLEUTELS.length === 9
+  ok('zeven instrument-sleutels (beeld telt drie) plus de twee bus-racks: elf namen', INSTELLING_SLEUTELS.length === 11
     && ['varve.master.rack', 'varve.klankschaal', 'varve.midi.ports', 'varve.beeld.adres', 'varve.beeld.latentie', 'varve.beeld.aan',
-      'varve.stems.standaard', 'varve.koptelefoon.omgewisseld', 'varve.vormen'].every((k) => INSTELLING_SLEUTELS.includes(k)));
+      'varve.stems.standaard', 'varve.koptelefoon.omgewisseld', 'varve.vormen',
+      'varve.send.a.rack', 'varve.send.b.rack'].every((k) => INSTELLING_SLEUTELS.includes(k)));
   ok('niet op de lijst: mapping (eigen route), gemak-sleutels', !INSTELLING_SLEUTELS.includes('varve.mapping')
     && !INSTELLING_SLEUTELS.includes('varve.klankschaal.open') && !INSTELLING_SLEUTELS.includes('varve.log.altijd'));
+  // De werkruimte (14 okt) bracht nieuwe browser-sleutels; die horen bij dit scherm, niet bij het instrument
+  // (docs/LIBRARY.md "De browser-instellingen op de server", waarom niet).
+  ok('niet op de lijst: de keuzes van de werkruimte per browser', ['varve.werkruimte', 'varve.werkruimte.stand', 'varve.uitlijn',
+    'varve.uitlijn.vorm', 'varve.uitlijn.maten', 'varve.companion.pins', 'varve.companion.tab', 'varve.avondpakket.profiel',
+    'varve.library.indeling', 'varve.rack.klembord'].every((k) => !INSTELLING_SLEUTELS.includes(k)));
 
   ok('de server start', await start(), uit.slice(-600));
 

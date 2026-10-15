@@ -18,6 +18,9 @@ export const INSTELLING_SLEUTELS = Object.freeze([
   'varve.stems.standaard',
   'varve.koptelefoon.omgewisseld',
   'varve.vormen',
+  // sinds de werkruimte (S4, 14 okt): welk rack op de echo- en de galmbus zit (aanhakers/combi.js)
+  'varve.send.a.rack',
+  'varve.send.b.rack',
 ]);
 
 /** Hoe groot één waarde mag zijn (tekens). Een master-rack is een paar kB. */
