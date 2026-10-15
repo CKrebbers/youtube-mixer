@@ -2045,6 +2045,16 @@ if (HER !== 'uit') { gpu.sluit(); setTimeout(() => gpu.open(), 60000).unref?.();
 
 await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de herstart:', err?.message || err));
 
+// De poort is bezet (een tweede server): stoppen met exitcode 3, niet half blijven draaien. Zonder
+// deze regel ving uncaughtException de fout op en liep deze server zonder poort door, met zijn
+// achtergrondwerk (nacht, heranalyse, backups) op dezelfde library. 3 = een vaste fout: de
+// herstartlus (tools/varve-app/server-lus.sh) start dan niet opnieuw.
+server.on('error', (err) => {
+  if (err?.code !== 'EADDRINUSE') return console.error('[server] fout:', err?.message || err);
+  console.error(`[server] poort ${POORT} is bezet: er draait al een server (of iets anders). Deze stopt.`);
+  process.exit(3);
+});
+
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);
   for (const naam of EXTRA_HOSTS) console.log(`ook via  ·  https://${naam}  (Tailscale, docs/TAILSCALE.md)`);

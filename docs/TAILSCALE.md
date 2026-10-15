@@ -38,7 +38,9 @@ iPad / laptop / telefoon ──(Tailscale, HTTPS)──> Mac: tailscale serve :4
    Daarna meldt hij `Available within your tailnet: https://varve.tail1234.ts.net/`.
    Die naam (zonder `https://` en zonder `/`) heet hieronder `<NAAM>`; later
    terugzien kan met `tailscale serve status`.
-4. **De server starten met die naam** (de oude eerst stoppen):
+4. **De server starten met die naam** (de oude eerst stoppen; draait hij via VARVE.app in de
+   herstartlus, dan `sh tools/varve-app/server-lus.sh stop`, of `pkill` zoals hieronder: een SIGTERM
+   stopt de lus ook):
    ```
    pkill -f server/index.js
    cd <projectmap>
@@ -59,6 +61,14 @@ zonder zegt de server bij het opstarten `VARVE_HOSTS is leeg: iPad en iPhone kri
 - Systeeminstellingen → Batterij (of Energie) → Opties: **"Voorkom automatische
   sluimerstand op netstroom wanneer het scherm uit is"** aan. Met de klep dicht
   op batterij slaapt een MacBook toch: dan is VARVE onbereikbaar.
+- **De server blijft draaien** (15 okt, docs/WINST.md punt 3): VARVE.app start hem in een herstartlus
+  (`tools/varve-app/server-lus.sh`): valt hij om, dan staat hij na ~1 s weer op, hooguit 5 keer per
+  minuut. Stoppen: `sh tools/varve-app/server-lus.sh stop`, of `pkill -f server/index.js` (een SIGTERM
+  start de lus niet opnieuw). Gebruik de lus en de LaunchAgent hieronder **nooit samen**: allebei
+  starten ze een server op 8777 (de lus ziet een bezette poort en stopt dan, maar de LaunchAgent met
+  `KeepAlive` blijft het proberen). Kies er één: VARVE.app (de lus) voor het spelen, de LaunchAgent
+  alleen als de Mac zonder jou na een herstart bereikbaar moet zijn; zet hem dan uit met
+  `launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist` voordat je VARVE.app gebruikt.
 - De server vanzelf laten starten na een herstart (optioneel): een LaunchAgent.
   Zet dit in `~/Library/LaunchAgents/nl.varve.server.plist` (vul de drie
   paden in; `which node` geeft het eerste), en dan

@@ -41,6 +41,18 @@ in de aanroep. Met `VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket` uit fixture
 `VARVE.applescript` + `maak.sh`: de Dock-knop die de server en de AV-app-hub start (zonder hub doet de Maschine niets) en de Controlekamer opent (met `?hub=`)
 (`~/Applications/VARVE.app`). Een losse macOS-app; draait niet in de mixer.
 
+`server-lus.sh` (15 okt, docs/WINST.md punt 3): VARVE.app start de server niet meer zelf maar via deze
+herstartlus (POSIX sh). Valt de server om (exitcode ≠ 0, ook SIGKILL of een native fout), dan start de lus
+hem na 1 s opnieuw, hooguit 5 keer per minuut; daarna stopt hij en staat de reden in `~/.varve-server.log`.
+Exitcode 0, SIGTERM/SIGINT/SIGHUP en 3 (poort bezet) starten niet opnieuw. Vóór elke start kijkt hij of er
+al iets op de poort luistert: dan geen tweede server (en de lus stopt). Pidbestand `~/.varve/server-lus.pid`.
+- **Stoppen**: `sh tools/varve-app/server-lus.sh stop` (lus én server, wacht tot ze weg zijn). Het oude
+  `pkill -f server/index.js` werkt ook: een SIGTERM is "bewust gestopt", de lus stopt dan mee.
+- `sh tools/varve-app/server-lus.sh status`: draait hij (exit 0) of niet (exit 1).
+- Niet samen met de LaunchAgent uit docs/TAILSCALE.md (`KeepAlive`): twee starters botsen op 8777. Wie
+  hem had: `launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist`.
+- De test: `test/server-lus.test.mjs` (nep-`node` op PATH die op bestelling omvalt; poorten 8964/8965).
+
 ## beeld-lokaal.sh
 Beeld op één machine (docs/BEELD.md §8): `zsh tools/beeld-lokaal.sh [--stand licht|normaal|auto]
 [--stroom <map>] [--poort 7702] [--geen-fps] [--droog] [--stop] [--installeer]`. Start op deze Mac
