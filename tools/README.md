@@ -136,6 +136,11 @@ bestand heen. Zie `patronen/LEESMIJ.md`.
   (standaard 300) s; elke 15 s de RSS van de renderer, aan het eind GC (hoofdthread én AudioWorklet).
   Drukt groei per minuut af, ook na GC. `VARVE_CODE=<checkout>` meet een andere versie met hetzelfde
   script (vóór/na). Poorten 8881/9381. 14 okt: 26,6 → 2,6 MB/min, na GC 25,8 → 0,2 (docs/WINST.md punt 1).
+- `server-weg.mjs` — mag de server even weg zijn? (docs/WINST.md punt 3) Eigen server (alle `VARVE_*`-mappen
+  in tmp), twee decks streamend en hoorbaar, opname en handelingenlog aan; dan SIGKILL, `VARVE_WEG_S`
+  (standaard 30) s weg, opnieuw starten. Eisen: 0 stille vensters van 50 ms op de master, een WAV zonder gat,
+  een log zonder gat, hooguit één opname-melding die "weer goed" wordt. `VARVE_CODE=<checkout>` = vóór/na.
+  Poorten 8961/8962. 15 okt: vóór 200 stille vensters (10 s), 20 s nullen in de WAV, 20 meldingen; na 0, 0, 1.
 - `acht-video.mjs` — verdringen de video's de audio? Acht decks die spelen, het videopaneel open, 30
   sprongen; wachttijd van de audioverzoeken, sprong → pagina, gat per deck. Media: `VARVE_ACHT_MEDIA=<map
   met library.db>` (database gekopieerd, nummers gelinkt, er wordt niets in geschreven), anders acht
