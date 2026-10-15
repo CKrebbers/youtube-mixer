@@ -9,7 +9,8 @@ daarna in CLAUDE.md of ROADMAP.md.
 
 Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 alleen een keuze
 
-Nieuwste blok (14 okt): **W, de werkruimte** (hieronder).
+Nieuwste blokken (14–15 okt): **W, de werkruimte** en **GA, afmaken: controllers en beatgrid** (hieronder),
+en achteraan **S9**, **S10** en **S11**.
 
 ---
 
@@ -101,6 +102,82 @@ Zelf gekozen (zeg het als je het anders wilt): acht delen op F1–F8 in deze vol
 wisselen alleen vanaf het scherm; fase lineair met een fijne variant op shift; SSE (plus POST voor bedienen) in plaats van
 WebSocket; sampler, secties, patronen en auto in twee-handen uit de ▲ ▼-rondgang; de zender vraagt zonder kijker 1×/s of er
 iemand kijkt.
+
+---
+
+## GA. Afmaken: controllers en beatgrid (14 okt, tak `studio/afmaken`, PR #41)
+
+De vragen uit de vier verslagen van afmaken, letterlijk overgenomen en ingekort (bronnen:
+docs/verslagen/2026-10-14/beatgrid-analyse.md §8, beatgrid-bediening.md, controller-invoer.md,
+controller-uitvoer.md). Waar je niets zegt, geldt wat er gebouwd is. BEATGRID.md §12–13 en APC40.md
+leggen de achtergrond uit.
+
+**Beatgrid-analyse** (BEATGRID.md §12)
+- [ ] **GA1. Het dansbereik.** 🎧 Hoort Beat This! een nummer op 70–87, dan wordt het tempo nu verdubbeld
+  (Ciel 77 → 154, zoals jij tikt). Reggae of downtempo die je echt op 75 telt, krijgt dan ook 150. Is dat
+  goed, of draai je genoeg van die muziek om het per krat te willen regelen?
+  Aan de bovenkant (181–300) blijft het tempo staan; daar wordt alleen gehalveerd als de downbeats én de
+  oude analyse het bevestigen.
+  **Advies:** zo laten, en per krat pas als je het mist. Let op: de winst op het DJ-tempo is deels
+  op nep-tellen gemeten; daarom bestaat GA3.
+- [ ] **GA2. Alle automatische grids één keer opnieuw rekenen bij de eerste start (VERSIE 2)?** 💬
+  Dat kost 0,7–4 s per nummer in een worker, voor 300 nummers 4–20 minuten achtergrondwerk, één keer.
+  Het wacht zolang er een deck speelt. Grids op slot en grids die met de hand zijn gezet blijven staan;
+  bewaarde sampler-pads rekenen mee; lengtes in maten in het setplan niet.
+  Zo niet: VERSIE op 1 laten, dan geldt het alleen voor nieuwe nummers en na ↻.
+  **Advies:** ja, op een dag zonder optreden.
+- [ ] **GA3. Eén keer het echte Beat This! op de benchmark draaien?** 💬 Drie commando's op de Mac
+  (beatgrid-analyse.md §1). Dan weten we of de nep-tellen kloppen. **Advies:** ja, vóór GA1 en GA2.
+- [ ] **GA4. Krijgt de oude analyse ook een versie?** 💬 Nummers zonder tellen (Beat This! stond er niet
+  op toen ze binnenkwamen) houden het grid van de oude analyse, ook op 70–87. Met een versie komen ze
+  bij het opstarten in het dansbereik: een paar seconden per nummer in de worker.
+  **Advies:** ja, samen met GA2.
+- [ ] **GA5. Wat gebeurt er met een dubbel tempo dat niemand bevestigt?** 💬 Telt Beat This! onder 300
+  het dubbele tempo en kan de oude analyse het niet bevestigen, dan blijft het tempo van het netwerk
+  staan en geldt het als zeker. Sync tegen een nummer op 120 speelt dan op halve snelheid. Boven 300
+  wordt gehalveerd, en dat blijft onzeker tot het bevestigd is.
+  Is dat goed, of liever een melding "dubbel tempo?" als voorstel?
+  **Advies:** de melding, als het in de praktijk voorkomt.
+
+**Beatgrid-bediening op de APC** (BEATGRID.md §13, APC40.md)
+- [ ] **GA6. De grid-modus neemt Device ◀ ▶, On/Off, Clip/Device View en Detail View over.** 🎛 Dat zijn
+  de "1", controle/✓, tellen hier en ↶. De grid-modus wint dan van elk open device-mapje: rack kiezen,
+  effect aan/uit, strip ↔ rack, het master-rack, het instrument, het mapje vorm. De device knobs, Bank
+  en de shift-varianten blijven werken. Goed zo, of liever een andere plek? **Advies:** proberen op de
+  proefavond.
+- [ ] **GA7. On/Off (controleren) op een stilstaand deck.** 🎛 Die zoekt een plek op en drukt op play.
+  Zonder koptelefoonuitgang van vier kanalen gaat de tik naar de master, en wie uit gewoonte op On/Off
+  drukt, laat de zaal de track en de tik horen. Liever alleen klaarzetten (plek, tik aan, niet starten),
+  of zonder koptelefoon weigeren met een melding? **Advies:** alleen klaarzetten.
+- [ ] **GA8. Een bewerkt grid op twee tracks met hetzelfde nummer.** 💬 De andere track krijgt het grid
+  ook, ook als hij in de zaal speelt (pas na 250 ms rust, één keer). Ook midden in een set, of alleen
+  op tracks die niet spelen? **Advies:** alleen op tracks die niet spelen.
+- [ ] **GA9. Oranje op "tel 1 hier" = twijfel.** 👀 Genoeg, of bij "geen puls" liever uit of rood?
+  **Advies:** zo laten.
+- [ ] **GA10. Tap tempo zet na vier tikken het hele grid op slot** (al van vóór afmaken). 💬 Zo laten?
+  **Advies:** ja.
+
+**Controllers: invoer** (controller-invoer.md)
+- [ ] **GA11 (C1). De latentie in het MIDI-paneel.** 🎛 Wat zegt "latency: … in + … audio" op de Mac met
+  de Scarlett? Boven ~15 ms audio ligt het aan de uitgang, niet aan de code.
+- [ ] **GA12 (C2). Waar voelde het laggy?** 🎛 De fader (geluid), het scherm dat achterloopt, de lampjes
+  op de APC, of knoppen die soms niets deden? Dat laatste past precies bij het echofilter dat nu voor
+  noten weg is.
+- [ ] **GA13 (C3). Na een avond spelen: `midi.status().echoes` in de console.** 🎛 Staat daar 0, dan mag
+  het echofilter voor de APC helemaal uit (zie ook GA15).
+- [ ] **GA14 (C4). Mag de LED-tik verder om?** 💬 Optie 1 van controller-invoer raakt feedback.js.
+  Het uitvoer-spoor heeft de tik al van 454 naar 45 µs gebracht. **Advies:** alleen als GA12 de lampjes
+  noemt.
+
+**Controllers: uitvoer** (controller-uitvoer.md)
+- [ ] **GA15. Het echofilter voor de APC uit na één avond meten?** 🎛 Daarvoor is `midi.status().echoes`
+  na een sessie nodig (GA13). **Advies:** ja; dat staat ook bovenaan de opties in HANDOFF.
+- [ ] **GA16. Laggy: het lampje of de knop zelf?** 🎛 Ligt het aan het lampje (dit spoor), of reageert
+  de knop zelf laat (het geluid, de fader)? Dat laatste is het invoerpad. Hoort samen met GA12.
+- [ ] **GA17. Eén keer de hub-proef V1 (ring-overname) op de APC?** 🎛 Die beslist of de draaiknoppen in
+  het invoerpad anders moeten (endless of absoluut). **Advies:** ja, bij dezelfde meting als GA13.
+- [ ] **GA18. Het schermtempo van de Maschine bij draaien.** 👀 Nu ~25 beelden per seconde. Prettig, of
+  liever rustiger (100 ms, zoals eerst)?
 
 ---
 

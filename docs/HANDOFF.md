@@ -168,10 +168,9 @@ Waar je niets zegt, geldt het advies; zo is het gebouwd.
 | **S9** (set klaarzetten) | 8 | de boog, de niveaus van een laag, tracks voor de automaat, GO/terugladen vanaf de iPad, wat er in een set zit, de backup van sets, een tegel in de Controlekamer |
 | **S10** (effecten) | 9 | welke sjablonen blijven, modulators als besturing, kam/klinker/band, master-lijm, de volgende stap (parallelle ketens of stutter) |
 | **S11** (tags) | 9 | plat of mappen, een krat als kopie, de kolom links, taggen vanaf de iPad, welke snel-tags, de Maschine bij BROWSE, "energie", zoeken vindt tags, wissen |
-| **afmaken** (14 okt; staan in de verslagen, nog niet in VRAGEN.md) | 18 | beatgrid-analyse §8 (5: dansbereik, VERSIE 2 herrekenen, echt Beat This!, oude analyse een versie, het dubbele tempo), beatgrid-bediening (5: wat de grid-modus overneemt, On/Off op een stilstaand deck, een grid op twee tracks, oranje, tap op slot), controller-invoer C1–C4 en controller-uitvoer (4: echofilter uit, wat laggy voelde, hub-proef V1, schermtempo) |
+| **GA** (afmaken, 14 okt) | 18 (GA1–GA18) | beatgrid-analyse §8 (5: dansbereik, VERSIE 2 herrekenen, echt Beat This!, oude analyse een versie, het dubbele tempo), beatgrid-bediening (5: wat de grid-modus overneemt, On/Off op een stilstaand deck, een grid op twee tracks, oranje, tap op slot), controller-invoer C1–C4 en controller-uitvoer (4: echofilter uit, wat laggy voelde, hub-proef V1, schermtempo) |
 
-Alles in `docs/VRAGEN.md`. HANDOFF noemde bij afmaken een blok "VRAGEN GA"; dat blok bestaat niet: de beatgridvragen
-staan in `docs/verslagen/2026-10-14/beatgrid-analyse.md` §8. De oudere blokken (BE, SV, S, J …) staan er nog zoals
+Alles in `docs/VRAGEN.md`; blok GA (15 okt) bundelt de vragen uit de vier verslagen van afmaken. De oudere blokken (BE, SV, S, J …) staan er nog zoals
 eerder.
 
 ### Opties voor de volgende versie
