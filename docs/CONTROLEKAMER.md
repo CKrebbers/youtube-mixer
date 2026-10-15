@@ -7,7 +7,14 @@ de mixer.
 ## Wat erop staat
 
 1. **Stand**, tegels met een lampje:
-   - **Server** draait, met het aantal nummers in de library. Daaronder (6 okt) een regel
+   - **Server** draait, met het aantal nummers in de library. Is hij herstart door de herstartlus
+     (AR9, 16 okt), dan eerst een regel "herstart om 22:14 (viel om, exitcode 137) · 1 keer sinds
+     21:30", of "(hing, de wachter zette hem neer)" na een hang (AR18). De tegel is dan 10 minuten
+     oranje en daarna weer groen; de regel blijft tot de lus stopt. De lus geeft wat hij weet mee
+     aan elke nieuwe server (`VARVE_LUS_*`, `server/lus.js`), en de tegel leest het uit
+     `GET /api/leeft`: een herstart van 1 s zie je dus ook als de tegel hem tussen twee peilingen
+     miste, en ook na herladen. Een server die met de hand gestart is: "zonder herstartlus".
+     Daaronder (6 okt) een regel
      over de secties (`docs/SECTIES.md` §4, `/api/secties`, `src/controle/server-tegel.js`):
      "secties: 12 nog zonder · 3 verouderd", of "secties: alles actueel". *Nog zonder* = er is
      nog geen kaart; *verouderd* = er is er een, maar de server rekent hem opnieuw (een
@@ -215,6 +222,9 @@ actions of `index.html` bestaan.
   archief), de speellijst (ook: de ids van vóór 6 okt, de vraagcodes, de
   avondvolgorde), het bericht van de mixer.
 - `test/server.test.mjs`: de routes, de witte lijst, 415 zonder JSON.
+- `test/herstart.test.mjs` (AR9): `leesLus`, de regel en de tegel (oranje 10 minuten, de hang, het aantal, geen
+  NaN), en een echte server met de omgeving van de lus; `test/server-lus.test.mjs`: wat de lus elke server meegeeft.
+  In echte Chrome: `tools/headless/herstart.mjs` (kill -9, herladen, SIGSTOP, 1440 en 390 px).
 - `test/backup.test.mjs`: de backup-tegel (vandaag, gisteren, langer geleden, fout,
   nog geen, geen server) en `/api/backups` op een echte server.
 - `test/sec-controle.test.mjs`: de tegel Server met de regel secties (elke stand, ook 404,

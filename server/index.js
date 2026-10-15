@@ -18,6 +18,7 @@ import { toonSamenvatting } from './toon.js';
 import { sectieSamenvatting, SECTIE_VERSIE } from './secties.js';
 import { kiesMedia, iCloudReden, VERHUISD_BESTAND, isTestserver } from './media-plek.js';
 import { poortBezet } from './poort.js';
+import { leesLus } from './lus.js';
 import * as opname from './opname.js';
 import * as handelingen from './handelingen.js';
 import { Plannen, NAAM as PLANNAAM } from './plannen.js';
@@ -110,6 +111,9 @@ const wachtrij = new Wachtrij();
  * ook (in een ander tabblad) weggeklikt zijn.
  */
 const SERVER_RUN = randomUUID();
+// Wanneer deze server startte, en wat de herstartlus hem meegaf (AR9): één keer gelezen, daarna uit het geheugen.
+const GESTART = Date.now();
+const LUS = leesLus();
 /*
  * Stems (docs/STEMS.md): een eigen rij naast de ingest, ook één tegelijk. De
  * ingest-rij wacht er nooit op: een nummer is speelbaar zodra audio.wav er
@@ -1179,7 +1183,8 @@ const server = createServer(async (req, res) => {
     // Leeft de server nog (AR18)? Voor de herstartlus (tools/varve-app/server-lus.sh): ze peilt dit elke 5 s en
     // zet een server die drie keer niets zegt opnieuw neer. Alleen uit het geheugen, nooit schijf of database:
     // een schijf die hangt los je niet op met een herstart (de nieuwe hangt dan ook), een event loop die hangt wel.
-    if (pad === '/api/leeft') return json(res, 200, { ok: true, server: SERVER_RUN, pid: process.pid });
+    // Sinds AR9 ook wat de lus over zijn herstarts meegaf (server/lus.js): de tegel Server toont het.
+    if (pad === '/api/leeft') return json(res, 200, { ok: true, server: SERVER_RUN, pid: process.pid, gestart: GESTART, lus: LUS });
 
     // De splitter erbij: { ok, reden?, python? } (plus apparaat en versies als hij er is).
     if (pad === '/api/tooling') {

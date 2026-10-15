@@ -27,6 +27,11 @@
 # hij niets en stopt hij. Gebruik de lus en de LaunchAgent dus nooit samen.
 #
 # POSIX sh (geen zsh), zodat de test hem ook op Linux kan draaien (test/server-lus.test.mjs).
+# Wat de lus van zijn herstarts weet, krijgt elke nieuwe server mee in zijn omgeving (AR9): VARVE_LUS_SINDS (de start
+# van de lus, s sinds 1970), VARVE_LUS_AANTAL (herstarts sindsdien) en VARVE_LUS_HERSTARTS (de laatste 20 als
+# "<s>:<exitcode>:om|hang", spatie ertussen). De server geeft het door in GET /api/leeft; de tegel Server toont het.
+# Een hang meldt de wachter met een merkbestand naast het pidbestand (<pidbestand>.hang): de lus ziet anders alleen 137.
+#
 # Instelbaar (voor de test): PORT, VARVE_LUS_PID, VARVE_LUS_MAX, VARVE_LUS_VENSTER (s), VARVE_LUS_WACHT (s),
 # en voor de wachter VARVE_LUS_PEIL (s), VARVE_LUS_PEIL_MAX (s), VARVE_LUS_MIS, VARVE_LUS_OPSTART (s).
 
@@ -102,6 +107,7 @@ wachter() {
     leeft "$srv" || exit 0
     ps -p "$srv" -o args= 2>/dev/null | grep -q 'server/index.js' || exit 0
     weg=$(nazaten "$srv")
+    : > "$PIDBESTAND.hang"
     log "de server antwoordt niet (laatste antwoord $laatst, $mis keer niets op /api/leeft binnen $PEIL_MAX s, pid $srv): kill -9$([ -n "$weg" ] && echo " (en $(echo $weg | wc -w | tr -d ' ') die hij startte)"), de lus start hem opnieuw"
     kill -KILL "$srv" 2>/dev/null
     [ -n "$weg" ] && kill -KILL $weg 2>/dev/null
@@ -135,11 +141,14 @@ esac
 if p=$(lus_pid); then log "draait al (pid $p): niets gestart"; exit 0; fi
 mkdir -p "$(dirname "$PIDBESTAND")"
 echo $$ > "$PIDBESTAND"
+rm -f "$PIDBESTAND.hang"
+sinds=$(date +%s)
+geschiedenis=                           # de laatste 20 herstarts, "<s>:<exitcode>:om|hang"
 
 kind=
 wpid=
 stoppen=
-op_te_ruimen() { [ "$(head -n 1 "$PIDBESTAND" 2>/dev/null)" = "$$" ] && rm -f "$PIDBESTAND"; }
+op_te_ruimen() { [ "$(head -n 1 "$PIDBESTAND" 2>/dev/null)" = "$$" ] && rm -f "$PIDBESTAND" "$PIDBESTAND.hang"; }
 stop_wachter() { [ -n "$wpid" ] && kill -TERM "$wpid" 2>/dev/null; wpid=; }
 stop_kind() { stoppen=1; stop_wachter; [ -n "$kind" ] && kill -TERM "$kind" 2>/dev/null; }
 trap stop_kind TERM INT HUP
@@ -162,6 +171,9 @@ while :; do
     exit 3
   fi
   [ -n "$stoppen" ] && exit 0
+  # Wat de lus weet, voor deze server (AR9, server/lus.js): de omgeving van de lus blijft verder zoals hij is.
+  VARVE_LUS_SINDS=$sinds VARVE_LUS_AANTAL=$herstarts VARVE_LUS_HERSTARTS=$geschiedenis
+  export VARVE_LUS_SINDS VARVE_LUS_AANTAL VARVE_LUS_HERSTARTS
   node server/index.js < /dev/null &
   kind=$!
   log "server gestart (pid $kind)$([ $herstarts -gt 0 ] && echo " — herstart $herstarts")"
@@ -174,6 +186,8 @@ while :; do
   done
   stop_wachter
   kind=
+  soort=om
+  if [ -f "$PIDBESTAND.hang" ]; then soort=hang; rm -f "$PIDBESTAND.hang"; fi
   if [ -n "$stoppen" ]; then log "gestopt (server exitcode $code)"; exit 0; fi
   case $code in
     0) log "de server stopte netjes: de lus stopt ook"; exit 0 ;;
@@ -192,6 +206,7 @@ while :; do
   fi
   crashes="$binnen $nu"
   herstarts=$((herstarts + 1))
+  geschiedenis=$(echo $geschiedenis "$nu:$code:$soort" | tr ' ' '\n' | tail -n 20 | tr '\n' ' ' | sed 's/ $//')
   log "de server viel om (exitcode $code): over $WACHT s opnieuw ($((aantal + 1))/$MAX in $VENSTER s)"
   sleep "$WACHT"
 done

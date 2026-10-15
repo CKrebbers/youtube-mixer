@@ -222,3 +222,23 @@ node tools/proef/ar-na.mjs           # droog; na de avond met --meet [--venster 
   krijgen; analyse, backup, ingest en Demucs draaien buiten de event loop (worker of kindproces). Niet getest: macOS
   `pgrep -P` op een kleinkind van yt-dlp, en wat Demucs doet als hij midden in een stuk een kill -9 krijgt (de stems-rij
   zet hem bij de volgende start terug, zoals na een crash).
+
+## 10. AR9: een herstart in de Controlekamer (16 okt, tak `studio/ar-herstart`)
+
+- **Waarom niet de tegel zelf laten opletten**: de tegel kijkt elke 2 s en een herstart duurt ~1,3 s; na herladen
+  weet de pagina niets meer. Daarom geeft de lus wat hij weet aan elke nieuwe server mee in de omgeving:
+  `VARVE_LUS_SINDS` (de start van de lus), `VARVE_LUS_AANTAL` en de laatste 20 in `VARVE_LUS_HERSTARTS`
+  (`<s>:<exitcode>:om|hang`). Een hang (AR18) laat de wachter weten met een merkbestand `<pidbestand>.hang`,
+  want de lus ziet anders alleen exitcode 137. Geen bestand dat de server leest, geen schijf.
+- **Server**: `server/lus.js` (`leesLus`, puur) leest het één keer bij het starten; `GET /api/leeft` geeft
+  `{ ok, server, pid, gestart, lus }`.
+- **Tegel** (`src/controle/server-tegel.js`, `herstartRegel`): "herstart om 22:14 (viel om, exitcode 137) · 1 keer
+  sinds 21:30", of "(hing, de wachter zette hem neer)"; 10 minuten oranje (`HERSTART_RECENT_MS`), daarna groen met de
+  regel erbij. Niet onder de lus: "zonder herstartlus (valt hij om, dan start niemand hem opnieuw)". Een oudere server
+  (geen `lus`, of 404): geen regel. De herstartregel staat boven die van de secties (`\n`, `white-space: pre-line`).
+- **Proefpunten**: ar-val en ar-hang zeggen nu wat de tegel moet tonen (citeert: "herstart om ", "viel om, exitcode ",
+  "hing, de wachter zette hem neer").
+- **Gemeten** in Chromium (`tools/headless/herstart.mjs`, 13 checks): na kill -9 binnen een paar seconden de regel
+  en oranje, na herladen dezelfde regel, na SIGSTOP "· 2 keer", past op 1440 en 390 px, 0 fouten van de pagina.
+- **Toets**: herstart.test (22 checks: lezen, regel, tegel, een echte server), server-lus.test (7 checks erbij:
+  wat elke start meekrijgt, de hang, het merkbestand weg, de grens van 20).

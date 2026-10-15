@@ -4,7 +4,8 @@
 // Toetst: herstart na een crash, de grens van 5 per minuut, exit 0 en SIGTERM stoppen hem,
 // stoppen via het pidbestand ruimt lus én server op, nooit twee lussen, nooit op een bezette poort,
 // en de wachter (AR18): een server die hangt (SIGSTOP) wordt met kill -9 neergezet en opnieuw gestart,
-// met wat hij startte; een server die antwoordt of nog opstart niet.
+// met wat hij startte; een server die antwoordt of nog opstart niet; en wat de lus elke nieuwe server
+// over zijn herstarts meegeeft (AR9: VARVE_LUS_SINDS, _AANTAL, _HERSTARTS).
 // Draai met: node test/server-lus.test.mjs
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, chmodSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -39,6 +40,7 @@ echo "$@" >> "$d/args"
 n=$(( $(cat "$d/teller" 2>/dev/null || echo 0) + 1 ))
 echo $n > "$d/teller"
 echo $$ > "$d/pid"
+echo "$VARVE_LUS_SINDS|$VARVE_LUS_AANTAL|$VARVE_LUS_HERSTARTS" >> "$d/lus"
 if [ -f "$d/crash" ] && [ $n -le $(cat "$d/crash") ]; then exit \${NEP_CODE:-1}; fi
 if [ -f "$d/luister" ]; then exec "$ECHTE_NODE" "$NEP_LUISTER" server/index.js; fi
 if [ -f "$d/netjes" ]; then exit 0; fi
@@ -117,6 +119,16 @@ try {
     await slaap(200);
     ok('niet vaker gestart dan nodig', g.starts() === 4 && g.code === undefined);
     ok('hij start node server/index.js', g.lees('args').trim().split('\n').every((r) => r === 'server/index.js'));
+    // AR9: elke start krijgt mee wat de lus weet. De eerste: de start van de lus, 0 herstarts, geen lijst.
+    const lus = g.lees('lus').trim().split('\n').map((r) => r.split('|'));
+    const sinds = Number(lus[0][0]);
+    ok(`de eerste start: VARVE_LUS_SINDS = nu, 0 herstarts, lege lijst (${lus[0].join('|')})`,
+      Math.abs(sinds - Date.now() / 1000) < 30 && lus[0][1] === '0' && lus[0][2] === '');
+    ok('elke start dezelfde VARVE_LUS_SINDS, en het aantal telt op (0, 1, 2, 3)',
+      lus.length === 4 && lus.every((x) => Number(x[0]) === sinds) && lus.map((x) => x[1]).join() === '0,1,2,3');
+    const vierde = lus[3][2].split(' ');
+    ok(`de vierde krijgt de drie herstarts mee als "<s>:<exitcode>:om" (${lus[3][2]})`,
+      vierde.length === 3 && vierde.every((h) => /^\d+:1:om$/.test(h) && Number(h.split(':')[0]) >= sinds));
     ok('het pidbestand heeft het pid van de lus', readFileSync(g.env.VARVE_LUS_PID, 'utf8').trim() === String(g.p.pid));
     ok('status zegt: draait', g.cmd('status').status === 0);
     // Een tweede lus start niets (geen tweede server).
@@ -144,7 +156,23 @@ try {
     await Promise.race([g.einde, slaap(10000)]);
     ok(`altijd om: de lus stopt na 5 herstarts (${g.starts()} starts, exit ${g.code})`, g.code === 1 && g.starts() === 6);
     ok('en schrijft waarom in het log', /al 5 keer herstart in 60 s/.test(g.log) && /exitcode 134/.test(g.log));
+    const laatste = g.lees('lus').trim().split('\n').at(-1).split('|');
+    ok(`de zesde start kreeg vijf herstarts mee (${laatste[1]}, ${laatste[2].split(' ').length} in de lijst)`, laatste[1] === '5' && laatste[2].split(' ').length === 5);
     ok('het pidbestand is weg', !existsSync(g.env.VARVE_LUS_PID));
+  }
+
+  {
+    // AR9: de lijst blijft klein (de laatste 20), het aantal telt door.
+    const g = geval({ crash: 24 });
+    g.env.VARVE_LUS_MAX = '30';
+    g.start();
+    lussen.push(g);
+    await tot(() => g.starts() === 25 && leeft(g.nepPid()), 15000);
+    const laatste = g.lees('lus').trim().split('\n').at(-1).split('|');
+    ok(`na 24 herstarts: aantal 24, maar alleen de laatste 20 in de lijst (${laatste[1]}, ${laatste[2].split(' ').length})`,
+      laatste[1] === '24' && laatste[2].split(' ').length === 20);
+    g.p.kill('SIGTERM');
+    await Promise.race([g.einde, slaap(5000)]);
   }
 
   console.log('\nbewust gestopt: niet opnieuw');
@@ -208,6 +236,9 @@ try {
     ok('… en het kind dat hij startte ook (geen wees)', kind > 0 && await tot(() => !leeft(kind), 2000));
     ok('het log zegt het: antwoordt niet, het laatste antwoord, kill -9, en wat hij startte', /de server antwoordt niet \(laatste antwoord \d{2}:\d{2}:\d{2}, 3 keer niets op \/api\/leeft binnen 0\.3 s, pid \d+\): kill -9 \(en 1 die hij startte\), de lus start hem opnieuw/.test(g.log));
     ok('daarna gewoon de regel van een crash (exitcode 137) en een herstart', /de server viel om \(exitcode 137\)/.test(g.log) && /herstart 1/.test(g.log));
+    ok(`AR9: de nieuwe server weet dat het een hang was ("…:137:hang", ${g.lees('lus').trim().split('\n')[1]})`,
+      /^\d+\|1\|\d+:137:hang$/.test(g.lees('lus').trim().split('\n')[1] ?? ''));
+    ok('… en het merkbestand van de wachter is weer weg', !existsSync(`${g.env.VARVE_LUS_PID}.hang`));
     ok('pas na de drie keer: niet binnen 0,5 s', ms > 500);
     ok('de lus draait door met zijn pidbestand (de wachter ruimde het niet op)', g.code === undefined && readFileSync(g.env.VARVE_LUS_PID, 'utf8').trim() === String(g.p.pid));
     await slaap(1200);
