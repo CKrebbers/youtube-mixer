@@ -149,6 +149,7 @@ src/
                                     met naarServer ook POST /api/mixer (hooguit 1 per 900 ms, nooit wachten) voor de companion
                     apc-kaart.js    apc.html: de APC met knoppen op hun echte plek, klik = uitleg
                     apc-beschrijf.js elke action in gewone taal (de test eist er een voor de hele standaardmapping)
+                    wie.js          "welke track" in een uitleg (wie, WIE, WIE_KERN, wieMet): voor apc-beschrijf en elk spoor in beschrijf/
                     soorten.js      soort (kleur) van een action voor beide kaarten; de kleuren in styles.css (.s-*). Puur.
                     maschine-kaart.js  maschine.html: plaat, schermen, live volgen via window.opener.maschine. Stuurt niets.
                     maschine-kaart-plan.js  plaatsing + wat een control doet = legUit() van de Maschine (label, soort). Puur.
@@ -240,6 +241,8 @@ src/
   export/           patronen-smf.js patronen/set <-> Standard MIDI File (type 1, 384 PPQN) voor Logic; buiten de engine (docs/PATRONEN.md §8). Puur.
   lib/              emitter.js      Emitter + clamp/lerp/expMap/dbToGain/fmtTime
                     antwoord.js     leesWeg(res): het antwoord van een fetch lezen, ook als het gelukt is (anders lekt Chrome)
+                    notatie.js      getallen als tekst (komma, hz, pct, ms, teken, db), geen imports: ook voor de engine; geen eigen kopie (test/notatie.test.mjs)
+                    herhaal.js      een POST herhalen zolang de server weg is (0,25 → 2 s, time-out 10 s, 4xx hooguit 3×, `vol` nooit): opname, video, log
                     smf.js          een MIDI-bestand als bytes: schrijven (zonder running status) en lezen (ook running status). Geen imports.
 server/             draait apart: `node server/index.js`
   index.js          HTTP, statische bestanden (no-store), ingest-API, library-API
@@ -283,7 +286,8 @@ server/             draait apart: `node server/index.js`
                     tools/werkruimtes/voorbeelden/ (een eigen bestand gaat voor), VARVE_WERKRUIMTES; opslaan alleen vanaf deze Mac (W1);
                     S8: POST …/terug (de vorige versie, 409); tools/werkruimtes/top40.json op de witte lijst (de zoeker van ✎);
                     lezen onder dezelfde grens als de standen (`beperkt` + ANDERE_LEZERS in standen.js: samen hooguit 2, 503 na 2 s)
-tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/ (test-index.sh, hunks.py),
+tools/              beatmeting/ (metingen op Clay's library, alleen lezen; LEESMIJ.md zegt wat leeft: synth/ voor beatbench.test,
+                    synth/bench.mjs --beatthis <python> = het echte model, synth/snap.mjs; de rest is onderzoek van sep), git/ (test-index.sh, hunks.py),
                     media-verhuis.mjs (media/ buiten iCloud: --droog, --doe; docs/LIBRARY.md "Waar media/ staat"),
                     lokaal/ (importeer.mjs + kies.mjs: Clay's eigen muziek via /api/upload met video=0, --droog; LEESMIJ.md),
                     headless/ (kaart.mjs: de tab kaart op de nep-server kaart-nep.mjs; kaart-echt.mjs: de tab kaart tegen de
@@ -309,7 +313,9 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     feedback.mjs + feedback-samen.mjs: de LED-laag, druk -> lampje, echo's, de Maschine),
                     headless/lek.mjs (groeit de renderer tijdens een opname?) en headless/acht-video.mjs (acht decks + acht video's: wacht de audio?), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
-                    luisterbestanden), varve-app/ (de Dock-app VARVE: start de server, opent de Controlekamer),
+                    luisterbestanden), varve-app/ (de Dock-app VARVE: start de server via server-lus.sh, opent de Controlekamer;
+                    server-lus.sh: POSIX sh, herstart hooguit 5×/min, `stop`/`status`, ~/.varve/server-lus.pid),
+                    headless/server-weg.mjs (de server 30 s weg met twee decks, opname en log: 0 stille vensters, WAV zonder gat),
                     setboek/ (lees.mjs: wat er op een avond KLONK uit de handelingenlogs, puur; gebruik.mjs: de teller;
                     setboek.mjs: de CLI op KOPIEËN, --dag/--vanaf/--log, --db, --proef, stdout; LEESMIJ.md),
                     patronen/ (midi.mjs: een set patronen als MIDI-bestand voor Logic, op een kopie; LEESMIJ.md),
@@ -438,7 +444,9 @@ test/
   paneel-schrijf.test.mjs  werkruimte S8: de schrijfweg (model, Uitvoerder, de bron in het log, PaneelSchrijf met nepklok, een eigen server
                     met nep-mixer nep-mixer.mjs (geen test zelf): 404/401/403, invoke -> read, 429, seq, los binnen 1,5 s), de tegel
   inrichten.test.mjs  werkruimte S8: ✎ inrichten (bewerkingen, toewijzen: het model beslist, de zoeker, de Inrichter, terug met 409 op een eigen server)
-  alles.mjs         alle tests in één keer met overzicht
+  meldingen.test.mjs  de meldingen met een sleutel (één die meegroeit) op een nagebouwd document
+  notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node; de Node-waarschuwing van alles.mjs
+  alles.mjs         alle tests in één keer met overzicht (een andere Node dan .node-version: waarschuwing boven en onder, niets overgeslagen)
 docs/
   VISIE.md          Clay's beeld van het geheel (10 okt): vier pijlers, twee dragers, de draagbare set, de streamvraag (§4)
   HANDOFF.md        stand, wat niet getest is, volgende stap
@@ -493,7 +501,7 @@ docs/
 | Dependencies | Nul in de frontend. Elke toevoeging eerst voorleggen met reden. |
 | Nieuwe functie | Eerst `define()` in `actions.js`, daarna pas UI en mapping. |
 | Formatting | 2 spaties, single quotes, semicolons. Volg de bestaande stijl. |
-| Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. Hij draait in een pool (zoveel tegelijk als er kernen zijn, langste eerst uit `test/.duur.json`); een test met een tijdsgrens op de wandklok, een afvalmeting of een vaste poort krijgt bovenaan `// @alleen: <waarom>` en loopt daarna alleen. `--serieel` = alles na elkaar, `--banen N`. |
+| Tests | Alle bestanden in `test/` moeten groen blijven: `node test/alles.mjs`. Bij wijzigingen: check toevoegen. Hij draait in een pool (zoveel tegelijk als er kernen zijn, langste eerst uit `test/.duur.json`); een test met een tijdsgrens op de wandklok, een afvalmeting of een vaste poort krijgt bovenaan `// @alleen: <waarom>` en loopt daarna alleen. `--serieel` = alles na elkaar, `--banen N`. De Node van de suite staat in `.node-version` (26.8.2, de Mac en de workflow); een andere Node meldt `alles.mjs` boven en onder met de checks die op een andere V8 anders uitvallen (`test/node-versie.mjs`, VERSIEGEVOELIG; een nieuwe afvalmeting met een grens op één V8 hoort daarin). Een test die vraagt "is dit proces weg" telt een zombie als weg (`leeftNog` in wachtrij.test: PID 1 van een container ruimt wezen niet op). |
 | Mocks | Een mock die makkelijker is dan de echte API verbergt bugs. De Web Audio-mock vuurt `onended` asynchroon omdat de browser dat ook doet. |
 | Browser | Chrome. Web MIDI bestaat niet in Safari — geen polyfill-pogingen. |
 | Git | Committen en pushen mag. `git add` per pad, nooit `-A`: de repo staat op het Bureaublad (iCloud), en bestanden met " 2" in de naam zijn conflictkopieën (meestal een oude versie): die NOOIT committen. Groter werk per spoor op een eigen tak in een worktree buiten iCloud (`~/Projects/varve-stems/<spoor>`), samenvoegen in `studio/integratie`, naar main met een PR; daarna de worktree weg. Data staat niet in git en hoort in de Bureaublad-map: `media/`, `opnames/`, `patronen/`, `proef/`, `standen/`, `sets/`, `racks/eigen.json` (eigen sjablonen; `racks/sjablonen.json` hoort WEL in git). Een server die vanuit een worktree draait schrijft patronen, de speellijst, de standen, de sets en de eigen sjablonen in die worktree: link `media`/`opnames` en zet de rest terug vóór je de worktree weghaalt. |
@@ -503,7 +511,9 @@ docs/
 - Wat uit de library komt STREAMT (`StreamBron`, sinds 23 september 2026): alleen
   pagina's van ~1,4 s rond de positie, de loop, het cuepunt en de hotcues staan
   in het geheugen, ~4-6 MB per track, hoe lang hij ook is. Gemeten: acht keer
-  een album van 31 minuten ~30 MB, waar het uitgepakt 5,7 GB was.
+  een album van 31 minuten ~30 MB, waar het uitgepakt 5,7 GB was. Een track die je
+  HOORT houdt sinds 15 okt 60 s vooruit (zie "De server mag even weg zijn"): ~12,8 MB
+  voor een hoorbare stereotrack, ~46 MB met vier stems.
 - ÉÉN afspeelmotor (Clay 23 sep): losgesleepte bestanden en de demotrack gaan
   ook door de StreamBron. `deck.laadGeheugen(buffer)` zet de AudioBuffer om
   naar het formaat van de ingest (`maakWav`, 16-bit stereo) en geeft de
@@ -1916,6 +1926,42 @@ bouwer niet mag missen:
 - Een mislukte WebSocket logt Chrome zelf rood in de console (Log-domein); JavaScript kan dat niet
   onderdrukken. Headless-tools tellen dat apart van fouten van onze code.
 
+## De server mag even weg zijn (15 okt, docs/WINST.md punt 3)
+
+Verslag `docs/verslagen/2026-10-15/arch-server-weg.md`. Wat een bouwer niet mag missen:
+- Opname, videostukken en handelingenlog herhalen een stuk zonder antwoord (geen verbinding, time-out 10 s,
+  5xx) met 0,25 → 2 s zolang ze lopen (`src/lib/herhaal.js`); de rij is begrensd (opname 300 s ≈ 57 MB, log
+  16 MB) en daarboven valt het OUDSTE stuk weg (gat op zijn plek). Een 4xx hooguit drie keer, `vol` nooit
+  opnieuw. Bij stop nog 10 s, dan de oude regel. Videostukken dragen `?van=<byte>` (de server schrijft op die
+  plek, zoals `?frame=N` voor de WAV).
+- De opname geeft ÉÉN melding (sleutel `opname`, `meldingVan`), het log de sleutel `handelingenlog`:
+  `meld(tekst, soort, duur, { sleutel })` vervangt wat er onder die sleutel staat, `wisMelding(sleutel)` haalt
+  hem weg. Een nieuwe melding die meegroeit: een sleutel, geen nieuwe per seconde. Tests met een nep-klok:
+  `wacht` schuift `nu` op (anders draait een herhaallus als microtaken eeuwig door).
+- VOORUIT: een track die je HOORT (geladen, speelt, fader × crossfader > −60 dB; "> 0" werkt niet: een dichte
+  fader is −70 dB) houdt 60 s pagina's vooruit (`VOORUIT_HOORBAAR`), de rest 20 s (`VOORUIT`). De engine beslist
+  (`_volgVooruit` bij elke 'change'), het deck geeft het getal door (`zetVooruit`), alleen `bijvullen` leest het.
+- HERSTARTLUS: VARVE.app start de server via `tools/varve-app/server-lus.sh` (POSIX sh): hooguit 5 herstarts
+  per minuut, niet na exit 0, SIGTERM/INT/HUP of 3. De server stopt zelf met exit 3 als poort 8777 bezet is
+  (vroeger liep een tweede server zonder poort door, met achtergrondwerk op dezelfde library). Stoppen:
+  `sh tools/varve-app/server-lus.sh stop` of `pkill -f server/index.js`. Nooit samen met de LaunchAgent uit
+  docs/TAILSCALE.md. Na een wijziging aan de Dock-app: `zsh tools/varve-app/maak.sh`.
+- Toets: `tools/headless/server-weg.mjs` (poorten 8961/8962): gemeten 0 stille vensters van 50 ms in 1040, een
+  WAV van 49 s zonder nullen, één opname-melding die op "weer goed" eindigt (zonder dit: 10 s stilte, 20 s
+  nullen, 20 meldingen). Niet gebouwd: hang-detectie en de noodlus op de maat (volgende versie).
+
+## Het avondpakket per platform (15 okt, docs/AVONDPAKKET.md §9b)
+
+- `meet({ platform })` kiest de sondes via `metersVoor()` (standaard `process.platform`): de Mac zoals altijd;
+  Linux GNU `stat -c`, `/sys/class/power_supply`, `lsusb` plus `/sys/bus/usb/devices` (kindprocessen met
+  `LC_ALL=C`), en grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth (de live-mixer
+  draait op de Mac); elk ander platform alleen de AV-hub. Een sonde accepteert NOOIT een exitcode als stderr
+  zegt dat het commando een optie niet kent (`ONBEKENDE_OPTIE`): de BSD-`find -flags` gaf op Linux exit 1 en
+  dat telde als geslaagd (vals rood op compleet, vals groen op instellingen). Een nieuwe sonde: per platform,
+  met een fixture en `"platform"` in nep.json. Uitzenden hercodeert met videotoolbox op de Mac en libx264
+  elders (`hercodeerEncoder`); `tools/headless/beeld-lokaal.mjs` meet pmset/sysctl/plutil/swiftc alleen
+  achter `isMac()`.
+
 ## Waar media/ staat (11 okt, VI2)
 
 Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag missen:
@@ -1943,6 +1989,13 @@ fasemeter op een endless-knop krijgt GEEN `takeover: 1`: dan geeft de eerste tik
 sprong (docs/werkruimte/S1.md). Mapjes van buiten:
 `voegMapjeToe`/`haalMapjeWeg`/`zetVolgorde` (lagen.js) en daarna `herbindLagen()`; regels van buiten:
 `mapping.vervangFragment(bron, doc)`/`haalWeg(bron)` (een eigen regel wint altijd).
+Een spoor erbij = vijf plekken: AANHAKERS (src/ui/aanhakers.js), SPOREN van de uitleg (src/ui/beschrijf/index.js),
+SPOREN van de server (server/routes/index.js), de stylesheet in index.html, en in werk.html/uitlijn.html plus de
+tabel `OOK` in de test; `test/aanhaakpunten.test.mjs` legt ze tegen de bestanden op schijf (S0.md §8b). Kleine
+afspraken uit de opruimronde van 15 okt: getallen als tekst uit `src/lib/notatie.js`, "welke track" uit
+`src/ui/wie.js`, `WORKLET_FADE` één export in fx-meer.js (nooit uit fx-worklet.js: dat is de audiothread), een
+effect toetsen op id en nooit op zijn plek in `EFFECTEN`, en `PaneelRelais._stuur` maakt de SSE-tekst één keer
+per bericht (`_tekst`), niet per kijker.
 
 Werkruimte-kern (S3, `docs/werkruimte/S3.md`): `werkruimtes/<naam>.json` (niet in git) of een voorbeeld uit
 `tools/werkruimtes/voorbeelden/`; zonder werkruimte (`standaard`) is de mapping bit voor bit die van vandaag en de
@@ -2120,6 +2173,17 @@ Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
   en `node test/beatbench.test.mjs` (nergens vals zeker). Kaart-VERSIE omhoog = alle auto-grids uit de tellen opnieuw.
 - deck.onsets = klappen in tracktijd (GET /api/library/<id>/onsets, eigen ijking 68,5 ms, ±15 ms):
   goed om te snappen, niet om een fase op te zetten.
+- SNAPPEN (15 okt, BEATGRID.md §14): tel 1 hier, tellen hier, vast en de klik in de golfvorm snappen via
+  `snapNaarTel(d.tellen, d.onsets, t)` (beatgrid.js): eerst de tel van Beat This! binnen 30 ms, dan de klap,
+  dan de positie. De klappen hebben een vaste ijking (synthetisch −8,9 ms scheef); de pin telt op
+  `klappenEnTellen`. Een nieuwe plek die snapt: dezelfde helper, nooit `snapNaarOnset(d.onsets, …)` alleen.
+- DE "1" TEGEN DE LAGE BAND (15 okt, §14): `maatMening(kaart, laag)` na `vergelijk` in `pasTellenToe`; de lage
+  band (`laagEnvelope` in detect.js, energie < 150 Hz per 4 ms) staat in `media/<id>/laag.bin` + `laag.json`
+  (`LAAG_VERSIE`). Alleen `twijfel: 'maat'` (de zekerheid blijft, nooit een andere "1"); vier op de vloer zegt
+  niets. Verander je `laagEnvelope`: `LAAG_VERSIE` omhoog. Verander je `maatMening`: `bench.mjs` met en zonder
+  `--geen-maat` en `test/beatbench.test.mjs` (geen goede "1" onterecht, vals zeker 0). Een FFT-flux per frame is
+  hiervoor NIET goed (aliasing tegen de maat). Kaart-VERSIE is NIET verhoogd (VRAGEN AB1): bestaande grids
+  krijgen de tweede mening pas na een nieuwe meting.
 - Grid-modus op de APC: Shift + Metronome (mapje `edit`, een schakelaar, vooraan in GROEPEN).
   Scene 1 tel 1 hier (snapt ±30 ms naar een onset, vanaf wat je HOORT: positie min
   uitgangsvertraging × rate) · 2 ×2 · 3 ½ · 4 halve tel · 5 nieuw stuk · Nudge ±5 ms (shift ±1) ·
