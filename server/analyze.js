@@ -110,6 +110,17 @@ export const maakOnsets = (onsetBestand, envRate, tijdOffset) =>
   inWerker('onsets', [onsetBestand, envRate, tijdOffset]);
 
 /**
+ * De LAGE BAND van een track (15 okt, docs/BEATGRID.md §14): laagEnvelope uit
+ * detect.js op de audio mono op 11025 Hz, als float32 naar `doel` (laag.bin
+ * naast onset.bin). Voor de tweede mening over de "1" (maatMening in
+ * src/engine/tellen.js). Een nummer van 3 minuten ~0,3 s, plus ffmpeg.
+ * Geeft { ok, frames, envRate, tijdOffset, versie } of { ok: false, fout }.
+ */
+export const maakLaag = (audioBestand, doel, { signal } = {}) => inWerker('laag', [audioBestand, doel], signal);
+/** Verhoog als laagEnvelope iets anders gaat geven: dan wordt laag.bin opnieuw gemaakt (server/tellen.js). */
+export const LAAG_VERSIE = 1;
+
+/**
  * De toonsoort van een hele track als kaart (docs/TOONSOORT.md): de audio
  * mono op 4410 Hz, dan `toonKaart` uit toon.js. Een uur audio kost 6-27 s
  * (afhankelijk van hoe druk de machine is) en 64 MB pcm: in de worker.
@@ -523,6 +534,19 @@ async function maakOnsetsHier(onsetBestand, envRate, tijdOffset) {
   return { ok: true, tijden: Array.from(tijden, (t) => Math.round(t * 1000) / 1000) };
 }
 
+async function maakLaagHier(audioBestand, doel) {
+  const { laagEnvelope } = await import('./detect.js');
+  const pcm = await leesPcm(audioBestand, ONSET_RATE);
+  if (!pcm || !pcm.length) return { ok: false, fout: 'kon de audio niet lezen voor de lage band' };
+  const { env, envRate, tijdOffset } = laagEnvelope(pcm, ONSET_RATE, { win: ONSET_WIN, hop: ONSET_HOP });
+  try {
+    await writeFile(doel, Buffer.from(env.buffer, env.byteOffset, env.byteLength));
+  } catch (err) {
+    return { ok: false, fout: `lage band niet weggeschreven: ${err?.message || err}` };
+  }
+  return { ok: true, frames: env.length, envRate, tijdOffset, versie: LAAG_VERSIE };
+}
+
 async function maakToonHier(audioBestand) {
   const { toonKaart, TOON_SR } = await import('./toon.js');
   const pcm = await leesPcm(audioBestand, TOON_SR);
@@ -579,4 +603,4 @@ async function maakSectiesHier(audioBestand, grid, stems) {
 
 /** Voor de worker. Niet rechtstreeks aanroepen vanuit de server. */
 export const hier = { peaks: maakPeaksHier, onset: maakOnsetHier, verfijn: verfijnHier,
-  grid: maakGridHier, onsets: maakOnsetsHier, toon: maakToonHier, secties: maakSectiesHier };
+  grid: maakGridHier, onsets: maakOnsetsHier, toon: maakToonHier, secties: maakSectiesHier, laag: maakLaagHier };

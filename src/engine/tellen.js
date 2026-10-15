@@ -923,13 +923,88 @@ function voerHalverenUit(st, hier, ander, h) {
   else delete st.twijfel;
 }
 
+// ---- een tweede mening over de "1" ----------------------------------------------
+
+/**
+ * DE "1" UIT DE LAGE BAND (15 okt, docs/BEATGRID.md §14). De "1" van een stuk
+ * rust op de downbeats van Beat This! (maatVan); zit het netwerk consequent een
+ * tel naast, dan merkt niets dat (benchmark: eenfout 0%), en vergelijk() toetst
+ * alleen tempo en tel. Hier een tweede mening: per tel van de maat (fase 0 = de
+ * "1" van het grid) hoeveel er in de lage band BIJ komt (kick, een nieuwe
+ * basnoot; laagEnvelope in server/detect.js), mediaan over de maten. Ligt de
+ * "1" van het grid duidelijk zwakker dan de sterkste tel (MAAT_LAAG), dan
+ * `twijfel: 'maat'`: de "1" is niet zeker (oranje, controleer), het grid zelf
+ * wel (sync en loops mogen, zoals bij downbeats die het onderling oneens zijn).
+ * NOOIT een andere "1" kiezen: met een kick op 1 en 3 zegt de bas niet welke
+ * van de twee het is, en wie de "1" verschuift op een gok maakt een goede "1"
+ * stil fout.
+ * Geen mening (niets veranderd): vier op de vloer (alle tellen even sterk), te
+ * weinig maten (MAAT_LAAG_MATEN), geen kick of bas die boven de vloer uitkomt
+ * (MAAT_LAAG_VLOER), een stuk dat al twijfelt (een sterkere reden staat er
+ * dan al), of geen lage band.
+ * `laag`: { env, envRate, tijdOffset } (frame f = tracktijd f / envRate + tijdOffset).
+ * Verandert `kaart` en geeft hem terug.
+ */
+export const MAAT_LAAG = 0.6;
+export const MAAT_LAAG_MATEN = 8;
+export const MAAT_LAAG_VLOER = 2;
+export function maatMening(kaart, laag) {
+  if (!laag?.env?.length) return kaart;
+  const per = kaart.beatsPerBar || 4;
+  kaart.stukken.forEach((st, i) => {
+    if (st.twijfel || !Number.isFinite(st.maat) || !(st.bpm > 0)) return;
+    const m = maatSterkte(st, kaart.stukken[i + 1]?.van ?? Infinity, per, laag);
+    // Alleen als de sterkste tel duidelijk boven de vloer uitkomt (MAAT_LAAG_VLOER × wat er tussen de
+    // tellen bijkomt): zonder kick of bas (piano, a capella) zegt de lage band niets.
+    if (m && m.max > MAAT_LAAG_VLOER * m.tussen && m.een < MAAT_LAAG * m.max) st.twijfel = 'maat';
+  });
+  return kaart;
+}
+
+/**
+ * Per tel van de maat de mediaan van de lage band rond de gridlijnen van één
+ * stuk: { per: [fase 0 … per−1], een (fase 0), max, maten } of null met te
+ * weinig maten; `tussen` = het GEMIDDELDE van hetzelfde midden tussen twee tellen (de
+ * vloer; een mediaan van iets dat de helft van de keren 0 is, zegt bij ruis niets).
+ * Per lijn: hoeveel energie er BIJ komt, de energie in het
+ * venster na de lijn min die in het venster ervoor (een vijfde tel, hooguit
+ * 60 ms; nooit onder 0). Een kick of een nieuwe basnoot op de tel telt; een
+ * bas die over de tel doorklinkt niet.
+ */
+export function maatSterkte(st, tot, per, laag) {
+  const L = 60 / st.bpm, { env, envRate, tijdOffset = 0 } = laag;
+  const eind = Math.min(tot, env.length / envRate + tijdOffset);
+  const w = Math.min(0.06, 0.2 * L), nw = Math.max(1, Math.round(w * envRate));
+  const fasen = Array.from({ length: per }, () => []), tussen = [];
+  for (let k = Math.ceil((st.van - st.anker) / L - 1e-9); st.anker + k * L < eind; k++) {
+    const t = st.anker + k * L;
+    const v = Math.round((t - tijdOffset) * envRate);
+    if (v - nw < 0 || v + nw > env.length) continue;
+    let na = 0, voor = 0;
+    for (let j = 0; j < nw; j++) { na += env[v + j]; voor += env[v - 1 - j]; }
+    const fase = ((Math.round((t - st.maat) / L) % per) + per) % per;
+    fasen[fase].push(Math.max(0, na - voor));
+    // En midden tussen twee tellen: wat er daar bijkomt is de vloer (ruis, of een bas op de offbeat).
+    const u = Math.round((t + L / 2 - tijdOffset) * envRate);
+    if (u - nw >= 0 && u + nw <= env.length) {
+      na = 0; voor = 0;
+      for (let j = 0; j < nw; j++) { na += env[u + j]; voor += env[u - 1 - j]; }
+      tussen.push(Math.max(0, na - voor));
+    }
+  }
+  const maten = Math.min(...fasen.map((x) => x.length));
+  if (maten < MAAT_LAAG_MATEN) return null;
+  const med = fasen.map((x) => mediaan(x));
+  return { per: med, een: med[0], max: Math.max(...med), tussen: tussen.length ? tussen.reduce((a, b) => a + b, 0) / tussen.length : 0, maten };
+}
+
 /** Wat een twijfel betekent, voor op het scherm. */
 export const TWIJFEL_TEKST = {
   'geen puls': 'hier hoort de analyse geen puls: geen sync of beat-loops',
   rubato: 'het tempo beweegt (rubato): een vast grid volgt het niet',
   drift: 'het grid loopt hier van de tellen weg',
   los: 'veel tellen vallen hier naast het grid',
-  maat: 'de "1" is niet zeker: de downbeats zijn het onderling oneens',
+  maat: 'de "1" is niet zeker: de downbeats zijn het onderling oneens, of de kick en de bas vallen vooral op een andere tel',
   oneens: 'twee analyses zijn het hier oneens: controleer even',
   tel: 'Beat This! telt hier het dubbele tempo: welke van de twee de tel is, is niet bevestigd (controleer, of ½ tel opschuiven)',
 };

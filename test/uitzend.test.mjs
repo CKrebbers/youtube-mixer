@@ -30,6 +30,13 @@ tijdslimiet.unref();
 const heeftFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0 && spawnSync('ffprobe', ['-version']).status === 0;
 const encoders = heeftFfmpeg ? spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' }).stdout : '';
 const heeftVT = /h264_videotoolbox/.test(encoders);
+// beeld/hercodeer: videotoolbox op de Mac, libx264 elders (U.hercodeerEncoder, spoor C2). Kan deze ffmpeg dat?
+// Zoals start() kiest: videotoolbox alleen als hij hier ECHT codeert (een virtuele Mac heeft hem wel in
+// de lijst, maar levert geen beeld), anders libx264.
+const vtWerkt = heeftFfmpeg && heeftVT ? await U.videotoolboxWerkt() : false;
+const hercodeer = heeftFfmpeg ? await U.standaardEncoder() : U.hercodeerEncoder();
+const kanHercoderen = hercodeer === 'videotoolbox' ? heeftVT : /libx264/.test(encoders);
+const geenHercoder = `geen ${hercodeer === 'videotoolbox' ? 'h264_videotoolbox' : 'libx264'} in deze ffmpeg`;
 const heeftOpus = /libopus/.test(encoders);
 const echteTijd = process.env.VARVE_TEST_ECHTETIJD === '1';
 
@@ -174,12 +181,24 @@ try {
     const png = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'audio', beeld: 'plaat-donker.png', fps: 2 }, { uit: 'u.flv' }).join(' ');
     ok('P3 stil/png: movie=beelden/<naam>.png met de golf erover (draw=full: review 2, L1), ook gelijk met het geluid', png.includes('movie=beelden/plaat-donker.png') && png.includes('overlay=shortest=1')
       && png.includes(`colors=white@0.5:draw=full,${GELIJK}[w]`));
-    const her = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer', bitrate: '2500k' }, { uit: 'u.flv' });
+    const her = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer', bitrate: '2500k' }, { uit: 'u.flv', encoder: 'videotoolbox' });
     const hs = her.join(' ');
     ok('P4 beeld/hercodeer: -hwaccel videotoolbox, h264_videotoolbox, -g 60, geluid -c:a copy, nergens aac als encoder',
       hs.includes('-hwaccel videotoolbox') && hs.includes('-c:v h264_videotoolbox') && hs.includes('-g 60') && hs.includes('-c:a copy') && !/-c:a aac/.test(hs) && hs.includes('-bufsize 5000k'));
     const fk = her.indexOf('-force_key_frames');
     ok('P4 een keyframe op elke 2 s in SECONDEN (-force_key_frames expr:gte(t,n_forced*2), één argv-element): -g telt beelden', fk > 0 && her[fk + 1] === 'expr:gte(t,n_forced*2)');
+    // P4b (spoor C2): libx264 waar videotoolbox niet bestaat; dezelfde bitrate, keyframes en geluid.
+    const x = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer', bitrate: '2500k' }, { uit: 'u.flv', encoder: 'libx264' });
+    const xs = x.join(' ');
+    ok('P4b libx264: -c:v libx264 -preset veryfast -tune zerolatency, geen videotoolbox of -realtime, verder gelijk aan P4', xs.includes('-c:v libx264 -preset veryfast -tune zerolatency')
+      && !/videotoolbox|-realtime/.test(xs) && xs.endsWith(hs.slice(hs.indexOf('-b:v'))));
+    ok(`P4b de keuze: videotoolbox op darwin, libx264 op linux; standaard het platform (${hercodeer})`, U.hercodeerEncoder('darwin') === 'videotoolbox' && U.hercodeerEncoder('linux') === 'libx264'
+      && U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer' }, { uit: 'u.flv' }).includes(U.hercodeerEncoder() === 'libx264' ? 'libx264' : 'h264_videotoolbox'));
+    const [lx, mJa, mNee] = await Promise.all([U.standaardEncoder({ platform: 'linux' }), U.standaardEncoder({ platform: 'darwin', werkt: true }), U.standaardEncoder({ platform: 'darwin', werkt: false })]);
+    ok('P4c start() kiest: linux libx264; een Mac waar videotoolbox echt codeert videotoolbox, anders libx264', lx === 'libx264' && mJa === 'videotoolbox' && mNee === 'libx264');
+    const nep = await U.videotoolboxWerkt('/bestaat/niet/ffmpeg');
+    ok('P4c de proef met een ffmpeg die niet bestaat: false, geen fout', nep === false && (await U.videotoolboxWerkt('/bestaat/niet/ffmpeg')) === nep);
+    if (heeftVT && !vtWerkt) notitie(`videotoolbox staat in deze ffmpeg maar codeert hier niet (virtuele Mac?): beeld/hercodeer is met libx264 getoetst, het videotoolbox-pad niet`);
     const kop = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'kopie' }, { uit: 'u.flv' }).join(' ');
     ok('P5 beeld/kopie: -c copy', kop.includes('-map 0:v:0 -map 0:a:0 -c copy'));
     const rt = U.bouwArgs({ naam: 't', soort: 'rtmp', bron: 'audio', url: 'rtmp://127.0.0.1:1935/live/test' }, { uit: 'rtmp://127.0.0.1:1935/live/test' });
@@ -365,7 +384,7 @@ try {
 
     // S18-S19: beeld (de mp4 van de video-opname) met Chrome's cadans
     const vAac = fmp4('aac');
-    if (!heeftVT) notitie('S18: geen h264_videotoolbox in deze ffmpeg');
+    if (!kanHercoderen) notitie(`S18: ${geenHercoder}`);
     else {
       const id = await nieuweOpname();
       await O.voegVideoToe(opnames, id, 'mp4', vAac.init);
@@ -527,7 +546,7 @@ try {
 
     // S29: de noodrem van beeld (review 2, L4). Een mp4 is niet te knippen: boven achterstandMaxBeeld stopt de
     //      uitzending met fout 'achterstand'. Hier 2 s, met een ffmpeg die hangt (SIGSTOP) en 4 s geluid erbij.
-    if (!heeftVT) notitie('S29: geen h264_videotoolbox in deze ffmpeg');
+    if (!kanHercoderen) notitie(`S29: ${geenHercoder}`);
     else {
       const id = await nieuweOpname();
       await O.voegVideoToe(opnames, id, 'mp4', vAac.init);
@@ -706,7 +725,7 @@ try {
     }
     // R12 (review 2, M1): opnameKlaar terwijl de start nog op de mp4 wacht. Vroeger gaf opnameKlaar meteen ok zonder
     //     iets te doen; de start slaagde daarna alsnog en volgde een opname die al dicht was ("bron stil" na 10 s).
-    if (!heeftVT) notitie('R12: geen h264_videotoolbox in deze ffmpeg');
+    if (!kanHercoderen) notitie(`R12: ${geenHercoder}`);
     else {
       const p12 = pcm(12), v = fmp4('aac');
       const id = await nieuweOpname();
@@ -782,7 +801,7 @@ try {
       for (const [ms, doe] of [...taken].sort((a, b) => a[0] - b[0])) { await wacht(Math.max(0, t0 + ms - Date.now())); await doe(); }
       return t0;
     };
-    if (!heeftVT) notitie('E4-E5: geen h264_videotoolbox');
+    if (!kanHercoderen) notitie(`E4-E5: ${geenHercoder}`);
     else for (const [naam, haak] of [['E4', null], ['E5', (a) => a.map((x, i) => (x === 'copy' && a[i - 1] === '-c:a' ? 'aac' : x))]]) {
       const id = await nieuweOpname();
       await O.voegVideoToe(opnames, id, 'mp4', vAac.init);

@@ -281,5 +281,32 @@ console.log('\nde hartslag-worklet zelf, met een nepklok');
   ok('de meters hangen de hartslag met gain 0 aan de uitgang (er klinkt niets extra)', /gain: 0/.test(m.METERS('c')) && /gain: 0/.test(m.POSITIEVE_CONTROLE()));
 }
 
+console.log('\nde Mac-meters alleen op de Mac (spoor C2: pmset, sysctl, plutil, swiftc)');
+{
+  const gevraagd = [];
+  const spion = (cmd, args) => { gevraagd.push(`${cmd} ${args.join(' ')}`); return null; };
+  const lx = m.machineNu(null, { platform: 'linux', run: spion });
+  ok(`linux: machineNu roept niets aan, zegt "${m.NIET_HIER}", kernen en belasting uit node:os`, gevraagd.length === 0 && lx.nietGemeten.includes(m.NIET_HIER)
+    && Number.isInteger(lx.kernen) && lx.kernen > 0 && /^\d+\.\d\d \d+\.\d\d \d+\.\d\d$/.test(lx.loadavg) && lx.accu === null && lx.watt === null && lx.warmte === null);
+  ok('linux: geluidUit = null (niet gemeten, niet "er speelt niets"), zonder pmset', m.geluidUit({ platform: 'linux', run: spion }) === null && gevraagd.length === 0);
+  ok('linux: geen warmtemeter (geen swiftc gestart)', m.maakWarmte('/bestaat/niet', { platform: 'linux' }) === null && !m.isMac('linux') && m.isMac('darwin'));
+  const mac = (cmd, args) => ({
+    'pmset -g batt': "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t65%; charging; 1:02 remaining present: true",
+    'pmset -g ac': ' Wattage = 8W\n Current = 1500mA', 'pmset -g': ' lowpowermode         0', 'sysctl -n hw.model': 'MacBookAir10,1',
+    'sysctl -n hw.ncpu': '8', 'sysctl -n vm.loadavg': '{ 1.10 1.20 1.30 }',
+    'pmset -g assertions': '   pid 312(coreaudiod): [0x0001] 00:01:02 PreventUserIdleSystemSleep named: "com.apple.audio.AppleUSBAudioEngine:audio-out"\n   pid 9(x): iets anders',
+  })[`${cmd} ${args.join(' ')}`] ?? null;
+  const d = m.machineNu(null, { platform: 'darwin', run: mac });
+  ok('darwin: machineNu leest pmset en sysctl zoals voorheen (AC Power, 65 %, laadt, 8 W, LPM uit, model, 8 kernen)', d.stroom === 'AC Power' && d.accu === 65 && d.laadt === true
+    && d.watt === 8 && d.lowPowerMode === false && d.model === 'MacBookAir10,1' && d.kernen === 8 && d.loadavg === '{ 1.10 1.20 1.30 }' && d.nietGemeten === undefined);
+  ok('darwin: geluidUit geeft de audio-out-regels', m.geluidUit({ platform: 'darwin', run: mac }).length === 1);
+  if (process.platform !== 'darwin') {
+    let fout = '';
+    try { m.zoekChrome(null); } catch (e) { fout = e.message; }
+    ok(`niet op de Mac: zoekChrome zonder VARVE_CHROME zegt waarom (${fout})`, fout.includes(m.NIET_HIER) && /VARVE_CHROME/.test(fout));
+    ok('niet op de Mac: met VARVE_CHROME gewoon dat pad', m.zoekChrome('/opt/chrome') === '/opt/chrome');
+  } else ok('zoekChrome op de Mac: niet hier getoetst (de Playwright-cache), zie --zelftest', true);
+}
+
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

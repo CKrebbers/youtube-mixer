@@ -18,6 +18,7 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { availableParallelism, cpus } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { versieWaarschuwing } from './node-versie.mjs';
 
 const map = fileURLToPath(new URL('.', import.meta.url));
 const DUUR = map + '.duur.json';
@@ -27,6 +28,10 @@ const bi = args.indexOf('--banen');
 const banen = serieel ? 1 : Math.max(1, Number(bi >= 0 ? args[bi + 1] : 0) || (availableParallelism?.() ?? cpus().length));
 
 const bestanden = readdirSync(map).filter((f) => f.endsWith('.test.mjs')).sort();
+
+// Een andere Node dan .node-version: zeggen, niet overslaan (test/node-versie.mjs, spoor C).
+const versie = versieWaarschuwing();
+if (versie) console.log(versie.kop);
 
 /** De reden achter `// @alleen:` bovenaan, of null. */
 function alleenReden(tekst) {
@@ -75,7 +80,13 @@ function meld({ f, code, uit, s }) {
   nieuweDuur[f] = Math.round(s * 10) / 10;
   uitslag[f] = ok;
   console.log(`${ok ? 'groen' : 'ROOD '}  ${f.padEnd(22)} ${String(goed).padStart(4)} ok${fout ? `  ${fout} FAIL` : ''}  ${s.toFixed(1)} s${alleen.has(f) && !serieel ? '  (alleen)' : ''}`);
-  if (!ok) console.log(uit.split('\n').filter((l) => /^FAIL|^✗|Error|at /.test(l)).slice(0, 12).map((l) => '        ' + l).join('\n'));
+  // Eerst de FAIL-regels, dan wat op een fout lijkt (een stacktrace-regel begint met spaties en "at "): "at " midden
+  // in een regel ("wat", "dat") liet de echte FAIL buiten de twaalf vallen (macOS-run 15 okt, stems).
+  if (!ok) {
+    const regels = uit.split('\n');
+    const toon = [...regels.filter((l) => /^FAIL|^✗/.test(l)), ...regels.filter((l) => !/^FAIL|^✗/.test(l) && /Error|^\s+at /.test(l))];
+    console.log(toon.slice(0, 12).map((l) => '        ' + l).join('\n'));
+  }
 }
 
 const T0 = performance.now();
@@ -98,5 +109,6 @@ const roodLijst = bestanden.filter((f) => uitslag[f] === false);
 if (roodLijst.length) console.log(`\nrood: ${roodLijst.join(', ')}`);
 const tijd = serieel ? `serieel ${((tEind - T0) / 1000).toFixed(0)} s`
   : `${banen} tegelijk, ${((tEind - T0) / 1000).toFixed(0)} s (pool ${((tPool - T0) / 1000).toFixed(0)} s + alleen ${((tEind - tPool) / 1000).toFixed(0)} s)`;
+if (versie) console.log(`\n${versie.staart}`);
 console.log(`\n${bestanden.length} bestanden, ${totaal} checks${overgeslagen.length ? `, ${overgeslagen.length} overgeslagen` : ''} — ${rood ? `${rood} ROOD` : 'alles groen'} · ${tijd}`);
 process.exit(rood ? 1 : 0);

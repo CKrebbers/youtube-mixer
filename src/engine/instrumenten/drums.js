@@ -1,4 +1,5 @@
 import { clamp, expMap } from '../../lib/emitter.js';
+import { komma, hz } from '../../lib/notatie.js';
 import { faderGain } from '../audio-graph.js';
 import { startDrempel } from '../overgang.js';
 
@@ -216,8 +217,6 @@ export const snelheidGain = (s) => Math.pow(clamp(s), 1.5);
 
 // ---- de acht parameters ---------------------------------------------------
 
-const komma = (x, d = 1) => x.toFixed(d).replace('.', ',');
-const hz = (f) => (f >= 1000 ? `${komma(f / 1000, f >= 10000 ? 0 : 1)} kHz` : `${Math.round(f)} Hz`);
 
 /** TOON: hele halve tonen, −12..+12. */
 export const toonHalveTonen = (v) => Math.round((clamp(v) - 0.5) * 24);

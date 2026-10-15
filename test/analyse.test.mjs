@@ -2,6 +2,7 @@
 // haak in de vormlaag. Geen browser: een nep-spectrum zoals een AnalyserNode
 // het geeft, en een nep-analyser die net zo streng is als de echte.
 // Draai met: node test/analyse.test.mjs
+// @alleen: afvalmeting (v8 total_allocated_bytes per beeld; met andere tests ernaast meet hij hun afval mee)
 import { readFileSync } from 'node:fs';
 
 const F = await import('../src/analysis/features.js');

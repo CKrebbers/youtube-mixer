@@ -130,7 +130,7 @@ export class PaneelRelais {
     };
     res.on?.('close', weg);
     req?.on?.('close', weg);
-    if (this.vers) this._schrijf(k, [alsBericht(this.stand)]);
+    if (this.vers) this._schrijf(k, this._tekst([alsBericht(this.stand)]), 1);
     this._startHb();
     return k;
   }
@@ -141,18 +141,27 @@ export class PaneelRelais {
     return { bericht: b, bytes: grootte(b), vers: this.vers, past: grootte(b) <= MAX_STAND };
   }
 
+  /** Naar elke kijker: de tekst één keer gemaakt (één JSON.stringify per bericht, niet per kijker). */
   _stuur(lijst) {
-    for (const k of this.kijkers) this._schrijf(k, lijst);
+    if (!this.kijkers.size) return;
+    const tekst = this._tekst(lijst);
+    for (const k of this.kijkers) this._schrijf(k, tekst, lijst.length);
   }
 
-  _schrijf(k, lijst) {
+  /** Berichten als SSE-tekst (`data: {…}\n\n` per bericht); onthoudt de grootte van een stand. */
+  _tekst(lijst) {
     let tekst = '';
     for (const b of lijst) {
       const s = JSON.stringify(b);
       if (b.t === 'stand') this.stats.standBytes = Buffer.byteLength(s);
       tekst += `data: ${s}\n\n`;
     }
-    this.stats.naarKijkers += lijst.length;
+    return tekst;
+  }
+
+  /** De tekst van `n` berichten naar één kijker (de stats tellen per kijker, zoals altijd). */
+  _schrijf(k, tekst, n) {
+    this.stats.naarKijkers += n;
     this.stats.bytes += tekst.length;
     try {
       // Leest de kijker niet meer (de buffer van de socket loopt vol)? Weg ermee.

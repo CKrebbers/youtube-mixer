@@ -19,7 +19,17 @@ const { expMap, dbToGain } = await import('../src/lib/emitter.js');
 const IDS = S.S10_EFFECTEN.map((e) => e.id);
 
 console.log('contract');
-ok(`zeven effecten achter de filter app (${IDS.join(', ')})`, IDS.length === 7 && EFFECTEN.slice(17).every((e, k) => e === S.S10_EFFECTEN[k]));
+// Op id, niet op hun plek in de lijst (een effect erbij in fx.js of fx-meer.js mag dit niet breken).
+// Wel de volgorde, want die is die van de kiezer en van fx.next/prev: achter alle andere, aaneengesloten.
+const plekken = S.S10_EFFECTEN.map((e) => EFFECTEN.findIndex((x) => x.id === e.id));
+const { MEER_EFFECTEN } = await import('../src/engine/fx-meer.js');
+ok(`zeven effecten (${IDS.join(', ')})`, IDS.length === 7);
+ok('elk staat in EFFECTEN, op id en als hetzelfde object',
+  S.S10_EFFECTEN.every((e, k) => plekken[k] >= 0 && EFFECTEN[plekken[k]] === e),
+  S.S10_EFFECTEN.filter((e, k) => plekken[k] < 0).map((e) => e.id).join(', '));
+ok('aaneengesloten en in hun eigen volgorde (de kiezer)', plekken.every((p, k) => k === 0 || p === plekken[k - 1] + 1));
+ok('achter de filter app en de effecten van fx.js', MEER_EFFECTEN.length === 10
+  && EFFECTEN.every((e, i) => S.S10_EFFECTEN.includes(e) || i < plekken[0]));
 ok('ids uniek over alle effecten', new Set(EFFECTEN.map((e) => e.id)).size === EFFECTEN.length);
 for (const e of S.S10_EFFECTEN) {
   const goed = typeof e.naam === 'string' && e.params.length >= 1 && e.params.length <= 8
@@ -345,6 +355,23 @@ await import('../src/engine/fx-worklet.js');
   proc[0].port.onmessage({ data: 'stop' });
   ok('na "stop" geeft process() false', proc[0].process(INV[0], uit[0], params[0]) === false);
 }
+// Een fout in een effect-worklet (processorerror, spoor A): het effect is vanaf dan stil; dat wordt een
+// melding via de context (worklet-fout.js), met de naam van het effect.
+console.log('\nworklet-fout van een effect');
+for (const e of S.S10_EFFECTEN) {
+  const w = nepWorklet(), ctx = new MockContext({ worklet: w });
+  const fouten = [];
+  ctx.addEventListener('varve-workletfout', (ev) => fouten.push(ev.detail));
+  const inst = e.bouw(ctx, { klok: nepKlok() });
+  await w.klaar();
+  const wn = staat.WORKLET_NODES.filter((n) => n.ctx === ctx);
+  if (!wn.length) continue;
+  for (const n of wn) n.onprocessorerror?.({ message: 'nep' });
+  ok(`${e.id}: processorerror = een melding op de context per worklet ("${fouten[0]?.wat}")`,
+    fouten.length === wn.length && fouten.every((f) => /^effect /.test(f.wat) && f.reden === 'nep' && /opnieuw/.test(f.hint)));
+  inst.vernietig?.();
+}
+
 void expMap; void dbToGain;
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

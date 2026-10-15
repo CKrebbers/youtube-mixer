@@ -9,6 +9,11 @@ import { Klankschaal } from './klankschaal.js';
 import { Koptelefoon } from './koptelefoon.js';
 import { GridKlik, DUO_TONEN } from './grid-klik.js';
 import { PatroonSpeler, maatVan } from './patronen/speler.js';
+import { WORKLET_FOUT, workletFoutTekst } from './worklet-fout.js';
+import { VOORUIT, VOORUIT_HOORBAAR } from './stream-kern.js';
+
+/** Vanaf hier telt een track als hoorbaar voor het vooruit halen (−60 dB; een dichte fader is −70). */
+const HOORBAAR_MIN = 0.001;
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -120,6 +125,13 @@ export class Engine extends Emitter {
     } catch (_) {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
     }
+    // Een fout IN een worklet (effect, klankschaal, instrument, limiter) komt als
+    // event op de context (worklet-fout.js) en wordt hier een melding: anders
+    // was het stil geluid zonder dat iemand het zag. Eén sleutel per soort.
+    this.ctx.addEventListener?.(WORKLET_FOUT, (e) => {
+      const d = e?.detail || {};
+      this.emit('melding', { tekst: workletFoutTekst(d), soort: 'fout', sleutel: `worklet:${d.wat || '?'}` });
+    });
     // De koptelefoon eerst: hij bepaalt waar de zaal heen gaat (kanaal 1/2 van
     // vier, of zonder vier kanalen gewoon de uitgang, zoals altijd).
     this.koptelefoon = new Koptelefoon(this.ctx, opties.koptelefoon);
@@ -215,6 +227,7 @@ export class Engine extends Emitter {
       // hem wrijft en de rij dicht is. Zonder worklet is er niets te stemmen.
       if (this.klankschaal?.node) this.klankschaal.bijwerken();
       this._volgWachtenden();
+      this._volgVooruit();
     };
     for (const id of DECK_IDS) this.decks[id].on('change', volgMaat);
     this.on('change', volgMaat);
@@ -706,6 +719,22 @@ export class Engine extends Emitter {
    */
   _kanMaat(d) { return !!(d.buffer && d.grid && d.playing && !d.wacht && !d.remt); }
 
+  /**
+   * Wat je HOORT krijgt een minuut vooruit (VOORUIT_HOORBAAR), de rest 20 s
+   * (stream-kern.js, docs/WINST.md punt 3): valt de server even weg, dan speelt
+   * de zaal door. Hoorbaar = geladen, speelt (ook als hij op de maat wacht: zo
+   * meteen hoor je hem) en fader × crossfader boven −60 dB, dezelfde maat als
+   * voor de maatgever. Een dichte fader is −70 dB (faderGain), een crossfader
+   * aan de overkant ~1e-17 (cosinus): dat is niet hoorbaar, ook al is het niet 0.
+   * Bij elke 'change' van een deck of de mixer (volgMaat).
+   */
+  _volgVooruit() {
+    for (const k of DECK_IDS) {
+      const d = this.decks[k];
+      d.zetVooruit(d.buffer && d.playing && this._maatGain(k) > HOORBAAR_MIN ? VOORUIT_HOORBAAR : VOORUIT);
+    }
+  }
+
   /** Hoe hard je hem hoort: fader maal crossfader (zoals voor sync altijd al). */
   _maatGain(k) { return faderGain(this.decks[k].ui.fader) * this.xfadeGain(k); }
 
@@ -824,6 +853,8 @@ export class Engine extends Emitter {
       playing: d.playing, position: d.position, duration: d.duration,
       rate: d.rate, cuePoint: d.cuePoint,
       grid: d.grid ? d.grid.toJSON() : null, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
+      // Telt bij elke gridwijziging (deck.gridVersie): een sleutel zonder het grid elk beeld als tekst te maken.
+      gridVersie: d.gridVersie,
       // Toonsoort die je HOORT op de positie (of null): zie deck.toonsoort.
       toon: d.toonsoort,
       // Secties (docs/SECTIES.md): de stukken van de kaart (dezelfde array zolang de kaart blijft) en welke je hoort.

@@ -9,8 +9,13 @@ export async function library() {
   return (await r.json()).tracks;
 }
 
+// Waar media/ staat (VARVE_MEDIA, media-VERHUISD.txt, of die van de hoofdrepo vanuit een worktree):
+// dezelfde regel als rest/lib.mjs. De paden in de library zijn relatief: media/<id>/onset.bin.
+// (15 okt: hier stond ROOT + pad, en dat las niets meer sinds media/ buiten iCloud staat, VI2.)
+const { MEDIA } = await import('./rest/lib.mjs');
+
 export function laadOnset(t) {
-  const b = readFileSync(ROOT + '/' + t.onset.bestand);
+  const b = readFileSync(MEDIA + '/' + t.onset.bestand.replace(/^media\//, ''));
   const env = new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
   return { env, envRate: t.onset.envRate, tijdOffset: t.onset.tijdOffset };
 }

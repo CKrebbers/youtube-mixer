@@ -6,7 +6,11 @@
 // van detect.js: scherpe aanzetten (5 ms) vallen 4-8 ms laat, trage (30 ms) 12-35 ms.
 //   node tools/beatmeting/rest/tel1-echt.mjs id:van:duur:bpm ...
 // A = snap (zoals nu), B = + /grid/verfijn zoals hij is, D = alleen als de voorflank gemeten is.
-import { d, analyze, beatgrid, SR, ENV_RATE, envelopeFragment, audioFragment } from './lib.mjs';
+// T = snapNaarTel (15 okt, BEATGRID.md §14): eerst de tel van Beat This! (media/<id>/tellen.json),
+// anders de klap; alleen als het nummer tellen heeft.
+import { readFileSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { d, analyze, beatgrid, SR, ENV_RATE, MEDIA, envelopeFragment, audioFragment } from './lib.mjs';
 
 const PIEK = await analyze.piekVertraging();
 const H = 11 / SR, W = 16.5 / SR;                     // hop en half venster (s)
@@ -44,8 +48,10 @@ for (const item of process.argv.slice(2)) {
   const onsets = analyze.onsetPieken(env, envRate, PIEK + (tijdOffset - d.onsetVertraging(SR, 1024, 128)));
   const a0 = Math.max(0, van - 13), pcm = audioFragment(id, a0, duur + 26), hr = hrEnergie(pcm);
   const g = d.verfijnTempoFase(env, envRate, bpm0, tijdOffset, { marge: 0.02, rond: van + duur / 2, straal: duur / 2 });
-  const p = 60 / g.bpm, uit = { A: [], B: [], D: [] };
-  let bijB = 0, bijD = 0;
+  const p = 60 / g.bpm, uit = { A: [], B: [], D: [], T: [] };
+  let bijB = 0, bijD = 0, opTel = 0;
+  const tellenPad = path.join(MEDIA, id, 'tellen.json');
+  const tellen = existsSync(tellenPad) ? { beats: Float64Array.from(JSON.parse(readFileSync(tellenPad, 'utf8')).beats ?? []) } : null;
   for (let t = van + 3; t < van + duur - 3; t += 4 * p) {
     const tel = g.firstBeat + Math.round((t - g.firstBeat) / p) * p;
     for (const druk of [-0.02, 0, 0.02]) {
@@ -69,6 +75,11 @@ for (const item of process.argv.slice(2)) {
       if (B !== snap) bijB++;
       if (D !== snap) bijD++;
       uit.A.push((snap - ref) * 1000); uit.B.push((B - ref) * 1000); uit.D.push((D - ref) * 1000);
+      if (tellen) {
+        const T = beatgrid.snapNaarTel(tellen, onsets, tel + druk);
+        if (T !== snap) opTel++;
+        uit.T.push((T - ref) * 1000);
+      }
     }
   }
   const st = (a) => { const s = a.map(Math.abs).sort((x, y) => x - y); return `gem ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1).padStart(6)}  |p50| ${s[s.length >> 1].toFixed(1).padStart(5)}  |p90| ${s[Math.floor(0.9 * s.length)].toFixed(1).padStart(5)}`; };
@@ -76,4 +87,5 @@ for (const item of process.argv.slice(2)) {
   console.log(`   A snap          ${st(uit.A)}`);
   console.log(`   B route         ${st(uit.B)}   (${bijB} keer bijgesteld)`);
   console.log(`   D alleen flank  ${st(uit.D)}   (${bijD} keer bijgesteld)`);
+  console.log(tellen ? `   T snap tel      ${st(uit.T)}   (${opTel} keer anders dan A)` : '   T snap tel      (geen tellen.json voor dit nummer)');
 }

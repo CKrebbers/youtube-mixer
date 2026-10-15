@@ -251,6 +251,26 @@ ok('en het tempo klopt nog steeds', Math.abs(tt4.tap(31 * 480, 0).bpm - 125) < 0
   ok('snap: zonder onsets (null of leeg) niet snappen', snapNaarOnset(null, 1.0) === 1.0 && snapNaarOnset(new Float64Array(0), 1.0) === 1.0);
 }
 
+// ---- snappen naar de tellen van Beat This! (15 okt, BEATGRID.md §14) ----------
+{
+  const { snapNaarTel, klappenEnTellen } = await import('../src/engine/beatgrid.js');
+  // De klappen liggen 10 ms vroeg (vaste ijking), de tellen 2 ms laat.
+  const klap = new Float64Array([0.49, 0.99, 1.49, 1.99]);
+  const tel = { beats: new Float64Array([0.502, 1.002, 2.002]), downbeats: new Float64Array([0.502]) };
+  ok('snap naar de tel: met tellen wordt het de tel, niet de klap', snapNaarTel(tel, klap, 1.01) === 1.002);
+  ok('snap naar de tel: geen tel binnen 30 ms (1,5 s) = de klap', snapNaarTel(tel, klap, 1.51) === 1.49);
+  ok('snap naar de tel: zonder tellen = de klap (zoals snapNaarOnset)', snapNaarTel(null, klap, 1.01) === 0.99 && snapNaarTel({ beats: new Float64Array(0) }, klap, 1.01) === 0.99);
+  ok('snap naar de tel: zonder tellen en zonder klappen = de positie zelf', snapNaarTel(null, null, 1.234) === 1.234);
+  ok('snap naar de tel: buiten het venster van beide = de positie zelf', snapNaarTel(tel, klap, 1.25) === 1.25);
+  ok('snap naar de tel: tellen zonder klappen', snapNaarTel(tel, null, 2.02) === 2.002 && snapNaarTel(tel, null, 1.51) === 1.51);
+  ok('snap naar de tel: een tel precies op de positie blijft de tel', snapNaarTel(tel, klap, 1.002) === 1.002);
+  const samen = klappenEnTellen(tel, klap);
+  ok('pin-klappen: tellen en klappen samen, gesorteerd', samen.length === 7 && samen.every((x, i) => i === 0 || x >= samen[i - 1]) && samen[0] === 0.49 && samen[6] === 2.002);
+  ok('pin-klappen: onthouden per paar (geen nieuwe lijst per druk)', klappenEnTellen(tel, klap) === samen);
+  ok('pin-klappen: alleen tellen of alleen klappen = die lijst zelf, niets = null',
+    klappenEnTellen(tel, null) === tel.beats && klappenEnTellen(null, klap) === klap && klappenEnTellen(null, null) === null);
+}
+
 // ---- maat-anker per stuk (25 september 2026) -----------------------------------
 // Elk stuk weet welke tel zijn "1" is. Een grid van vóór deze versie heeft dat
 // veld niet: dan tellen de maten door zoals vroeger (tel 0 van het hele grid =

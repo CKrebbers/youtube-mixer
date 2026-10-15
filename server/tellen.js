@@ -197,11 +197,44 @@ export async function bewaarTweede(media, id, grid, versie, { uit = 'maakGrid' }
   } catch { return false; }
 }
 
-/** tellen.json weg (nieuwe audio: de oude tellen kloppen niet meer), en de bewaarde tweede mening ook. */
+/**
+ * DE LAGE BAND BEWAARD (15 okt, docs/BEATGRID.md §14): laagEnvelope (server/detect.js)
+ * als media/<id>/laag.bin (float32, 250 per s: een nummer van 3 minuten 180 kB, een uur
+ * 3,6 MB) met laag.json { versie, envRate, tijdOffset, frames } ernaast. Voor de tweede
+ * mening over de "1" (maatMening in src/engine/tellen.js). `versie` = LAAG_VERSIE
+ * (server/analyze.js); een andere, of een bin die niet zo lang is als laag.json zegt,
+ * telt niet. maakLaag schrijft de bin; `bewaarLaagMeta` schrijft laag.json PAS DAARNA,
+ * dus een halve schrijf is nooit een lage band.
+ */
+export const LAAG_BESTAND = 'laag.bin', LAAG_META = 'laag.json';
+
+export async function leesLaag(media, id, versie) {
+  if (!/^[\w-]{1,64}$/.test(String(id))) return null;
+  try {
+    const m = JSON.parse(await readFile(join(media, id, LAAG_META), 'utf8'));
+    if (m?.versie !== versie || !(m.envRate > 0) || !Number.isInteger(m.frames)) return null;
+    const b = await readFile(join(media, id, LAAG_BESTAND));
+    if (b.byteLength !== m.frames * 4) return null;
+    return { env: new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)), envRate: m.envRate, tijdOffset: m.tijdOffset ?? 0 };
+  } catch { return null; }
+}
+
+/** laag.json naast een net geschreven laag.bin (eerst .tmp, dan hernoemen). Gooit nooit. */
+export async function bewaarLaagMeta(media, id, { versie, envRate, tijdOffset, frames }) {
+  if (!/^[\w-]{1,64}$/.test(String(id))) return false;
+  const pad = join(media, id, LAAG_META);
+  try {
+    await writeFile(pad + '.tmp', JSON.stringify({ versie, envRate, tijdOffset, frames }));
+    await rename(pad + '.tmp', pad);
+    return true;
+  } catch { return false; }
+}
+
+/** tellen.json weg (nieuwe audio: de oude tellen kloppen niet meer), en de bewaarde tweede mening en lage band ook. */
 export async function wisTellen(media, id) {
   if (!/^[\w-]{1,64}$/.test(String(id))) return;
   geheugen.delete(id);
-  await Promise.all([TELLEN_BESTAND, TELLEN_BESTAND + '.tmp', TWEEDE_BESTAND, TWEEDE_BESTAND + '.tmp']
+  await Promise.all([TELLEN_BESTAND, TELLEN_BESTAND + '.tmp', TWEEDE_BESTAND, TWEEDE_BESTAND + '.tmp', LAAG_META, LAAG_META + '.tmp', LAAG_BESTAND]
     .map((f) => rm(join(media, id, f), { force: true }).catch(() => {})));
 }
 

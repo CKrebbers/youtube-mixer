@@ -47,6 +47,12 @@ const O = await import('../server/opname.js');
 
 const map = mkdtempSync(join(tmpdir(), 'varve-handelingen-'));
 
+// Een nep-klok voor het opnieuw proberen: wachten schuift hem op en geeft de event
+// loop even vrij (de grens bij stoppen rekent hierop, niet op de wandklok).
+let nepNu = 0;
+const klok = { wacht: (ms) => { nepNu += ms; return new Promise((r) => setImmediate(r)); }, nu: () => nepNu };
+const rustTot = async (klaar, max = 20000) => { for (let i = 0; i < max && !klaar(); i++) await new Promise((r) => setImmediate(r)); };
+
 /** Timers op bestelling: de test bepaalt wanneer "een seconde" om is. */
 function nepTimers() {
   const lijst = new Set();
@@ -75,6 +81,7 @@ function nepServer(dir, storing = {}) {
     const nr = stukken.indexOf(body.van);
     const n = (pogingen.get(body.van) || 0) + 1;
     pogingen.set(body.van, n);
+    if (storing.weg?.()) throw new TypeError('Failed to fetch');      // de server is helemaal weg
     if (storing.altijdWeg?.has(nr)) throw new Error('netwerk weg');
     if (storing.valWeg?.has(nr) && n === 1) throw new Error('verzoek kwijt');
     const r = await S.schrijf(dir, m[1], body.van, body.tekst);
@@ -118,7 +125,7 @@ try {
     let klokT = 100;                 // de audioklok staat niet op 0 als het log begint
     const timers = nepTimers();
     const srv = nepServer(dir1);
-    const log = new H.Handelingenlog({ klok: () => klokT, haal: srv.haal, wacht: async () => {}, elke: timers.elke,
+    const log = new H.Handelingenlog({ klok: () => klokT, haal: srv.haal, ...klok, elke: timers.elke,
       stopElke: timers.stopElke, datum: () => new Date('2026-09-25T20:00:00Z') });
     const weg = A.bijInvoke((id, v) => log.neem(id, v));
     A.invoke('test.fader', 0.1);                // vóór de start: niets
@@ -152,10 +159,10 @@ try {
   {
     let klokT = 0;
     const timers = nepTimers();
-    // stuk 0 = kop+stand; 1: antwoord kwijt; 2: verzoek kwijt; 3: drie keer weg; 4: gewoon
+    // stuk 0 = kop+stand; 1: antwoord kwijt; 2: verzoek kwijt; 3: altijd weg (tot na de grens bij stoppen); 4: gewoon
     const srv = nepServer(dir2, { antwoordKwijt: new Set([1]), valWeg: new Set([2]), altijdWeg: new Set([3]) });
     const fouten = [];
-    const log = new H.Handelingenlog({ klok: () => klokT, haal: srv.haal, wacht: async () => {}, elke: timers.elke, stopElke: timers.stopElke });
+    const log = new H.Handelingenlog({ klok: () => klokT, haal: srv.haal, ...klok, elke: timers.elke, stopElke: timers.stopElke });
     log.onFout = (f) => fouten.push(f);
     const r = await log.start({ stand: { tracks: [] } });
     const verwacht = [];
@@ -166,8 +173,11 @@ try {
         if (sec !== 3) verwacht.push(`${klokT}|track.${sec}.fader|${k / 4}`);
       }
       timers.tik();
-      await log.sessie.rij;
+      // Stuk 3 wacht tot de stop (de server "is weg"), en stuk 4 netjes erachter.
+      if (sec < 3) await log.sessie.rij; else await rustTot(() => false, 50);
     }
+    ok('een stuk zonder antwoord blijft wachten zolang het log loopt (geen 3-pogingenregel)', fouten.length === 0
+      && srv.pogingen.get(srv.stukken[3]) > 3 && srv.stukken.length === 4);
     await log.stop();
     const pad = join(dir2, `set-${r.id}.acties.jsonl`);
     const ruw = readFileSync(pad, 'latin1');
@@ -176,10 +186,105 @@ try {
     ok('antwoord kwijt: opnieuw geschreven op DEZELFDE plek, niet dubbel', srv.pogingen.get(srv.stukken[1]) === 2
       && gelezen.filter((x) => x.startsWith('1|')).length === 1);
     ok('verzoek kwijt: tweede poging kwam aan', srv.pogingen.get(srv.stukken[2]) === 2);
-    ok('drie keer weg: gemeld, en een gat van nullen op zijn plek', fouten.length === 1 && /stuk kwijt/.test(fouten[0]) && ruw.includes('\0'));
+    ok('na de grens bij stoppen: gemeld, en een gat van nullen op zijn plek', fouten.length === 1 && /stuk kwijt/.test(fouten[0]) && ruw.includes('\0'));
     ok(`alles behalve het verloren stuk staat er precies één keer, in volgorde (${gelezen.length}/${verwacht.length})`,
       JSON.stringify(gelezen) === JSON.stringify(verwacht));
     ok('en het stuk NA het gat staat op zijn eigen plek (eind-regel leesbaar)', l.eind !== null && l.kapot === 0);
+  }
+
+  console.log('\nde server is even weg (WINST.md punt 3)');
+  {
+    const dir = join(map, 'weg');
+    let klokT = 0;
+    const timers = nepTimers();
+    let wegTot = -1;
+    const srv = nepServer(dir, { weg: () => nepNu < wegTot });
+    const fouten = [];
+    const log = new H.Handelingenlog({ klok: () => klokT, haal: srv.haal, ...klok, elke: timers.elke, stopElke: timers.stopElke });
+    log.onFout = (f) => fouten.push(f);
+    const r = await log.start({ stand: { tracks: [] } });
+    timers.tik(); await log.sessie.rij;
+    wegTot = nepNu + 30_000;                  // 30 s geen server
+    const t0 = nepNu;
+    const verwacht = [];
+    for (let sec = 1; sec <= 30; sec++) {
+      klokT = sec;
+      log.neem('track.1.fader', sec / 30);
+      verwacht.push(`${sec}|${sec / 30}`);
+      timers.tik();
+    }
+    await rustTot(() => log.sessie.inRij === 0);
+    ok(`server 30 s weg: na terugkomst is alles binnen (${((nepNu - t0) / 1000).toFixed(1)} s nep)`, log.sessie.inRij === 0 && nepNu - t0 >= 30_000);
+    ok('niets gemeld, niets kwijt', fouten.length === 0);
+    ok('elk stuk achter het eerste één keer verstuurd (op volgorde)', srv.stukken.slice(2).every((v) => srv.pogingen.get(v) === 1));
+    await log.stop();
+    const l = H.leesLog(readFileSync(join(dir, `set-${r.id}.acties.jsonl`), 'latin1'));
+    const gelezen = l.regels.filter(Array.isArray).map((a) => `${a[0]}|${a[2]}`);
+    ok(`server 30 s weg: geen gat, geen dubbel (${gelezen.length}/30 regels)`, JSON.stringify(gelezen) === JSON.stringify(verwacht)
+      && !readFileSync(join(dir, `set-${r.id}.acties.jsonl`), 'latin1').includes('\0') && l.eind !== null);
+  }
+  {
+    // De rij is vol: het oudste stuk valt weg (een gat op zijn plek), de rest komt erachter.
+    const dir = join(map, 'rijvol');
+    let klokT = 0;
+    const timers = nepTimers();
+    let wegTot = -1;
+    const srv = nepServer(dir, { weg: () => nepNu < wegTot });
+    const fouten = [];
+    const log = new H.Handelingenlog({ klok: () => klokT, haal: srv.haal, ...klok, elke: timers.elke, stopElke: timers.stopElke, rijBytes: 200 });
+    log.onFout = (f) => fouten.push(f);
+    const r = await log.start({ stand: { tracks: [] } });
+    timers.tik(); await log.sessie.rij;
+    wegTot = nepNu + 10_000;
+    for (let sec = 1; sec <= 10; sec++) { klokT = sec; log.neem('track.2.fader', 0.5); timers.tik(); }  // ~30 bytes per stuk
+    await rustTot(() => log.sessie.inRij === 0);
+    await log.stop();
+    const ruw = readFileSync(join(dir, `set-${r.id}.acties.jsonl`), 'latin1');
+    const l = H.leesLog(ruw);
+    const tijden = l.regels.filter(Array.isArray).map((a) => a[0]);
+    ok(`rij vol: de oudste stukken weg en gemeld (${fouten.length}), een gat van nullen`, fouten.length >= 1 && /stuk kwijt/.test(fouten[0]) && ruw.includes('\0'));
+    ok(`rij vol: de nieuwste staan er, op volgorde (${tijden.join(' ')})`, tijden.length >= 5 && tijden.at(-1) === 10
+      && tijden.every((t, i) => i === 0 || t > tijden[i - 1]) && l.eind !== null);
+  }
+  {
+    // De schijf is vol: niet opnieuw proberen.
+    const dir = join(map, 'vol');
+    const timers = nepTimers();
+    const srv0 = nepServer(dir);
+    let vol = false;
+    const haal = async (url, init) => (vol && url.endsWith('/stuk')
+      ? { ok: false, status: 400, json: async () => ({ ok: false, fout: 'de schijf is vol', vol: true }) } : srv0.haal(url, init));
+    let pogingen = 0;
+    const tel = async (url, init) => { if (url.endsWith('/stuk')) pogingen++; return haal(url, init); };
+    const fouten = [];
+    const log = new H.Handelingenlog({ klok: () => 1, haal: tel, ...klok, elke: timers.elke, stopElke: timers.stopElke });
+    log.onFout = (f) => fouten.push(f);
+    await log.start({ stand: { tracks: [] } });
+    timers.tik(); await log.sessie.rij;
+    vol = true; pogingen = 0;
+    log.neem('track.1.fader', 1); timers.tik(); await log.sessie.rij;
+    ok('schijf vol: één poging, meteen gemeld', pogingen === 1 && fouten.length === 1 && /vol/.test(fouten[0]));
+    vol = false;
+    await log.stop();
+  }
+  {
+    // Stoppen terwijl de server nog weg is: de grens, dan opgeven (geen eindeloos wachten).
+    const dir = join(map, 'stopweg');
+    const timers = nepTimers();
+    let wegTot = -1;
+    const srv = nepServer(dir, { weg: () => nepNu < wegTot });
+    const fouten = [];
+    const log = new H.Handelingenlog({ klok: () => 1, haal: srv.haal, ...klok, elke: timers.elke, stopElke: timers.stopElke });
+    log.onFout = (f) => fouten.push(f);
+    await log.start({ stand: { tracks: [] } });
+    timers.tik(); await log.sessie.rij;
+    wegTot = nepNu + 3_600_000;
+    log.neem('track.1.fader', 1); timers.tik();
+    await rustTot(() => false, 20);
+    const t0 = nepNu;
+    const e = await log.stop();
+    ok(`stop met de server weg: na de grens (${((nepNu - t0) / 1000).toFixed(1)} s nep) opgegeven en gemeld`,
+      nepNu - t0 >= 10_000 && nepNu - t0 < 13_000 && fouten.length === 2 && /stuk kwijt/.test(e.waarschuwing || ''));
   }
 
   console.log('\nveilige paden en keuring (server/handelingen.js)');
@@ -394,7 +499,7 @@ try {
     const dir = join(map, 'rondje');
     const timers = nepTimers();
     const srv = nepServer(dir);
-    const log = new H.Handelingenlog({ klok: () => NOW, haal: srv.haal, wacht: async () => {}, elke: timers.elke, stopElke: timers.stopElke });
+    const log = new H.Handelingenlog({ klok: () => NOW, haal: srv.haal, ...klok, elke: timers.elke, stopElke: timers.stopElke });
     const weg = A.bijInvoke((id, v) => log.neem(id, v));
     const r = await log.start({ stand: stand0 });
     const op = (dt, a, v) => { NOW += dt; A.invoke(a, v); };
@@ -487,7 +592,7 @@ try {
       const tk = nepTimers();
       const dir4 = join(map, 'opnieuw');
       const srv4 = nepServer(dir4);
-      const nieuwLog = () => new H.Handelingenlog({ klok: () => NOW, haal: srv4.haal, wacht: async () => {}, elke: tk.elke, stopElke: tk.stopElke });
+      const nieuwLog = () => new H.Handelingenlog({ klok: () => NOW, haal: srv4.haal, ...klok, elke: tk.elke, stopElke: tk.stopElke });
       const a = eng.deck('A'), b = eng.deck('B');
       // (1) het origineel: A speelt vanaf 1,2 s op 1,05x met hotcue 1 op 2,0 s; B staat stil op 0,5 s.
       laadDemo('A', { seed: 0, bars: 4 }, 'demo 1'); laadDemo('B', { seed: 1, bars: 2 }, 'demo 2');
@@ -743,7 +848,7 @@ try {
     const dir = join(map, 'combi');
     const timers = nepTimers();
     const srv = nepServer(dir);
-    const log = new H.Handelingenlog({ klok: () => NOW, haal: srv.haal, wacht: async () => {}, elke: timers.elke, stopElke: timers.stopElke });
+    const log = new H.Handelingenlog({ klok: () => NOW, haal: srv.haal, ...klok, elke: timers.elke, stopElke: timers.stopElke });
     const weg = A.bijInvoke((id, v) => log.neem(id, v));
     const r = await log.start({ stand: stand0 });
     const druk = (on) => m.handle({ sig: 'note:0:1', type: 'note', channel: 0, number: 1, value: on ? 127 : 0, norm: on ? 1 : 0, on });
@@ -792,7 +897,7 @@ try {
     const meet = async (perSec, namen) => {
       let bytes = 0, klokT = 0;
       const timers = nepTimers();
-      const log = new H.Handelingenlog({ klok: () => klokT, elke: timers.elke, stopElke: timers.stopElke, wacht: async () => {},
+      const log = new H.Handelingenlog({ klok: () => klokT, elke: timers.elke, stopElke: timers.stopElke, ...klok,
         haal: async (url, init) => {
           if (url.endsWith('/start')) return { ok: true, json: async () => ({ ok: true, id: '20260925-000000', bestand: 'x' }) };
           bytes += JSON.parse(init.body).tekst.length;

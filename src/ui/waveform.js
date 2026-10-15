@@ -217,16 +217,25 @@ export class WaveformView {
     return false;
   }
 
-  /** De grid-sleutel (dezelfde tekst als _grid() gebruikt), of '' zonder grid. */
-  _gridTekst(json) { return json ? JSON.stringify(json) : ''; }
+  /**
+   * De grid-sleutel van een deckstand (dezelfde die _grid() gebruikt), of '' zonder grid.
+   * Uit de snapshot: track en `gridVersie` (telt bij elke gridwijziging, deck.js), dus
+   * geen JSON.stringify van het grid per view per beeld (8 kB per beeld met een tempokaart
+   * van 12 stukken, spoor A 15 okt, tools/headless/beeld-afval.mjs). Een stand zonder
+   * gridVersie (een test, een nagebouwde stand) valt terug op de tekst van het grid.
+   */
+  _gridTekst(d) {
+    if (!d?.grid) return '';
+    return Number.isInteger(d.gridVersie) ? `${d.id}#${d.gridVersie}` : JSON.stringify(d.grid);
+  }
 
   /**
    * De snapshot geeft het grid als JSON; rekenen doet de Beatgrid-klasse.
    * Eén keer per wijziging opbouwen, niet elke frame.
    */
-  _grid(json) {
-    const sleutel = JSON.stringify(json);
-    if (sleutel !== this._gridSleutel) { this._gridSleutel = sleutel; this._gridObj = Beatgrid.van(json); }
+  _grid(d) {
+    const sleutel = this._gridTekst(d);
+    if (sleutel !== this._gridSleutel) { this._gridSleutel = sleutel; this._gridObj = Beatgrid.van(d.grid); }
     return this._gridObj;
   }
 
@@ -281,7 +290,7 @@ export class WaveformView {
       : Math.round(d.position * this.pxPerSecond * dpr);
     if (this.zelfde(d.loaded ? analysis : null, this.mode === 'zoom' ? onsets : null, this.mode === 'zoom' ? tellen : null,
       this.mode, this.pxPerSecond, dpr, w, h, d.loaded, d.duration, kop,
-      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.cuePoint, d.hotcues.join(','), this._gridTekst(d.grid),
+      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.cuePoint, d.hotcues.join(','), this._gridTekst(d),
       this.mode === 'overview' ? d.secties ?? null : null, this.mode === 'overview' ? d.sectie ?? -1 : -1)) return;
     g.clearRect(0, 0, w, h);
     g.fillStyle = '#0b0e11';
@@ -313,7 +322,7 @@ export class WaveformView {
 
     // beatgrid: alleen in de zoomweergave, want in het overzicht van een half
     // uur vallen 9000 lijnen samen tot een grijze soep.
-    const grid = deckState.grid ? this._grid(deckState.grid) : null;
+    const grid = deckState.grid ? this._grid(deckState) : null;
     if (grid && this.mode === 'zoom') this.tekenGrid(grid, range, span, w, h);
 
     // golfvorm: het overzicht uit de cache, de zoom scrolt en tekent elke frame
@@ -382,7 +391,7 @@ export class BaanView extends WaveformView {
     const dpr = window.devicePixelRatio || 1;
     const kop = d.duration ? Math.round((d.position / d.duration) * w * dpr) : 0;
     if (this.zelfde(d.loaded ? analysis : null, null, 'baan', dpr, w, h, d.loaded, d.duration, kop,
-      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.hotcues.join(','), this._gridTekst(d.grid))) return;
+      d.loop ? `${d.loop.start}|${d.loop.end}` : '', d.hotcues.join(','), this._gridTekst(d))) return;
     g.fillStyle = '#0b0e11';
     g.fillRect(0, 0, w, h);
     if (!analysis || !d.loaded || !d.duration) {
@@ -404,7 +413,7 @@ export class BaanView extends WaveformView {
       g.fillRect(x(t) - 0.5, 0, 1, h);
     });
     // Zekerheid van het grid, per stuk: onderste twee pixels.
-    const grid = d.grid ? this._grid(d.grid) : null;
+    const grid = d.grid ? this._grid(d) : null;
     if (grid) tekenStrook(g, strookVan(this, grid, d.duration, w), h - 2, 2);
     g.fillStyle = '#ff3b30';
     g.fillRect(x(d.position) - 1, 0, 2, h);

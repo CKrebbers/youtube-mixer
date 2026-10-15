@@ -13,8 +13,13 @@ const wortel = fileURLToPath(new URL('..', import.meta.url));
 
 const as = readFileSync(wortel + 'tools/varve-app/VARVE.applescript', 'utf8');
 const start = /on startServer\(\)[\s\S]*?end startServer/.exec(as)?.[0] ?? '';
-ok('VARVE.app: startServer zet UV_THREADPOOL_SIZE=16 vóór nohup node server/index.js',
-  /export UV_THREADPOOL_SIZE=16 && nohup node server\/index\.js/.test(start));
+// Sinds 15 okt start VARVE.app de herstartlus (WINST.md punt 3), en die start node: de variabele
+// moet vóór de lus staan, en de lus mag hem niet weer weghalen of overschrijven.
+const lus = readFileSync(wortel + 'tools/varve-app/server-lus.sh', 'utf8');
+ok('VARVE.app: startServer zet UV_THREADPOOL_SIZE=16 vóór nohup sh tools/varve-app/server-lus.sh',
+  /export UV_THREADPOOL_SIZE=16 && nohup sh tools\/varve-app\/server-lus\.sh/.test(start));
+ok('de lus start node server/index.js en laat UV_THREADPOOL_SIZE staan',
+  /^\s*node server\/index\.js/m.test(lus) && !/UV_THREADPOOL_SIZE=|unset UV_THREADPOOL_SIZE|env -i/.test(lus));
 
 if (process.platform === 'win32') {
   console.log('  --  geen mkfifo op Windows: de meting is overgeslagen');

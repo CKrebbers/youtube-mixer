@@ -66,7 +66,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createConnection } from 'node:net';
 import { mkdtempSync, mkdirSync, readdirSync, writeFileSync, existsSync, rmSync, appendFileSync, openSync, closeSync, readFileSync } from 'node:fs';
-import { tmpdir, homedir } from 'node:os';
+import { tmpdir, homedir, loadavg, availableParallelism } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -77,6 +77,11 @@ export const GAT_MS = 15;              // een gat in de hartslag (rust ≈ 6 ms 
 export const CONTROLE_MS = 40;         // de positieve controle blokkeert zoveel
 export const VREEMD_KERN = 0.2;        // een ander proces boven 20 % van een kern: niet meten
 export const AUDIO_KLAAG_S = 0.1;      // Clay's audioproces rekent > 0,1 s per 5 s: afbreken
+// pmset, sysctl (hw.model), plutil en swiftc + warmte.swift (ProcessInfo.thermalState) zijn
+// van de Mac. Op een ander platform (de Omarchy-pc) roept de meting ze niet aan en zegt hij
+// dat (spoor C2): geen null die als meting oogt, geen FAIL voor iets dat er niet kan zijn.
+export const NIET_HIER = 'niet gemeten op dit platform';
+export const isMac = (platform = process.platform) => platform === 'darwin';
 
 /** Wat elke stand met de Stroommachine-tab en de vormen doet. */
 export const STANDEN = {
@@ -441,6 +446,7 @@ export const psNu = () => leesPs(spawnSync('ps', ['-axo', 'pid=,ppid=,cputime=,r
 /** De volledige Chrome for Testing (niet de headless shell: alleen daar is een tabblad echt zichtbaar of verborgen). */
 export function zoekChrome(eigen = null) {
   if (eigen) return eigen;
+  if (!isMac()) throw new Error(`Chrome for Testing zoeken: ${NIET_HIER} (zet VARVE_CHROME)`);
   const cache = join(homedir(), 'Library/Caches/ms-playwright');
   if (!existsSync(cache)) throw new Error(`geen Playwright-cache in ${cache} (zet VARVE_CHROME)`);
   const map = readdirSync(cache).filter((d) => /^chromium-\d+$/.test(d)).sort().pop();
@@ -451,6 +457,7 @@ export function zoekChrome(eigen = null) {
 
 /** Versie uit Info.plist van de .app rond een Chrome-binary (of null). */
 function chromeVersie(binary) {
+  if (!isMac()) return null;   // plutil en Info.plist: alleen de Mac
   const plist = resolve(binary, '../../Info.plist');
   if (!existsSync(plist)) return null;
   const r = spawnSync('plutil', ['-extract', 'CFBundleShortVersionString', 'raw', plist], { encoding: 'utf8' });
@@ -459,34 +466,44 @@ function chromeVersie(binary) {
 
 const sh = (cmd, args) => { const r = spawnSync(cmd, args, { encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
 
-/** Wat de machine nu doet: model, belasting, accu, lader, Low Power Mode. */
-function machineNu(warmte) {
-  const batt = sh('pmset', ['-g', 'batt']) || '';
-  const ac = sh('pmset', ['-g', 'ac']) || '';
-  const lpm = (sh('pmset', ['-g']) || '').match(/lowpowermode\s+(\d)/);
+/**
+ * Wat de machine nu doet: model, belasting, accu, lader, Low Power Mode. Op de Mac uit
+ * pmset en sysctl (`run` = sh, voor test/beeld-meting.test.mjs te vervangen); elders
+ * alleen kernen en belasting uit node:os, de rest null met `nietGemeten`.
+ */
+export function machineNu(warmte, { platform = process.platform, run = sh } = {}) {
+  if (!isMac(platform)) {
+    return { model: null, kernen: availableParallelism(), loadavg: loadavg().map((x) => x.toFixed(2)).join(' '), stroom: null, accu: null, laadt: null,
+      watt: null, lowPowerMode: null, warmte: null, nietGemeten: `model, accu, lader, Low Power Mode en warmte: ${NIET_HIER}` };
+  }
+  const batt = run('pmset', ['-g', 'batt']) || '';
+  const ac = run('pmset', ['-g', 'ac']) || '';
+  const lpm = (run('pmset', ['-g']) || '').match(/lowpowermode\s+(\d)/);
   return {
-    model: sh('sysctl', ['-n', 'hw.model']),
-    kernen: Number(sh('sysctl', ['-n', 'hw.ncpu'])) || null,
-    loadavg: sh('sysctl', ['-n', 'vm.loadavg']),
+    model: run('sysctl', ['-n', 'hw.model']),
+    kernen: Number(run('sysctl', ['-n', 'hw.ncpu'])) || null,
+    loadavg: run('sysctl', ['-n', 'vm.loadavg']),
     stroom: (batt.match(/drawing from '([^']+)'/) || [])[1] || null,
     accu: Number((batt.match(/(\d+)%/) || [])[1]) || null,
     laadt: /charging;/.test(batt) && !/discharging/.test(batt),
     watt: Number((ac.match(/Wattage = (\d+)W/) || [])[1]) || null,
     lowPowerMode: lpm ? lpm[1] === '1' : null,
-    warmte: warmte ? sh(warmte, []) : null,
+    warmte: warmte ? run(warmte, []) : null,
   };
 }
 
-/** warmte.swift naar een binary in tmp (ProcessInfo.thermalState); null als swiftc er niet is. */
-function maakWarmte(tmp) {
+/** warmte.swift naar een binary in tmp (ProcessInfo.thermalState); null als swiftc er niet is, of niet op de Mac. */
+export function maakWarmte(tmp, { platform = process.platform } = {}) {
+  if (!isMac(platform)) return null;
   const uit = join(tmp, 'warmte');
   const r = spawnSync('swiftc', ['-O', join(WORTEL, 'tools/headless/warmte.swift'), '-o', uit], { encoding: 'utf8', timeout: 60000 });
   return r.status === 0 && existsSync(uit) ? uit : null;
 }
 
-/** Geluid uit de Mac (een audio-out-assertie van coreaudiod)? Geeft de regels. */
-function geluidUit() {
-  return (sh('pmset', ['-g', 'assertions']) || '').split('\n').filter((l) => /audio-out/i.test(l)).map((l) => l.trim());
+/** Geluid uit de Mac (een audio-out-assertie van coreaudiod)? Geeft de regels; null = niet gemeten (geen Mac). */
+export function geluidUit({ platform = process.platform, run = sh } = {}) {
+  if (!isMac(platform)) return null;
+  return (run('pmset', ['-g', 'assertions']) || '').split('\n').filter((l) => /audio-out/i.test(l)).map((l) => l.trim());
 }
 
 /**
@@ -720,11 +737,13 @@ async function vooraf(o, tmp, { volledig }) {
   vooraf.cft = chromePad ? chromeVersie(chromePad) : null;
 
   // Geluid uit de Mac en Clay's audioproces (H9).
-  const geluid = geluidUit();
-  vooraf.geluid = geluid;
-  if (volledig && geluid.length && !o.forceer) stop.push(`er komt geluid uit de Mac (pmset audio-out): ${geluid[0]}`);
+  const gemeten = geluidUit();
+  const geluid = gemeten ?? [];
+  vooraf.geluid = gemeten;
+  if (gemeten === null) info(`geluid (pmset audio-out): ${NIET_HIER}`);
+  else if (volledig && geluid.length && !o.forceer) stop.push(`er komt geluid uit de Mac (pmset audio-out): ${geluid[0]}`);
   else if (geluid.length) info(`geluid uit de Mac (pmset audio-out)${volledig ? ', VARVE_BL_FORCEER=1' : ''}: ${geluid.length} assertie(s)`);
-  else info('geen audio-out-assertie (er speelt niets)');
+  else if (gemeten) info('geen audio-out-assertie (er speelt niets)');
 
   // De warmtemeter, terwijl de CPU 5 s gemeten wordt (beide ~5 s).
   const ps0 = psNu();
@@ -757,9 +776,10 @@ async function vooraf(o, tmp, { volledig }) {
     info(`audioproces van Clay's Chrome ${vooraf.claysChrome ?? ''}: pid ${audio0.pid}, cputime ${n1(audio0.cpu, 2)} s, ${n1(vooraf.claysAudio.perVijfS, 2)} s per 5 s`);
     if (volledig && vooraf.claysAudio.perVijfS > AUDIO_KLAAG_S && !o.forceer) stop.push(`het audioproces van Clay's Chrome rekent (${vooraf.claysAudio.perVijfS} s per 5 s): speelt er iets?`);
   } else info('geen audioproces van Clay\'s Chrome gevonden: geen bewaking tijdens de run');
-  info(warmte ? `warmte: ${sh(warmte, [])}` : 'warmte: niet gemeten (geen swiftc)');
+  info(warmte ? `warmte: ${sh(warmte, [])}` : isMac() ? 'warmte: niet gemeten (geen swiftc)' : `warmte: ${NIET_HIER}`);
   vooraf.machine = machineNu(warmte);
-  info(`machine: ${vooraf.machine.model}, ${vooraf.machine.kernen} kernen, load ${vooraf.machine.loadavg}, ${vooraf.machine.stroom ?? '?'} ${vooraf.machine.watt ?? '?'} W, accu ${vooraf.machine.accu ?? '?'} %${vooraf.machine.laadt ? ' (laadt)' : ''}, Low Power Mode ${vooraf.machine.lowPowerMode ? 'aan' : 'uit'}`);
+  if (vooraf.machine.nietGemeten) info(`machine: ${vooraf.machine.kernen} kernen, load ${vooraf.machine.loadavg}; ${vooraf.machine.nietGemeten}`);
+  else info(`machine: ${vooraf.machine.model}, ${vooraf.machine.kernen} kernen, load ${vooraf.machine.loadavg}, ${vooraf.machine.stroom ?? '?'} ${vooraf.machine.watt ?? '?'} W, accu ${vooraf.machine.accu ?? '?'} %${vooraf.machine.laadt ? ' (laadt)' : ''}, Low Power Mode ${vooraf.machine.lowPowerMode ? 'aan' : 'uit'}`);
   return { stop, vooraf, warmte, chromePad };
 }
 
@@ -775,7 +795,8 @@ async function zelftest(o) {
     const v = await vooraf(o, tmp, { volledig: false });
     json.vooraf = v.vooraf;
     ok('de controles van punt 2 laten de volledige run starten (los van audio- en CPU-gate)', !v.stop.length, v.stop.join(' · '));
-    ok('warmtemeter gecompileerd (swiftc -O warmte.swift)', !!v.warmte, v.warmte ? sh(v.warmte, []) : 'niet gemeten');
+    if (isMac()) ok('warmtemeter gecompileerd (swiftc -O warmte.swift)', !!v.warmte, v.warmte ? sh(v.warmte, []) : 'niet gemeten');
+    else console.log(`  --  warmtemeter (swiftc + ProcessInfo.thermalState): ${NIET_HIER}`);
 
     // De fps-logica op een nep-kwInfo (H1).
     console.log('\nfps-logica op een nep-kwInfo');
@@ -930,6 +951,11 @@ async function volledigeRun(o) {
   json.vooraf = v.vooraf;
   if (v.stop.length) {
     for (const r of v.stop) console.error(`STOP  ${r}`);
+    if (!o.bewaar) rmSync(tmp, { recursive: true, force: true });
+    return 2;
+  }
+  if (o.accu && !isMac()) {
+    console.error(`STOP  --accu: de stroombron (pmset) is ${NIET_HIER}`);
     if (!o.bewaar) rmSync(tmp, { recursive: true, force: true });
     return 2;
   }

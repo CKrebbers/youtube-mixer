@@ -6,8 +6,8 @@ import { wanneer } from '../src/controle/backup-tegel.js';
  * "kan ik hier beginnen".
  *
  * Dit bestand is het PURE deel: parsers voor de uitvoer van pmset, ioreg, df,
- * defaults, system_profiler, tailscale en find, de profielen als data
- * (avondpakket/profielen.json), de keuze van de fase en het oordeel. Geen I/O,
+ * defaults, system_profiler, tailscale en find (op Linux: GNU stat, lsusb en
+ * sysfs), de profielen als data (avondpakket/profielen.json), de keuze van de fase en het oordeel. Geen I/O,
  * geen kindprocessen, geen klok: `nu` komt van buiten. De sondes (meet), de
  * cache en de bevriezing staan in server/avondpakket-meet.js; de route in
  * server/index.js, de CLI in tools/avondpakket.mjs. Die voeren alleen de
@@ -240,6 +240,100 @@ export function parseIoregUsb(t) {
     else if (k === 'idProduct') nu.pid = hexId(Number(v));
   }
   return uit;
+}
+
+// ---- Linux (de Omarchy-pc; docs/AVONDPAKKET.md "Op Linux") ----------------------
+
+/** Root hubs van de kernel (vendor 1d6b, "Linux Foundation"): geen apparaat. */
+const ROOT_HUB = '0x1d6b';
+
+/**
+ * `lsusb` (usbutils): "Bus 003 Device 005: ID 1235:8210 Focusrite-Novation Scarlett 2i2 3rd Gen"
+ * → [{ naam, vid, pid }]. De naam komt uit usb.ids en kan ontbreken ("ID 09e8:0029" en verder
+ * niets): dan herkent de USB-id hem nog. Root hubs tellen niet.
+ */
+export function parseLsusb(t) {
+  const uit = [];
+  for (const regel of tekst(t).split('\n')) {
+    const m = /^Bus\s+\d+\s+Device\s+\d+:\s+ID\s+([0-9a-f]{4}):([0-9a-f]{4})\s*(.*)$/i.exec(regel.trim());
+    if (!m) continue;
+    const vid = hexId(m[1]), pid = hexId(m[2]);
+    if (vid === ROOT_HUB) continue;
+    uit.push({ naam: m[3].trim(), vid, pid });
+  }
+  return uit;
+}
+
+/**
+ * sysfs zonder lsusb: `find -L /sys/bus/usb/devices -mindepth 2 -maxdepth 2 -type f ( -name idVendor
+ * -o -name idProduct -o -name product -o -name manufacturer ) -exec grep -H '' {} +` → regels
+ * "<map>/<veld>:<waarde>" → [{ naam, vid, pid }] (naam = product, anders manufacturer). Alleen
+ * mappen met een idVendor; root hubs (1d6b) niet. Het pad zelf komt nooit in het resultaat.
+ */
+export function parseSysUsb(t) {
+  const per = new Map();
+  for (const regel of tekst(t).split('\n')) {
+    const m = /^(.*)\/(idVendor|idProduct|product|manufacturer):(.*)$/.exec(regel.trim());
+    if (!m) continue;
+    if (!per.has(m[1])) per.set(m[1], {});
+    per.get(m[1])[m[2]] = m[3].trim();
+  }
+  const uit = [];
+  for (const v of per.values()) {
+    const vid = hexId(v.idVendor), pid = hexId(v.idProduct);
+    if (!vid || vid === ROOT_HUB) continue;
+    uit.push({ naam: v.product || v.manufacturer || '', vid, pid });
+  }
+  return uit;
+}
+
+const STATUS_LINUX = { charging: 'charging', discharging: 'discharging', full: 'charged', 'not charging': 'not charging' };
+
+/**
+ * sysfs: `find -L /sys/class/power_supply -mindepth 2 -maxdepth 2 -name uevent -type f -exec grep -H '' {} +`
+ * → regels "<map>/uevent:POWER_SUPPLY_<VELD>=<waarde>" → hetzelfde object als de Mac
+ * ({ bron, procent, toestand, resterend, laderW, gezondheid, cycli }), of null zonder
+ * accu van het systeem (een vaste pc). Een accu met SCOPE=Device (muis, koptelefoon) telt
+ * niet. bron: een Mains/USB-voeding met ONLINE=1 = 'AC'; is er een voeding en geen online,
+ * 'accu'; zonder voedingsknoop uit de STATUS van de accu. laderW alleen uit een USB-PD-bron
+ * met VOLTAGE_MAX × CURRENT_MAX (µV × µA; een AANNAME tot het op de pc gezien is); een
+ * Mains-adapter zegt geen vermogen (null). Gezondheid = (ENERGY|CHARGE)_FULL / _FULL_DESIGN.
+ * CYCLE_COUNT 0 is vaak "niet ondersteund": dan null. Meerdere accu's: naar energie gewogen.
+ */
+export function parsePowerSupply(t) {
+  const per = new Map();
+  for (const regel of tekst(t).split('\n')) {
+    const m = /^(.*)\/uevent:POWER_SUPPLY_([A-Z0-9_]+)=(.*)$/.exec(regel.trim());
+    if (!m) continue;
+    if (!per.has(m[1])) per.set(m[1], {});
+    per.get(m[1])[m[2]] = m[3].trim();
+  }
+  const getal = (v) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+  const vanSysteem = (v) => (v.SCOPE || 'System').toLowerCase() !== 'device';
+  const alle = [...per.values()].filter(vanSysteem);
+  const accus = alle.filter((v) => /^battery$/i.test(v.TYPE || '') && v.PRESENT !== '0');
+  if (!accus.length) return null;
+  const voedingen = alle.filter((v) => v.TYPE && !/^battery$/i.test(v.TYPE));
+  const online = voedingen.filter((v) => v.ONLINE === '1');
+  const status = (accus[0].STATUS || '').toLowerCase();
+  const bron = online.length ? 'AC' : voedingen.length ? 'accu'
+    : status === 'discharging' ? 'accu' : ['charging', 'full', 'not charging'].includes(status) ? 'AC' : null;
+  const vol = (v) => getal(v.ENERGY_FULL) ?? getal(v.CHARGE_FULL);
+  const ontwerp = (v) => getal(v.ENERGY_FULL_DESIGN) ?? getal(v.CHARGE_FULL_DESIGN);
+  const nu = (v) => getal(v.ENERGY_NOW) ?? getal(v.CHARGE_NOW);
+  let procent = null;
+  if (accus.length > 1 && accus.every((v) => nu(v) !== null && vol(v))) {
+    procent = Math.round((accus.reduce((s, v) => s + nu(v), 0) / accus.reduce((s, v) => s + vol(v), 0)) * 100);
+  } else {
+    const c = accus.map((v) => getal(v.CAPACITY)).filter((x) => x !== null);
+    procent = c.length ? Math.round(c.reduce((s, x) => s + x, 0) / c.length) : null;
+  }
+  const v0 = vol(accus[0]), o0 = ontwerp(accus[0]);
+  const gezondheid = v0 && o0 ? Math.round((v0 / o0) * 100) : null;
+  const cycli = getal(accus[0].CYCLE_COUNT) || null;
+  const pd = online.map((v) => (getal(v.VOLTAGE_MAX) ?? 0) * (getal(v.CURRENT_MAX) ?? 0) / 1e12).filter((w) => w > 0);
+  const laderW = pd.length ? Math.round(Math.max(...pd)) : null;
+  return { bron, procent, toestand: STATUS_LINUX[status] ?? (status || null), resterend: null, laderW, gezondheid, cycli };
 }
 
 /** Twee (of meer) USB-lijsten samen; een apparaat dat in beide staat, telt één keer. */
@@ -609,7 +703,9 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
       } else if (verwacht !== null && b.totaal < verwacht) {
         punt('media', 'Media lokaal', 'half', `${b.totaal} van ${verwacht}`, 'minder bestanden dan de library verwacht (zie compleet)');
       } else {
-        punt('media', 'Media lokaal', 'ok', `${b.totaal} lokaal`, b.bytesTotaal ? `${gb(b.bytesTotaal)} in media/` : '');
+        // datalessNvt: op Linux bestaat de iCloud-vlag niet (avondpakket-meet.js); dat zegt het punt dan ook.
+        punt('media', 'Media lokaal', 'ok', `${b.totaal} lokaal`, [b.bytesTotaal ? `${gb(b.bytesTotaal)} in media/` : '',
+          b.datalessNvt ? 'iCloud-uitplaatsing n.v.t. op dit platform' : ''].filter(Boolean).join(' · '));
       }
     }
   }

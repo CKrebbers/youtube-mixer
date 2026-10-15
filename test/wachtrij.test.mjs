@@ -5,7 +5,7 @@
 import { mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 
 const { Wachtrij, isOpen } = await import('../server/wachtrij.js');
 const { bekijkLink } = await import('../server/links.js');
@@ -484,7 +484,27 @@ try {
     // ONZE pijpen. Met SIGTERM viel yt-dlp om, liep het kind door en hield de
     // pijp vast: run() kwam pas terug als het kind klaar was — bij een
     // livestream nooit, en de wachtrij stond stil ("stoppen").
-    const leeftNog = (p) => { try { process.kill(p, 0); return true; } catch { return false; } };
+    // Een zombie (staat Z) draait niet meer: hij is dood en wacht alleen tot zijn ouder hem
+    // opruimt. Het kleinkind wordt na de dood van yt-dlp een wees van PID 1, en in een container
+    // is PID 1 soms geen init die wezen opruimt (gezien 15 okt: /proc/<pid>/stat "(sleep) Z 1 …").
+    // kill(p, 0) slaagt op een zombie; daarom de staat erbij. Geen andere versoepeling (spoor C2).
+    const zombie = (p) => {
+      try {
+        if (process.platform === 'linux') { const st = readFileSync(`/proc/${p}/stat`, 'utf8'); return st.slice(st.lastIndexOf(')') + 2).startsWith('Z'); }
+        return execFileSync('ps', ['-o', 'stat=', '-p', String(p)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().startsWith('Z');
+      } catch { return false; }
+    };
+    const leeftNog = (p) => { try { process.kill(p, 0); } catch { return false; } return !zombie(p); };
+    {
+      // Een echte zombie maken: sh start sleep op de achtergrond en wordt zelf een sleep die nooit wacht.
+      const sh = spawn('sh', ['-c', 'sleep 0.05 & echo $!; exec sleep 5'], { stdio: ['ignore', 'pipe', 'ignore'] });
+      const kindPid = await new Promise((k) => { sh.stdout.once('data', (d) => k(Number(String(d).trim()))); setTimeout(() => k(null), 3000); });
+      await wacht(400);
+      ok(`een zombie (staat Z, ouder leeft nog) telt als weg; de ouder niet (${kindPid})`, Number.isInteger(kindPid) && zombie(kindPid) && !leeftNog(kindPid)
+        && leeftNog(sh.pid) && !zombie(sh.pid) && !leeftNog(999999999));
+      sh.kill('SIGKILL');
+      await new Promise((k) => sh.once('exit', k));
+    }
     for (const [link, wat] of [['nummer-kind-traag', 'yt-dlp met een kind op onze pijp: ruimt het zelf op (SIGINT)'],
       ['nummer-kind-doof-traag', 'reageert hij niet op SIGINT: na 3 s hij én zijn kind SIGKILL']]) {
       const ac3 = new AbortController();

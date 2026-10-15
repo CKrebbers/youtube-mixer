@@ -285,6 +285,45 @@ export function onsetEnvelope(x, sampleRate, { win = 1024, hop = 128, ruw = fals
 }
 
 /**
+ * DE LAGE BAND (15 okt, docs/BEATGRID.md §14): de ENERGIE onder `tot` Hz
+ * (kick en bas) in vakjes van 1/envRate s (standaard 4 ms), gefilterd per
+ * sample: een hoogdoorlaat op `van` Hz en twee keer een laagdoorlaat op `tot`
+ * (één pool elk). Voor een tweede mening over de "1" (maatMening in
+ * src/engine/tellen.js): op de "1" valt in Clay's repertoire bijna altijd een
+ * kick of een nieuwe basnoot; maatSterkte kijkt hoeveel energie er na een tel
+ * BIJ komt (na min ervoor).
+ * Geen FFT-flux met frames van 11,6 ms (de eerste versie): de plek van de
+ * aanslag tussen twee frames schoof per tel op, en waar een maat precies een
+ * geheel aantal van die verschuivingen lang was (122,3 bpm = 42,25 frames per
+ * tel) lag de "1" 30-45% zwakker dan tel 4, in vier op de vloer. Energie per
+ * sample opgeteld hangt daar niet van af. Los van onsetEnvelope (die blijft
+ * bit voor bit gelijk: analyze.test vergelijkt hem met de browser).
+ * Vakje i hoort bij tracktijd i / envRate (tijdOffset 0; de vertraging van de
+ * filters, ~2 ms, is voor elke tel dezelfde en valt weg in de vergelijking).
+ */
+export const LAAG_TOT = 150;
+export const LAAG_RATE = 250;
+export function laagEnvelope(x, sampleRate, { tot = LAAG_TOT, van = 30, envRate = LAAG_RATE } = {}) {
+  const n = Math.floor(x.length * envRate / sampleRate);
+  const env = new Float32Array(n);
+  const aH = Math.exp(-2 * Math.PI * van / sampleRate), aL = Math.exp(-2 * Math.PI * tot / sampleRate);
+  let hx = 0, hy = 0, l1 = 0, l2 = 0, i = 0;
+  for (let v = 0; v < n; v++) {
+    const eind = Math.min(x.length, Math.round((v + 1) * sampleRate / envRate));
+    let e = 0;
+    for (; i < eind; i++) {
+      const xi = x[i];
+      hy = aH * (hy + xi - hx); hx = xi;               // hoogdoorlaat (één pool)
+      l1 += (1 - aL) * (hy - l1);                      // twee keer laagdoorlaat
+      l2 += (1 - aL) * (l1 - l2);
+      e += l2 * l2;
+    }
+    env[v] = e;
+  }
+  return { env, envRate, tijdOffset: 0 };
+}
+
+/**
  * Envelope schoonmaken: lokaal hoogdoorlaten en lokaal normaliseren.
  *
  * Het globale gemiddelde eraf trekken werkt niet op materiaal dat van stil naar

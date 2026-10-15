@@ -5,6 +5,7 @@ import { Lagen } from '../control/lagen.js';
 import { opzetMapjeBalk } from './mapje-balk.js';
 import { attachKeyboard } from '../control/keyboard.js';
 import { meld, koppelMeldingen } from './meldingen.js';
+import { opzetGezondheid } from './gezondheid.js';
 import { opzetVideo } from './video-paneel.js';
 import { opzetOpname } from './opname-knop.js';
 import { bewaakVertrek } from './vertrek.js';
@@ -258,6 +259,9 @@ const hub = hubJs ? { url: hubUrl, HubMidi: hubJs.HubMidi, secties: hubJs.engine
 const midiDelen = opzetMidi({ engine, sluitOnderpanelen: onderpanelen.sluitOnderpanelen, lagen, hub,
   geraakt: (sig, regelSig) => spiegel.markeer(sig, regelSig) });
 spiegel.koppel({ mapping: midiDelen.mapping, lagen });
+// De AudioContext bewaken (gezondheid.js): stil = een melding, en de eerstvolgende
+// druk op de controller (ook via de hub) of het toetsenbord zet hem weer aan.
+window.gezondheid = opzetGezondheid({ ctx: engine.ctx, meld, midi: midiDelen.midi, venster: window });
 // Het mapje "vorm" op de APC komt als fragment BIJ de mapping, niet erin:
 // je eigen bewaarde mapping blijft zoals hij is (Mapping.voegToe).
 if (vormen) {
