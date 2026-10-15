@@ -1,5 +1,6 @@
 import { CURVES, neemOp, muteer, pasCurve, pasKromme, isPlekDoel, isModDoel, MAX_MODS, MAX_DOELEN } from '../engine/rack.js';
 import { esc, pct } from './dom.js';
+import { komma } from '../lib/notatie.js';
 import { toonWaarde, effectVan } from '../engine/fx.js';
 import { MOD_SOORTEN, MOD_VORMEN, STAPPEN_MAX, MOD_HZ_MIN, MOD_HZ_MAX } from '../engine/modulatie.js';
 import { LFO_DELINGEN } from '../engine/fx-lfo.js';
@@ -61,7 +62,6 @@ const nieuweMod = (soort, oud = {}) => ({
 });
 const hzNaarSchuif = (hz) => Math.log(hz / MOD_HZ_MIN) / Math.log(MOD_HZ_MAX / MOD_HZ_MIN);
 const schuifNaarHz = (v) => MOD_HZ_MIN * Math.pow(MOD_HZ_MAX / MOD_HZ_MIN, v);
-const komma = (x, n) => x.toFixed(n).replace('.', ',');
 
 const KNOPPEN = [1, 2, 3, 4, 5, 6, 7, 8];
 

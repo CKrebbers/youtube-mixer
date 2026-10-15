@@ -2,8 +2,11 @@
 // zoals beschrijf() in apc-beschrijf.js, of null (dan beschrijft apc-beschrijf.js hem zelf).
 // Puur: geen DOM, geen bus (apc.html en maschine.html laden dit statisch mee).
 
-const wie = (t) => (t === '{focus}' ? 'focus-track' : t === '{speel}' ? 'speeltrack' : t === '{maatgever}' ? 'maatgever'
-  : t === '{tweede}' || t === '{R}' ? 'vorige focus' : `track ${t}`);
+import { wie as wieIn, wieMet } from '../wie.js';
+
+// Hier heet de tweede track "vorige focus" en de maatgever kort "maatgever" (zo staat het in S1).
+const NAMEN = wieMet({ '{maatgever}': 'maatgever', '{tweede}': 'vorige focus', '{R}': 'vorige focus' });
+const wie = (t) => wieIn(t, NAMEN);
 
 const SPRONG = { quarter: ['¼', '¼ tel'], half: ['½', '½ tel'], beat: ['1', '1 tel'] };
 
