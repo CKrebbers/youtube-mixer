@@ -1,4 +1,5 @@
 import { clamp, expMap } from '../../lib/emitter.js';
+import { komma, hz } from '../../lib/notatie.js';
 import { houdVast, startDrempel } from '../overgang.js';
 
 /**
@@ -72,9 +73,7 @@ const zwevingVan = (v) => 6 * clamp(v) * clamp(v);
 const filterVan = (v) => expMap(v, 200, 18000);
 const warmteVan = (v) => clamp(v);
 
-const komma = (x, d = 1) => x.toFixed(d).replace('.', ',');
 const tijd = (s) => (!Number.isFinite(s) ? '∞' : s < 1 ? `${Math.round(s * 1000)} ms` : `${komma(s, s < 10 ? 1 : 0)} s`);
-const hz = (f) => (f >= 1000 ? `${komma(f / 1000, f >= 10000 ? 0 : 1)} kHz` : `${Math.round(f)} Hz`);
 
 /** De acht plekken (plek k = PARAMS[k - 1]). `standaard` komt dicht bij de stem van "Glass", maar speelbaar (ST4). */
 export const PARAMS = [

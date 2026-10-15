@@ -1,5 +1,5 @@
 import { mmss, mb } from './dom.js';
-import { Opnemer } from '../opname/opnemer.js';
+import { Opnemer, meldingVan } from '../opname/opnemer.js';
 import { meld } from './meldingen.js';
 
 /**
@@ -15,7 +15,13 @@ import { meld } from './meldingen.js';
  */
 export function opzetOpname({ engine, videoCanvas }) {
   const opnemer = new Opnemer({ engine });
-  opnemer.onFout = (f) => meld(`opname: ${f}`, 'fout', 8000);
+  // ÉÉN melding voor de opname (sleutel), die meegroeit en verandert: "server antwoordt niet,
+  // 14 s in de wacht" -> "weer goed, niets verloren". Vroeger een nieuwe rode per verloren seconde.
+  const SLEUTEL = { sleutel: 'opname' };
+  opnemer.onStand = (st) => { const m = meldingVan(st); meld(m.tekst, m.soort, 6000, SLEUTEL); };
+  // Wat niet bij een storing hoort (een volle schijf, een videostuk): op dezelfde plek. Tijdens een
+  // storing zegt de melding van onStand het al (de verloren seconden staan erin).
+  opnemer.onFout = (f) => { if (!opnemer.storing) meld(`opname: ${f}`, 'fout', 8000, SLEUTEL); };
   // app.js zet window.opnemer; het videopaneel leest die om te weten of het
   // tijdens een video-opname moet doorrenderen, en uit welk venster.
 
@@ -46,7 +52,7 @@ export function opzetOpname({ engine, videoCanvas }) {
     opnameKnop.textContent = 'afronden…';
     const r = await opnemer.stop();
     // Iets kwijt (stilte), of te lang voor een gewone WAV: niet alleen in een tooltip.
-    if (r.ok && r.waarschuwing) meld(`opname bewaard, let op: ${r.waarschuwing}`, 'fout', 12000);
+    if (r.ok && r.waarschuwing) meld(`opname bewaard, let op: ${r.waarschuwing}`, 'fout', 12000, SLEUTEL);
     opnameKnop.classList.add(r.ok ? 'gelukt' : 'mislukt');
     opnameKnop.textContent = r.ok ? `✓ ${mmss(r.duur)} bewaard` : 'afronden mislukt';
     opnameKnop.title = r.ok
@@ -69,13 +75,13 @@ export function opzetOpname({ engine, videoCanvas }) {
   // Wat de bus (bindApp) aanroept: zonder tweede klik, met een melding.
   const opnameStart = async () => {
     const r = await opnemer.start({ video: opnameSoort.value === 'video' ? videoCanvas() : null });
-    if (!r.ok) meld(`opnemen: ${r.fout}`, 'fout');
+    if (!r.ok) meld(`opnemen: ${r.fout}`, 'fout', 8000, SLEUTEL);
   };
   const opnameStop = async () => {
     const r = await opnemer.stop();
-    if (!r.ok) return meld(`afronden mislukt: ${r.fout}`, 'fout');
-    if (r.waarschuwing) meld(`opname bewaard: opnames/${r.bestand} — let op: ${r.waarschuwing}`, 'fout', 12000);
-    else meld(`opname bewaard: opnames/${r.bestand}`, 'info');
+    if (!r.ok) return meld(`afronden mislukt: ${r.fout}`, 'fout', 8000, SLEUTEL);
+    if (r.waarschuwing) meld(`opname bewaard: opnames/${r.bestand} — let op: ${r.waarschuwing}`, 'fout', 12000, SLEUTEL);
+    else meld(`opname bewaard: opnames/${r.bestand}`, 'info', 5000, SLEUTEL);
   };
   const wisselSoort = () => { opnameSoort.value = opnameSoort.value === 'video' ? 'audio' : 'video'; opnameSoort.dispatchEvent(new Event('change')); };
 

@@ -240,6 +240,17 @@ export function controleerWav(kop) {
 export const paginaVan = (sec, sr) => Math.floor((sec * sr) / PAGINA);
 
 /**
+ * Hoe ver vooruit (seconden tracktijd × rate) een track zijn pagina's houdt. Een
+ * track die je HOORT (speelt, fader × crossfader > 0) houdt een minuut vooruit:
+ * valt de server weg (een crash, een herstart van ~1 s door de herstartlus), dan
+ * speelt de zaal nog 60 s door in plaats van 20 (docs/WINST.md punt 3). Kost
+ * ~+7,7 MB per hoorbare stereotrack (×2 of ×4 met stems). De rest 20 s, zoals
+ * altijd. De ENGINE beslist wat je hoort (regel 1: de bron krijgt een getal).
+ */
+export const VOORUIT = 20;
+export const VOORUIT_HOORBAAR = 60;
+
+/**
  * Welke pagina's moeten er zijn, belangrijkste eerst?
  *
  * Vooruit ruim, achteruit een beetje (nudge, korte scratch), plus vastgepinde
@@ -247,7 +258,7 @@ export const paginaVan = (sec, sr) => Math.floor((sec * sr) / PAGINA);
  * waarschuwing, en dan mag er geen gat vallen.
  */
 export function plan({ positie, rate = 1, duur, sr, vastpunten = [], loop = null,
-  vooruit = 20, achteruit = 5, rondPunt = 3 }) {
+  vooruit = VOORUIT, achteruit = 5, rondPunt = 3 }) {
   const laatste = Math.max(0, Math.ceil((duur * sr) / PAGINA) - 1);
   const lijst = [];
   const gezien = new Set();

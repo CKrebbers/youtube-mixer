@@ -3,6 +3,7 @@
  * elk net iets anders — de MIDI-monitor ontsnapte geen aanhalingstekens,
  * terwijl hij in een value="…" werd gebruikt.
  */
+import { pct as procent } from '../lib/notatie.js';
 
 /** Tekst veilig in HTML, ook binnen een attribuut. */
 export const esc = (t) => String(t ?? '').replace(/[&<>"']/g,
@@ -21,8 +22,8 @@ export function zetTekst(el, t) {
   else if (el.textContent !== t) el.textContent = t;
 }
 
-/** 0..1 als procent. */
-export const pct = (v) => `${Math.round((typeof v === 'number' ? v : 0) * 100)}%`;
+/** 0..1 als procent (src/lib/notatie.js), maar geen getal telt als 0: een lege read toont 0%. */
+export const pct = (v) => procent(typeof v === 'number' ? v : 0);
 
 /** Seconden als m:ss. */
 export const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;

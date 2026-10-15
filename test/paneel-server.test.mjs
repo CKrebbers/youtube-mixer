@@ -146,6 +146,20 @@ console.log('\nde relais (server/paneel.js) met nep-antwoorden');
   const kn = [];
   for (let i = 0; i < 17; i++) { const r = nepRes(); rel.kijk(null, r); kn.push(r); }
   ok('hooguit 16 kijkers: de 17e komt erin, de OUDSTE gaat eruit (een dode iPad sluit niemand buiten)', rel.aantal === 16 && kn[16].kop.c === 200 && kn[0].dicht && !kn[1].dicht);
+  // Eén JSON.stringify per bericht, niet per kijker (15 okt, spoor E): zestien kijkers krijgen
+  // dezelfde tekst, byte voor byte, en de stats tellen nog per kijker.
+  rel.vanMixer({ tab: 't2', berichten: [{ t: 'stand', reads: { a: 8 } }] });
+  const stats0 = { ...rel.stats }, stukken0 = kn.map((r) => r.stukken.length);
+  const echt = JSON.stringify;
+  let keer = 0;
+  JSON.stringify = (...a) => { keer++; return echt(...a); };
+  try { rel.vanMixer({ tab: 't2', berichten: [{ t: 'verschil', reads: { a: 'é€' } }, { t: 'klok', bpm: 124 }] }); } finally { JSON.stringify = echt; }
+  const nieuw = kn.slice(1).map((r, i) => r.stukken.slice(stukken0[i + 1]).join(''));
+  const verwacht = `data: ${echt({ t: 'verschil', reads: { a: 'é€' } })}\n\ndata: ${echt({ t: 'klok', bpm: 124 })}\n\n`;
+  ok('16 kijkers: één stringify per bericht (2, niet 32), elke kijker precies dezelfde tekst', keer === 2
+    && nieuw.length === 16 && nieuw.every((t) => t === verwacht));
+  ok('… en de stats tellen per kijker (32 berichten, 16 × de tekst)', rel.stats.naarKijkers - stats0.naarKijkers === 32
+    && rel.stats.bytes - stats0.bytes === 16 * verwacht.length);
   rel.sluit();
   ok('sluit: alles dicht', rel.aantal === 0 && kn[1].dicht);
   // De mixer valt stil (tabblad dicht, terug naar standaard): de kijkers horen 'weg'.

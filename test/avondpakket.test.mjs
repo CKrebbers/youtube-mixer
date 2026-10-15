@@ -16,6 +16,7 @@ const {
   parsePmset, parsePmsetAc, parseIoregAccu, parseDf, parseOptimize, parseAudio, parseBluetooth, parseUsbHost,
   parseIoregUsb, voegUsbSamen, herkenUsb, parseTailscale, parseBestanden, parseInstellingen, verwachteBestanden,
   vergelijkCompleet, leesProfielen, kiesFase, beoordeel, hexId, FASEN, schoon, paklijstVan, verwachtePaden, heeftProfiel,
+  parsePowerSupply, parseLsusb, parseSysUsb,
 } = A;
 
 const MAP = fileURLToPath(new URL('./fixtures/avondpakket/', import.meta.url));
@@ -707,6 +708,89 @@ console.log('44. gekozen fase, kern niet gemeten: nooit groen (review ronde 3)')
   ok('laptop (niets in te pakken): de kern is media en instellingen, niet USB en geluid', laptop.fase === 'aankomst' && !punt(laptop, 'meting')
     && punt(beoordeel(alleenBinnen, { profiel: 'laptop', data: data(), nu: NU }), 'meting')?.sub === 'media en instellingen niet gemeten: meet opnieuw vóór je begint');
   ok('"meting" in bekend → grijs, rood nooit', punt(beoordeel(alleenBinnen, { profiel: 'apc', fase: 'aankomst', data: data({ bekend: ['meting'] }), nu: NU }), 'meting').licht === 'uit');
+}
+
+console.log('45. Linux: parsers (test/fixtures/avondpakket/linux, LEESMIJ.md)');
+{
+  const lx = (naam) => readFileSync(MAP + 'linux/' + naam, 'utf8');
+  const LM = '/tmp/varve-linux/media';
+  // De fout die dit spoor oplost: de Mac-opdracht (BSD stat -f '%z %N') op GNU stat, echt vastgelegd.
+  const mis = parseBestanden(lx('stat-f-stdout.txt'), '', LM);
+  ok(`echt: BSD stat -f op GNU stat geeft geen enkele regel "<bytes> <pad>" (totaal ${mis.totaal}): daarom per platform`, mis.totaal === 0);
+  ok('echt: GNU find stopt op -flags (stderr "unknown predicate")', /unknown predicate `-flags'/.test(lx('find-flags-stderr.txt')));
+  const b = parseBestanden(lx('find-stat-9.txt'), '', LM);
+  ok(`echt: GNU stat -c '%s %n' → 9 bestanden, relatief, nr01 audio 0 B (${b.totaal}, ${b.bytesTotaal})`, b.totaal === 9 && b.paden.has('nr00_test/audio.wav')
+    && b.bytes.get('nr01_test/audio.wav') === 0 && b.bytes.get('lokaal-0a1b2c3d4e5f/audio.wav') === 9600 && b.dataless.length === 0 && ![...b.paden].some((x) => x.startsWith('/')));
+  const df = parseDf(lx('df-k.txt'));
+  ok(`echt: GNU df -k → vrij en totaal (${df?.vrijGiB} van ${df?.totaalGiB} GiB)`, df && Math.round(df.vrijGiB) === 22 && Math.round(df.totaalGiB) === 252);
+
+  ok('echt: lege /sys/class/power_supply (container, vaste pc) → null', parsePowerSupply(lx('power-supply-leeg.txt')) === null);
+  ok('alleen een muisaccu (SCOPE=Device) → null, nooit "op de accu"', parsePowerSupply(lx('power-supply-pc-muis-HANDGEMAAKT.txt')) === null);
+  const ac = parsePowerSupply(lx('power-supply-laptop-ac-HANDGEMAAKT.txt'));
+  ok(`laptop aan USB-PD: AC, 72 %, charging, 20 V × 3,25 A = 65 W, gezondheid 90 %, 212 cycli; de muis (9 %) telt niet (${JSON.stringify(ac)})`,
+    ac.bron === 'AC' && ac.procent === 72 && ac.toestand === 'charging' && ac.laderW === 65 && ac.gezondheid === 90 && ac.cycli === 212 && ac.resterend === null);
+  const accu = parsePowerSupply(lx('power-supply-laptop-accu-HANDGEMAAKT.txt'));
+  ok(`laptop op de accu: accu, 18 %, discharging, geen lader, gezondheid uit CHARGE_* (90), cycli 0 → null (${JSON.stringify(accu)})`,
+    accu.bron === 'accu' && accu.procent === 18 && accu.toestand === 'discharging' && accu.laderW === null && accu.gezondheid === 90 && accu.cycli === null);
+  const regel = (map, k, v) => `/sys/class/power_supply/${map}/uevent:POWER_SUPPLY_${k}=${v}`;
+  const zonderVoeding = [regel('BAT0', 'TYPE', 'Battery'), regel('BAT0', 'STATUS', 'Full'), regel('BAT0', 'CAPACITY', '100')].join('\n');
+  ok('zonder voedingsknoop: de STATUS beslist (Full → AC, "charged")', parsePowerSupply(zonderVoeding).bron === 'AC' && parsePowerSupply(zonderVoeding).toestand === 'charged');
+  const mains = [regel('AC', 'TYPE', 'Mains'), regel('AC', 'ONLINE', '1'), regel('BAT0', 'TYPE', 'Battery'), regel('BAT0', 'STATUS', 'Not charging'), regel('BAT0', 'CAPACITY', '80')].join('\n');
+  ok('Mains-adapter: AC, "not charging", geen vermogen (laderW null: geen vals "zwakke lader")', parsePowerSupply(mains).bron === 'AC' && parsePowerSupply(mains).laderW === null
+    && parsePowerSupply(mains).toestand === 'not charging');
+  const twee = [regel('BAT0', 'TYPE', 'Battery'), regel('BAT0', 'ENERGY_NOW', '10'), regel('BAT0', 'ENERGY_FULL', '20'), regel('BAT0', 'CAPACITY', '50'),
+    regel('BAT1', 'TYPE', 'Battery'), regel('BAT1', 'ENERGY_NOW', '60'), regel('BAT1', 'ENERGY_FULL', '60'), regel('BAT1', 'CAPACITY', '100')].join('\n');
+  ok(`twee accu's (ThinkPad): naar energie gewogen, 70/80 = 88 % (${parsePowerSupply(twee).procent})`, parsePowerSupply(twee).procent === 88);
+
+  const ls = parseLsusb(lx('lsusb-apc-scarlett-maschine-HANDGEMAAKT.txt'));
+  ok(`lsusb: vijf apparaten, root hubs (1d6b) niet (${ls.length})`, ls.length === 5 && !ls.some((x) => x.vid === '0x1d6b'));
+  ok('lsusb: een regel zonder naam (usb.ids kent hem niet) houdt zijn id', ls.some((x) => x.vid === '0x09e8' && x.pid === '0x0029' && x.naam === ''));
+  const h = herkenUsb(ls, data().apparaten);
+  ok(`lsusb + profielen.json: APC op id, Scarlett op naam, Maschine op id; LPD8/Xboard niet (${JSON.stringify(h)})`, h.apc40 && h.scarlett && h.maschine && !h.lpd8 && !h.xboard);
+  ok('lsusb zonder controllers → niets herkend', Object.values(herkenUsb(parseLsusb(lx('lsusb-leeg-HANDGEMAAKT.txt')), data().apparaten)).every((x) => !x));
+  const sys = parseSysUsb(lx('sys-usb-apc-scarlett-HANDGEMAAKT.txt'));
+  ok(`sysfs: APC, Scarlett en een hub, de root hub niet, geen pad (${JSON.stringify(sys)})`, sys.length === 3 && sys.some((x) => x.naam === 'APC40 mkII' && x.vid === '0x09e8')
+    && !JSON.stringify(sys).includes('/sys/'));
+  const hs = herkenUsb(sys, data().apparaten);
+  ok('sysfs + profielen.json: APC en Scarlett', hs.apc40 && hs.scarlett && !hs.maschine);
+  ok('lsusb en sysfs samen: de APC één keer', voegUsbSamen(ls, sys).filter((x) => x.vid === '0x09e8').length === 1);
+}
+
+console.log('46. Linux: het oordeel (geen vals rood, geen vals groen)');
+{
+  const lx = (naam) => readFileSync(MAP + 'linux/' + naam, 'utf8');
+  const LM = '/tmp/varve-linux/media';
+  const nh = { onbekend: 'niet op dit platform' };
+  const nhm = { onbekend: 'niet op dit platform (de live-mixer draait op de Mac)' };
+  const bestanden = { ...parseBestanden(lx('find-stat-9.txt'), '', LM), bestaat: true, datalessNvt: true };
+  const rij = (id, velden) => ({ id, ...Object.fromEntries(velden.map((v) => [v, `media/${id}/${v === 'audio' ? 'audio.wav' : 'video.mp4'}`])) });
+  const heel = vergelijkCompleet(verwachtePaden([rij('nr00_test', ['audio', 'video']), rij('lokaal-0a1b2c3d4e5f', ['audio'])], 'media'), bestanden, LM);
+  const pc = (wijzig = {}) => goedVertrek({
+    bestanden, instellingen: nh, icloud: nh, audio: nhm, bluetooth: nhm,
+    schijf: parseDf(lx('df-k.txt')), accu: { onbekend: 'geen accu (vaste pc?)' },
+    usb: parseLsusb(lx('lsusb-leeg-HANDGEMAAKT.txt')), compleet: heel, ...wijzig,
+  });
+  const r = beoordeel(pc(), { profiel: 'apc', data: data(), nu: NU });
+  ok(`media groen met 9 bestanden, en het zegt dat iCloud hier niet geldt (${punt(r, 'media').sub})`, punt(r, 'media').licht === 'ok' && punt(r, 'media').waarde === '9 lokaal'
+    && /n\.v\.t\. op dit platform/.test(punt(r, 'media').sub));
+  ok(`instellingen grijs "niet gemeten: niet op dit platform", nooit "lokaal" (${punt(r, 'instellingen').licht})`, punt(r, 'instellingen').licht === 'uit'
+    && punt(r, 'instellingen').sub === 'niet gemeten: niet op dit platform');
+  ok('iCloud en accu grijs', punt(r, 'icloud').licht === 'uit' && punt(r, 'accu').licht === 'uit' && /vaste pc/.test(punt(r, 'accu').sub));
+  ok(`compleet groen met een library die er echt is (${punt(r, 'compleet').waarde})`, punt(r, 'compleet').licht === 'ok' && heel.nummers === 2);
+  ok('fase auto: USB gemeten (niets aangesloten) → vertrek, geen punt fase of meting', r.fase === 'vertrek' && !punt(r, 'fase') && !punt(r, 'meting'));
+  const nul = vergelijkCompleet(verwachtePaden([rij('nr01_test', ['audio'])], 'media'), bestanden, LM);
+  ok('compleet rood alleen voor wat echt mist: de audio van nr01 is 0 B', punt(beoordeel(pc({ compleet: nul }), { profiel: 'apc', data: data(), nu: NU }), 'compleet').licht === 'fout'
+    && nul.leeg.length === 1 && nul.ontbreekt.length === 0);
+  const aan = beoordeel(pc({ usb: parseLsusb(lx('lsusb-apc-scarlett-maschine-HANDGEMAAKT.txt')) }), { profiel: 'apc', data: data(), nu: NU });
+  ok(`APC en Scarlett aan de pc → aankomst; APC en Scarlett groen; geluid grijs "niet op dit platform" (${aan.fase})`, aan.fase === 'aankomst' && punt(aan, 'apc40').licht === 'ok'
+    && punt(aan, 'scarlett').licht === 'ok' && punt(aan, 'geluid').licht === 'uit' && /de live-mixer draait op de Mac/.test(punt(aan, 'geluid').sub));
+  ok('aankomst op de pc: Bluetooth grijs, geen punt meting (USB is gemeten)', punt(aan, 'bluetooth').licht === 'uit' && !punt(aan, 'meting'));
+  const laptop = beoordeel(pc({ accu: parsePowerSupply(lx('power-supply-laptop-accu-HANDGEMAAKT.txt')) }), { profiel: 'apc', fase: 'vertrek', data: data(), nu: NU });
+  ok('Linux-laptop op de accu met 18 % → accu rood (echt, niet vals)', punt(laptop, 'accu').licht === 'fout');
+  const geenUsb = beoordeel(pc({ usb: { onbekend: 'geen lsusb en geen USB in sysfs' } }), { profiel: 'apc', data: data(), nu: NU });
+  ok('geen lsusb en geen sysfs (container) → fase niet te bepalen (oranje), nooit groen', geenUsb.licht !== 'ok' && punt(geenUsb, 'fase')?.licht === 'half');
+  const zonder = goedVertrek({ bestanden: parseBestanden(lx('find-stat-9.txt'), '', LM) });
+  ok('zonder datalessNvt (de Mac) staat er niets over het platform in de sub', !/platform/.test(punt(beoordeel(zonder, { profiel: 'apc', data: data(), nu: NU }), 'media').sub));
 }
 
 if (fails.length) { console.log(`\n${fails.length} FAIL`); process.exit(1); }

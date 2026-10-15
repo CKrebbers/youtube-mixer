@@ -35,8 +35,9 @@ const node = (type) => ({
   connect(n){ return n; }, disconnect(){},
   getByteTimeDomainData(b){ b.fill(128); },
 });
-globalThis.AudioContext = class {
-  constructor(){ this.sampleRate=48000; this.state='running'; this.baseLatency=0.005; this.destination=node('dest'); }
+// Een EventTarget, zoals de echte (worklet-fouten komen als event op de context, worklet-fout.js).
+globalThis.AudioContext = class extends EventTarget {
+  constructor(){ super(); this.sampleRate=48000; this.state='running'; this.baseLatency=0.005; this.destination=node('dest'); }
   get currentTime(){ return NOW; }
   createGain(){ return node('gain'); }
   createBiquadFilter(){ return node('biquad'); }
@@ -79,7 +80,7 @@ const nepWorkletNode = (nodes = []) => class {
     this.outputChannelCount = opties.outputChannelCount ?? Array(this.numberOfOutputs).fill(1);
     this.verbindingen = [];
     const berichten = [];
-    this.port = { berichten, postMessage: (m) => berichten.push(m), onmessage: null };
+    this.port = { berichten, dicht: false, postMessage(m) { if (!this.dicht) berichten.push(m); }, onmessage: null, close() { this.dicht = true; } };
     nodes.push(this);
   }
   connect(doel, uitgang = 0) {
@@ -3852,6 +3853,88 @@ console.log('\nstemkanalen');
 
   ok('geen overlappende automatisering en geen afgebroken curve in de stemkanalen', OVERLAP_FOUTEN === fouten0 && CURVE_BREUK === breuk0);
   NOW = NOW0;
+}
+
+console.log('\nvooruit voor wat je hoort (docs/WINST.md punt 3)');
+{
+  // De engine beslist wat je hoort en geeft de bron alleen een getal (regel 1):
+  // speelt + fader × crossfader > 0 = 60 s vooruit, de rest 20 s.
+  const eV = new Engine();
+  const a = eV.deck('A'), b = eV.deck('B');
+  a.load(buf, 'hoorbaar');
+  b.load(buf, 'stil');
+  ok('geladen maar stil: 20 s', a.vooruit === 20 && a.bron.vooruit === 20 && b.vooruit === 20);
+  a.set('fader', 1);
+  a.play();
+  ok('speelt met de fader open: 60 s (ook op de bron)', a.vooruit === 60 && a.bron.vooruit === 60);
+  ok('de andere track speelt niet: 20 s', b.vooruit === 20);
+  b.set('fader', 0);
+  b.play();
+  ok('speelt met de fader dicht (voorbeluisteren): 20 s', b.vooruit === 20);
+  eV.setXfader(1);                                   // helemaal naar B: A (kant A) hoor je niet meer
+  ok(`crossfader weg van zijn kant (${eV.xfadeGain('A').toFixed(2)}): 20 s`, eV.xfadeGain('A') < 1e-6 && a.vooruit === 20);
+  eV.setKant('A', 'thru');
+  ok('kant thru: de crossfader telt niet, 60 s', a.vooruit === 60);
+  a.pause();
+  ok('pauze: weer 20 s', a.vooruit === 20);
+  a.play();
+  a.set('fader', 0);
+  ok('fader dicht: 20 s', a.vooruit === 20);
+  a.set('fader', 0.5);
+  ok('fader weer open: 60 s', a.vooruit === 60);
+  a.pause(); b.pause();
+}
+
+// De golfvorm-sleutel (waveform.js) leest gridVersie uit de snapshot in plaats van het grid als tekst
+// (spoor A, 15 okt). Dan moet ELKE gridwijziging hem ophogen, anders tekent een golfvorm oude lijnen:
+// elke action op de grid (tap, grid.*, bewerken, slot, controle) één voor één, met de stand ervoor en erna.
+{
+  console.log('\ngridVersie volgt elke gridwijziging');
+  const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');
+  const d = eng.deck('A');
+  d.stop();
+  d.load(renderDemoTrack(eng.ctx, { seed: 2, bars: 32 }), 'demo');
+  d.setGrid(new BG({ stukken: [{ van: 0, bpm: 124, anker: 0.05, zekerheid: 0.5 }, { van: 30, bpm: 126, anker: 30.02, zekerheid: 0.9 }] }));
+  d.onsets = Array.from({ length: 200 }, (_, i) => 0.05 + i * (60 / 124));
+  const ids = list().map((a) => a).filter((a) => /^track\.1\.(grid\b|tap\b)/.test(a.id));
+  const fouten = [];
+  let veranderd = 0, plek = 0;
+  for (const a of ids) {
+    for (const stap of a.type === 'value' ? [0.3, 0.7] : [true]) {
+      NOW += 0.2;
+      d.seek(5 + (plek++ * 7.3) % 20);
+      const voor = JSON.stringify(eng.snapshot().decks.A.grid), v0 = eng.snapshot().decks.A.gridVersie;
+      try { invoke(a.id, stap); if (a.type !== 'value') invoke(a.id, false); } catch (_) {}
+      const s = eng.snapshot().decks.A;
+      const na = JSON.stringify(s.grid);
+      if (na !== voor) { veranderd++; if (s.gridVersie === v0) fouten.push(a.id); }
+    }
+  }
+  ok(`${ids.length} grid-actions, ${veranderd} veranderden het grid: elke keer ook gridVersie omhoog${fouten.length ? ` (NIET: ${fouten.join(', ')})` : ''}`,
+    ids.length > 10 && veranderd > 5 && fouten.length === 0);
+  const s0 = eng.snapshot().decks.A;
+  ok('snapshot: gridVersie is het getal van het deck', s0.gridVersie === d.gridVersie && Number.isInteger(s0.gridVersie));
+  const v = d.gridVersie;
+  d.setGrid(new BG({ bpm: 124 }));
+  ok('setGrid hoogt hem op', d.gridVersie > v);
+  d.stop();
+}
+
+// Een worklet-fout (spoor A, 15 okt) komt als event op de context en wordt een melding van de engine, met een sleutel.
+{
+  console.log('\nworklet-fout -> melding');
+  const { meldWorkletFout, WORKLET_FOUT } = await import('../src/engine/worklet-fout.js');
+  const eng = new Engine();
+  const m = [];
+  eng.on('melding', (x) => m.push(x));
+  meldWorkletFout(eng.ctx, 'effect kam', { reden: 'RangeError: nep', hint: 'het effect is stil; kies het opnieuw' });
+  ok(`een worklet-fout op de context = één fout-melding met sleutel ("${m[0]?.tekst}")`, m.length === 1 && m[0].soort === 'fout'
+    && m[0].sleutel === 'worklet:effect kam' && /effect kam liep vast/.test(m[0].tekst) && /RangeError: nep/.test(m[0].tekst) && /kies het opnieuw/.test(m[0].tekst));
+  eng.ctx.dispatchEvent(new CustomEvent(WORKLET_FOUT, { detail: { wat: 'effect kam' } }));
+  ok('dezelfde soort nog eens: dezelfde sleutel (de schermlaag vervangt, stapelt niet)', m.length === 2 && m[1].sleutel === m[0].sleutel);
+  meldWorkletFout({}, 'x');
+  meldWorkletFout(null, 'x');
+  ok('meldWorkletFout op iets zonder dispatchEvent: gooit niet, doet niets', m.length === 2);
 }
 
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);

@@ -1,7 +1,8 @@
 import { clamp, expMap, dbToGain } from '../lib/emitter.js';
+import { komma, hz, pct, ms, teken, db } from '../lib/notatie.js';
 import {
   zetter, wisselaar, tweeKoppen, oscillator, opStandaard, metWorklet, lineair, direct, inloop,
-  curveVan, compVan, mengNaar, BEREIK,
+  curveVan, compVan, mengNaar, BEREIK, WORKLET_FADE,
 } from './fx-meer.js';
 import { Lfo, LFO_DELINGEN } from './fx-lfo.js';
 
@@ -24,13 +25,6 @@ import { Lfo, LFO_DELINGEN } from './fx-lfo.js';
  * (tot dan droog), geen setValueCurveAtTime, tijd alleen van de audioklok.
  */
 
-const WORKLET_FADE = 0.05;
-const komma = (x, n) => x.toFixed(n).replace('.', ',');
-const hz = (f) => (f >= 1000 ? `${komma(f / 1000, f >= 10000 ? 0 : 1)} kHz` : `${Math.round(f)} Hz`);
-const pct = (v) => `${Math.round(v * 100)}%`;
-const ms = (s) => (s < 0.1 ? `${komma(s * 1000, 1)} ms` : `${Math.round(s * 1000)} ms`);
-const teken = (x) => (x > 0 ? '+' : x < 0 ? '−' : '');
-const db = (d) => `${teken(Math.round(d * 10))}${komma(Math.abs(d), 1)} dB`;
 const bip = (t) => clamp(t) * 2 - 1;
 
 /** Een worklet-effect: droog tot de worklet er is, dan vloeit hij naar de meng (zoals pitch in fx-meer.js). */

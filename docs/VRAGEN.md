@@ -9,8 +9,9 @@ daarna in CLAUDE.md of ROADMAP.md.
 
 Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 alleen een keuze
 
-Nieuwste blokken (14–15 okt): **W, de werkruimte** en **GA, afmaken: controllers en beatgrid** (hieronder),
-en achteraan **S9**, **S10**, **S11** en **HA, handen** (de controllers en de hub-middag, 11 okt, gemerged 15 okt).
+Nieuwste blokken (14–15 okt): **AR, de architectuurronde** (15 okt), **W, de werkruimte** en **GA, afmaken:
+controllers en beatgrid** (hieronder), en achteraan **S9**, **S10**, **S11** en **HA, handen** (de controllers en de
+hub-middag, 11 okt, gemerged 15 okt).
 
 ---
 
@@ -104,6 +105,63 @@ WebSocket; sampler, secties, patronen en auto in twee-handen uit de ▲ ▼-rond
 iemand kijkt.
 
 ---
+
+## AR. De architectuurronde (15 okt, tak `studio/architectuur`, docs/verslagen/2026-10-15/arch-*.md)
+
+Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even weg zijn, E kleine opruimingen.
+
+**Beatgrid (B)**
+- [ ] **AR1. Kaart-VERSIE 3, zodat de hele library de tweede mening over de "1" krijgt?** 💬 Bij de eerste start
+  rekent de server elk automatisch grid uit de tellen opnieuw: milliseconden per nummer plus één keer de lage
+  band (~0,5 s per 3 minuten), wachtend zolang er een deck speelt. Tempo, tellen en "1" blijven gelijk; alleen
+  staat er bij een verdachte "1" een "?". **Advies:** ja, samen met GA2, op een dag zonder optreden, na de
+  meting van AR2.
+- [ ] **AR2. Twee metingen op je Mac.** 🎧 (a) het echte Beat This! op de bench (GA3): `node
+  tools/beatmeting/synth/bench.mjs --beatthis <python van ~/.varve/tellen-venv>`; (b) het snappen op je eigen
+  fragmenten: `node tools/beatmeting/rest/tel1-echt.mjs` (kolom T = naar de tel van Beat This!). De exacte
+  opdrachten staan in docs/verslagen/2026-10-15/arch-beatgrid.md §5. Het checkpoint was hier niet te downloaden.
+- [ ] **AR3. Twijfel over de "1" en sync.** 💬 Bij twijfel 'maat' mogen sync en beat-loops (tempo en tel
+  kloppen); starten op de maat, secties en de auto-DJ gebruiken die "1" gewoon. Liever ook onzeker (sync
+  weigert)? **Advies:** zo laten; de "1" zet je met ← 1 / → 1 in twee drukken.
+- [ ] **AR4. Vier op de vloer.** 🎧 Een "1" die bij house/techno een tel naast staat krijgt geen "?" (elke tel
+  heeft een kick). Komt het bij jou voor? Dan is de bas-toon of de crash de volgende bron. **Advies:** eerst
+  kijken of het voorkomt.
+
+**Audio (A)**
+- [ ] **AR5. Een vastgelopen effect.** 💬 Bij een fout in een effect-worklet nu alleen een melding (de
+  klankschaal bouwt zichzelf bij de volgende aanslag opnieuw, de StreamBron één keer per laad, de limiter valt
+  terug op de compressor). Moet een effect zichzelf ook opnieuw opbouwen? **Advies:** eerst zien of het ooit
+  gebeurt.
+- [ ] **AR6. Audio staat stil.** 💬 De melding is rood tot hij weer loopt, en de eerste druk op de APC,
+  Maschine of een toets zet hem weer aan. Ook meteen (zonder druk) een poging? **Advies:** zo laten; zonder
+  gebaar weigert Chrome het soms, en dan zie je de melding.
+- [ ] **AR7. Het grid in de snapshot als gedeeld object.** 💬 `grid.toJSON()` kost nog ~14–17 kB per beeld.
+  Gedeeld kan, maar dan mag niemand het aanpassen. **Advies:** ja, met een check die het bevriest.
+
+**De server even weg (D)**
+- [ ] **AR8. Na de merge: VARVE.app opnieuw bouwen** 💬 (`zsh tools/varve-app/maak.sh`), anders start hij de
+  server nog zonder lus. Had je de LaunchAgent uit TAILSCALE.md geladen: eerst `launchctl unload
+  ~/Library/LaunchAgents/nl.varve.server.plist`. En die LaunchAgent: weg of houden? **Advies:** de lus gebruiken.
+- [ ] **AR9. Een herstart van de server in de Controlekamer** ("server herstart om 22:14, 1 keer")? 💬 Nu alleen
+  in ~/.varve-server.log. **Advies:** ja, klein.
+- [ ] **AR10. Rij vol na 5 minuten weg:** nu valt het OUDSTE stuk weg (je houdt de laatste 5 minuten). Liever de
+  eerste 5 houden? 💬 **Advies:** zo laten.
+- [ ] **AR11. Vooruit halen met hysterese** (pas na ~30 s niet-hoorbaar terug van 60 naar 20 s)? 💬 Nu haalt een
+  fader die even dicht gaat de extra 40 s later opnieuw op. **Advies:** pas als je het ziet.
+
+**Linux (C)**
+- [ ] **AR12. Eén keer `node tools/avondpakket.mjs --json` op de Omarchy-pc** 🎛 met de APC eraan (en met en
+  zonder lader als hij een accu heeft): dan vervallen de HANDGEMAAKT-fixtures voor Linux.
+- [ ] **AR13. Moet het avondpakket op de pc iets eigens meten** (de Stroommachine, de HDMI-uitgang, de verbinding
+  naar de Mac), of is "eerlijk grijs" genoeg? 💬 **Advies:** eerlijk grijs, tot de pc mee op reis gaat.
+- [ ] **AR14. Node 26.8.2 op de pc** (dan is de suite daar gelijk aan de Mac) of de afwijking accepteren? 💬
+  **Advies:** 26.8.2 installeren (`.node-version` staat erin).
+
+**Opruimen (E), alleen voorstellen**
+- [ ] **AR15. Binaire schermframes voor de Maschine** in de AV-app-hub (aangekondigd met `kan` in `hallo`)? 💬
+  ~56–140 kB/s base64 in JSON. **Advies:** pas na de hub-proef ms-scherm, als die laat zien dat de pads wachten.
+- [ ] **AR16. De status-zender rustiger zonder kijker** (het POST-antwoord krijgt `kijker`; zonder kijker 1× per
+  4 s, onder VERS_MS)? 💬 **Advies:** klein, maar pas na de proefavond.
 
 ## GA. Afmaken: controllers en beatgrid (14 okt, tak `studio/afmaken`, PR #41)
 

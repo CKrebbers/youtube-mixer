@@ -1,6 +1,7 @@
 import { GROEPEN, LAAGNAAM } from '../control/lagen.js';
 import { DRUMPAD_VAN_SAMPLER, drumpadNoot, nootNaamDrum } from '../control/drumpads.js';
 import { beschrijfSpoor } from './beschrijf/index.js';
+import { wie as wieIn, WIE_KERN } from './wie.js';
 
 /**
  * Wat een action betekent, in gewone taal — voor de APC-kaarten (apc.html).
@@ -51,7 +52,7 @@ export function beschrijf(action) {
   if (spoor) return spoor;
   let m;
   // {speel} = de speeltrack (waar noten heen gaan: Xboard49 en Maschine, docs/MASCHINE.md).
-  const wie = (t) => (t === '{focus}' ? 'focus-track' : t === '{speel}' ? 'speeltrack' : `track ${t}`);
+  const wie = (t) => wieIn(t, WIE_KERN);
   const kortWie = (t) => (t === '{focus}' ? 'F' : t === '{speel}' ? 'S' : t);
   if ((m = /^track\.([^.]+)\.(.+)$/.exec(action))) {
     const [, t, rest] = m;

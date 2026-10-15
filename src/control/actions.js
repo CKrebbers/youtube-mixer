@@ -13,7 +13,7 @@
  * soft-takeover niet weten wanneer een fysieke knop door de softwarewaarde heen
  * beweegt, en kan de LED-laag niet weten wat hij moet laten branden.
  */
-import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarOnset } from '../engine/beatgrid.js';
+import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarTel, klappenEnTellen } from '../engine/beatgrid.js';
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
 import { teControleren, plekkenTeControleren, volgendTeControleren, oordeelStuk, oordeelBij, afwijkingBij } from '../engine/tellen.js';
 import { EFFECTEN } from '../engine/fx.js';
@@ -291,14 +291,16 @@ export function bindEngine(engine) {
       const o = oordeelBij(d.grid, t, d.gridMetingBij(performance.now()), live);
       return o.soort === 'zeker' || o.soort === 'vast' ? 0 : 0.5;
     };
-    // Tel 1 hier SNAPT naar de dichtstbijzijnde klap binnen 30 ms (de onsets
-    // van de analyse, stap C); geen klap of geen analyse: de positie zelf.
-    gridKnop('here', (g, p) => g.ankerHier(snapNaarOnset(d.onsets, p)), `Track ${nr} beat 1 hier (snapt naar een klap)`, twijfelHier);
+    // Tel 1 hier SNAPT naar de dichtstbijzijnde tel van Beat This! binnen 30 ms
+    // (d.tellen, ~5 ms van de tel), anders naar de klap (d.onsets, vaste ijking:
+    // tot ~15 ms scheef), anders de positie zelf (snapNaarTel, BEATGRID.md §14).
+    const snap = (p) => snapNaarTel(d.tellen, d.onsets, p);
+    gridKnop('here', (g, p) => g.ankerHier(snap(p)), `Track ${nr} beat 1 hier (snapt naar een tel of klap)`, twijfelHier);
     // TELLEN HIER (14 okt): de dichtstbijzijnde tel op de klap die je hoort,
     // en de "1" blijft waar hij was (Beatgrid.lijnUitOp). Voor een grid dat
     // een paar ms naast ligt: één druk op ELKE tel, je hoeft niet op de "1" te
     // wachten en de maat verschuift niet. Snapt zoals tel 1 hier.
-    gridKnop('align', (g, p) => g.lijnUitOp(snapNaarOnset(d.onsets, p)), `Track ${nr} tellen hier: de tel op de klap, de "1" blijft`);
+    gridKnop('align', (g, p) => g.lijnUitOp(snap(p)), `Track ${nr} tellen hier: de tel op de klap, de "1" blijft`);
     // Nudge van het grid: één druk = één stap; VASTHOUDEN herhaalt (na
     // HERHAAL_NA ms elke HERHAAL_ELKE ms een stap), als één stap terug (↶).
     // De timer zegt alleen WANNEER; elke stap schuift het grid met vaste ms.
@@ -357,8 +359,8 @@ export function bindEngine(engine) {
     const pin = (t) => {
       if (!d.grid) return;
       const was = d.grid.toJSON();
-      // De klappen beslissen mee welke tel dit is als het grid hier ver uit de pas ligt (Beatgrid.pin).
-      const r = d.grid.pin(snapNaarOnset(d.onsets, t), { klappen: d.onsets });
+      // De tellen en klappen beslissen mee welke tel dit is als het grid hier ver uit de pas ligt (Beatgrid.pin).
+      const r = d.grid.pin(snap(t), { klappen: klappenEnTellen(d.tellen, d.onsets) });
       if (!r.ok) { engine.emit('melding', { tekst: `track ${nr}, vastzetten: ${r.reden}`, soort: 'fout' }); return; }
       d.gridVoorBewerking(was);
       d.gridGewijzigd();
@@ -380,7 +382,7 @@ export function bindEngine(engine) {
       { label: `Track ${nr} vastzetten op een plek (tracktijd / duur)` });
     define(`${n}.grid.here.op`, 'value', (v) => {
       if (!d.buffer) return;
-      const t = snapNaarOnset(d.onsets, Math.min(1, Math.max(0, v)) * d.duration);
+      const t = snap(Math.min(1, Math.max(0, v)) * d.duration);
       if (!d.grid) { engine.emit('melding', { tekst: `track ${nr} heeft nog geen beatgrid: tik eerst mee op de tel met TAP`, soort: 'info' }); return; }
       d.gridVoorBewerking(); d.grid.ankerHier(t); d.grid.bevestig(t); d.gridGewijzigd();
     }, { label: `Track ${nr} tel 1 op een plek (tracktijd / duur)` });

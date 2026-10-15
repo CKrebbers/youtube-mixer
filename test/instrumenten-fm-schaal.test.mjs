@@ -51,8 +51,10 @@ globalThis.AudioWorkletNode = class extends NepNode {
     NODES.push(this);
   }
 };
-class NepContext {
+// Een EventTarget, zoals de echte (worklet-fouten komen als event op de context, worklet-fout.js).
+class NepContext extends EventTarget {
   constructor() {
+    super();
     this.sampleRate = 48000; this.baseLatency = 0.005; this.state = 'running';
     this.audioWorklet = { addModule: async (url) => { MODULES++; this.module = String(url); } };
   }
@@ -413,10 +415,27 @@ const { NOOTVELDEN, VELD_STEM, SchaalInstrumentKern, LIJF, VELD0, RIJ } = await 
   sc.vernietig();
   await new Promise((r) => setTimeout(r, 250));
   ok('vernietig: worklet en uitgang los, poort dicht', sc.node === null && NODES[0].los > 0 && NODES[0].dicht && sc.uitGain.los > 0);
+  // Alleen de poort sluiten liet de worklet voor altijd draaien (process() bleef true geven): eerst 'stop'.
+  ok('vernietig: eerst { t: stop } naar de worklet, dan pas de poort dicht', BERICHTEN.some((m) => m.t === 'stop'));
   gooit = false;
   BERICHTEN.length = 0;
   try { sc.noteOn(60, 1); sc.stil(); sc.stand(); } catch (_) { gooit = true; }
   ok('na vernietig: niets, en niet gooien', !gooit && BERICHTEN.length === 0);
+
+  // Een fout in de worklet (processorerror, spoor A): los, melden op de context, de volgende noot bouwt hem opnieuw.
+  const sc2 = SCHAAL.maak(ctx, { uit, klok: null, toon: () => toon });
+  await sc2.start();
+  const n1 = sc2.node, h1 = n1.onprocessorerror, fouten = [];
+  ctx.addEventListener('varve-workletfout', (e) => fouten.push(e.detail));
+  h1({ message: 'nep' });
+  ok('worklet-fout: de node los en dicht, één melding op de context', sc2.node === null && n1.dicht && n1.los > 0
+    && fouten.length === 1 && /Klankschaal/.test(fouten[0].wat) && fouten[0].reden === 'nep');
+  h1({});
+  ok('… een tweede event van dezelfde node doet niets', fouten.length === 1);
+  sc2.noteOn(60, 1);
+  await sc2.start();
+  ok('… de volgende noot bouwt een nieuwe worklet', sc2.node && sc2.node !== n1);
+  sc2.vernietig();
 }
 
 // ---- 3. de kern van Schaal (puur) --------------------------------------------------
@@ -652,6 +671,11 @@ console.log('\nde worklet (nagebouwde AudioWorkletGlobalScope)');
   draai(2000);
   const ms = (performance.now() - t0) / 2000;
   ok(`rekentijd per blok ${ms.toFixed(3)} ms (< 1 ms van 2,67)`, ms < 1);
+
+  // Na { t: 'stop' } geeft process() false (anders blijft hij voor altijd draaien, ook los van alles).
+  ok('vóór stop: process() geeft true', proc.process(IN, uit) === true);
+  stuur({ t: 'stop' });
+  ok('na { t: stop }: process() geeft false, en neemt geen berichten meer aan', proc.process(IN, uit) === false && proc.port.onmessage === null);
 }
 
 // ---- 5. de regels -------------------------------------------------------------------

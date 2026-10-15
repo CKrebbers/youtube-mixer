@@ -24,7 +24,14 @@ const weg = (el) => { el.classList.add('weg'); setTimeout(() => el.remove(), 400
  * moet je gezien hebben, ook als je net naar de APC keek. Te veel tegelijk:
  * eerst de oudste info weg, pas daarna de oudste fout.
  */
-export function meld(tekst, soort = 'info', duur = 5000) {
+export function meld(tekst, soort = 'info', duur = 5000, { sleutel } = {}) {
+  // Met een SLEUTEL is het één melding die meegroeit of verandert ("opname: server weg,
+  // 14 s in de wacht" -> "opname: weer goed"): dezelfde sleutel vervangt tekst en soort
+  // van wat er staat, in plaats van een nieuwe erbij (een rode per seconde duwde de rest weg).
+  if (sleutel) {
+    const oud = [...meldingen.children].find((m) => !m.classList.contains('weg') && m.dataset.sleutel === sleutel);
+    if (oud) return vervang(oud, tekst, soort, duur);
+  }
   // Dezelfde fout die al staat (een stream die blijft haperen): niet stapelen.
   const al = [...meldingen.children].find((m) => !m.classList.contains('weg') && m.classList.contains(soort) && m.firstChild?.textContent === tekst);
   if (al) {
@@ -47,13 +54,23 @@ export function meld(tekst, soort = 'info', duur = 5000) {
   }
   const el = document.createElement('div');
   el.className = `melding ${soort}`;
+  if (sleutel) el.dataset.sleutel = sleutel;
   el.append(document.createTextNode(tekst));
   meldingen.append(el);
   while (meldingen.children.length > MAX) {
     const oudste = [...meldingen.children].find((m) => !m.classList.contains('fout')) ?? meldingen.firstElementChild;
     oudste.remove();
   }
+  blijfOfGa(el, tekst, soort, duur);
+  return el;
+}
+
+/** Een fout blijft staan met een kruisje; info verdwijnt na `duur` ms. */
+function blijfOfGa(el, tekst, soort, duur) {
+  clearTimeout(el._weg);
+  const kruis = el.querySelector?.('.melding-x');
   if (soort === 'fout') {
+    if (kruis) return;
     // Alleen het kruisje vangt de klik: een melding die over een knop ligt,
     // mag die knop nooit onklikbaar maken (5 okt: de PATROON-rij zat eronder).
     const x = document.createElement('button');
@@ -64,9 +81,23 @@ export function meld(tekst, soort = 'info', duur = 5000) {
     el.append(x);
     console.warn('[melding]', tekst);
   } else {
+    kruis?.remove();
     el._weg = setTimeout(() => weg(el), duur);
   }
+}
+
+/** De melding met deze sleutel krijgt een nieuwe tekst en soort (zelfde plek, geen flits). */
+function vervang(el, tekst, soort, duur) {
+  el.firstChild.textContent = tekst;
+  el.className = `melding ${soort}`;
+  blijfOfGa(el, tekst, soort, duur);
   return el;
+}
+
+/** Haal de melding met deze sleutel weg (als hij er staat). */
+export function wisMelding(sleutel) {
+  const el = [...meldingen.children].find((m) => !m.classList.contains('weg') && m.dataset.sleutel === sleutel);
+  if (el) { clearTimeout(el._weg); weg(el); }
 }
 
 /** Kort op de knop zelf laten zien wat er gebeurde; de console leest niemand. */
@@ -87,7 +118,7 @@ export function meldOpKnop(knop, tekst, goed) {
  * vult, een stream die hapert, een action die faalt.
  */
 export function koppelMeldingen(engine) {
-  engine.on('melding', ({ tekst, soort, duur }) => meld(tekst, soort, duur));
+  engine.on('melding', ({ tekst, soort, duur, sleutel }) => meld(tekst, soort, duur, { sleutel }));
   for (const id of DECK_IDS) engine.deck(id).on('fout', (tekst) => meld(`track ${trackVanDeck(id)}: ${tekst}`, 'fout'));
   bijFout((id, err) => meld(`${id} faalde: ${err.message}`, 'fout'));
 }

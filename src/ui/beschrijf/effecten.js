@@ -1,8 +1,7 @@
 // De uitleg van de actions van spoor S10 ('effecten', docs/EFFECTEN-MEER.md): { kort, lang }
 // zoals beschrijf() in apc-beschrijf.js, of null. Puur: geen DOM, geen bus.
 
-const wie = (t) => (t === '{focus}' ? 'focus-track' : t === '{speel}' ? 'speeltrack' : t === '{tweede}' || t === '{R}' ? 'tweede track'
-  : t === '{maatgever}' ? 'de track die de maat geeft' : `track ${t}`);
+import { wie } from '../wie.js';
 
 export default function effecten(action) {
   let m;

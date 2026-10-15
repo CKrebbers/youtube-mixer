@@ -1,4 +1,5 @@
 import { clamp, expMap } from '../lib/emitter.js';
+import { hz, pct } from '../lib/notatie.js';
 import { leesRack, schrijfRack, resolveMacros, rackVanEffect, LEEG_RACK, stuurPlekken, isPlekDoel, isModDoel, isNatDoel } from './rack.js';
 import { ModBank } from './modulatie.js';
 import { startDrempel, houdVast, zetHellingen } from './overgang.js';
@@ -105,10 +106,8 @@ export const echoDelingVan = (t) => ECHO_DELINGEN[Math.min(ECHO_DELINGEN.length 
 
 // ---- eenheden --------------------------------------------------------------
 // Wat een 0..1-waarde in het echt IS. Rekent met precies dezelfde formule als
-// zet() hieronder; wijkt een van de twee af, dan liegt het scherm.
+// zet() hieronder; wijkt een van de twee af, dan liegt het scherm. hz en pct: src/lib/notatie.js.
 
-const hz = (f) => (f >= 1000 ? `${(f / 1000).toFixed(f >= 10000 ? 0 : 1).replace('.', ',')} kHz` : `${Math.round(f)} Hz`);
-const pct = (v) => `${Math.round(v * 100)}%`;
 const filterStand = (t) => {
   const d = t * 2 - 1;
   if (Math.abs(d) < 0.02) return 'open';

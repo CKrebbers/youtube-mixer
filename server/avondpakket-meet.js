@@ -7,7 +7,7 @@ import { homedir } from 'node:os';
 import {
   parsePmset, parsePmsetAc, parseIoregAccu, parseDf, parseOptimize, parseAudio, parseBluetooth, parseUsbHost,
   parseIoregUsb, voegUsbSamen, parseTailscale, parseBestanden, parseInstellingen, vergelijkCompleet, verwachtePaden,
-  leesProfielen, beoordeel, schoon,
+  leesProfielen, beoordeel, schoon, parsePowerSupply, parseLsusb, parseSysUsb,
 } from './avondpakket.js';
 import { kopieen } from './backup.js';
 import { allePunten } from '../src/controle/speellijst.js';
@@ -32,6 +32,14 @@ import { allePunten } from '../src/controle/speellijst.js';
  *   de mixer niet ziet, krijgt zo toch geen system_profiler onder het geluid.
  * - VARVE_AVONDPAKKET_NEP=<map>: geen enkel commando, alles uit fixtures
  *   (`<map>/nep.json`, zie maakNep). Voor de tests en de headless-check.
+ * - PLATFORM (docs/AVONDPAKKET.md "Op Linux"): de sondes hierboven zijn die van de Mac
+ *   (BSD find/stat, pmset, ioreg, system_profiler, defaults). `meet({ platform })`
+ *   (standaard process.platform) kiest per platform wat er gebeurt (`metersVoor`): op
+ *   Linux GNU stat, sysfs en lsusb, en "niet op dit platform" (grijs) voor wat daar niet
+ *   bestaat; nooit een Mac-commando dat daar iets anders betekent. Een commando dat een
+ *   optie niet kent, is nooit geslaagd (`ONBEKENDE_OPTIE`), ook niet als zijn exitcode in
+ *   `codes` staat: GNU find stopt op `-flags` met code 1, en die code mocht (find: een
+ *   map niet leesbaar), zodat media "leeg" en instellingen vals "lokaal" werden.
  */
 
 /** Time-out per sonde (ms). In de tests 50 ms (H13). */
@@ -50,6 +58,17 @@ export const AVHUB_POORT = 7700;
 /** Het standaardpad van de muziekkaart; hetzelfde als STANDAARD_PAD in server/kaart.js (test/avondpakket-meet.test.mjs bewaakt dat). */
 export const KAART_STANDAARD = `${homedir()}/Desktop/3. Resources/Data/Muziekkaart/varve-kaart.json`;
 const TAILSCALE = ['tailscale', '/usr/local/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'];
+const TAILSCALE_LINUX = ['tailscale', '/usr/bin/tailscale', '/usr/local/bin/tailscale'];
+/** Op Linux elk commando met de C-locale: stderr in het Engels (ONBEKENDE_OPTIE), getallen zonder komma. */
+const C = Object.freeze({ LC_ALL: 'C' });
+
+/**
+ * stderr van een commando dat een optie niet kent, of op dit platform iets anders laat
+ * betekenen (GNU stat -f = bestandssysteem). Zo'n uitvoer is nooit geslaagd, welke
+ * exitcode er ook bij hoort. GNU (en, nl), BSD en busybox; liever een sonde te veel
+ * grijs dan één vals groen. Een gewone fout ("Permission denied") valt er niet onder.
+ */
+export const ONBEKENDE_OPTIE = /unknown predicate|unknown primary|unknown option|unrecognized option|unrecognised option|invalid option|illegal option|cannot read file system information|onbekend predicaat|onbekende optie|ongeldige optie|niet-herkende optie/i;
 
 const fout = (reden) => Object.assign(new Error(reden), { kort: true });
 const reden = (err) => (err?.kort ? err.message : schoon(String(err?.message || err || 'onbekend')).slice(0, 120));
@@ -61,15 +80,19 @@ const reden = (err) => (err?.kort ? err.message : schoon(String(err?.message || 
  * (die bevat paden): "time-out", "<naam> niet gevonden", "bestaat niet",
  * "<naam> gaf code 2". Bij de time-out wordt het kind gedood (SIGKILL).
  */
-export function voerUit(cmd, args = [], { timeout = 1000, codes = [0] } = {}) {
+export function voerUit(cmd, args = [], { timeout = 1000, codes = [0], env = null } = {}) {
   const naam = basename(cmd);
   return new Promise((klaar, mis) => {
     try {
-      execFile(cmd, args, { timeout, killSignal: 'SIGKILL', maxBuffer: 8 * 1024 * 1024, encoding: 'utf8', windowsHide: true }, (err, stdout, stderr) => {
+      const opties = { timeout, killSignal: 'SIGKILL', maxBuffer: 8 * 1024 * 1024, encoding: 'utf8', windowsHide: true, ...(env ? { env: { ...process.env, ...env } } : {}) };
+      execFile(cmd, args, opties, (err, stdout, stderr) => {
+        if (err?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return mis(fout(`${naam}: te veel uitvoer`));
+        if (err && (err.killed || err.signal === 'SIGKILL')) return mis(fout('time-out'));
+        if (err?.code === 'ENOENT') return mis(fout(`${naam} niet gevonden`));
+        // Vóór `codes` en vóór "bestaat niet": een optie die het commando niet kent is geen
+        // "map niet leesbaar" en geen "niets gevonden" (GNU stat -f meldt er ook "No such file" bij).
+        if (ONBEKENDE_OPTIE.test(stderr || '')) return mis(fout(`${naam}: optie onbekend op dit platform`));
         if (!err) return klaar(stdout);
-        if (err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return mis(fout(`${naam}: te veel uitvoer`));
-        if (err.killed || err.signal === 'SIGKILL') return mis(fout('time-out'));
-        if (err.code === 'ENOENT') return mis(fout(`${naam} niet gevonden`));
         if (/No such file or directory/i.test(stderr || '') && !String(stdout || '').trim()) return mis(fout('bestaat niet'));
         if (typeof err.code === 'number' && codes.includes(err.code)) return klaar(stdout);
         mis(fout(`${naam} gaf code ${err.code ?? err.signal}`));
@@ -103,7 +126,7 @@ const regels = (t) => String(t || '').split('\n').map((r) => r.trim()).filter(Bo
  * Per sonde: async ({ exec, verbind, paden, t, goedkoop, vorige }) → het geparste object.
  * Gooien mag: meet() maakt er { onbekend } van.
  */
-const METERS = {
+const DARWIN = {
   async bestanden({ exec, paden, t }) {
     if (!paden.media) throw fout('geen mediamap');
     const opts = { timeout: t, codes: [0, 1] };
@@ -202,9 +225,9 @@ const METERS = {
     return { opDb, varve: alle.status === 'fulfilled' ? regels(alle.value).length : null };
   },
 
-  async tailscale({ exec, t }) {
+  async tailscale({ exec, t, plekken = TAILSCALE }) {
     let laatste;
-    for (const cmd of TAILSCALE) {
+    for (const cmd of plekken) {
       try {
         const ts = parseTailscale(await exec(cmd, ['status', '--json'], { timeout: t, codes: [1], sleutel: 'tailscale' }));
         if (!ts) throw fout('onleesbaar');
@@ -218,6 +241,79 @@ const METERS = {
   },
 };
 
+/** Een sonde die op dit platform niets te meten heeft: grijs met de reden, nooit groen of rood. */
+const niet = (waarom) => async () => { throw fout(waarom); };
+export const NIET_HIER = 'niet op dit platform';
+export const NIET_HIER_MIXER = 'niet op dit platform (de live-mixer draait op de Mac)';
+
+/**
+ * Linux (de Omarchy-pc: beeld, ontwikkelen, testen; de live-mixer draait er niet).
+ * - bestanden: GNU `stat -c '%s %n'` (BSD `-f '%z %N'` betekent daar "bestandssysteem");
+ *   de iCloud-vlag `dataless` bestaat niet: `datalessNvt`.
+ * - instellingen en icloud: alleen de Mac kent uitgeplaatste bestanden en "Optimaliseer
+ *   opslag"; hier niet te meten, dus grijs (nooit "lokaal").
+ * - accu: /sys/class/power_supply, via `find … -exec grep` in een kindproces (zoals elke
+ *   sonde: geen fs in het serverproces). Geen accu (vaste pc) = grijs.
+ * - usb: `lsusb` en /sys/bus/usb/devices samen (de vendor:product-id's uit profielen.json
+ *   werken op beide). Allebei weg = grijs.
+ * - audio, bluetooth: grijs; de geluidsuitgang telt alleen op de Mac.
+ * - schijf (df -k), servers (lsof, pgrep), avhub (een TCP-poort) en tailscale: zoals op de Mac.
+ */
+const LINUX = {
+  ...DARWIN,
+  async bestanden({ exec, paden, t }) {
+    if (!paden.media) throw fout('geen mediamap');
+    let stat;
+    try {
+      stat = await exec('find', ['-H', paden.media, '-type', 'f', '-exec', 'stat', '-c', '%s %n', '{}', '+'], { timeout: t, codes: [0, 1], env: C, sleutel: 'find-stat' });
+    } catch (err) {
+      if (err?.message === 'bestaat niet') return { bestaat: false };
+      throw err;
+    }
+    return { ...parseBestanden(stat, '', paden.media), bestaat: true, datalessNvt: true };
+  },
+  instellingen: niet(NIET_HIER),
+  icloud: niet(NIET_HIER),
+  async schijf({ exec, paden, t }) {
+    const d = parseDf(await exec('df', ['-k', paden.media || paden.wortel || '/'], { timeout: t, codes: [0, 1], env: C, sleutel: 'df' }));
+    if (!d) throw fout('onleesbaar');
+    return d;
+  },
+  async accu({ exec, t }) {
+    const uit = await exec('find', ['-L', '/sys/class/power_supply', '-mindepth', '2', '-maxdepth', '2', '-name', 'uevent', '-type', 'f', '-exec', 'grep', '-H', '', '{}', '+'],
+      { timeout: t, codes: [0, 1], env: C, sleutel: 'power-supply' })
+      .catch((err) => { throw err?.message === 'bestaat niet' ? fout('geen voeding in sysfs') : err; });
+    const a = parsePowerSupply(uit);
+    if (!a) throw fout('geen accu (vaste pc?)');
+    if (!Number.isFinite(a.procent)) throw fout('onleesbaar');
+    return a;
+  },
+  audio: niet(NIET_HIER_MIXER),
+  bluetooth: niet(NIET_HIER_MIXER),
+  async usb({ exec, t }) {
+    const [ls, sys] = await Promise.allSettled([
+      exec('lsusb', [], { timeout: t, env: C, sleutel: 'lsusb' }),
+      exec('find', ['-L', '/sys/bus/usb/devices', '-mindepth', '2', '-maxdepth', '2', '-type', 'f', '(', '-name', 'idVendor', '-o', '-name', 'idProduct',
+        '-o', '-name', 'product', '-o', '-name', 'manufacturer', ')', '-exec', 'grep', '-H', '', '{}', '+'], { timeout: t, codes: [0, 1], env: C, sleutel: 'sys-usb' }),
+    ]);
+    if (ls.status !== 'fulfilled' && sys.status !== 'fulfilled') {
+      const zonderLsusb = /niet gevonden$/.test(ls.reason?.message || '');
+      if (zonderLsusb && sys.reason?.message === 'bestaat niet') throw fout('geen lsusb en geen USB in sysfs');
+      throw zonderLsusb ? sys.reason : ls.reason;
+    }
+    return voegUsbSamen(ls.status === 'fulfilled' ? parseLsusb(ls.value) : [], sys.status === 'fulfilled' ? parseSysUsb(sys.value) : []);
+  },
+  async tailscale(o) { return DARWIN.tailscale({ ...o, plekken: TAILSCALE_LINUX }); },
+};
+
+/** Elk ander platform: alleen de AV-hub (een TCP-poort); de rest grijs. */
+const ANDERS = Object.fromEntries(SONDES.map((id) => [id, id === 'avhub' ? DARWIN.avhub : niet(NIET_HIER)]));
+
+/** De sondes van een platform (process.platform-namen): darwin, linux, of de rest. */
+export function metersVoor(platform) {
+  return platform === 'darwin' ? DARWIN : platform === 'linux' ? LINUX : ANDERS;
+}
+
 /**
  * Alle sondes parallel, elk met zijn eigen grens. Nooit een throw.
  * @param {object} o
@@ -228,10 +324,12 @@ const METERS = {
  * @param {Iterable<string>} [o.alleen]   alleen deze sondes (de rest uit `vorige`, of onbekend)
  * @param {object} [o.vorige]            de vorige metingen (voor de goedkope ronde)
  * @param {string} [o.waarom]            de reden voor een sonde die niet draaide
+ * @param {string} [o.platform]          process.platform (standaard); de tests kiezen 'darwin' of 'linux'
  * @returns {Promise<object>} per sonde het object of { onbekend }
  */
-export async function meet({ exec = voerUit, verbind = poortOpen, paden = {}, timeouts = {}, alleen = null, vorige = null, waarom = 'er speelt een deck' } = {}) {
+export async function meet({ exec = voerUit, verbind = poortOpen, paden = {}, timeouts = {}, alleen = null, vorige = null, waarom = 'er speelt een deck', platform = process.platform } = {}) {
   const t = { ...STANDAARD_TIMEOUTS, ...timeouts };
+  const METERS = metersVoor(platform);
   const wel = alleen ? new Set(alleen) : null;
   const goedkoop = !!wel;
   const uit = {};
@@ -300,8 +398,9 @@ export function maakCache({ meet: meter, ttlMs = 10000, versMs = 2000, speeltDec
  *   "<bestand>" (relatief aan de map of absoluut) | { "tekst": "…" } |
  *   { "fout": "time-out" } (de sonde faalt) | { "nooit": true } (antwoordt nooit).
  * Plus "avhub": true|false, "backups": ["library-….db", …] (voor de CLI zonder
- * server), "server": { bereikbaar, nummers } en "paden": { media, wortel } (de
- * paden waar de find-fixtures onder staan). Een sleutel die ontbreekt: de sonde
+ * server), "server": { bereikbaar, nummers }, "paden": { media, wortel } (de
+ * paden waar de find-fixtures onder staan) en "platform" ('darwin' | 'linux': de
+ * sondes van welk platform; zonder: process.platform). Een sleutel die ontbreekt: de sonde
  * faalt met "geen fixture".
  */
 export function maakNep(map) {
@@ -318,7 +417,9 @@ export function maakNep(map) {
     return readFile(isAbsolute(String(v)) ? String(v) : join(map, String(v)), 'utf8').catch(() => Promise.reject(fout(`fixture ontbreekt (${sleutel})`)));
   };
   const verbind = async () => cfg.avhub === true;
-  return { exec, verbind, cfg, geteld, paden: cfg.paden || null, backups: Array.isArray(cfg.backups) ? cfg.backups : null, server: cfg.server ?? null };
+  // "platform": van welk platform de fixtures zijn (darwin, linux); de sondes van dat platform lezen ze.
+  return { exec, verbind, cfg, geteld, paden: cfg.paden || null, backups: Array.isArray(cfg.backups) ? cfg.backups : null, server: cfg.server ?? null,
+    platform: typeof cfg.platform === 'string' ? cfg.platform : null };
 }
 
 // ---- in het serverproces: backup, achtergrond, compleet -----------------------------
@@ -392,12 +493,14 @@ export function speellijstStand(sessie, punten = allePunten()) {
  * @param {() => Promise<object>} [o.speellijst]  proef.lees(): de sessie van de speellijst (alleen info)
  * @param {() => boolean} [o.speeltDeck]
  * @param {string} [o.nep]                     VARVE_AVONDPAKKET_NEP
+ * @param {string} [o.platform]                standaard het platform van de nep-fixtures, anders process.platform
  */
-export function maakAvondpakket({ paden, profielenPad, backupStand = null, rijen = null, library = null, speellijst = null, speeltDeck = () => false, nep = null, timeouts = {}, ttlMs, klok = Date.now, leesMs = LEES_MS }) {
+export function maakAvondpakket({ paden, profielenPad, backupStand = null, rijen = null, library = null, speellijst = null, speeltDeck = () => false, nep = null, timeouts = {}, ttlMs, klok = Date.now, leesMs = LEES_MS, platform = null }) {
   const n = nep ? maakNep(nep) : null;
   const meetPaden = n?.paden ? { ...paden, ...n.paden } : paden;
+  const plat = platform ?? n?.platform ?? process.platform;
   const cache = maakCache({
-    meet: (opties) => meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden: meetPaden, timeouts, ...opties }),
+    meet: (opties) => meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden: meetPaden, timeouts, platform: plat, ...opties }),
     speeltDeck, klok, ...(ttlMs ? { ttlMs } : {}),
   });
   // Alleen de verwachte paden per nummer, niet de hele rij (review 2, fix 16).

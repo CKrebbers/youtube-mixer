@@ -31,6 +31,10 @@ mengcanvas -> MediaRecorder -----------------> POST /api/opname/<id>/video.mp4 -
 - **Het opnamepad blijft precies zoals het was** (G4): `opnemer.js`, `opname.js` en de opnameroutes zijn niet
   veranderd. De test bewijst het: een WAV met en zonder uitzending is byte voor byte gelijk (S21), en als ffmpeg
   sterft loopt de opname door (S22).
+  *Sinds 15 okt* (docs/WINST.md punt 3, verslag `docs/verslagen/2026-10-15/arch-server-weg.md`) wacht de opnemer als
+  de server even weg is en schrijft hij de stukken daarna op hun plek; videostukken dragen `?van=<byte>` (zonder:
+  erachter, zoals vroeger). Voor de uitzending verandert er niets zolang de server leeft; valt hij weg, dan stopt
+  de uitzending sowieso (ze draait in de server), en na de herstart groeit de WAV in één keer bij.
 - `CLAUDE.md` r.29-31 ("geen publieke streaming") ging over **de cache**: `media/` en `library.db` verlaten deze
   machine nooit. Deze module importeert alleen `node:*` en `kopVan`/`ID` uit `./opname.js`, neemt van buiten alleen
   een opname-id en een doelnaam aan (geen pad, geen url, geen ffmpeg), en leest alleen `opnames/set-<id>.wav|.mp4`
@@ -91,6 +95,9 @@ beeld (bron video = de mp4 van de video-opname, vanaf byte 0):
              -c:v h264_videotoolbox -realtime 1 -b:v <br> -maxrate <br> -bufsize <2×br>
              -g 60 -force_key_frames expr:gte(t,n_forced*2) -pix_fmt yuv420p
              -c:a copy
+  hercodeer, niet op de Mac (hercodeerEncoder, spoor C2, 15 okt): -f mp4 -i pipe:0 -map 0:v:0 -map 0:a:0
+             -c:v libx264 -preset veryfast -tune zerolatency, verder hetzelfde (h264_videotoolbox
+             bestaat alleen op macOS; de tests S18/S29/R12 draaien zo ook op Linux)
   kopie (intern, alleen lokaal): -f mp4 -i pipe:0 -map 0:v:0 -map 0:a:0 -c copy
 
 muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c copy -movflags +faststart naar .mp4)

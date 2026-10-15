@@ -20,9 +20,21 @@
  * een verloren antwoord geeft geen dubbele regels, en een crash kost hooguit
  * een seconde. Alles is ASCII (asciiJson): één teken = één byte, dus de
  * browser weet precies waar het volgende stuk begint.
+ *
+ * De server mag even weg zijn (docs/WINST.md punt 3, zoals de opname): een
+ * stuk dat geen antwoord krijgt blijft op volgorde wachten en wordt opnieuw
+ * geprobeerd (0,25 → 2 s, src/lib/herhaal.js) zolang het log loopt en de rij
+ * kleiner is dan `rijBytes`; bij stoppen nog `stopGrens` ms. Daarna de oude
+ * regel: een gat van nullen op die plek.
  */
 
+/** Zoveel tekst mag er hooguit op de server wachten (een druk log is ~1–5 kB/s: dit is uren). */
+export const RIJ_BYTES = 16 * 1024 * 1024;
+/** Na stop: zo lang (ms) mag de rij nog leeglopen. */
+export const STOP_GRENS = 10_000;
+
 import { leesWeg } from '../lib/antwoord.js';
+import { herhaal, nieuweToestand, tijdslot } from '../lib/herhaal.js';
 
 export const LOG_VERSIE = 1;
 
@@ -39,14 +51,20 @@ export class Handelingenlog {
    * @param klok   () => seconden op de audioklok (ctx.currentTime)
    * @param haal   fetch; de tests geven er een die de echte server/handelingen.js aanroept
    * @param wacht  pauze tussen pogingen (ms -> Promise)
+   * @param nu     () => ms, voor de grens bij stoppen (de tests: een nep-klok, net als wacht)
    * @param elke   (fn, ms) -> handvat, de wegschrijftimer; stopElke ruimt hem op
    * @param datum  () => Date, alleen voor de kop (wanneer was dit)
    */
   constructor({ klok, haal = (url, init) => fetch(url, init), wacht = (ms) => new Promise((r) => setTimeout(r, ms)),
-    elke = (fn, ms) => setInterval(fn, ms), stopElke = (h) => clearInterval(h), datum = () => new Date() }) {
+    elke = (fn, ms) => setInterval(fn, ms), stopElke = (h) => clearInterval(h), datum = () => new Date(),
+    nu = () => performance.now(), rijBytes = RIJ_BYTES, stopGrens = STOP_GRENS }) {
     this.klok = klok;
     this.haal = haal;
     this.wacht = wacht;
+    this.nu = nu;
+    this.rijBytes = rijBytes;
+    this.stopGrens = stopGrens;
+    this._t = nieuweToestand();
     this.elke = elke;
     this.stopElke = stopElke;
     this.datum = datum;
@@ -77,7 +95,9 @@ export class Handelingenlog {
    */
   start({ opname = null, stand = null, kop = {} } = {}) {
     if (this.sessie) return Promise.resolve({ ok: true, id: this.sessie.id, al: true });
-    const s = { id: null, bestand: null, opname, van: 0, fout: null, rij: null };
+    // inRij: bytes die nog niet bevestigd zijn; doorTot: null zolang het log loopt, daarna de grens (this.nu);
+    // storing: { fout } zolang de server niet antwoordt.
+    const s = { id: null, bestand: null, opname, van: 0, fout: null, rij: null, inRij: 0, doorTot: null, storing: null };
     this.sessie = s;
     this.buffer = [];
     this.regels = 0;
@@ -155,6 +175,7 @@ export class Handelingenlog {
     this.gebeurtenis('eind', { regels: this.regels + 1 });
     const regels = this.regels;
     this._spoel();
+    s.doorTot = this.nu() + this.stopGrens;   // wat nog wacht (server weg) krijgt nog even
     this._sluit();
     await s.rij;
     if (!s.id) return { ok: false, fout: s.fout || 'log niet begonnen' };
@@ -200,26 +221,33 @@ export class Handelingenlog {
     this.buffer = [];
     const van = s.van;
     s.van += tekst.length;                // ASCII: tekens = bytes
-    s.rij = s.rij.then(() => this._verstuur(s, van, tekst));
+    s.inRij += tekst.length;
+    s.rij = s.rij.then(() => this._verstuur(s, van, tekst)).finally(() => {
+      s.inRij -= tekst.length;
+      if (s.inRij <= 0) s.storing = null;
+    });
+  }
+
+  /** Mag dit stuk nog wachten? Zolang het log loopt (of tot de grens na stop) en de rij niet te groot is. */
+  _magNog(s) {
+    const loopt = s.doorTot === null ? this.sessie === s : this.nu() < s.doorTot;
+    return loopt && s.inRij <= this.rijBytes;
   }
 
   async _verstuur(s, van, tekst) {
     if (!s.id) return;                    // start mislukt: niets om naar te schrijven
-    let laatste = null;
-    for (let poging = 0; poging < 3; poging++) {
-      try {
-        const res = await this.haal(`/api/handelingen/${s.id}/stuk`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ van, tekst }),
-        });
-        if (res.ok) { await leesWeg(res); return; }   // ook gelukt lezen: anders blijft het in Chrome hangen
-        const j = await res.json().catch(() => ({}));
-        laatste = j.fout || `${res.status}`;
-        if (j.vol) break;                 // een volle schijf wordt niet leger van opnieuw proberen
-      } catch (err) { laatste = err.message; }
-      await this.wacht(250 * (poging + 1));
-    }
+    // Voorbij de grens terwijl de server HANGT: niet nog per stuk een time-out afwachten.
+    const opgeven = s.storing && this._t.hangt && !this._magNog(s);
+    const r = opgeven ? { ok: false, fout: s.storing.fout } : await herhaal({
+      doe: () => this.haal(`/api/handelingen/${s.id}/stuk`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ van, tekst }), signal: tijdslot(),
+      }),
+      mag: () => this._magNog(s), wacht: this.wacht, t: this._t,
+      bijWeg: (fout) => { s.storing = { fout }; },
+    });
+    if (r.ok) { await leesWeg(r.res); return; }   // ook gelukt lezen: anders blijft het in Chrome hangen
     // Kwijt: een gat van nullen op die plek, de rest blijft staan (de lezer slaat het over).
-    s.fout = `stuk kwijt (${tekst.split('\n').length - 1} regels): ${laatste}`;
+    s.fout = `stuk kwijt (${tekst.split('\n').length - 1} regels): ${r.fout}`;
     this.onFout?.(s.fout);
   }
 

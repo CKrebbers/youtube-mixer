@@ -2,11 +2,10 @@
 // zoals beschrijf() in apc-beschrijf.js, of null (dan beschrijft apc-beschrijf.js hem zelf).
 // Puur: geen DOM, geen bus (apc.html en maschine.html laden dit statisch).
 
+import { wie } from '../wie.js';
+
 // Zelfde namen als STEM_LABELS in actions.js (hier los, zodat apc.html de bus niet hoeft te laden).
 const STEM = { vocals: 'zang', inst: 'rest', drums: 'drums', bass: 'bas', other: 'overig' };
-
-const wie = (t) => (t === '{focus}' ? 'focus-track' : t === '{speel}' ? 'speeltrack' : t === '{tweede}' || t === '{R}' ? 'tweede track'
-  : t === '{maatgever}' ? 'de track die de maat geeft' : `track ${t}`);
 
 export default function combi(action) {
   let m;

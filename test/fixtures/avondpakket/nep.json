@@ -1,5 +1,6 @@
 {
   "_doc": "VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket: welke fixture elke sonde krijgt (server/avondpakket-meet.js, maakNep). De echte uitvoer van 10 okt 12:26 (niets aangesloten, accu 65 % aan 8 W) plus een handgemaakte library van 26 nummers. Geen enkel commando, geen netwerk.",
+  "platform": "darwin",
   "paden": { "media": "/Users/test/varve/media", "wortel": "/Users/test/varve", "db": "/Users/test/varve/media/library.db", "extra": [] },
   "pmset-batt": "pmset-ac-65.txt",
   "pmset-ac": "pmset-ac-8w.txt",

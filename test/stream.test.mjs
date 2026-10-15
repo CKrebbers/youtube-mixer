@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const K = await import('../src/engine/stream-kern.js');
-const { PAGINA, positieOp, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen, renderBlok } = K;
+const { PAGINA, positieOp, ctxTijdVan, leesWavKop, controleerWav, plan, reeksen, renderBlok, VOORUIT, VOORUIT_HOORBAAR } = K;
 
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
@@ -29,7 +29,8 @@ function nepWorkletNode(berichten, nodes = []) {
       if (opties.outputChannelCount && opties.outputChannelCount.length !== this.numberOfOutputs) throw indexFout('outputChannelCount past niet bij numberOfOutputs');
       this.outputChannelCount = opties.outputChannelCount ?? Array(this.numberOfOutputs).fill(1);
       this.verbindingen = [];
-      this.port = { postMessage: (m) => berichten.push(m), onmessage: null };
+      // Zoals een echte MessagePort: na close() komt niets meer aan (en gooit hij niet).
+      this.port = { dicht: false, postMessage(m) { if (!this.dicht) berichten.push(m); }, onmessage: null, close() { this.dicht = true; } };
       nodes.push(this);
     }
     connect(doel, uitgang = 0) {
@@ -240,6 +241,17 @@ console.log('\npagina-plan');
   ok('reeksen voegen samen', JSON.stringify(reeksen([5, 3, 4, 9, 10, 20])) ===
     JSON.stringify([{ van: 3, tot: 5 }, { van: 9, tot: 10 }, { van: 20, tot: 20 }]));
   ok('reeksen hooguit max lang', reeksen([1, 2, 3, 4, 5], 2).length === 3);
+  // Wat je hoort houdt een minuut vooruit (docs/WINST.md punt 3): de server mag even weg zijn.
+  ok('standaard vooruit = VOORUIT (20 s)', VOORUIT === 20 && VOORUIT_HOORBAAR === 60
+    && JSON.stringify(plan({ positie: 100, duur: 3600, sr, vooruit: undefined })) === JSON.stringify(plan({ positie: 100, duur: 3600, sr })));
+  const lang = plan({ positie: 100, duur: 3600, sr, vooruit: VOORUIT_HOORBAAR });
+  ok('vooruit 60: tot ~160 s, niet verder', lang.includes(Math.floor(159 / s)) && !lang.includes(Math.floor(165 / s)));
+  ok('vooruit 60: wat nu klinkt nog steeds vooraan, en achteruit blijft 5 s', lang[0] === Math.floor(100 / s)
+    && lang.includes(Math.floor(96 / s)) && !lang.includes(Math.floor(90 / s)));
+  const extra = (lang.length - plan({ positie: 100, duur: 3600, sr }).length) * PAGINA * 4;
+  ok(`vooruit 60 kost ${(extra / 1e6).toFixed(1)} MB extra per stereotrack (~8 MB)`, extra > 7e6 && extra < 9e6);
+  const snel60 = plan({ positie: 100, rate: 1.5, duur: 3600, sr, vooruit: 60 });
+  ok('vooruit 60 op 1,5×: 90 s tracktijd vooruit', snel60.includes(Math.floor(189 / s)) && !snel60.includes(Math.floor(195 / s)));
 }
 
 // ---- StreamBron met een nagemaakte browser ------------------------------------
@@ -305,6 +317,16 @@ console.log('\nStreamBron');
   ok('hotcue blijft staan na de sprong',
     bron.geladen.has(Math.floor(1800 * SR / PAGINA)));
   ok(`geheugen blijft klein: ${(bron.geheugen / 1e6).toFixed(1)} MB`, bron.geheugen < 16e6);
+  // Het deck geeft een getal door (bron.vooruit, de engine beslist): de bron houdt dan 60 s vooruit.
+  const voor20 = bron.geladen.size;
+  bron.vooruit = VOORUIT_HOORBAAR;
+  for (let i = 0; i < 4; i++) await bron.bijvullen();
+  const pos = bron.positie;
+  ok(`bron.vooruit = 60: pagina's tot een minuut verder (${voor20} -> ${bron.geladen.size})`,
+    bron.geladen.has(Math.floor((pos + 59) * SR / PAGINA)) && bron.geladen.size > voor20 + 25);
+  bron.vooruit = VOORUIT;
+  await bron.bijvullen();
+  ok('terug naar 20: wat verder ligt gaat weer weg', !bron.geladen.has(Math.floor((pos + 59) * SR / PAGINA)) && bron.geladen.size <= voor20 + 1);
 
   bron.pauzeer();
   const stil = bron.positie;
@@ -1018,6 +1040,96 @@ console.log('\nstems: meer kanalen');
   await b2.laad({ url: '/media/x/stems.wav', kanalen: 8 });
   ok('opnieuw laden neemt het nieuwe bestand gewoon', b2.kanalen === 8 && !b2.bestand.vervangen && b2.bestand.totaal === wav8.byteLength);
   b2.vernietig();
+}
+
+// ---- opruimen en worklet-fouten (spoor A, 15 okt) -----------------------------------
+// Een AudioWorkletNode waarvan process() true blijft geven, wordt nooit opgeruimd
+// (met zijn stretchers). Vernietigen stuurt 'stop' en sluit de poort; herladen niet.
+// Een processorerror bouwt één keer een nieuwe node op dezelfde plek.
+console.log('\nopruimen en worklet-fouten');
+{
+  let Lezer = null;
+  globalThis.sampleRate = 48000;
+  globalThis.currentFrame = 0;
+  globalThis.AudioWorkletProcessor = class { constructor() { this.port = { onmessage: null, postMessage() {}, close() {} }; } };
+  globalThis.registerProcessor = (_naam, k) => { Lezer = k; };
+  await import('../src/engine/stream-lezer.js?stop');
+  const w = new Lezer();
+  const zend = (m) => w.port.onmessage({ data: m });
+  const blok = () => Array.from({ length: 4 }, () => [new Float32Array(128), new Float32Array(128)]);
+  zend({ type: 'bron', duur: 1, sr: 48000 });
+  const toon = new Int16Array(PAGINA * 2).map((_, i) => Math.round(8000 * Math.sin(i / 20)));
+  zend({ type: 'pagina', i: 0, data: toon });
+  zend({ type: 'segment', id: 1, seg: { T: 0, P: 0, R: 1, loop: null, speelt: true, rem: null, rek: null } });
+  const b0 = blok();
+  ok('worklet: vóór stop geeft process() true (en klinkt)', w.process([], b0) === true && b0[0][0].some((v) => v !== 0));
+  zend({ type: 'stop' });
+  ok('worklet: na stop geeft process() false, pagina\'s weg, geen berichten meer',
+    w.process([], blok()) === false && w.paginas.size === 0 && w.port.onmessage === null && w.rek === null);
+  globalThis.currentFrame = 128;
+  ok('worklet: en blijft false', w.process([], blok()) === false);
+  delete globalThis.registerProcessor; delete globalThis.AudioWorkletProcessor;
+
+  const { maakWav } = K;
+  const { StreamBron, geheugenHaal } = await import('../src/engine/bron.js');
+  const L = new Float32Array(48000 * 3).map((_, i) => 0.3 * Math.sin(i / 30));
+  const wav = maakWav([L, L], 48000);
+  const berichten = [], nodes = [];
+  globalThis.AudioWorkletNode = nepWorkletNode(berichten, nodes);
+  const ctx = { currentTime: 1, sampleRate: 48000, audioWorklet: { addModule: async () => {} } };
+  const uit = {};
+  const bron = new StreamBron(ctx, uit, { interval: 1e9 });
+  await bron.laad({ url: 'geheugen:S:1', haal: geheugenHaal(wav) });
+  const node = bron.node;
+  const info1 = bron.buffer;
+  ok('buffer: één object per geladen bestand, niet per aanroep (afval per beeld, spoor A)',
+    info1 && info1 === bron.buffer && info1.stream === true && info1.duration === bron.duur);
+  await bron.laad({ url: 'geheugen:S:2', haal: geheugenHaal(wav) });
+  ok('… een nieuwe laad: een nieuw object', bron.buffer && bron.buffer !== info1);
+  ok('herladen: dezelfde node, geen stop, de poort blijft open',
+    bron.node === node && nodes.length === 1 && !berichten.some((m) => m.type === 'stop') && !node.port.dicht && node.port.onmessage);
+  bron.vernietig();
+  ok('vernietig: eerst leeg, dan stop, de poort dicht, losgekoppeld',
+    berichten.at(-1)?.type === 'stop' && berichten.at(-2)?.type === 'bron' && berichten.at(-2).duur === 0
+    && node.port.dicht && node.port.onmessage === null && node.verbindingen.length === 0 && bron.node === null);
+
+  // processorerror: één keer opnieuw opbouwen op dezelfde plek, daarna stil met een melding.
+  const b2 = new StreamBron(ctx, uit, { interval: 1e9 });
+  const meld = [];
+  b2.onFout = (t) => meld.push(t);
+  await b2.laad({ url: 'geheugen:S:3', haal: geheugenHaal(wav) });
+  ctx.currentTime = 2;
+  b2.start(0.5);
+  const n1 = b2.node, seg1 = b2.seg, voorNodes = nodes.length;
+  berichten.length = 0;
+  ctx.currentTime = 2.3;
+  const h1 = n1.onprocessorerror;                 // een event dat al in de rij stond, komt ook na het losmaken nog
+  h1({ message: 'RangeError: nep' });
+  const n2 = b2.node;
+  ok('processorerror: een nieuwe node, aangesloten; de oude los en dicht',
+    n2 && n2 !== n1 && nodes.length === voorNodes + 1 && n2.verbindingen.length === 4 && n1.verbindingen.length === 0 && n1.port.dicht);
+  const segNa = berichten.filter((m) => m.type === 'segment').at(-1);
+  ok('… met het bestand opnieuw en HETZELFDE segment {T, P, R} (regel 3: hij speelt waar hij nu hoort te zijn)',
+    berichten.findIndex((m) => m.type === 'bron') === 0 && berichten[0].duur === b2.duur
+    && segNa && segNa.seg.T === seg1.T && segNa.seg.P === seg1.P && segNa.seg.R === seg1.R && segNa.seg.speelt && !segNa.gepland
+    && Math.abs(b2.positie - (0.5 + 0.3)) < 1e-9);
+  for (let i = 0; i < 20 && !berichten.some((m) => m.type === 'pagina'); i++) await new Promise((r) => setTimeout(r, 0));
+  ok('… en de pagina\'s opnieuw naar de nieuwe worklet', berichten.some((m) => m.type === 'pagina') && b2.geladen.size > 0);
+  ok(`… met een melding ("${meld[0]}")`, meld.length === 1 && /opnieuw opgebouwd/.test(meld[0]) && /RangeError: nep/.test(meld[0]));
+  h1({});
+  ok('een late fout van de oude node doet niets', b2.node === n2 && meld.length === 1);
+  const h2 = n2.onprocessorerror;
+  h2({});
+  ok('nog een fout na het opbouwen: geen derde node, stil, en een melding die blijft staan',
+    b2.node === null && nodes.length === voorNodes + 1 && meld.length === 2 && /blijft stil/.test(meld[1]) && n2.port.dicht);
+  b2.start(1);
+  ok('daarna gooit spelen niet (er is geen node)', b2.speelt);
+  await b2.laad({ url: 'geheugen:S:4', haal: geheugenHaal(wav) });
+  ok('de volgende laad bouwt een nieuwe node (en mag weer één keer opnieuw opbouwen)', b2.node && b2.node !== n2 && b2._herbouwd === false);
+  const h3 = b2.node.onprocessorerror;
+  b2.vernietig();
+  h3({});
+  ok('een fout na vernietigen doet niets', meld.length === 2 && b2.node === null);
 }
 
 console.log(fails.length ? `\n${fails.length} FOUT(EN): ${fails.join(', ')}` : '\nAlle checks groen.');

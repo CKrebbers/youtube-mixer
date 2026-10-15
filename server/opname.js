@@ -163,20 +163,38 @@ export async function voegToe(map, id, stuk, frame) {
  * MediaRecorder levert losse stukken die achter elkaar een geldig bestand
  * vormen; hier alleen achter elkaar plakken. Alleen deze twee extensies:
  * de browser mag niet bepalen wat voor bestand hier ontstaat.
+ *
+ * Met `van` (bytes vanaf het begin, `?van=N`, sinds 15 okt): op DIE plek, zoals
+ * een audiostuk op zijn frame. Dan is herhalen na een verloren antwoord veilig
+ * (de browser herhaalt zolang de server even weg is, src/opname/opnemer.js).
+ * Zonder: erachter, zoals vroeger.
  */
 export const VIDEO_EXT = ['mp4', 'webm'];
+/** Zo ver mag een videostuk voorbij het eind liggen (er viel er een weg): ruim 10 min op 8 Mbit/s. */
+const VIDEO_MAX_SPRONG = 1024 * 1024 * 1024;
 
-export async function voegVideoToe(map, id, ext, stuk) {
+export async function voegVideoToe(map, id, ext, stuk, van) {
   if (!ID.test(id)) return { ok: false, fout: 'ongeldig opname-id' };
   if (!VIDEO_EXT.includes(ext)) return { ok: false, fout: `videoformaat "${ext}" niet toegestaan` };
+  if (van !== undefined && !(Number.isSafeInteger(van) && van >= 0)) return { ok: false, fout: 'van moet een heel getal >= 0 zijn' };
   // Alleen bij een opname die echt bestaat: geen losse videobestanden maken.
   if (!(await stat(join(map, naamVan(id))).then(() => true, () => false))) return { ok: false, fout: 'opname bestaat niet' };
   let f;
+  const pad = join(map, `set-${id}.${ext}`);
   try {
-    f = await open(join(map, `set-${id}.${ext}`), 'a');
-    await f.write(stuk);
+    if (van === undefined) {
+      f = await open(pad, 'a');
+      await f.write(stuk);
+      return { ok: true };
+    }
+    // 'a' schrijft altijd achteraan (O_APPEND), dus op een plek: 'r+', en de eerste keer 'w'.
+    f = await open(pad, 'r+').catch((err) => (err.code === 'ENOENT' ? open(pad, 'wx').catch(() => open(pad, 'r+')) : Promise.reject(err)));
+    const { size } = await f.stat();
+    if (van > size + VIDEO_MAX_SPRONG) return { ok: false, fout: `van ${van} ligt te ver voorbij het eind` };
+    await schrijfAlles(f, stuk, van);
     return { ok: true };
   } catch (err) {
+    if (err.code === 'ENOSPC') return { ok: false, fout: 'de schijf is vol', vol: true };
     return { ok: false, fout: err.message };
   } finally {
     await f?.close();

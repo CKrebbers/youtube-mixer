@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const { gridUitTellen, meetGrid, vergelijk, oordeelStuk, dansFactor, dansOctaven, DANS_MIN, DANS_MAX, VERSIE } = await import('../src/engine/tellen.js');
+const { gridUitTellen, meetGrid, vergelijk, oordeelStuk, dansFactor, dansOctaven, maatMening, DANS_MIN, DANS_MAX, VERSIE } = await import('../src/engine/tellen.js');
 const { Beatgrid, ZEKER_VANAF } = await import('../src/engine/beatgrid.js');
 const { NAMEN, nummer, wavVan } = await import('../tools/beatmeting/synth/nummers.mjs');
 const { nepTellen, VARIANTEN } = await import('../tools/beatmeting/synth/nep-beatthis.mjs');
@@ -276,6 +276,59 @@ try {
         `oud ${go && go.stukken.map((st) => st.bpm.toFixed(1)).join('/')}, kaart ${kaart.stukken.map((st) => `${st.bpm} z${st.zekerheid} ${st.twijfel ?? ''}`).join('/')}`);
     }
   }
+  // EEN TWEEDE MENING OVER DE "1" (15 okt, BEATGRID.md §14): de lage band (kick, bas) per tel van de maat.
+  // Zit Beat This! consequent een tel naast (eenfout), dan twijfel 'maat' waar de "1" een accent in de
+  // lage band heeft; een goede "1" nooit; vier op de vloer zegt niets; de zekerheid verandert nergens.
+  {
+    const laagVan = async (naam, x) => {
+      const wav = join(map, `${naam}.wav`), bin = join(map, `${naam}.laag`);
+      writeFileSync(wav, x);
+      const r = await analyze.maakLaag(wav, bin);
+      if (!r.ok) return null;
+      const b = (await import('node:fs')).readFileSync(bin);
+      return { env: new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)), envRate: r.envRate, tijdOffset: r.tijdOffset };
+    };
+    const accent = ['vast-96', 'swing-118', 'wals-150', 'reggae-75', 'jungle-172', 'halftime-140', 'opmaat-126'];
+    const vloer = ['house-124', 'oplopend'];
+    const rest = ['live-drift', 'indie-154', 'ambient'];
+    const r = {};
+    for (const naam of [...accent, ...vloer, ...rest]) {
+      const n = nummer(naam);
+      const laag = await laagVan(naam, wavVan(n.x));
+      for (const v of ['bt', 'ruis', 'eenfout']) {
+        const t = nepTellen(n, v);
+        const zonder = gridUitTellen(t.beats, t.downbeats, { duur: n.duur });
+        const met = maatMening(structuredClone(zonder), laag);
+        r[`${naam}/${v}`] = { zonder: scoor(zonder, n), met: scoor(met, n), laag: !!laag };
+      }
+    }
+    const alle = Object.entries(r);
+    ok('de lage band is er voor elk nummer (maakLaag in de worker)', alle.every(([, x]) => x.laag));
+    const fout = accent.map((k) => [k, r[`${k}/eenfout`].met]);
+    ok(`"1" een tel naast (eenfout) met een accent in de lage band (${accent.length} nummers): twijfel 'maat', geen foute "1" meer zonder twijfel`,
+      fout.every(([, s]) => s.eenMaat >= 0.95 && s.eenVals <= 0.05), fout.map(([k, s]) => `${k} maat ${pct(s.eenMaat)} vals ${pct(s.eenVals)}`).join(', '));
+    ok('… en zonder de lage band waren die "1"-en fout ZONDER twijfel (de test meet iets)', accent.every((k) => r[`${k}/eenfout`].zonder.eenVals >= 0.95));
+    const goed = alle.filter(([k]) => !k.endsWith('/eenfout'));
+    ok(`een goede "1" (bt en ruis, ${goed.length} gevallen) krijgt nooit twijfel 'maat' door de lage band`,
+      goed.every(([, x]) => x.met.eenOnterecht <= x.zonder.eenOnterecht), goed.filter(([, x]) => x.met.eenOnterecht > x.zonder.eenOnterecht).map(([k]) => k).join(', '));
+    ok('vier op de vloer (elke tel een kick): de lage band zegt niets, ook niet bij eenfout (een bekende grens)',
+      vloer.every((k) => r[`${k}/eenfout`].met.eenMaat === 0));
+    ok('de zekerheid verandert nergens (dekking en vals zeker gelijk; sync mag bij twijfel over de "1")',
+      alle.every(([, x]) => x.met.dekking === x.zonder.dekking && x.met.valsZeker === x.zonder.valsZeker && x.met.vals === x.zonder.vals));
+    // Zonder lage band, of een lage band zonder kick of bas (alleen ruis): niets.
+    const n = nummer('vast-96', { audio: false }), t = nepTellen(n, 'eenfout');
+    const k0 = gridUitTellen(t.beats, t.downbeats, { duur: n.duur });
+    const zelfde = JSON.stringify(k0);
+    ok('maatMening zonder lage band laat de kaart staan', JSON.stringify(maatMening(structuredClone(k0), null)) === zelfde);
+    let z = 7;
+    const ruis = new Float32Array(Math.ceil(n.duur * 250)).map(() => ((z = (Math.imul(z, 1103515245) + 12345) >>> 0) / 4294967296));
+    ok('… en met een lage band die alleen ruis is (geen accent boven de vloer) ook', JSON.stringify(maatMening(structuredClone(k0), { env: ruis, envRate: 250, tijdOffset: 0 })) === zelfde);
+    // Een stuk dat al twijfelt houdt zijn reden.
+    const k1 = structuredClone(k0); k1.stukken[0].twijfel = 'los';
+    const nv = nummer('vast-96');
+    ok('een stuk met een andere twijfel houdt die (de lage band schrijft er niet overheen)', maatMening(k1, await laagVan('vast-96b', wavVan(nv.x))).stukken[0].twijfel === 'los');
+  }
+
   const e = Object.fromEntries(echt);
   ok('echte oude analyse, Beat This! dubbel: met goede downbeats bevestigd (zeker, DJ-tempo), op de "en" of zonder: nergens vals zeker',
     e['house-124/dubbel'].dekking >= 0.95 && e['jungle-172/dubbel'].dekking >= 0.95 && e['house-124/dubbel'].dj >= 0.95 && e['jungle-172/dubbel'].dj >= 0.95
