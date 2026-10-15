@@ -109,6 +109,79 @@ h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 .notitie::placeholder{color:#4a5661}
 .notitie.bewaard{border-color:var(--a)}
 
+/* de speellijst per deel (16 okt, uit het artifact): een kleur per deel, één punt groot met grote knoppen */
+.delen{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-top:10px}
+.deel{--k:var(--dim);display:grid;gap:2px;text-align:left;background:var(--panel);border:1px solid var(--line);
+  border-top:3px solid var(--k);border-radius:6px;padding:8px 10px;min-width:0}
+.deel[aria-pressed="true"]{border-color:var(--k);box-shadow:0 0 0 1px var(--k) inset}
+.deel-naam{font-weight:700;color:var(--k)}
+.deel-wat{font-size:12px;color:var(--klein)}
+.deel-telling{font:12px ui-monospace,monospace;color:var(--klein)}
+[data-kleur="vooraf"]{--k:#9aa7b4} [data-kleur="a1"]{--k:#e5ab48} [data-kleur="a2"]{--k:#b18cff}
+[data-kleur="a3"]{--k:#6ea0f4} [data-kleur="a4"]{--k:#4fc9a6} [data-kleur="eerder"]{--k:#7b8794} [data-kleur="alles"]{--k:var(--a)}
+.balk{display:block;height:4px;background:var(--panel2);border-radius:2px;overflow:hidden;margin-top:3px}
+.balk i{display:block;height:100%;background:var(--k)}
+.weergave{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:10px}
+.weergave-knoppen{display:flex;gap:4px}
+.weergave .knop[aria-pressed="true"]{border-color:var(--a);color:var(--a)}
+.kern{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--klein);cursor:pointer}
+.kern[hidden]{display:none}
+.deel-kop{margin:8px 0 0;font-size:13px;color:var(--klein)}
+.deel-kop b{color:var(--text);font-weight:600}
+.groen{color:var(--groen)}
+.link{background:none;border:0;padding:0;color:var(--a);text-decoration:underline;text-underline-offset:3px;font:inherit;text-align:left}
+.link[aria-current="true"]{font-weight:700}
+.punt.groot{display:grid;grid-template-columns:1fr;gap:12px;padding:16px;border:1px solid var(--line);
+  border-top:3px solid var(--k,var(--a));border-radius:8px;background:var(--panel)}
+#lijst[data-kleur] .punt.groot{--k:inherit}
+.punt.groot .waar{margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--k,var(--dim))}
+.punt.groot .doe{margin:0;font-size:19px;line-height:1.45}
+.punt.groot .let{margin:0;font-size:15px}
+.punt.groot .let b{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--k,var(--dim));margin-right:4px}
+.codes{margin:0;font-size:13px;color:var(--klein)}
+.vraag{display:inline-block;font:600 12px/1.5 ui-monospace,monospace;padding:0 6px;border-radius:3px;background:var(--panel2);
+  border:1px solid var(--line);color:var(--text)}
+.grote-knoppen{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.grote-knoppen .sk{font-size:18px;font-weight:700;padding:14px 6px;border-width:2px;border-radius:8px}
+.grote-knoppen .sk[data-st="ok"]{border-color:var(--a);color:var(--a)}
+.grote-knoppen .sk[data-st="fout"]{border-color:var(--red);color:var(--red)}
+.notitie-vak{display:grid;gap:4px;font-size:13px;color:var(--klein)}
+textarea.notitie{font-size:15px;line-height:1.4;resize:vertical;padding:8px 10px}
+.punt-nav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.blokken-van-deel{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:8px 12px}
+.blokken-van-deel summary,.verslag summary{cursor:pointer;font-size:13px;color:var(--klein)}
+.blokken-van-deel ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:5px;font-size:13px}
+.blokken-van-deel li{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline}
+.verslag{margin-top:14px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:8px 12px}
+.verslag h3{margin:12px 0 4px;font-size:13px}
+.cijfers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:10px}
+.cijfers div{background:var(--panel2);border-radius:6px;padding:8px;display:grid}
+.cijfers b{font:600 24px ui-monospace,monospace}
+.cijfers span{font-size:12px;color:var(--klein)}
+.verslag-lijst{margin:0;padding-left:1.2em;display:grid;gap:6px;font-size:13px}
+.verslag-lijst .n{color:var(--klein);white-space:pre-wrap;border-left:2px solid var(--line);padding-left:8px;margin-top:2px}
+.verslagtekst{width:100%;font:12px/1.4 ui-monospace,monospace;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:4px}
+
+/* hulp: de APC in het kort en als iets niet werkt (uit het artifact) */
+.hulp > summary{cursor:pointer;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.hulpvak{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:10px}
+.hulpvak section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:8px;align-content:start}
+.hulpvak h3{margin:0;font-size:15px}
+.modi{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:4px 10px;font-size:13px;align-items:baseline}
+.modi span:nth-child(3n+1){font-family:ui-monospace,monospace;font-size:12px;color:var(--klein);white-space:nowrap}
+.modi span:nth-child(3n){color:var(--klein)}
+.modi b{white-space:nowrap}
+.lamp{display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--l);margin-right:6px}
+.knoppen-kort{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:3px 14px;margin:0;font-size:13px}
+.knoppen-kort div{display:flex;gap:8px}
+.knoppen-kort dt{font-weight:600;white-space:nowrap}
+.knoppen-kort dd,.mis dd{margin:0;color:var(--klein)}
+.mis{display:grid;gap:8px;margin:0;font-size:13px}
+.mis dt{font-weight:600}
+.hulpvak a{color:var(--a)}
+.tegel[data-id="versie"]{cursor:pointer}
+.tegel[data-id="versie"]:hover{background:var(--panel2)}
+
 /* het avondpakket: de tegel is een knop; de keuze en de lijsten in een <details> onder de tegels */
 .tegel[data-id="avondpakket"]{cursor:pointer}
 .tegel[data-id="avondpakket"]:hover{background:var(--panel2)}
@@ -140,6 +213,8 @@ h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 
 @media (max-width:720px){
   .punt{grid-template-columns:1fr}
+  .cijfers{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grote-knoppen .sk{font-size:16px;padding:12px 4px}
   .ap-vakken{grid-template-columns:1fr}
   .kop{flex-wrap:wrap}
 }

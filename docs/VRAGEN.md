@@ -191,7 +191,13 @@ Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even 
   server zonder `kijker`: zoals altijd.
 
 **Uit de droogloop van de proefpunten (16 okt, docs/verslagen/2026-10-15/ar-proef.md)**
-- [ ] **AR21. VARVE.app start altijd de hub (sinds 13 okt) als AV-app-hub er staat.** 💬 Gevonden bij het ordenen van de
+- [x] **AR21. VARVE.app start altijd de hub (sinds 13 okt) als AV-app-hub er staat.** 💬 **Gebouwd 16 okt** (`studio/ar21`,
+  Clay: "graag"): VARVE.app vraagt de server welke opstelling actief is (`tools/varve-app/hub-nodig.mjs`, dezelfde regel
+  als de knop "mixer openen": `mixerAdres`) en start de hub alleen bij `hub.mixerVia`. Zonder (avond 1, of geen
+  opstelling) geen hub, en een open Controlekamer verliest zijn `?hub=`; draait er al een hub, dan een melding (niet
+  stoppen); antwoordt de server niet, dan "Opstelling onbekend (…): de hub is niet gestart." Avond 2 activeert daarom
+  eerst de opstelling (sta-hub, nu vóór app-hub). Toets: `test/hub-nodig.test.mjs`, en `standen-server.test` vraagt het
+  de echte server. De vraag was: Gevonden bij het ordenen van de
   speellijst (16 okt): avond 1 is zonder hub, maar een klik op VARVE (ar-app, en vroeger ar-weg/ar-val) start de hub, die de
   APC pakt; met de knop "zonder hub" praten dan de hub en de mixer allebei met de APC. De speellijst omzeilt het nu (start-apc
   stopt de hub, ar-weg start de lus zonder de app). Moet VARVE.app de hub alleen starten als de actieve opstelling

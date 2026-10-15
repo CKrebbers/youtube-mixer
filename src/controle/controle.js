@@ -1,4 +1,5 @@
 import { SPEELLIJST, allePunten } from './speellijst.js';
+import { DELEN, deelVan, blokkenVan, heeftKern, idsVan, telling, eersteOpen, beginDeel, plekVan, vraagCodes, verslagTekst } from './speellijst-weergave.js';
 import { KANAAL } from '../ui/status-zender.js';
 import { LOCK_NAAM } from '../ui/tabblad.js';
 import { stemsTegel } from '../ui/stems-weergave.js';
@@ -8,6 +9,7 @@ import { serverTegel } from './server-tegel.js';
 import { standTegel, mixerKeuze, verschilTekst, activeerMelding, terugMelding, LABEL as STAND_LABEL, MIXER_GEWOON } from './stand-tegel.js';
 import { bewerkerHtml, leesBewerker, nieuweNaamGeldig, nieuweNaam } from './stand-bewerker.js';
 import { avondpakketTegel } from './avondpakket-tegel.js';
+import { versieTegel } from './versie-tegel.js';
 import { hubAdres, mixerAdres } from '../ui/vlag.js';
 import { opzetBedienen } from './bedienen-tegel.js';
 
@@ -16,7 +18,8 @@ import { opzetBedienen } from './bedienen-tegel.js';
  * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/leeft (herstarts), /api/stems, /api/proef,
  *   /api/backups (de laatste kopie van library.db), /api/secties (hoeveel nummers nog
  *   geen actuele secties hebben), /api/standen (de opstelling: welke actief is, docs/STANDEN.md),
- *   /api/avondpakket (vertrek/aankomst, docs/AVONDPAKKET.md: NIET elke 2 s, zie leesAvondpakket);
+ *   /api/avondpakket (vertrek/aankomst, docs/AVONDPAKKET.md: NIET elke 2 s, zie leesAvondpakket),
+ *   /api/versie (welke commit draait, op schijf, op GitHub: elke minuut, klik = nu);
  * - de Web Lock van de mixer (tabblad.js): is er een mixer open, wacht er een tweede;
  * - het kanaal van de mixer (status-zender.js): APC, audio, wat er speelt, beeld.
  * Opent zelf GEEN MIDI: de APC heeft maar één tabblad, de mixer.
@@ -253,6 +256,19 @@ $('tegels').addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-id="avondpakket"]')) { e.preventDefault(); leesAvondpakket({ vers: true, gevraagd: true }); }
 });
 
+// De versie (server/versie.js): elke minuut, een klik op de tegel = meteen, ook naar GitHub. `versieGeladen` = de
+// commit op schijf toen deze pagina laadde: verschuift die, dan is deze pagina (en een open mixer) oud.
+async function leesVersie({ vers = false } = {}) {
+  try { stand.versie = await haal(`/api/versie${vers ? '?vers=1' : ''}`, { wacht: 15000 }); }
+  catch (err) { stand.versie = err.status === 404 ? { ontbreekt: true } : null; }
+  if (stand.versieGeladen == null && stand.versie?.opSchijf?.commit) stand.versieGeladen = stand.versie.opSchijf.commit;
+}
+const versieNu = () => { stand.versie = stand.versie ? { ...stand.versie, github: null } : null; tekenStand(); leesVersie({ vers: true }).then(tekenStand); };
+$('tegels').addEventListener('click', (e) => { if (e.target.closest('[data-id="versie"]')) versieNu(); });
+$('tegels').addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-id="versie"]')) { e.preventDefault(); versieNu(); }
+});
+
 // De tooling-controle start yt-dlp, de splitter en de tellenzoeker: die mag langer duren.
 async function leesTooling() {
   try { stand.tooling = await haal('/api/tooling', { wacht: 60000 }); } catch { stand.tooling = null; }
@@ -279,6 +295,7 @@ function tegels() {
   const vers = s && Date.now() - s.t < 5000;
   const t = [];
 
+  t.push(versieTegel(stand.server === false ? null : stand.versie, { geladen: stand.versieGeladen }));
   t.push(serverTegel(stand));
   t.push(standTegel({ standen: stand.server === false ? null : stand.standen }));
 
@@ -328,9 +345,10 @@ function tegels() {
 }
 
 /** Tegels met een `id` krijgen data-id; Avondpakket is een knop (een klik meet opnieuw). */
-const KLIKBAAR = new Set(['avondpakket']);
+const KLIKBAAR = new Set(['avondpakket', 'versie']);
 
 function tekenStand() {
+  if (sl.deel) tekenDeelKop();   // de opstelling van het deel kan intussen actief zijn
   // De tegels worden elke 2 s opnieuw getekend: een tegel met de toetsenbordfocus
   // (Avondpakket is een knop) krijgt hem daarna terug (review 2, fix 10).
   const focus = document.activeElement?.closest?.('#tegels [data-id]')?.dataset.id;
@@ -577,20 +595,74 @@ $('bw-leg-vast').addEventListener('click', async () => {
 });
 
 // ---- de speellijst --------------------------------------------------------------
+// Per deel (Vooraf, Avond 1 …), als lijst of één punt tegelijk (src/controle/speellijst-weergave.js). Welk deel,
+// welke weergave en welk punt onthoudt deze browser; de stand zelf staat op de server (proef/sessie.json).
 
 const STATUS_KNOPPEN = [['ok', 'ok'], ['fout', 'fout'], ['overslaan', '—']];
+const GROTE_KNOPPEN = [['ok', '✓ ok'], ['fout', '✗ fout'], ['overslaan', '— overslaan']];
+const SL_SLEUTEL = 'varve.controle.speellijst';
+const sl = { deel: null, weergave: 'een', kern: false, punt: null };
+try { Object.assign(sl, JSON.parse(localStorage.getItem(SL_SLEUTEL) || '{}')); } catch (_) {}
+const onthoudSl = () => { try { localStorage.setItem(SL_SLEUTEL, JSON.stringify(sl)); } catch (_) {} };
+const DEEL_NAMEN = [...DELEN.map((d) => d.naam), 'alles'];
+
+const blokkenNu = () => blokkenVan(SPEELLIJST, sl.deel, { kern: sl.kern });
+const idsNu = () => idsVan(blokkenNu());
 
 function tekenLijst() {
   const items = stand.proef.items;
-  $('lijst').innerHTML = SPEELLIJST.map((b) => {
+  if (!DEEL_NAMEN.includes(sl.deel)) sl.deel = beginDeel(SPEELLIJST, items);
+  if (!heeftKern(SPEELLIJST, sl.deel)) sl.kern = false;
+  if (sl.weergave !== 'lijst') sl.weergave = 'een';
+
+  $('delen').innerHTML = DEEL_NAMEN.map((naam) => {
+    const d = DELEN.find((x) => x.naam === naam);
+    const t = telling(idsVan(blokkenVan(SPEELLIJST, naam)), items);
+    return `<button type="button" class="deel" data-deel="${esc(naam)}" data-kleur="${esc(d?.kleur ?? 'alles')}" aria-pressed="${naam === sl.deel}">
+      <span class="deel-naam">${esc(d ? naam : 'Alles')}</span><span class="deel-wat">${esc(d?.wat ?? 'alle delen onder elkaar')}</span>
+      <span class="deel-telling">${t.gedaan}/${t.totaal}${t.fout ? ` · <b class="rood">${t.fout} fout</b>` : ''}</span>
+      <span class="balk"><i style="width:${t.totaal ? (100 * t.gedaan) / t.totaal : 0}%"></i></span></button>`;
+  }).join('');
+  $('lijst').dataset.kleur = DELEN.find((x) => x.naam === sl.deel)?.kleur ?? 'alles';
+  document.querySelectorAll('[data-weergave]').forEach((k) => k.setAttribute('aria-pressed', String(k.dataset.weergave === sl.weergave)));
+  $('kern-keuze').hidden = !heeftKern(SPEELLIJST, sl.deel);
+  $('kern').checked = sl.kern;
+  tekenDeelKop();
+  $('lijst').innerHTML = sl.weergave === 'een' ? eenPunt(items) : lijstHtml(items);
+  tekenVerslag();
+  tekenVoortgang();
+  onthoudSl();
+}
+
+/** Onder de delen: wat dit deel vraagt (de opstelling en de paklijst), met een knop die er meteen naartoe gaat. */
+function tekenDeelKop() {
+  const d = DELEN.find((x) => x.naam === sl.deel);
+  const delen = [];
+  if (d?.opstelling) {
+    const s = stand.standen?.standen?.find((x) => x.naam === d.opstelling);
+    const actief = stand.standen?.actief?.naam === d.opstelling;
+    delen.push(`opstelling <b>${esc(s?.titel ?? d.opstelling)}</b>${actief ? ' <span class="groen">✓ actief</span>' : ` · <button type="button" class="link" data-kies-stand="${esc(d.opstelling)}">kies hem</button> (dan activeer)`}`);
+  }
+  if (d?.profiel) delen.push(`meenemen: <button type="button" class="link" data-paklijst="${esc(d.profiel)}">paklijst ${esc(d.profiel)}</button>`);
+  const html = delen.join(' · ');
+  if ($('deel-kop').innerHTML !== html) $('deel-kop').innerHTML = html;   // ook elke 2 s (tekenStand): alleen als het anders is
+  $('deel-kop').hidden = !delen.length;
+}
+
+function puntKnoppen(it, groot) {
+  return (groot ? GROTE_KNOPPEN : STATUS_KNOPPEN).map(([st, label]) =>
+    `<button class="sk" type="button" data-st="${st}" aria-pressed="${it.status === st}" title="${st}">${label}</button>`).join('');
+}
+
+function lijstHtml(items) {
+  return blokkenNu().map((b) => {
     const klaar = b.punten.filter((p) => items[p.id] && items[p.id].status !== 'open').length;
     return `<section class="lijst-blok">
       <h3>${esc(b.titel)} <span class="blok-maat">${klaar}/${b.punten.length} · ~${b.minuten} min</span></h3>
       ${b.punten.map((p) => {
         const it = items[p.id] ?? { status: 'open', notitie: '' };
         return `<div class="punt" data-id="${esc(p.id)}" data-status="${esc(it.status)}">
-          <div class="punt-knoppen">${STATUS_KNOPPEN.map(([st, label]) =>
-            `<button class="sk" data-st="${st}" aria-pressed="${it.status === st}" title="${st}">${label}</button>`).join('')}</div>
+          <div class="punt-knoppen">${puntKnoppen(it, false)}</div>
           <div class="punt-tekst"><span class="doe">${esc(p.doe)}</span><span class="let">${esc(p.let)}</span></div>
           <input class="notitie" id="n-${esc(p.id)}" type="text" maxlength="2000" placeholder="notitie"
                  value="${esc(it.notitie)}" aria-label="notitie bij ${esc(p.doe)}">
@@ -598,7 +670,56 @@ function tekenLijst() {
       }).join('')}
     </section>`;
   }).join('');
-  tekenVoortgang();
+}
+
+/** Eén punt groot, met grote knoppen (ook op de iPad naast de controllers), vorige en volgende open punt. */
+function eenPunt(items) {
+  const ids = idsNu();
+  if (!ids.length) return '<p class="uitleg">Geen punten in dit deel.</p>';
+  if (!ids.includes(sl.punt)) sl.punt = eersteOpen(ids, items) ?? ids[0];
+  const plek = plekVan(SPEELLIJST, sl.punt);
+  const p = plek.punt, it = items[p.id] ?? { status: 'open', notitie: '' };
+  const t = telling(ids, items);
+  const i = ids.indexOf(p.id);
+  const codes = vraagCodes(p.let);
+  return `<article class="punt groot" data-id="${esc(p.id)}" data-status="${esc(it.status)}">
+      <p class="waar">${esc(plek.blok.titel)} · punt ${plek.nr} van ${plek.van} · ~${plek.blok.minuten} min voor het blok</p>
+      <p class="doe">${esc(p.doe)}</p>
+      <p class="let"><b>let op</b> ${esc(p.let)}</p>
+      ${codes.length ? `<p class="codes">Beantwoordt ${codes.map((c) => `<span class="vraag">${esc(c)}</span>`).join(' ')}: schrijf je antwoord in de notitie.</p>` : ''}
+      <div class="grote-knoppen" role="group" aria-label="uitslag">${puntKnoppen(it, true)}</div>
+      <label class="notitie-vak"><span>${it.status === 'fout' ? 'Wat zag je? (nodig bij fout)' : 'Notitie of antwoord (mag leeg)'}</span>
+        <textarea class="notitie" id="n-${esc(p.id)}" rows="3" maxlength="2000">${esc(it.notitie)}</textarea></label>
+      <div class="punt-nav">
+        <button class="knop" type="button" data-nav="vorige"${i === 0 ? ' disabled' : ''}>← vorige</button>
+        <span class="voortgang">${i + 1} / ${ids.length} · ${t.gedaan} gedaan</span>
+        <button class="knop hoofd" type="button" data-nav="volgende">${t.open === 0 ? 'naar het verslag →' : 'volgende open punt →'}</button>
+      </div>
+    </article>
+    <details class="blokken-van-deel"><summary>Alle blokken van dit deel</summary><ul>${blokkenNu().map((b) => {
+      const bt = telling(b.punten.map((x) => x.id), items);
+      return `<li><button type="button" class="link" data-blok="${esc(b.id)}"${b === plek.blok ? ' aria-current="true"' : ''}>${esc(b.titel)}</button>
+        <span class="uitleg">${bt.gedaan}/${bt.totaal}${bt.fout ? ` · <b class="rood">${bt.fout} fout</b>` : ''} · ~${b.minuten} min</span></li>`;
+    }).join('')}</ul></details>`;
+}
+
+function tekenVerslag() {
+  const items = stand.proef.items;
+  const blokken = blokkenVan(SPEELLIJST, sl.deel);
+  const ids = idsVan(blokken);
+  const t = telling(ids, items);
+  const lijst = (wie) => ids.filter(wie).map((id) => {
+    const { blok, punt } = plekVan(blokken, id);
+    const n = String(items[id]?.notitie ?? '').trim();
+    return `<li><button type="button" class="link" data-punt="${esc(id)}">${esc(blok.titel)}</button>: ${esc(punt.doe)}${n ? `<div class="n">${esc(n)}</div>` : ''}</li>`;
+  }).join('');
+  const fouten = lijst((id) => items[id]?.status === 'fout');
+  const notities = lijst((id) => items[id]?.status !== 'fout' && String(items[id]?.notitie ?? '').trim());
+  $('verslag-inhoud').innerHTML = `<div class="cijfers"><div><b>${t.ok}</b><span>ok</span></div><div class="rood"><b>${t.fout}</b><span>fout</span></div>
+      <div><b>${t.overslaan}</b><span>overgeslagen</span></div><div><b>${t.open}</b><span>open</span></div></div>
+    ${fouten ? `<h3>Fout</h3><ul class="verslag-lijst">${fouten}</ul>` : ''}
+    ${notities ? `<h3>Notities en antwoorden</h3><ul class="verslag-lijst">${notities}</ul>` : ''}`;
+  $('verslagtekst').value = verslagTekst(SPEELLIJST, sl.deel, items);
 }
 
 function tekenVoortgang() {
@@ -634,13 +755,31 @@ $('lijst').addEventListener('click', async (e) => {
   const huidig = stand.proef.items[id]?.status ?? 'open';
   const status = huidig === knop.dataset.st ? 'open' : knop.dataset.st;   // nog eens = terug naar open
   const notitie = punt.querySelector('.notitie').value;
-  if (await zet(id, { status, notitie })) {
-    punt.dataset.status = stand.proef.items[id]?.status ?? 'open';
-    punt.querySelectorAll('.sk').forEach((k) => k.setAttribute('aria-pressed', String(k.dataset.st === punt.dataset.status)));
-    if (status === 'fout' && !notitie) punt.querySelector('.notitie').focus();
-    tekenVoortgang();
+  if (!(await zet(id, { status, notitie }))) return;
+  if (punt.classList.contains('groot')) {
+    // Eén punt: na ok of overslaan door naar het volgende open punt; bij fout blijven en de notitie in.
+    if (status === 'ok' || status === 'overslaan') sl.punt = eersteOpen(idsNu(), stand.proef.items, id) ?? id;
+    tekenLijst();
+    if (status === 'fout' && !notitie) $(`n-${id}`)?.focus();
+    return;
   }
+  punt.dataset.status = stand.proef.items[id]?.status ?? 'open';
+  punt.querySelectorAll('.sk').forEach((k) => k.setAttribute('aria-pressed', String(k.dataset.st === punt.dataset.status)));
+  if (status === 'fout' && !notitie) punt.querySelector('.notitie').focus();
+  tekenDelenEnVoortgang();
 });
+
+/** Na een klik in de lijst: alleen de tellingen bij (de lijst zelf blijft staan, met de focus erin). */
+function tekenDelenEnVoortgang() {
+  const items = stand.proef.items;
+  document.querySelectorAll('#delen .deel').forEach((k) => {
+    const t = telling(idsVan(blokkenVan(SPEELLIJST, k.dataset.deel)), items);
+    k.querySelector('.deel-telling').innerHTML = `${t.gedaan}/${t.totaal}${t.fout ? ` · <b class="rood">${t.fout} fout</b>` : ''}`;
+    k.querySelector('.balk i').style.width = `${t.totaal ? (100 * t.gedaan) / t.totaal : 0}%`;
+  });
+  tekenVerslag();
+  tekenVoortgang();
+}
 
 async function bewaarNotitie(veld) {
   const id = veld.closest('.punt').dataset.id;
@@ -648,13 +787,76 @@ async function bewaarNotitie(veld) {
   if (await zet(id, { notitie: veld.value })) {
     veld.classList.add('bewaard');
     setTimeout(() => veld.classList.remove('bewaard'), 900);
-    tekenVoortgang();
+    tekenDelenEnVoortgang();
   }
 }
 $('lijst').addEventListener('change', (e) => { if (e.target.classList.contains('notitie')) bewaarNotitie(e.target); });
 $('lijst').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target.classList.contains('notitie')) { e.preventDefault(); e.target.blur(); }
+  // Enter bewaart (blur); in het grote notitievak geeft Shift + Enter een nieuwe regel.
+  if (e.key === 'Enter' && !e.shiftKey && e.target.classList.contains('notitie')) { e.preventDefault(); e.target.blur(); }
 });
+
+// Delen, weergave, kern, de navigatie in één punt, de blokken, het verslag, en de knoppen naar opstelling en paklijst.
+document.addEventListener('click', (e) => {
+  const k = e.target.closest('button');
+  if (!k) return;
+  if (k.dataset.deel) { sl.deel = k.dataset.deel; sl.punt = null; tekenLijst(); return; }
+  if (k.dataset.weergave) { sl.weergave = k.dataset.weergave; tekenLijst(); return; }
+  if (k.dataset.nav) {
+    const ids = idsNu();
+    if (k.dataset.nav === 'vorige') sl.punt = ids[Math.max(0, ids.indexOf(sl.punt) - 1)];
+    else {
+      const v = eersteOpen(ids, stand.proef.items, sl.punt);
+      if (v) sl.punt = v; else { $('verslag').open = true; $('verslag').scrollIntoView({ block: 'start' }); }
+    }
+    tekenLijst(); return;
+  }
+  if (k.dataset.blok) {
+    const b = SPEELLIJST.find((x) => x.id === k.dataset.blok);
+    sl.punt = b.punten.find((p) => (stand.proef.items[p.id]?.status ?? 'open') === 'open')?.id ?? b.punten[0].id;
+    tekenLijst(); return;
+  }
+  if (k.dataset.punt) {
+    sl.weergave = 'een'; sl.punt = k.dataset.punt;
+    if (!idsNu().includes(sl.punt)) sl.kern = false;
+    if (!idsNu().includes(sl.punt)) sl.deel = deelVan(plekVan(SPEELLIJST, sl.punt).blok);
+    tekenLijst(); $('lijst').scrollIntoView({ block: 'start' }); return;
+  }
+  if (k.dataset.kiesStand) {
+    const kies = $('stand-kies');
+    if (![...kies.options].some((o) => o.value === k.dataset.kiesStand)) { meld('die opstelling staat (nog) niet in de lijst', 'fout'); return; }
+    kies.value = k.dataset.kiesStand; toonVerschil();
+    $('opstelling').scrollIntoView({ block: 'center' }); $('stand-activeer').focus(); return;
+  }
+  if (k.dataset.paklijst) {
+    const kies = $('ap-profiel');
+    if ([...kies.options].some((o) => o.value === k.dataset.paklijst) && kies.value !== k.dataset.paklijst) {
+      kies.value = k.dataset.paklijst; kies.dispatchEvent(new Event('change'));
+    }
+    $('avondpakket').open = true; $('avondpakket').scrollIntoView({ block: 'start' }); return;
+  }
+  if (k.id === 'kopieer') {
+    const tekst = $('verslagtekst').value;
+    const klaar = () => { $('gekopieerd').textContent = 'gekopieerd: plak het in de chat met Claude'; };
+    const terugval = () => { const t = $('verslagtekst'); t.hidden = false; t.focus(); t.select(); $('gekopieerd').textContent = 'selecteer en kopieer de tekst hieronder'; };
+    try { navigator.clipboard.writeText(tekst).then(klaar, terugval); } catch (_) { terugval(); }
+  }
+});
+$('kern').addEventListener('change', (e) => { sl.kern = e.target.checked; sl.punt = null; tekenLijst(); });
+
+// De iPad en de Mac op dezelfde stand: zolang deze pagina in beeld is elke 10 s /api/proef, en meteen bij
+// terugkomen. Alleen opnieuw tekenen als er iets veranderde, en niet terwijl je in een notitie typt.
+const PROEF_ELKE_MS = 10000;
+async function volgProef() {
+  if (document.visibilityState !== 'visible') return;
+  let nieuw;
+  try { nieuw = await haal('/api/proef'); } catch (_) { return; }
+  if (JSON.stringify(nieuw.items) === JSON.stringify(stand.proef?.items)) return;
+  if (document.activeElement?.classList?.contains('notitie')) return;
+  stand.proef = nieuw;
+  tekenLijst();
+}
+document.addEventListener('visibilitychange', volgProef);
 
 let nieuwKlaar = null;
 $('nieuw').addEventListener('click', async () => {
@@ -671,6 +873,7 @@ $('nieuw').addEventListener('click', async () => {
     const r = await fetch('/api/proef/nieuw', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     const d = await r.json();
     stand.proef = await haal('/api/proef');
+    sl.deel = null; sl.punt = null;
     tekenLijst();
     meld(d.gearchiveerd ? `vorige ronde bewaard in proef/${d.gearchiveerd}` : 'er was nog niets om te bewaren');
   } catch (err) { meld(`niet gelukt: ${err.message}`, 'fout'); }
@@ -699,12 +902,15 @@ try { stand.proef = await haal('/api/proef'); } catch (_) { meld('speellijst nie
 tekenLijst();
 await ververs();
 leesTooling().then(tekenStand);
+leesVersie().then(tekenStand);
 leesAvondpakket();
 setInterval(apAutomatisch, AP_ELKE_MS);
 vraagStatus();
 setInterval(ververs, 2000);
 setInterval(vraagStatus, 2000);
 setInterval(() => leesTooling().then(tekenStand), 60000);
+setInterval(() => leesVersie().then(tekenStand), 60000);
+setInterval(volgProef, PROEF_ELKE_MS);
 // Bedienen vanaf iPad en iPhone (werkruimte S8): een eigen blok onder "Openen", met zijn eigen peiling.
 const bedienen = opzetBedienen({ na: document.querySelector('[aria-labelledby="h-open"]'), meld });
 window.controle = { bedienen, stand, ververs, mixerAdres: () => mixerNu().adres, leesAvondpakket, apAutomatisch };   // handig in de console en voor tools/headless/controle.mjs, standen.mjs en avondpakket.mjs

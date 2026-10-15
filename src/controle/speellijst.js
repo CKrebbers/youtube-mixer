@@ -57,8 +57,8 @@
  * ar-na, het setboek, 7a, de proefherstel, de eigen muziek). Op avond 2 eerst VARVE.app die de hub start (app-hub), de
  * opstelling via de hub, de lange opname van uitzenden stap 0, en "Na afloop" (Logic, de speeldag pas daar: die blokkeert
  * de nacht). Op avond 3 het niveau na beeld-pc, dan zonder de pc het zaalbeeld, beeld op één machine en uitzenden.
- * VARVE.app start sinds 13 okt ook de hub (AR21): avond 1 stopt hem (start-apc) en ar-weg/ar-val starten de lus zonder
- * de app. De open vragen op gevoel, gehoor en zicht (J, W, PL2, BE11–BE15, HA4–HA9, AP9, CX3) staan bij hun punt.
+ * VARVE.app start de hub sinds 16 okt alleen als de opstelling "mixer via de hub" zegt (AR21): avond 1 (APC direct) dus niet;
+ * avond 2 activeert eerst de opstelling (sta-hub) en klikt dan VARVE (app-hub). ar-weg/ar-val starten de lus zonder de app. De open vragen op gevoel, gehoor en zicht (J, W, PL2, BE11–BE15, HA4–HA9, AP9, CX3) staan bij hun punt.
  * Geen id veranderd of weg; ar-app, ar-meet, ar-ok en ga-echoes zijn alleen verhuisd (de stand hangt aan het id).
  * Elk punt: `doe` = wat je doet, `let` = waar je op let.
  */
@@ -83,8 +83,11 @@ export const SPEELLIJST = [
       let: '"Verhuisd." en "media-VERHUISD.txt geschreven: …"? Staat er in de projectmap geen media/ meer, wel media-VERHUISD.txt?',
       citeert: ['Verhuisd.', ' geschreven: '] },
     { id: 'ar-app', doe: 'Na mv-doe (VARVE.app leest ~/.varve/media-pad), in Terminal in de projectmap: had je de LaunchAgent uit docs/TAILSCALE.md geladen, dan eerst launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist. Stop een server die nog los draait (pkill -f server/index.js), bouw VARVE.app opnieuw (zsh tools/varve-app/maak.sh) en start VARVE vanuit het Dock.',
-      let: 'sh tools/varve-app/server-lus.sh status zegt "de lus draait (pid …)", en ~/.varve-server.log heeft de regel "[lus] … server gestart (pid …)". Zegt hij "de lus draait niet", dan draait er een server zonder lus (VARVE.app start geen tweede): stop hem en klik VARVE opnieuw. Wil je de LaunchAgent houden (de server na het inloggen al aan): die start sinds 16 okt de lus zelf (docs/TAILSCALE.md, AR8); laad hem dan opnieuw en kijk of status hetzelfde zegt. Let op: VARVE.app start sinds 13 okt ook de hub (staat AV-app-hub in ~/Projects): lsof -i :7700 geeft dan een regel. Dat is goed voor avond 2; voor avond 1 stop je hem weer (start-apc).',
-      citeert: ['de lus draait (pid', 'de lus draait niet', 'server gestart (pid'] },
+      let: 'sh tools/varve-app/server-lus.sh status zegt "de lus draait (pid …)", en ~/.varve-server.log heeft de regel "[lus] … server gestart (pid …)". Zegt hij "de lus draait niet", dan draait er een server zonder lus (VARVE.app start geen tweede): stop hem en klik VARVE opnieuw. Wil je de LaunchAgent houden (de server na het inloggen al aan): die start sinds 16 okt de lus zelf (docs/TAILSCALE.md, AR8); laad hem dan opnieuw en kijk of status hetzelfde zegt. Een hub start VARVE.app alleen als de actieve opstelling "mixer via de hub" zegt (AR21, sinds 16 okt): geeft lsof -i :7700 een regel, kijk dan welke opstelling de tegel Opstelling noemt (sta-tegel zet hem op "Avond 1 · APC direct"). Kwam er een melding "Opstelling onbekend (…): de hub is niet gestart."?',
+      citeert: ['de lus draait (pid', 'de lus draait niet', 'server gestart (pid', 'Opstelling onbekend ('] },
+    { id: 'ver-tegel', doe: 'Na ar-app: Controlekamer, de eerste tegel Versie. Klik erop (dan kijkt hij meteen, ook naar GitHub).',
+      let: 'Groen, met "… · main" en "gelijk met GitHub"? Zo niet, dan zegt hij wat eerst moet: "herstart de server", "git pull, dan de server herstarten", "git checkout main", of "herlaad hem". Dit is voortaan de snelle controle dat je de laatste versie hebt, ook vóór avond 2 en 3.',
+      citeert: ['gelijk met GitHub', 'herstart de server', 'git pull, dan de server herstarten'] },
     { id: 'ar-herreken', doe: 'Na ar-app, er speelt niets (dan wacht de tweede mening niet). Volg het log: tail -f ~/.varve-server.log, tot de regel "[tellen] … grids uit bestaande tellen klaar — … s". De eerste start na 16 okt rekent elk automatisch grid opnieuw uit de tellen (kaart-VERSIE 3). Kijk daarna naar de tegel Server in de Controlekamer.',
       let: 'Hoe lang duurde het (het getal achter klaar)? Staat er in het log "[media] …" met je nieuwe map en GEEN "ligt binnen iCloud ("? Zegt de tegel Server daarna "secties: alles actueel", of hoeveel "verouderd" (die volgen bij het laden)? Pas hierna kloppen de beatgrid-punten van avond 1 (ga-dj, ar-een). (AR1)',
       citeert: [' uit bestaande tellen klaar', '[media] ', 'ligt binnen iCloud (', 'secties: alles actueel'] },
@@ -134,9 +137,9 @@ export const SPEELLIJST = [
   // ---- Avond 1: mixen (APC + koptelefoon) ----------------------------------------
   // De kern (~45 min): opstarten, luisteren, draaien, koptelefoon, keylock.
   { id: 'start', titel: 'Avond 1 · Opstarten', minuten: 5, punten: [
-    { id: 'start-apc', doe: 'Sluit de APC40 aan (Logic en andere muziekprogramma\'s dicht). Avond 1 is zonder hub: startte VARVE.app er een (lsof -i :7700 geeft een regel), stop hem dan met kill $(lsof -nP -t -iTCP:7700 -sTCP:LISTEN). Open de mixer met de knop zonder hub (naast "mixer openen via de hub"; zonder ?hub= in de Controlekamer heet hij gewoon mixer openen).',
-      let: 'APC hierboven groen, geen melding "verkeerde poort", en in de adresbalk van de mixer geen ?hub=? (Met de hub erbij praten de hub en de mixer allebei met de APC.) (AR21)',
-      citeert: ['mixer openen via de hub', 'zonder hub'] },
+    { id: 'start-apc', doe: 'Sluit de APC40 aan (Logic en andere muziekprogramma\'s dicht). Avond 1 is zonder hub (opstelling "Avond 1 · APC direct", sta-terug): klik VARVE in het Dock; die start nu geen hub (AR21). Draait er toch nog een (lsof -i :7700 geeft een regel, bv. van een middag met de hub; VARVE meldt dan "De hub draait al, maar de opstelling zegt niet via de hub …"), stop hem met kill $(lsof -nP -t -iTCP:7700 -sTCP:LISTEN). Open de mixer met mixer openen (staat er "mixer openen via de hub", dan is de opstelling niet die van avond 1: kies hem, of neem de knop zonder hub ernaast).',
+      let: 'Geen ?hub= in de adresbalk van de Controlekamer (VARVE haalt hem weg), APC hierboven groen, geen melding "verkeerde poort", en in de adresbalk van de mixer geen ?hub=? (Met de hub erbij praten de hub en de mixer allebei met de APC.) (AR21)',
+      citeert: ['mixer openen via de hub', 'zonder hub', 'De hub draait al, maar de opstelling zegt niet via de hub'] },
     { id: 'start-audio', doe: 'Klik in de mixer op "audio starten".', let: 'Audio hierboven: aan.' },
     { id: 'sb-log', doe: 'In de mixer: klik ↺ (naast de opname) en zet het vinkje "log altijd aan, vanaf het openen".',
       let: 'Loopt ○ log vanaf nu vanzelf mee, ook na herladen? Dat log leest het setboek na de avond (sb-draai).',
@@ -493,16 +496,16 @@ export const SPEELLIJST = [
       let: 'Hoe lang duurt het schrijven van twee volle schermen? Veel meer dan ±20 ms betekent dat een druk scherm de pads kan vertragen: schrijf het getal in de notitie.' },
   ] },
   { id: 'hub', titel: 'Avond 2 · Opstarten met de hub', minuten: 20, punten: [
-    { id: 'app-hub', doe: 'Maschine aangesloten, lsof -i :7700 geeft niets, Controlekamer-tabblad dicht. Klik VARVE in het Dock en open de mixer met mixer openen via de hub.',
-      let: 'Opent de Controlekamer met "?hub=ws://localhost:7700/app" in de adresbalk, met de knop "mixer openen via de hub" en "zonder hub" ernaast? Staat in ~/.varve-hub.log "--- … gestart door VARVE.app"? Doet de Maschine mee? Kwam er een melding "De hub start niet: de Maschine doet niet mee …"?',
+    { id: 'sta-hub', doe: 'Eerst de opstelling, dan de hub (AR21): mixer dicht, de hub draait nog niet (lsof -i :7700 geeft niets). Controlekamer: kies "Avond 2 · APC + Maschine via de hub" en activeer (twee klikken).',
+      let: 'Heet de knop nu mixer openen via de hub (met zonder hub ernaast)? Zegt de tegel Opstelling "hub-set studio: start hem zelf (npm start -- studio)"? Dat doet VARVE.app bij de volgende klik (app-hub).',
+      citeert: ['mixer openen via de hub', ': start hem zelf (npm start -- '] },
+    { id: 'app-hub', doe: 'Na sta-hub. Maschine aangesloten, lsof -i :7700 geeft niets, Controlekamer-tabblad dicht. Klik VARVE in het Dock en open de mixer met mixer openen via de hub.',
+      let: 'Opent de Controlekamer met "?hub=ws://localhost:7700/app" in de adresbalk, met de knop "mixer openen via de hub" en "zonder hub" ernaast? Gaat de mixer naar /?hub=ws://localhost:7700/app en werkt de APC via de hub? Staat in ~/.varve-hub.log "--- … gestart door VARVE.app"? Doet de Maschine mee? Kwam er een melding "De hub start niet: de Maschine doet niet mee …"?',
       citeert: ['?hub=ws://localhost:', 'gestart door VARVE.app', 'mixer openen via de hub', 'De hub start niet: de Maschine doet niet mee'] },
     { id: 'hb-start', doe: 'Varve draait al: start de hub pas daarna, dan gebruikt hij die server en laat hem bij stoppen staan. Mixer-tabblad dicht; APC, Xboard49 en Maschine aangesloten. Deed app-hub het al (VARVE.app startte de hub), dan is dit punt klaar. Anders: dubbelklik Start studio.command in de map AV-app-hub (in Terminal: npm start -- studio --geen-drivers). Doet de Maschine niets: Invoermonitoring voor Terminal aan en opnieuw starten. Zegt de hub "Maschine: bezet"? Klik Studio uit (de app) en wacht een paar seconden.',
       let: 'Chrome opent (na een paar seconden) de mixer met ?hub= in de adresbalk, en de APC werkt zoals op avond 1?' },
-    { id: 'app-erbij', doe: 'De hub draait. Open zelf http://localhost:8777/controle (zonder ?hub=) en klik VARVE nog eens in het Dock.',
-      let: 'Komt hetzelfde tabblad naar voren en krijgt het ?hub= erbij, zonder tweede Controlekamer? Geeft lsof -nP -iTCP:7700 -sTCP:LISTEN één regel (geen tweede hub)?' },
-    { id: 'sta-hub', doe: 'De hub draait, mixer dicht. Controlekamer: kies "Avond 2 · APC + Maschine via de hub", activeer, en open de mixer met mixer openen via de hub.',
-      let: 'Gaat het adres naar /?hub=ws://localhost:7700/app en werkt de APC via de hub? Zegt de tegel Opstelling "hub-set studio: start hem zelf (npm start -- studio)"?',
-      citeert: ['mixer openen via de hub', ': start hem zelf (npm start -- '] },
+    { id: 'app-erbij', doe: 'De hub draait, de opstelling van avond 2 is actief. Open zelf http://localhost:8777/controle (zonder ?hub=) en klik VARVE nog eens in het Dock.',
+      let: 'Komt hetzelfde tabblad naar voren en krijgt het ?hub= erbij, zonder tweede Controlekamer? Geeft lsof -nP -iTCP:7700 -sTCP:LISTEN één regel (geen tweede hub)? (Andersom, met een opstelling zonder hub, haalt VARVE ?hub= er juist af.)' },
     { id: 'uz-start', doe: 'Bij het begin van avond 2 (uitzenden stap 0, docs/UITZENDEN.md): kies naast ● "audio + video" en start een opname. Laat hem de hele avond lopen, minstens 45 min; stoppen pas bij uz-stap0.',
       let: 'Loopt hij (de teller naast ●)? De langste opname met beeld tot nu toe was 5,6 min.',
       citeert: ['audio + video'] },

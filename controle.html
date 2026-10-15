@@ -95,10 +95,71 @@
       <span class="voortgang" id="voortgang"></span>
       <button class="knop klein" id="nieuw" title="de huidige sessie naar proef/archief/ en opnieuw beginnen">nieuwe ronde</button>
     </div>
-    <p class="uitleg">Per punt: <b>ok</b>, <b>fout</b> of <b>overslaan</b>, en een notitie als iets niet klopt.
-      Alles wordt meteen bewaard in <code>proef/sessie.json</code>; daar leest Claude het na de sessie.</p>
+    <p class="uitleg">Kies een deel en loop de punten af: <b>ok</b>, <b>fout</b> of <b>overslaan</b>, en een notitie als iets
+      niet klopt (staat er een vraagcode bij, schrijf je antwoord erbij). Alles wordt meteen bewaard in
+      <code>proef/sessie.json</code>, dezelfde stand op de Mac en de iPad; daar leest Claude het na de sessie.</p>
+    <!-- Per deel, één punt tegelijk (16 okt: het losse artifact "Varve Controlekamer" is hierin opgegaan,
+         src/controle/speellijst-weergave.js). De knoppen worden door controle.js getekend. -->
+    <nav class="delen" id="delen" aria-label="Delen van de speellijst"></nav>
+    <div class="weergave">
+      <div class="weergave-knoppen" role="group" aria-label="Weergave">
+        <button class="knop klein" type="button" data-weergave="een">één punt</button>
+        <button class="knop klein" type="button" data-weergave="lijst">lijst</button>
+      </div>
+      <label class="kern" id="kern-keuze" hidden><input type="checkbox" id="kern"> alleen de kern (~50 min)</label>
+    </div>
+    <p class="deel-kop" id="deel-kop"></p>
     <div id="lijst"></div>
+    <details class="verslag" id="verslag">
+      <summary>Verslag van dit deel</summary>
+      <div id="verslag-inhoud"></div>
+      <p><button class="knop" type="button" id="kopieer">kopieer het verslag</button> <span class="uitleg" id="gekopieerd" aria-live="polite"></span></p>
+      <textarea id="verslagtekst" class="verslagtekst" readonly rows="8" hidden></textarea>
+    </details>
   </section>
+
+  <details class="blok hulp">
+    <summary>Hulp: de APC in het kort, en als iets niet werkt</summary>
+    <div class="hulpvak">
+      <section aria-labelledby="h-apc-kort">
+        <h3 id="h-apc-kort">De APC40 in het kort</h3>
+        <div class="modi">
+          <span>scene 1</span><b><i class="lamp" style="--l:#e3bb12"></i>hotcues</b><span>rij 1–4 hotcue per track, shift = wissen, rij 5 loop aan/uit</span>
+          <span>scene 2</span><b><i class="lamp" style="--l:#17aec2"></i>loops</b><span>1 · 2 · 4 · 8 · 16 tellen</span>
+          <span>scene 3</span><b><i class="lamp" style="--l:#8558ef"></i>sampler</b><span>rij 1 pads, rij 3 de sectie die je hoort</span>
+          <span>scene 4</span><b><i class="lamp" style="--l:#2d6be0"></i>video</b><span>effect, mengvorm, puls; rechts de noodknoppen</span>
+          <span>shift + 1</span><b><i class="lamp" style="--l:#58b4f0"></i>secties</b><span>de pads zijn de secties van de focus-track; shift = als loop</span>
+          <span>shift + 2</span><b><i class="lamp" style="--l:#ec7414"></i>patronen</b><span>clips per track</span>
+          <span>shift + 3</span><b><i class="lamp" style="--l:#2aa783"></i>stems</b><span>per kolom een stem weg</span>
+          <span>shift + 4</span><b><i class="lamp" style="--l:#86c823"></i>auto</b><span>de auto-DJ bijsturen</span>
+          <span>shift + 5</span><b><i class="lamp" style="--l:#d238b0"></i>klank</b><span>per kolom kill hoog / mid / laag, rem, op de maat</span>
+        </div>
+        <dl class="knoppen-kort">
+          <div><dt>Scene 5</dt><dd>loop weg</dd></div><div><dt>▲ ▼</dt><dd>door alle modi; modusknop vasthouden = even gluren</dd></div>
+          <div><dt>Nummer · S</dt><dd>play (shift: op de maat) · sync</dd></div><div><dt>A|B · ●</dt><dd>crossfaderkant · koptelefoon (PFL)</dd></div>
+          <div><dt>Cue Level</dt><dd>koptelefoonvolume (shift: mix)</dd></div><div><dt>Shift + Tap</dt><dd>keylock aan/uit</dd></div>
+          <div><dt>Nudge ±</dt><dd>bend (shift: toon −1 / +1)</dd></div><div><dt>Bank ◀ ▶</dt><dd>beatjump (shift: lengte ½ / ×2)</dd></div>
+          <div><dt>Pan · Sends · User</dt><dd>loop in · out · reloop</dd></div><div><dt>Stop All Clips</dt><dd>rem (vinylstop)</dd></div>
+          <div><dt>Lock</dt><dd>quantize aan/uit voor alle tracks</dd></div><div><dt>Shift + Metronome</dt><dd>grid-modus</dd></div>
+          <div><dt>Shift + Clip/Device</dt><dd>mapje master</dd></div><div><dt>Shift + Detail View</dt><dd>mapje beeld</dd></div>
+        </dl>
+        <p class="uitleg">Alles op hun echte plek, met wat ze nu doen: de <a href="/apc.html" target="_blank" rel="noopener">APC-kaart</a>.</p>
+      </section>
+      <section aria-labelledby="h-mis">
+        <h3 id="h-mis">Als iets niet werkt</h3>
+        <dl class="mis">
+          <div><dt>Een punt lukt niet</dt><dd>Zet het op <b>fout</b> en schrijf in de notitie wat je zag. Ga door met het volgende punt; repareren doen we later. Kom je er niet aan toe: <b>overslaan</b>.</dd></div>
+          <div><dt>Ik weet niet of ik de laatste versie heb</dt><dd>De tegel <b>Versie</b> bovenaan: groen = de server draait wat op schijf staat en dat is main op GitHub. Klik erop om meteen te kijken.</dd></div>
+          <div><dt>Geen geluid, terwijl PLAY brandt</dt><dd>Klik één keer in de mixer: de browser start het geluid pas na een klik.</dd></div>
+          <div><dt>APC niet groen</dt><dd>Logic dicht? Maar één Varve-tabblad open? Draait er een hub terwijl de opstelling zonder hub is (VARVE meldt het)? Daarna de mixer opnieuw openen met de knop.</dd></div>
+          <div><dt>Lampjes vechten (avond 2)</dt><dd>Er is nog een oud mixer-tabblad open. Sluit het tabblad <b>zonder</b> <code>?hub=</code> in de adresbalk; het tabblad mét ?hub= houdt de APC.</dd></div>
+          <div><dt>Pas op tijdens het spelen</dt><dd>Cmd+R of Cmd+W herlaadt of sluit de mixer (hij vraagt het eerst zolang er iets speelt). Shift + pad wist een hotcue meteen.</dd></div>
+          <div><dt>De hub start niet of valt om</dt><dd>In <code>AV-app-hub</code>: <code>node src/cli.js doctor</code> zegt wat er al draait. Start hem opnieuw met hetzelfde commando; de apps verbinden vanzelf weer.</dd></div>
+          <div><dt>De Maschine doet niets</dt><dd>Invoermonitoring voor Terminal aan (avond 2, hb-start) en de hub opnieuw starten.</dd></div>
+        </dl>
+      </section>
+    </div>
+  </details>
 </main>
 
 <div class="meldingen" id="meldingen" aria-live="polite"></div>

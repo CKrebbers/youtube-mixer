@@ -4,9 +4,29 @@ Clay: "maak 1 plek waar de hele controle room samen komt". Dit is die plek:
 `http://localhost:8777/controle` (`controle.html`). Begin een sessie hier, niet in
 de mixer.
 
+**Eén Controlekamer** (16 okt; Clay: "waarom zijn er twee controle kamers? laten we die zo goed mogelijk
+samenvoegen"). Naast deze pagina bestond sinds 15 okt een los artifact op claude.ai, "Varve Controlekamer"
+(gemaakt met `maak-nalopen.mjs` uit de speellijst van die dag: 236 punten in 45 blokken, eigen opslag, niet
+bijgewerkt). Wat dat beter deed staat nu hier: de lijst **per deel** (Vooraf, Avond 1 …), **één punt tegelijk**
+met grote knoppen (ook op de iPad naast de controllers), **alleen de kern**, het **verslag** om te kopiëren
+en de **hulp** (de APC in het kort, als iets niet werkt). Meenemen en klaarzetten van het artifact zijn
+hier de paklijst van het Avondpakket en de opstelling, met een knop vanuit het deel. Het artifact had geen
+opgeslagen resultaten, er ging dus niets verloren. Er is één stand: `proef/sessie.json`.
+
 ## Wat erop staat
 
 1. **Stand**, tegels met een lampje:
+   - **Versie** (16 okt; Clay: "hoe kan ik snel en makkelijk zien dat ik in de juiste laatste versie zit?";
+     `server/versie.js`, `src/controle/versie-tegel.js`, `GET /api/versie`): de commit en de tak. **Groen** =
+     de server draait wat op schijf staat, dat is main, en main op GitHub is hetzelfde. Anders staat bovenaan
+     wat je eerst doet: **"herstart de server"** (rood: na `git pull` draait nog de oude code), **"git pull,
+     dan de server herstarten"** (GitHub is verder), **"git checkout main"** (een andere tak), of **"herlaad
+     hem"** (deze pagina laadde op een oudere versie; de mixer dan ook, als er niets speelt). Herstarten: mixer
+     dicht, `sh tools/varve-app/server-lus.sh stop`, dan VARVE in het Dock. Extra regels: "gelijk met GitHub",
+     "verder dan GitHub (nog niet gepusht)", "GitHub niet bereikt (…)" (geen netwerk: oranje, geen fout),
+     "N bestanden gewijzigd, niet gecommit". De server leest git in een kindproces (time-out, nooit een
+     wachtwoordvraag): "draait" bij het starten, "op schijf" hooguit eens per 15 s, GitHub (`git ls-remote`)
+     hooguit eens per 10 min. Een **klik** op de tegel kijkt meteen, ook naar GitHub.
    - **Server** draait, met het aantal nummers in de library. Is hij herstart door de herstartlus
      (AR9, 16 okt), dan eerst een regel "herstart om 22:14 (viel om, exitcode 137) · 1 keer sinds
      21:30", of "(hing, de wachter zette hem neer)" na een hang (AR18). De tegel is dan 10 minuten
@@ -69,7 +89,17 @@ Clay probeert alles wat sinds 5 okt gebouwd is voor het eerst op zijn echte hard
 (APC40 mkII, Xboard49, Maschine MK2, de koptelefoon via het samengestelde apparaat,
 Chrome), en loopt daarvoor de lijst van boven naar beneden af: elk blok bouwt op het
 vorige. De ruggengraat zijn de "Klaar als"-punten van S1–S4 in `docs/STUDIO.md` §5.
-De Controlekamer kent geen avonden: de bloktitel groepeert ("Avond 1 · …").
+De bloktitel groepeert ("Avond 1 · …"); sinds 16 okt kiest de Controlekamer daarop een **deel**
+(`src/controle/speellijst-weergave.js`): een knop per deel met hoeveel er gedaan en fout is, en "Alles".
+Hij opent op het eerste deel met een open punt. Twee weergaven: **één punt** (standaard: het punt groot,
+✓ ok / ✗ fout / — overslaan, het notitievak, ← vorige en "volgende open punt"; na ok of overslaan gaat hij
+door, bij fout blijft hij staan met de notitie open; een vraagcode aan het eind van de let staat er apart
+bij) en **lijst** (zoals vroeger, alleen dat deel). Bij Avond 1 "alleen de kern" (de vijf kernblokken,
+~50 min). Boven de punten van een avond de opstelling (✓ actief, of een knop die hem kiest) en de paklijst
+van het Avondpakket. Onderaan het **verslag** van het deel (cijfers, de fouten, de notities; "kopieer het
+verslag" voor de chat). Welk deel, welke weergave en welk punt onthoudt de browser; de stand staat op de
+server, en zolang de pagina in beeld is haalt hij die elke 10 s op: wat je op de iPad afvinkt staat zo ook
+op de Mac (niet terwijl je in een notitie typt).
 
 | blok | punten | min | waarover (docs) | vragen (VRAGEN.md) |
 |---|---|---|---|---|
@@ -88,13 +118,13 @@ De Controlekamer kent geen avonden: de bloktitel groepeert ("Avond 1 · …").
 | Eerder werk · … (zeven blokken) | 26 | 45 | wat er vóór 6 okt al in stond: toonsoort, binnenhalen, auto-DJ, plan, klankschaal, beamer, kleine dingen | AU2, AU3, PL3, KS2, KS3 |
 
 Sinds 16 okt (herschikt na de architectuurronde) staat alles erin wat sinds 10 okt gebouwd is, op de volgorde
-waarin het moet: 325 punten in 61 blokken.
+waarin het moet: 325 punten in 61 blokken (16 okt avond: 326, met ver-tegel).
 
 | deel | blokken | punten | min | wat |
 |---|---|---|---|---|
-| **Vooraf** (overdag, vóór avond 1) | 2 | 21 | 110 | eerst een kopie buiten de laptop (`tools/backup`, docs/BACKUP.md), dan media buiten iCloud (`tools/media-verhuis.mjs`, server uit), dan VARVE.app opnieuw (ar-app) en de herberekening van alle grids (AR1, ar-herreken: wacht op "[tellen] … grids uit bestaande tellen klaar"); daarna de opstelling (docs/STANDEN.md, eindigt op "Avond 1 · APC direct"), het avondpakket thuis (vertrek, aankomst), de instellingen op de server, de iPhone via Tailscale (co-adres) en de A4 van de handenkaart |
+| **Vooraf** (overdag, vóór avond 1) | 2 | 22 | 110 | eerst een kopie buiten de laptop (`tools/backup`, docs/BACKUP.md), dan media buiten iCloud (`tools/media-verhuis.mjs`, server uit), dan VARVE.app opnieuw (ar-app), de tegel Versie (ver-tegel) en de herberekening van alle grids (AR1, ar-herreken: wacht op "[tellen] … grids uit bestaande tellen klaar"); daarna de opstelling (docs/STANDEN.md, eindigt op "Avond 1 · APC direct"), het avondpakket thuis (vertrek, aankomst), de instellingen op de server, de iPhone via Tailscale (co-adres) en de A4 van de handenkaart |
 | **Avond 1** (mixen, zonder hub) | 22 | 127 | 330 | de kern (opstarten, luisteren, draaien, koptelefoon, keylock: 27 punten, 50 min), zonder lag, de library (bpm, past bij, de kaart), klank, beatgrid, gelijkzetten, tel 1, stems, master, de secties, naast de mixer (Controlekamer en de companion, AR16), het geheugen, de server weg, slaap en de Scarlett, en "Na afloop en de ochtend erna" (echo's, de nacht aan, ar-na, het setboek, 7a, de proefherstel, de eigen muziek) |
-| **Avond 2** (spelen, met de hub) | 15 | 90 | 305 | de hub-middag (2a, overdag), V1 en de schermen, opstarten (VARVE.app start de hub: app-hub; de opstelling via de hub; de opname van uitzenden stap 0), zonder lag met de hub, spelen, patronen, de secties met plan, auto-DJ, Maschine, beeld en hub, de Maschine als DJ-bediening, bladeren en sampler, crossover, en "Na afloop" (de opname, Logic, de speeldag) |
+| **Avond 2** (spelen, met de hub) | 15 | 90 | 305 | de hub-middag (2a, overdag), V1 en de schermen, opstarten (eerst de opstelling via de hub: sta-hub, dan start VARVE.app de hub: app-hub; de opname van uitzenden stap 0), zonder lag met de hub, spelen, patronen, de secties met plan, auto-DJ, Maschine, beeld en hub, de Maschine als DJ-bediening, bladeren en sampler, crossover, en "Na afloop" (de opname, Logic, de speeldag) |
 | **Avond 3** (beeld) | 6 | 21 | 135 | met de pc: de Stroommachine, het niveau, het avondpakket en de suite op de pc; zonder de pc: het zaalbeeld, beeld op één machine (overdag, geen speeldag), uitzenden stap 1 |
 | **Werkruimte** | 9 | 40 | 225 | E0, poort M, A–D, S9–S11 (ongewijzigd, met de W-vragen bij hun punt) |
 | **Eerder werk** | 7 | 26 | 45 | als er tijd over is |
@@ -105,20 +135,21 @@ waarin het moet: 325 punten in 61 blokken.
 - **Media buiten iCloud vóór VARVE.app**: de app leest `~/.varve/media-pad`; de verhuizing kan alleen met de server uit.
 - **De herberekening vóór avond 1.** De eerste start na 16 okt rekent elk automatisch grid opnieuw (kaart-VERSIE 3); pas
   daarna kloppen ga-dj en ar-een, en de tegel Server zegt dan of de secties actueel zijn.
-- **Avond 1 is zonder hub, maar VARVE.app start hem** (sinds 13 okt, VRAGEN AR21): start-apc stopt hem en opent de mixer
-  met "zonder hub"; ar-weg en ar-val starten de server met de lus zelf, niet met VARVE.app (die zou de hub midden in
-  avond 1 starten, en dan praten de hub en de mixer allebei met de APC).
+- **Avond 1 is zonder hub.** VARVE.app start de hub sinds 16 okt alleen als de actieve opstelling "mixer via de hub"
+  zegt (VRAGEN AR21); "Avond 1 · APC direct" zegt dat niet, dus geen hub, en de Controlekamer verliest een oude `?hub=`.
+  Draait er toch nog een hub van eerder, dan stopt start-apc hem (met de hub erbij praten de hub en de mixer allebei
+  met de APC). ar-weg en ar-val starten de server met de lus zelf, niet met VARVE.app.
 - **De nacht.** De opstelling "Avond 1 · APC direct" zet "vannacht niet": nacht-eerste zet dat aan het eind van avond 1
   terug. "Vandaag speeldag" op de companion blokkeert de nacht, dus dat punt staat pas na avond 2.
 - **Na afloop**: ar-na, het setboek en 7a lezen kopieën van de avond, dus pas daarna (het setboek leest het log van
   sb-log, het vinkje "log altijd aan" vooraan in het opstarten).
-- **Avond 2**: de hub-middag en V1 kunnen niet naast een draaiende hub; daarna start VARVE.app de hub (app-hub) en is
-  de handmatige start de terugval (hb-start).
+- **Avond 2**: de hub-middag en V1 kunnen niet naast een draaiende hub; daarna eerst de opstelling via de hub
+  (sta-hub), want pas dan start VARVE.app de hub (app-hub); de handmatige start is de terugval (hb-start).
 - **Avond 3**: eerst wat de pc nodig heeft, dan wat zonder pc kan; beeld op één machine en uitzenden overdag.
 
 `test/controle.test.mjs` eist dit: Vooraf vóór avond 1 vóór avond 2 vóór avond 3 vóór Werkruimte vóór Eerder werk,
 de kern als eerste blokken van avond 1, kopie → verhuizing → VARVE.app → herberekening vóór avond 1, de speeldag na de
-nacht, het setboek na de avond, app-hub vóór hb-start, en dat start-apc de hub stopt en ar-weg de lus zonder de app start.
+nacht, het setboek na de avond, sta-hub vóór app-hub vóór hb-start, sta-terug vóór start-apc, en dat start-apc de hub stopt en ar-weg de lus zonder de app start.
 
 - **Citaten** (16 okt): een punt dat een melding of logregel van de app letterlijk aanhaalt, zet die in
   `citeert`. `test/controle.test.mjs` eist dat elk citaat in de doe of de let staat én letterlijk in de code
@@ -213,6 +244,14 @@ met één ding om op te letten; zet er alleen knoppen in die in de mapping, de
 actions of `index.html` bestaan.
 
 ## Getest
+
+- `test/versie.test.mjs` (16 okt): `server/versie.js` op echte git-mappen (een kale "GitHub" en twee klonen:
+  gelijk, een commit erbij = herstarten, iets nieuws van elders = github verder, de caches van 15 s en 10 min,
+  `vers`, een andere tak, een gewijzigd bestand, twee tegelijk, de remote weg, geen git), de tegel in elke stand,
+  en `GET /api/versie` op een eigen server. `test/speellijst-weergave.test.mjs`: de delen, de kern, tellen,
+  het volgende open punt, het begindeel, de vraagcodes en het verslag. `tools/headless/controle.mjs`: de tegel,
+  één punt (ok = door, vorige, nog eens = open), Avond 1 met opstelling, paklijst en kern, het verslag, de hulp,
+  de lijst van alles, onthouden na herladen, en een punt dat "de iPad" zet staat binnen 12 s op de pagina.
 
 - `test/controle.test.mjs`: opslag (fouten, gelijktijdig, kapot bestand,
   archief), de speellijst (ook: de ids van vóór 6 okt, de vraagcodes, de

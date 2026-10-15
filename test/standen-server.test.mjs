@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process';
 const { maakNepYtdlp } = await import('./nep-ytdlp.mjs');
 const { schrijfKaart } = await import('./nep-kaart.mjs');
 const { nachtDatum } = await import('../server/nacht.js');
+const { vraag: hubVraag } = await import('../tools/varve-app/hub-nodig.mjs');
 
 const fails = [];
 const ok = (naam, cond) => { if (!cond) fails.push(naam); console.log((cond ? '  ok  ' : 'FAIL  ') + naam); };
@@ -110,6 +111,8 @@ try {
     a2.status === 200 && (await get('/api/nacht')).j.vandaagNiet === true && a2.j.verslag.mixer.includes('master')
     && a2.j.verslag.waarschuwingen.some((w) => /proefkrat" is leeg/.test(w)) && !a2.j.verslag.waarschuwingen.some((w) => /avondpakket nog niet samengevoegd|profiel "apc" staat niet|profielen\.json niet leesbaar/.test(w)));
   ok('… de mapping bleef staan (apc noemt geen mapping)', (await get('/api/mapping')).j.mapping.rules.length === 1);
+  // AR21: VARVE.app vraagt hetzelfde adres (tools/varve-app/hub-nodig.mjs) en start dan geen hub.
+  ok('… VARVE.app (hub-nodig) op apc: nee apc, geen hub', (await hubVraag({ poort })) === 'nee apc');
   ok('POST onbekend/activeer: 404', (await post('/api/standen/onbekend/activeer')).status === 404);
   ok('GET apc/activeer: 405', (await get('/api/standen/apc/activeer')).status === 405);
   const a3 = await post('/api/standen/mijn/activeer');
@@ -139,6 +142,7 @@ try {
   ok('server weer op', await wachtOpServer());
   const na = (await get('/api/standen/actief')).j;
   ok('actief overleeft de herstart: alles, hub studio via de mixer', na.naam === 'alles' && na.hub?.set === 'studio' && na.hub?.mixerVia === true);
+  ok('… VARVE.app (hub-nodig) na de herstart op alles: ja, de hub erbij', (await hubVraag({ poort })) === 'ja');
   ok('de eigen standen ook (5 namen: vier voorbeelden plus mijn; apc nu als eigen)', (await get('/api/standen')).j.standen.length === 5
     && (await get('/api/standen')).j.standen.find((s) => s.naam === 'apc').bron === 'eigen');
   // Review punt 1: maschine raakt mapping noch nacht; "terug" zet dan ook niets terug.
