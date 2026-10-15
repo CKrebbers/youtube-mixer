@@ -13,7 +13,7 @@ import { opzetBedienen } from './bedienen-tegel.js';
 
 /**
  * De Controlekamer (controle.html, docs/CONTROLEKAMER.md). Leest:
- * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/stems, /api/proef,
+ * - de server: /api/tooling, /api/library (aantal), /api/ingest, /api/leeft (herstarts), /api/stems, /api/proef,
  *   /api/backups (de laatste kopie van library.db), /api/secties (hoeveel nummers nog
  *   geen actuele secties hebben), /api/standen (de opstelling: welke actief is, docs/STANDEN.md),
  *   /api/avondpakket (vertrek/aankomst, docs/AVONDPAKKET.md: NIET elke 2 s, zie leesAvondpakket);
@@ -28,6 +28,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const stand = {
   server: null,        // true | false (laatste verzoek gelukt?)
   tooling: null,       // antwoord van /api/tooling
+  lus: null,           // `lus` uit /api/leeft: de herstarts van de herstartlus (AR9), null = onbekend
   nummers: null,       // aantal in de library
   ingest: [],          // open opdrachten
   stems: null,         // antwoord van /api/stems, { ontbreekt: true } bij een server zonder stems, null = onbekend
@@ -100,6 +101,10 @@ async function leesServer() {
   // Los: een oudere server zonder /api/backups is nog steeds een draaiende server.
   const b = await haalLos('/api/backups');
   if (b !== undefined) stand.backup = b?.data ?? null;
+  // De herstarts van de lus (AR9, server/lus.js): uit het geheugen van de server. Een oudere server kent de
+  // route niet (404): dan geen regel.
+  const l = await haalLos('/api/leeft');
+  if (l !== undefined) stand.lus = l?.data?.lus ?? null;
 }
 
 /**

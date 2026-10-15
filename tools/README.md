@@ -54,6 +54,9 @@ antwoord uit het geheugen, nooit schijf of database); drie keer niets = in het l
 de lus start hem opnieuw zoals na een crash. Van hangen tot een nieuwe server ~15–22 s (gemeten: 21 s). Een nieuwe
 server telt pas mee na zijn eerste antwoord, of na 120 s zonder. Zonder curl geen wachter (één regel in het log).
 Een schijf die hangt ziet hij bewust niet: een herstart lost dat niet op.
+Elke nieuwe server krijgt mee wat de lus weet (AR9): `VARVE_LUS_SINDS` (start van de lus), `VARVE_LUS_AANTAL` en de
+laatste 20 herstarts in `VARVE_LUS_HERSTARTS` (`<s>:<exitcode>:om|hang`). Via `GET /api/leeft` toont de tegel Server
+in de Controlekamer "herstart om … · N keer sinds …".
 - **Stoppen**: `sh tools/varve-app/server-lus.sh stop` (lus én server, wacht tot ze weg zijn). Het oude
   `pkill -f server/index.js` werkt ook: een SIGTERM is "bewust gestopt", de lus stopt dan mee.
 - `sh tools/varve-app/server-lus.sh status`: draait hij (exit 0) of niet (exit 1).
@@ -150,6 +153,10 @@ bestand heen. Zie `patronen/LEESMIJ.md`.
   (standaard 300) s; elke 15 s de RSS van de renderer, aan het eind GC (hoofdthread én AudioWorklet).
   Drukt groei per minuut af, ook na GC. `VARVE_CODE=<checkout>` meet een andere versie met hetzelfde
   script (vóór/na). Poorten 8881/9381. 14 okt: 26,6 → 2,6 MB/min, na GC 25,8 → 0,2 (docs/WINST.md punt 1).
+- `herstart.mjs` — AR9: de tegel Server in de Controlekamer met een eigen server onder de echte herstartlus
+  (poorten 8916/9516, alle mappen in tmp): zonder herstart groen; na kill -9 "herstart om … (viel om, exitcode 137) ·
+  1 keer sinds …" en oranje; na herladen hetzelfde; na SIGSTOP "(hing, de wachter zette hem neer) · 2 keer" (de
+  wachter snel ingesteld); de regel past op 1440 en 390 px. Schermafdrukken `uit/herstart-*.png`.
 - `server-weg.mjs` — mag de server even weg zijn? (docs/WINST.md punt 3) Eigen server (alle `VARVE_*`-mappen
   in tmp), twee decks streamend en hoorbaar, opname en handelingenlog aan; dan SIGKILL, `VARVE_WEG_S`
   (standaard 30) s weg, opnieuw starten. Eisen: 0 stille vensters van 50 ms op de master, een WAV zonder gat,

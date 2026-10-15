@@ -32,6 +32,8 @@ VRAGEN blok **AR** (AR1–AR16).
   server die hangt na ~15–22 s neer (kill -9) en de lus start hem opnieuw; ar-hang laat hem nu hangen zonder los te
   laten. VARVE.app hoeft daarvoor niet opnieuw gebouwd (hij start het script uit de repo), maar een lus die al
   draait heeft het oude script ingelezen: één keer `sh tools/varve-app/server-lus.sh stop` en VARVE.app openen.
+  AR9 op 16 okt (`studio/ar-herstart`): de tegel Server zegt "herstart om 22:14 (viel om, exitcode 137) · 1 keer
+  sinds 21:30" (of "hing, de wachter zette hem neer"), 10 minuten oranje; ar-val en ar-hang kijken ernaar.
 
 **De suite:** op een schone Mac (de workflow `test`, `macos-14`, Node 26.8.2, met de hand gestart) **137 bestanden,
 11.778 checks, alles groen** (run 3 van 15 okt). De eerste twee runs vonden wat er op een runner anders is en nooit

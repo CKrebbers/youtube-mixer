@@ -142,8 +142,11 @@ Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even 
 - [ ] **AR8. Na de merge: VARVE.app opnieuw bouwen** 💬 (`zsh tools/varve-app/maak.sh`), anders start hij de
   server nog zonder lus. Had je de LaunchAgent uit TAILSCALE.md geladen: eerst `launchctl unload
   ~/Library/LaunchAgents/nl.varve.server.plist`. En die LaunchAgent: weg of houden? **Advies:** de lus gebruiken.
-- [ ] **AR9. Een herstart van de server in de Controlekamer** ("server herstart om 22:14, 1 keer")? 💬 Nu alleen
-  in ~/.varve-server.log. **Advies:** ja, klein.
+- [x] **AR9. Een herstart van de server in de Controlekamer** ("server herstart om 22:14, 1 keer")? 💬 **Gebouwd 16 okt**
+  (`studio/ar-herstart`): de lus geeft elke nieuwe server mee wat hij weet (`VARVE_LUS_SINDS`, `_AANTAL`, `_HERSTARTS`),
+  de server zet het in `GET /api/leeft`, en de tegel Server zegt "herstart om 22:14 (viel om, exitcode 137) · 1 keer
+  sinds 21:30" (of "hing, de wachter zette hem neer"), 10 minuten oranje. Ook na herladen, en ook als de tegel de
+  herstart tussen twee peilingen miste. Was: nu alleen in ~/.varve-server.log. **Advies:** ja, klein.
 - [ ] **AR10. Rij vol na 5 minuten weg:** nu valt het OUDSTE stuk weg (je houdt de laatste 5 minuten). Liever de
   eerste 5 houden? 💬 **Advies:** zo laten.
 - [ ] **AR11. Vooruit halen met hysterese** (pas na ~30 s niet-hoorbaar terug van 60 naar 20 s)? 💬 Nu haalt een

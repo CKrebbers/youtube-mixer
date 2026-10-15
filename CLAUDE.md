@@ -210,6 +210,7 @@ src/
   controle/         controle.js     de Controlekamer: tegels (server, ingest, mixer via de Web Lock, APC via het kanaal), speellijst
                     speellijst.js   de punten van een proefsessie, in blokken. Puur data; de stand staat in proef/sessie.json
                     backup-tegel.js de tegel "Backup" (laatste kopie, of de fout). Puur.
+                    server-tegel.js de tegel "Server": draait hij, de herstarts van de lus (AR9, uit /api/leeft), de secties. Puur.
                     stand-tegel.js  de tegel "Opstelling", het adres van "mixer openen", de tekst onder de kiezer (docs/STANDEN.md). Puur.
                     stand-bewerker.js een opstelling instellen zonder JSON: keuzelijsten → stand. Puur.
                     avondpakket-tegel.js  de tegel "Avondpakket" (vertrek/aankomst, docs/AVONDPAKKET.md). Puur.
@@ -281,6 +282,7 @@ server/             draait apart: `node server/index.js`
                     lezen uit het geheugen zolang stat niets nieuws zegt, één lees per pad en hooguit 2 tegelijk voor de hele
                     server (MAX_DRADEN: iCloud mag de threadpool niet vullen, de andere 2 draden blijven voor de audio)
   poort.js          poortBezet(poort): vóór alles kijken of de poort vrij is (AR20); index.js stopt dan met exit 3 zonder iets aan te raken
+  lus.js            leesLus(env): wat de herstartlus meegaf (VARVE_LUS_SINDS/_AANTAL/_HERSTARTS) voor GET /api/leeft (AR9). Puur
   uitzend.js        uitzenden stap 1: een UITGANG, geen bron. Volgt de opname die al groeit en duwt hem via ffmpeg naar een LOKAAL doel
                     (bestand, rtmp/udp op 127.0.0.1); slot tegen elke dienst; nog geen route of knop (docs/UITZENDEN.md)
   routes/           werkruimte S0: index.js laadt werkruimtes/mapping-apparaat/paneel/sets/sjablonen/indeling.js ({ routes, mag }), vlak vóór de 404;
@@ -304,6 +306,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen; LEESM
                     werk-scherm.mjs, werk-ipad.mjs (S7 + S8: koppelen, de xy-pad op een nep-iPhone, weigeren, loslaten), werk-maschine.mjs,
                     inrichten.mjs (✎ in echte Chrome), werk-alles.mjs (de totaalmeting van de werkruimte, C6);
                     avondpakket.mjs: de tegel Avondpakket (eigen server 8914, NEP-fixtures, de mixer-lock in een tweede tab);
+                    herstart.mjs: de tegel Server na een kill -9 en een hang onder de echte herstartlus (AR9, poorten 8916/9516);
                     en los: tools/avondpakket.mjs, de CLI van het avondpakket (exit 0/1/2/3; docs/AVONDPAKKET.md);
                     maschine-kaart.mjs: de Maschine-kaart los en live vanuit de mixer (nep-poort, geen hub);
                     bladeren.mjs: BROWSE, wiel en ENTER op een nep-Maschine met een echte library (twee testnummers);
@@ -460,6 +463,7 @@ test/
   gezondheid.test.mjs  src/ui/gezondheid.js: suspend, resume bij invoer, klok stil, geen alarm vóór de start
   meldingen.test.mjs  de meldingen met een sleutel (één die meegroeit) op een nagebouwd document
   server-poort.test.mjs  AR20: een tweede server op een bezette poort stopt met exit 3 vóór hij .bezig-*, de stems-rij of library.db aanraakt
+  herstart.test.mjs AR9: leesLus, de herstartregel en de tegel Server (puur), en /api/leeft van een echte server met de omgeving van de lus
   notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node (ook de wachter: SIGSTOP); de Node-waarschuwing van alles.mjs
   alles.mjs         alle tests in één keer met overzicht (een andere Node dan .node-version: waarschuwing boven en onder, niets overgeslagen)
 docs/
@@ -1988,7 +1992,9 @@ Verslag `docs/verslagen/2026-10-15/arch-server-weg.md`. Wat een bouwer niet mag 
   database: een schijf die hangt lost een herstart niet op); drie keer niets binnen 2 s = kill -9 op de server en zijn
   nazaten, en de lus start hem opnieuw (telt mee in de 5 per minuut); 120 s tot het eerste antwoord. Gemeten 21 s van
   hangen tot een nieuwe server (`VARVE_WEG_SOORT=lus`). Wat de event loop langer dan ~15 s vastzet wordt dus neergezet:
-  zwaar werk hoort in een worker of kindproces.
+  zwaar werk hoort in een worker of kindproces. De lus geeft elke nieuwe server mee wat hij weet (`VARVE_LUS_SINDS`,
+  `_AANTAL`, de laatste 20 in `_HERSTARTS` als `<s>:<exitcode>:om|hang`; een hang meldt de wachter met
+  `<pidbestand>.hang`); `server/lus.js` leest het voor `/api/leeft`, en de tegel Server zegt "herstart om …" (AR9).
   De server kijkt EERST of zijn poort vrij is (`server/poort.js`, AR20, 16 okt), vóór de library, de mappen en het opruimen
   van `.bezig-*`: een tweede server raakt niets aan. Een stream die hapert geeft één melding per track (sleutel
   `stream:<deck>`, `onHapert` in bron.js) die "stream weer goed" wordt (AR17).
