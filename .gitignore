@@ -27,3 +27,6 @@ test/.duur.json
 
 # Clay's eigen sjablonen (spoor S10, docs/EFFECTEN-MEER.md); racks/sjablonen.json hoort WEL in git
 /racks/eigen.json
+
+# de afdruk van de handenkaart (tools/handen/handenkaart.mjs --html)
+tools/handen/uit/
