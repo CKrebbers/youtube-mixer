@@ -91,6 +91,9 @@ beeld (bron video = de mp4 van de video-opname, vanaf byte 0):
              -c:v h264_videotoolbox -realtime 1 -b:v <br> -maxrate <br> -bufsize <2×br>
              -g 60 -force_key_frames expr:gte(t,n_forced*2) -pix_fmt yuv420p
              -c:a copy
+  hercodeer, niet op de Mac (hercodeerEncoder, spoor C2, 15 okt): -f mp4 -i pipe:0 -map 0:v:0 -map 0:a:0
+             -c:v libx264 -preset veryfast -tune zerolatency, verder hetzelfde (h264_videotoolbox
+             bestaat alleen op macOS; de tests S18/S29/R12 draaien zo ook op Linux)
   kopie (intern, alleen lokaal): -f mp4 -i pipe:0 -map 0:v:0 -map 0:a:0 -c copy
 
 muxer+uit:  bestand: -f flv <uitmap>/set-<id>.uitzend[-N].flv   (na stop: -c copy -movflags +faststart naar .mp4)

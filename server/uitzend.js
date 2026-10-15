@@ -188,8 +188,21 @@ function beeldFilter(beeld, fps) {
   return `${golf('colors=black')},format=yuv420p[v]`;
 }
 
-/** De argumenten voor ffmpeg (docs/UITZENDEN.md §4). Puur. `uit` is het pad of de url. */
-export function bouwArgs(doel, { uit, fps } = {}) {
+/**
+ * Waarmee beeld/hercodeer codeert: op de Mac `videotoolbox` (de hardware, gemeten in
+ * docs/UITZENDEN.md §9), elders `libx264` (veryfast, zerolatency): h264_videotoolbox bestaat
+ * alleen op macOS (spoor C2; zo draaien S18/S29/R12 ook op de Omarchy-pc). Op de Mac verandert
+ * er niets. Puur.
+ */
+export function hercodeerEncoder(platform = process.platform) {
+  return platform === 'darwin' ? 'videotoolbox' : 'libx264';
+}
+
+/**
+ * De argumenten voor ffmpeg (docs/UITZENDEN.md §4). Puur. `uit` is het pad of de url.
+ * `encoder` (alleen voor beeld/hercodeer): 'videotoolbox' of 'libx264', standaard hercodeerEncoder().
+ */
+export function bouwArgs(doel, { uit, fps, encoder = hercodeerEncoder() } = {}) {
   const kop = ['-hide_banner', '-loglevel', 'error', '-n', '-progress', 'pipe:3', '-stats_period', '1'];
   const br = doel.bitrate || (doel.bron === 'video' ? '2500k' : '300k');
   let midden;
@@ -198,8 +211,11 @@ export function bouwArgs(doel, { uit, fps } = {}) {
     if (doel.video === 'kopie') midden = ['-f', 'mp4', '-i', 'pipe:0', ...map, '-c', 'copy'];
     else {
       const k = Number(br.slice(0, -1));
-      midden = ['-hwaccel', 'videotoolbox', '-f', 'mp4', '-i', 'pipe:0', ...map,
-        '-c:v', 'h264_videotoolbox', '-realtime', '1', '-b:v', br, '-maxrate', br, '-bufsize', `${2 * k}k`,
+      // Dezelfde bitrate, keyframes en geluid; alleen de encoder verschilt (libx264 zonder -hwaccel en -realtime).
+      const codeer = encoder === 'libx264'
+        ? ['-f', 'mp4', '-i', 'pipe:0', ...map, '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency']
+        : ['-hwaccel', 'videotoolbox', '-f', 'mp4', '-i', 'pipe:0', ...map, '-c:v', 'h264_videotoolbox', '-realtime', '1'];
+      midden = [...codeer, '-b:v', br, '-maxrate', br, '-bufsize', `${2 * k}k`,
         // -g telt beelden; Chrome's fps varieert (29,07 gemeten), dus ook een keyframe op elke 2 s (review 1, punt 3).
         '-g', '60', '-force_key_frames', 'expr:gte(t,n_forced*2)', '-pix_fmt', 'yuv420p',
         '-c:a', 'copy'];
