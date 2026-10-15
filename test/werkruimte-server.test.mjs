@@ -143,7 +143,9 @@ try {
   ok('negen delen: 400', negen.status === 400 && /hooguit 8/.test(negen.j.fout));
   ok('… na al die weigeringen: het bestand en .versies onveranderd', readFileSync(join(werkMap, 'mijn.json'), 'utf8') === voor && versies('mijn') === 2);
   const hoofd = await put('/api/werkruimtes/Mijn', { werkruimte: { ...mijn(), naam: 'Mijn' }, versie: null });
-  ok('een naam met een hoofdletter: 400, niets geschreven', hoofd.status === 400 && !existsSync(join(werkMap, 'Mijn.json')) && !readdirSync(werkMap).some((f) => /^Mijn/i.test(f) && f !== 'mijn.json'));
+  ok('een naam met een hoofdletter: 400, niets geschreven', hoofd.status === 400
+    // Op de naam in de map, niet met existsSync: APFS is hoofdletterongevoelig, dan "bestaat" Mijn.json omdat mijn.json er staat.
+    && !readdirSync(werkMap).includes('Mijn.json') && !readdirSync(werkMap).some((f) => /^Mijn/i.test(f) && f !== 'mijn.json'));
   ok('een andere naam in het bestand dan in het adres: 400', (await put('/api/werkruimtes/ander', { werkruimte: mijn(), versie: null })).status === 400 && !existsSync(join(werkMap, 'ander.json')));
   ok('PUT als text/plain: 415', (await put('/api/werkruimtes/mijn', JSON.stringify({ werkruimte: mijn(), versie: p3.j.versie }), { 'Content-Type': 'text/plain' })).status === 415);
   ok('POST op een werkruimte: niet (415 zonder JSON, 405 met)', (await post('/api/werkruimtes/mijn', {})).status === 405);

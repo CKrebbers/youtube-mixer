@@ -34,6 +34,7 @@ import { startStatusZender, eindUitActions } from './status-zender.js';
 import { vormenAan, hubAdres, hubGeweigerd } from './vlag.js';
 import { opzetBovenbalk } from './bovenbalk.js';
 import { opzetRijKlassen } from './rij-klassen.js';
+import { startInstellingen, toonInstellingMeldingen, vorigeInstellingen, herstelInstelling } from './instellingen-opslag.js';
 
 /**
  * Het instappunt van de schermlaag: maakt de engine en zet de modules in
@@ -48,6 +49,12 @@ import { opzetRijKlassen } from './rij-klassen.js';
  * aanroepen, krijgt een ReferenceError (TDZ).
  */
 
+// De instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems,
+// koptelefoon, vormen en de twee bus-racks; elf namen in instellingen-lijst.js)
+// eerst van de server in localStorage: alles hieronder leest
+// ze daar. Zonder server (of na 1,5 s) blijft wat deze browser had.
+await startInstellingen();
+
 // De koptelefoon (zaal en koptelefoon omgewisseld?) is bedrading: alleen bij het maken.
 const engine = new Engine({ koptelefoon: koptelefoonOpties() });
 bindEngine(engine);
@@ -57,6 +64,8 @@ const perDeck = (maak) => Object.fromEntries(DECK_IDS.map((id) => [id, maak(id)]
 
 koppelMeldingen(engine);
 window.meld = meld;
+toonInstellingMeldingen();   // wat startInstellingen hierboven te melden had (vóór window.meld)
+window.instellingen = { vorige: vorigeInstellingen, herstel: herstelInstelling };   // console: een vervangen waarde terug
 
 // ---- één VARVE-tabblad luistert naar de APC ------------------------------
 // Een tweede tabblad krijgt anders elke knopdruk ook, en stuurt zijn eigen

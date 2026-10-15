@@ -5,7 +5,7 @@
 // - de actions van acties-combi.js op de bus (worpen, solo, superknoppen, bus-racks);
 // - {maatgever} als variabele voor elke mapping, en de condities van `als` op de
 //   APC-mapping (als S3 er nog geen zette);
-// - welk rack er op de echo- en galmbus zit: onthouden op naam (localStorage) en
+// - welk rack er op de echo- en galmbus zit: onthouden op naam (localStorage en de server) en
 //   bij het starten terugzetten, zoals het master-rack;
 // - een stuk proberen zonder werkruimte: ?stukken=fx-matrix,mix-extra (alleen
 //   deze pagina, niets bewaard); of in de console varveCombi.stuk('fx-matrix').
@@ -13,10 +13,14 @@ import { bindCombi, zetStuk, zetMaatgeverVariabele, maakAls, VOORBEELD_SUPERKNOP
 import { voegMapjeToe } from '../../control/lagen.js';
 import { herbindLagen } from '../../control/actions.js';
 import { leesWeg } from '../../lib/antwoord.js';
+import { schrijfInstelling } from '../instellingen-opslag.js';
 
-const busSleutel = (bus) => `varve.send.${bus.toLowerCase()}.rack`;
+// Het rack op de echo- (A) en galmbus (B) hoort bij het instrument, zoals het master-rack: op de
+// witte lijst van instellingen-lijst.js, dus ook op de server en in elke backup van library.db.
+const BUS_SLEUTEL = { A: 'varve.send.a.rack', B: 'varve.send.b.rack' };
+const busSleutel = (bus) => BUS_SLEUTEL[String(bus).toUpperCase()];
 const lees = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
-const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+const schrijf = (k, v) => { if (k) schrijfInstelling(k, v); };
 
 export default async function opzet(ctx) {
   const { engine, meld } = ctx;

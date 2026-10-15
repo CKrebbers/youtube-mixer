@@ -5,6 +5,7 @@ import { esc, zetTekst } from './dom.js';
 import { meld } from './meldingen.js';
 import { grTekst, grHoogte, houdGr, kiesWaarde, bewaarVorm, leesBewaard, sjabloonHerkomst, OPSLAG } from './master-weergave.js';
 import { registreerRij } from './rijen.js';
+import { schrijfInstelling } from './instellingen-opslag.js';
 
 /*
  * De MASTER-rij (docs/MASTER.md): effecten op het geheel en de limiter.
@@ -26,7 +27,8 @@ import { registreerRij } from './rijen.js';
  */
 const OPEN = 'varve.master.open';
 const lees = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
-const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+// De instrument-sleutels gaan ook naar de server (instellingen-opslag.js); de rest alleen localStorage.
+const schrijf = schrijfInstelling;
 const ms = (s) => `${(s * 1000).toFixed(1).replace('.', ',')} ms`;
 
 export function opzetMaster({ engine }) {

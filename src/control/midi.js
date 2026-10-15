@@ -151,8 +151,10 @@ export const TIK_MS = 4;
  */
 
 export class MidiHub extends Emitter {
-  constructor({ preferred = /apc40/i } = {}) {
+  /** @param bewaar (sleutel, tekst) -> void: waar de poortkeuze heen gaat (de ui: ook de server); zonder: localStorage. */
+  constructor({ preferred = /apc40/i, bewaar = null } = {}) {
     super();
+    this.bewaar = bewaar;
     this.access = null;
     this.sysex = false;          // is sysex daadwerkelijk toegestaan?
     this.enabled = false;
@@ -321,10 +323,11 @@ export class MidiHub extends Emitter {
 
   _save() {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({
+      const tekst = JSON.stringify({
         in: this.inputId, out: this.outputId,
         inName: this.inputName, outName: this.outputName,
-      }));
+      });
+      if (this.bewaar) this.bewaar(STORE_KEY, tekst); else localStorage.setItem(STORE_KEY, tekst);
     }
     catch (_) {}
   }
