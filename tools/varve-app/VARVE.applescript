@@ -5,6 +5,11 @@
 --    Waar de media staan (VI2, media buiten iCloud): VARVE_MEDIA uit ~/.zprofile (de login-shell
 --    leest die), of, als het bestaat, het pad op de eerste regel van ~/.varve/media-pad (gaat voor).
 --    Geen van beide: media/ in de projectmap; de server volgt dan zelf media-VERHUISD.txt.
+--    De server draait in een HERSTARTLUS (tools/varve-app/server-lus.sh, docs/WINST.md punt 3): valt
+--    hij om, dan start de lus hem na 1 s opnieuw (hooguit 5 keer per minuut). Stoppen:
+--    `sh tools/varve-app/server-lus.sh stop` (lus en server), of zoals altijd
+--    `pkill -f server/index.js` (een SIGTERM start de lus niet opnieuw; de lus stopt dan ook).
+--    Niet samen met de LaunchAgent uit docs/TAILSCALE.md: twee starters botsen op de poort.
 -- 2. Draait de AV-app-hub (7700) niet, start hem dan (set studio, zonder eigen Chrome-tab): zonder
 --    hub doet de Maschine MK2 niets (docs/MASCHINE.md). Lukt dat niet, dan gaat VARVE door zonder
 --    hub en zegt dat. Het log: ~/.varve-hub.log. Stoppen: kill het proces op 7700 (de hub ruimt op).
@@ -92,13 +97,15 @@ end luistert
 -- Via zsh -l (dan staan /opt/homebrew/bin en Python's bin op het pad, en VARVE_MEDIA uit
 -- ~/.zprofile). ~/.varve/media-pad (één regel: het pad) gaat voor. nohup en & met alle
 -- uitvoer naar het log: do shell script wacht dan niet op de server. false = niet gestart
--- (de map is er niet; de reden staat in het log).
+-- (de map is er niet; de reden staat in het log). Niet de server zelf maar de herstartlus
+-- (server-lus.sh, sh): die start node server/index.js, en opnieuw als hij omvalt. Draait er
+-- al een lus (pidbestand ~/.varve/server-lus.pid), dan doet een tweede niets.
 -- UV_THREADPOOL_SIZE=16: statische bestanden en de pagina's van de decks delen de libuv-draadpool
 -- (standaard 4). Hangen er vier codebestanden die macOS uit iCloud moet halen, dan krijgt anders
 -- geen enkel deck nog een pagina (docs/WINST.md punt 4, tools/bench/draadpool.mjs).
 on startServer()
 	set mediaPad to "if [ -s ~/.varve/media-pad ]; then export VARVE_MEDIA=\"$(head -n 1 ~/.varve/media-pad)\"; fi"
-	set opdracht to "echo \"--- $(date '+%d-%m %H:%M:%S') gestart door VARVE.app\" && cd ~/" & quoted form of map & " && " & mediaPad & " && export UV_THREADPOOL_SIZE=16 && nohup node server/index.js &"
+	set opdracht to "echo \"--- $(date '+%d-%m %H:%M:%S') gestart door VARVE.app\" && cd ~/" & quoted form of map & " && " & mediaPad & " && export UV_THREADPOOL_SIZE=16 && nohup sh tools/varve-app/server-lus.sh &"
 	try
 		do shell script "/bin/zsh -lc " & quoted form of opdracht & " < /dev/null >> " & logboek & " 2>&1"
 		return true

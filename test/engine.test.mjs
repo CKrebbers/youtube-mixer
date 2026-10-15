@@ -3854,6 +3854,36 @@ console.log('\nstemkanalen');
   NOW = NOW0;
 }
 
+console.log('\nvooruit voor wat je hoort (docs/WINST.md punt 3)');
+{
+  // De engine beslist wat je hoort en geeft de bron alleen een getal (regel 1):
+  // speelt + fader × crossfader > 0 = 60 s vooruit, de rest 20 s.
+  const eV = new Engine();
+  const a = eV.deck('A'), b = eV.deck('B');
+  a.load(buf, 'hoorbaar');
+  b.load(buf, 'stil');
+  ok('geladen maar stil: 20 s', a.vooruit === 20 && a.bron.vooruit === 20 && b.vooruit === 20);
+  a.set('fader', 1);
+  a.play();
+  ok('speelt met de fader open: 60 s (ook op de bron)', a.vooruit === 60 && a.bron.vooruit === 60);
+  ok('de andere track speelt niet: 20 s', b.vooruit === 20);
+  b.set('fader', 0);
+  b.play();
+  ok('speelt met de fader dicht (voorbeluisteren): 20 s', b.vooruit === 20);
+  eV.setXfader(1);                                   // helemaal naar B: A (kant A) hoor je niet meer
+  ok(`crossfader weg van zijn kant (${eV.xfadeGain('A').toFixed(2)}): 20 s`, eV.xfadeGain('A') < 1e-6 && a.vooruit === 20);
+  eV.setKant('A', 'thru');
+  ok('kant thru: de crossfader telt niet, 60 s', a.vooruit === 60);
+  a.pause();
+  ok('pauze: weer 20 s', a.vooruit === 20);
+  a.play();
+  a.set('fader', 0);
+  ok('fader dicht: 20 s', a.vooruit === 20);
+  a.set('fader', 0.5);
+  ok('fader weer open: 60 s', a.vooruit === 60);
+  a.pause(); b.pause();
+}
+
 ok(`geen enkele overlappende automatisering in de hele test (${OVERLAP_FOUTEN})`, OVERLAP_FOUTEN === 0);
 ok(`geen enkele afgebroken curve in de hele test (${CURVE_BREUK}): in Chrome een sprong`, CURVE_BREUK === 0);
 

@@ -56,6 +56,15 @@ try {
   ok('stukken komen achter elkaar', readFileSync(join(map, `set-${s.id}.mp4`), 'utf8') === 'abcdef');
   ok('andere extensies niet (de browser bepaalt niet wat hier ontstaat)', !(await O.voegVideoToe(map, s.id, 'exe', Buffer.from('x'))).ok);
   ok('geen losse video zonder opname', !(await O.voegVideoToe(map, '20990101-000000', 'mp4', Buffer.from('x'))).ok);
+  // Met ?van= (sinds 15 okt): op zijn plek, dus een herhaling (antwoord kwijt) maakt hem niet langer.
+  ok('video met van: op zijn plek, een herhaling overschrijft', (await O.voegVideoToe(map, s2.id, 'webm', Buffer.from('abc'), 0)).ok
+    && (await O.voegVideoToe(map, s2.id, 'webm', Buffer.from('abc'), 0)).ok && (await O.voegVideoToe(map, s2.id, 'webm', Buffer.from('de'), 3)).ok
+    && readFileSync(join(map, `set-${s2.id}.webm`), 'utf8') === 'abcde');
+  ok('video met van: een gat ervoor wordt nullen', (await O.voegVideoToe(map, s2.id, 'webm', Buffer.from('z'), 7)).ok
+    && readFileSync(join(map, `set-${s2.id}.webm`)).equals(Buffer.from('abcde\0\0z')));
+  ok('video met van: negatief of gebroken geweigerd', !(await O.voegVideoToe(map, s2.id, 'webm', Buffer.from('x'), -1)).ok
+    && !(await O.voegVideoToe(map, s2.id, 'webm', Buffer.from('x'), 0.5)).ok);
+  rmSync(join(map, `set-${s2.id}.webm`));
   const metVideo = await O.sluit(map, s.id);
   ok('sluiten meldt de video erbij', metVideo.video === `set-${s.id}.mp4` && metVideo.videoBytes === 6);
   writeFileSync(join(map, 'ander.txt'), 'x');

@@ -1631,7 +1631,9 @@ const server = createServer(async (req, res) => {
     if (mVideo && req.method === 'POST') {
       const stuk = await leesRuw(req, 16 * 1024 * 1024);
       if (!stuk) return json(res, 413, { ok: false, fout: 'videostuk te groot' });
-      const r = await opname.voegVideoToe(OPNAMES, mVideo[1], mVideo[2], stuk);
+      // ?van=N: de plek in het videobestand (herhalen is dan veilig). Zonder: erachter, zoals vroeger.
+      const van = url.searchParams.has('van') ? Number(url.searchParams.get('van')) : undefined;
+      const r = await opname.voegVideoToe(OPNAMES, mVideo[1], mVideo[2], stuk, van);
       return json(res, r.ok ? 200 : 400, r);
     }
     const mOpname = /^\/api\/opname\/([\w-]+)\/(stuk|klaar)$/.exec(pad);
@@ -2055,6 +2057,16 @@ const HER = process.env.VARVE_HERANALYSE;
 if (HER !== 'uit') { gpu.sluit(); setTimeout(() => gpu.open(), 60000).unref?.(); }
 
 await herstelStemsRij().catch((err) => console.error('[stems] de rij van voor de herstart:', err?.message || err));
+
+// De poort is bezet (een tweede server): stoppen met exitcode 3, niet half blijven draaien. Zonder
+// deze regel ving uncaughtException de fout op en liep deze server zonder poort door, met zijn
+// achtergrondwerk (nacht, heranalyse, backups) op dezelfde library. 3 = een vaste fout: de
+// herstartlus (tools/varve-app/server-lus.sh) start dan niet opnieuw.
+server.on('error', (err) => {
+  if (err?.code !== 'EADDRINUSE') return console.error('[server] fout:', err?.message || err);
+  console.error(`[server] poort ${POORT} is bezet: er draait al een server (of iets anders). Deze stopt.`);
+  process.exit(3);
+});
 
 server.listen(POORT, '127.0.0.1', () => {
   console.log(`VARVE DJ  ·  http://localhost:${POORT}`);

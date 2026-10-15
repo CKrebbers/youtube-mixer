@@ -250,7 +250,17 @@ Elke seconde een stuk: `POST /api/handelingen/<id>/stuk` met
 tekst op byte `van`, niet achter het bestand. Zoals de WAV met `?frame=N`
 (opname.js):
 - herhalen na een verloren antwoord schrijft dezelfde bytes op dezelfde plek:
-  geen dubbele regels. Drie pogingen, dan melden.
+  geen dubbele regels.
+- DE SERVER MAG EVEN WEG ZIJN (15 okt, docs/WINST.md punt 3, `src/lib/herhaal.js`,
+  hetzelfde als de opname): een stuk zonder antwoord (geen verbinding, een
+  time-out van 10 s, of een 5xx van een proxy zoals `tailscale serve`) blijft op
+  volgorde wachten en wordt opnieuw geprobeerd, met een pauze die oploopt van
+  0,25 naar 2 s, zolang het log loopt. De rij is begrensd op 16 MB tekst
+  (`RIJ_BYTES`, uren log); daarboven valt het oudste stuk weg (een gat). Bij
+  stoppen krijgt de rij nog 10 s (`STOP_GRENS`), dan de oude regel. Een "nee" van
+  de server (4xx) hooguit drie keer, een volle schijf (`vol`) nooit opnieuw.
+  Melden alleen wat echt kwijt is, met één melding (sleutel `handelingenlog`).
+  Gemeten met `tools/headless/server-weg.mjs` (server 30 s weg): geen gat.
 - een stuk dat helemaal wegvalt laat een gat van nullen; alles erna staat op
   zijn eigen plek. De lezer slaat de nullen over.
 - de plek wordt bepaald als het stuk gemaakt wordt, niet als het aankomt: de

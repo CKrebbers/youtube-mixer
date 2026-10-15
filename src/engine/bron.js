@@ -608,9 +608,10 @@ export class StreamBron {
     const { kop } = this.bestand;
     // Een geplande sprong met keylock: zijn doel hoort er al te zijn.
     const vast = this._vorig && this._wacht ? [...this.vastpunten(), this.seg.P] : this.vastpunten();
+    // `vooruit`: een getal van het deck (de engine weet wat je hoort, VOORUIT_HOORBAAR); zonder: 20 s.
     const nodig = plan({
       positie: this.positie, rate: this.seg.speelt ? this.seg.R : this.rate,
-      duur: this.duur, sr: kop.sampleRate, vastpunten: vast, loop: this.loop,
+      duur: this.duur, sr: kop.sampleRate, vastpunten: vast, loop: this.loop, vooruit: this.vooruit,
     });
     const set = new Set(nodig);
     for (const i of [...this.geladen.keys()]) {

@@ -301,6 +301,7 @@ export class Deck extends Emitter {
     this.bron?.vernietig();
     this.bron = bron;
     bron.zetRek?.({ keylock: this._keylock, toon: this._toon, stems: this._stemToonPerPaar() });
+    if (this._vooruit !== undefined) bron.vooruit = this._vooruit;   // zetVooruit
     bron.onEinde = () => this.emit('change', this);
     bron.onFout = (tekst) => this.emit('fout', tekst);
     // De rem is uitgelopen: de bron staat nu stil op die plek (een pauze).
@@ -314,6 +315,19 @@ export class Deck extends Emitter {
     bron.vastpunten = () => (this._laadt ? [] : [this.cuePoint, ...this.hotcues, this.loop?.start ?? null,
       this.loopInPunt, this.vorigeLoop?.start ?? null]);
   }
+
+  /**
+   * Hoe ver vooruit (s) een streamende bron zijn pagina's houdt. De ENGINE zet
+   * dit (60 voor een track die je hoort, anders 20: stream-kern.js VOORUIT);
+   * het deck geeft het getal door, ook aan een volgende bron. Een BufferBron
+   * heeft alles al en negeert het.
+   */
+  zetVooruit(s) {
+    if (this._vooruit === s) return;
+    this._vooruit = s;
+    if (this.bron) this.bron.vooruit = s;
+  }
+  get vooruit() { return this._vooruit; }
 
   /** Een heel bestand, uitgepakt in het geheugen: losgesleepte bestanden en de demotrack. */
   load(buffer, title) {

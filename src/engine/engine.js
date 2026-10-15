@@ -9,6 +9,10 @@ import { Klankschaal } from './klankschaal.js';
 import { Koptelefoon } from './koptelefoon.js';
 import { GridKlik, DUO_TONEN } from './grid-klik.js';
 import { PatroonSpeler, maatVan } from './patronen/speler.js';
+import { VOORUIT, VOORUIT_HOORBAAR } from './stream-kern.js';
+
+/** Vanaf hier telt een track als hoorbaar voor het vooruit halen (−60 dB; een dichte fader is −70). */
+const HOORBAAR_MIN = 0.001;
 
 /**
  * Acht tracks, één per fader van de APC40 mkII. De engine noemt ze A t/m H;
@@ -215,6 +219,7 @@ export class Engine extends Emitter {
       // hem wrijft en de rij dicht is. Zonder worklet is er niets te stemmen.
       if (this.klankschaal?.node) this.klankschaal.bijwerken();
       this._volgWachtenden();
+      this._volgVooruit();
     };
     for (const id of DECK_IDS) this.decks[id].on('change', volgMaat);
     this.on('change', volgMaat);
@@ -705,6 +710,22 @@ export class Engine extends Emitter {
    * op de maat wachten (hij klinkt nog niet) en niet remmen.
    */
   _kanMaat(d) { return !!(d.buffer && d.grid && d.playing && !d.wacht && !d.remt); }
+
+  /**
+   * Wat je HOORT krijgt een minuut vooruit (VOORUIT_HOORBAAR), de rest 20 s
+   * (stream-kern.js, docs/WINST.md punt 3): valt de server even weg, dan speelt
+   * de zaal door. Hoorbaar = geladen, speelt (ook als hij op de maat wacht: zo
+   * meteen hoor je hem) en fader × crossfader boven −60 dB, dezelfde maat als
+   * voor de maatgever. Een dichte fader is −70 dB (faderGain), een crossfader
+   * aan de overkant ~1e-17 (cosinus): dat is niet hoorbaar, ook al is het niet 0.
+   * Bij elke 'change' van een deck of de mixer (volgMaat).
+   */
+  _volgVooruit() {
+    for (const k of DECK_IDS) {
+      const d = this.decks[k];
+      d.zetVooruit(d.buffer && d.playing && this._maatGain(k) > HOORBAAR_MIN ? VOORUIT_HOORBAAR : VOORUIT);
+    }
+  }
 
   /** Hoe hard je hem hoort: fader maal crossfader (zoals voor sync altijd al). */
   _maatGain(k) { return faderGain(this.decks[k].ui.fader) * this.xfadeGain(k); }
