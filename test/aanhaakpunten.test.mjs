@@ -338,6 +338,78 @@ console.log('\naanhakers, rijen en uitleg');
     beschrijfSpoor('track.1.play') === null && beschrijf('track.1.play')?.kort === 'play');
 }
 
+// ---- 5b. de lijsten met de hand tegen de bestanden op schijf ------------------------
+// Een spoor erbij = een bestand op vijf plekken én een regel in vijf lijsten
+// (docs/werkruimte/S0.md "Een spoor erbij"). Dat blijft met de hand (bewust: geen
+// registratie via bijwerkingen), maar wat vergeten is valt hier op, beide kanten op.
+console.log('\nde lijsten van de sporen tegen de bestanden');
+{
+  const { readdirSync } = await import('node:fs');
+  const lees = (p) => readFileSync(join(WORTEL, p), 'utf8');
+  const namenIn = (map, uitz = []) => readdirSync(join(WORTEL, map)).filter((n) => n.endsWith('.js') && !uitz.includes(n)).map((n) => n.slice(0, -3)).sort();
+  const verschil = (a, b) => a.filter((x) => !b.includes(x));
+  const zeg = (wat, x) => (x.length ? ` — ${wat}: ${x.join(', ')}` : '');
+
+  // 1. AANHAKERS (src/ui/aanhakers.js) ↔ src/ui/aanhakers/*.js
+  const { AANHAKERS } = await import('../src/ui/aanhakers.js');
+  const aanhakerBestanden = namenIn('src/ui/aanhakers');
+  ok(`AANHAKERS = de bestanden in src/ui/aanhakers/${zeg('zonder bestand', verschil(AANHAKERS, aanhakerBestanden))}${zeg('niet in AANHAKERS', verschil(aanhakerBestanden, AANHAKERS))}`,
+    gelijk([...AANHAKERS].sort(), aanhakerBestanden) && new Set(AANHAKERS).size === AANHAKERS.length);
+
+  // 2. SPOREN van de uitleg (src/ui/beschrijf/index.js) ↔ src/ui/beschrijf/*.js. SPOREN is niet
+  // geëxporteerd: we lezen de bron (de imports en de lijst), en controleren daarna op identiteit.
+  const bron = lees('src/ui/beschrijf/index.js');
+  const imports = Object.fromEntries([...bron.matchAll(/^import (\w+) from '\.\/([\w-]+)\.js';$/gm)].map((m) => [m[1], m[2]]));
+  const lijst = (/const SPOREN = \[([^\]]*)\]/.exec(bron)?.[1] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const beschrijfSporen = lijst.map((id) => imports[id] ?? `?${id}`);
+  const beschrijfBestanden = namenIn('src/ui/beschrijf', ['index.js']);
+  ok(`SPOREN van de uitleg = de bestanden in src/ui/beschrijf/${zeg('zonder bestand of import', verschil(beschrijfSporen, beschrijfBestanden))}${zeg('niet in SPOREN', verschil(beschrijfBestanden, beschrijfSporen))}`,
+    lijst.length > 0 && gelijk([...beschrijfSporen].sort(), beschrijfBestanden) && new Set(beschrijfSporen).size === beschrijfSporen.length);
+  // Klopt het lezen? Elk spoor geeft null of { kort, lang } en is een functie (de default van zijn bestand).
+  const mods = await Promise.all(beschrijfBestanden.map((n) => import(`../src/ui/beschrijf/${n}.js`)));
+  ok('elk uitlegbestand: een default-functie (action -> { kort, lang } | null)', mods.every((m) => typeof m.default === 'function'));
+  ok(`elk uitlegspoor hoort bij een aanhaker${zeg('zonder aanhaker', verschil(beschrijfBestanden, AANHAKERS))}`, verschil(beschrijfBestanden, AANHAKERS).length === 0);
+
+  // 3. Een aanhaker die actions definieert (zelf define(), of een bind… uit src/control/acties-*.js)
+  // heeft een uitleg: anders staat zijn action op de kaarten zonder tekst.
+  const definieert = aanhakerBestanden.filter((n) => {
+    const s = lees(`src/ui/aanhakers/${n}.js`);
+    if (/\bdefine\(/.test(s)) return true;
+    return [...s.matchAll(/import \{([^}]*)\} from '\.\.\/\.\.\/control\/(acties-[\w-]+)\.js'/g)]
+      .some((m) => /\bbind\w*/.test(m[1]) && /\bdefine\(/.test(lees(`src/control/${m[2]}.js`)));
+  });
+  ok(`een aanhaker die actions definieert heeft een uitleg in SPOREN (${definieert.join(', ')})${zeg('zonder uitleg', verschil(definieert, beschrijfSporen))}`,
+    definieert.length >= 5 && verschil(definieert, beschrijfSporen).length === 0);
+
+  // 4. SPOREN van de server (server/routes/index.js) ↔ server/routes/*.js, op identiteit.
+  const { SPOREN: routeSporen } = await import('../server/routes/index.js');
+  const routeBestanden = namenIn('server/routes', ['index.js']);
+  const routeNamen = routeSporen.map(([n]) => n);
+  const routeMods = Object.fromEntries(await Promise.all(routeBestanden.map(async (n) => [n, (await import(`../server/routes/${n}.js`)).default])));
+  ok(`SPOREN van de server = de bestanden in server/routes/${zeg('zonder bestand', verschil(routeNamen, routeBestanden))}${zeg('niet in SPOREN', verschil(routeBestanden, routeNamen))}`,
+    gelijk([...routeNamen].sort(), routeBestanden) && new Set(routeNamen).size === routeNamen.length);
+  ok('elke naam in SPOREN hoort bij zijn eigen bestand (routes/<naam>.js)', routeSporen.every(([n, m]) => routeMods[n] === m));
+
+  // 5. Stijl: elk bestand in src/ui/css/ staat in index.html (de mixer laadt alles); werk.html en
+  // uitlijn.html laden alleen wat hun vensters gebruiken (deze tabel: zet hem bij als je er een
+  // stylesheet bij zet); en geen enkele pagina linkt naar een stylesheet die er niet is.
+  const OOK = { 'werk.html': ['inrichten', 'panelen', 'uitlijn'], 'uitlijn.html': ['uitlijn'] };
+  const cssBestanden = readdirSync(join(WORTEL, 'src/ui/css')).filter((n) => n.endsWith('.css')).map((n) => n.slice(0, -4)).sort();
+  const links = (pagina) => [...lees(pagina).matchAll(/href="(?:\.\/)?src\/ui\/css\/([^"]+)\.css"/g)].map((m) => m[1]);
+  const paginas = readdirSync(WORTEL).filter((n) => n.endsWith('.html')).sort();
+  const indexLinks = links('index.html');
+  ok(`index.html linkt elk bestand in src/ui/css/${zeg('zonder link', verschil(cssBestanden, indexLinks))}`,
+    verschil(cssBestanden, indexLinks).length === 0);
+  const dood = paginas.flatMap((p) => verschil(links(p), cssBestanden).map((c) => `${p}: ${c}.css`));
+  ok(`geen link naar een stylesheet die er niet is${zeg('dood', dood)}`, dood.length === 0);
+  const dubbel = paginas.filter((p) => new Set(links(p)).size !== links(p).length);
+  ok(`geen stylesheet twee keer op één pagina${zeg('dubbel', dubbel)}`, dubbel.length === 0);
+  const anders = Object.entries(OOK).filter(([p, l]) => !gelijk([...links(p)].sort(), l)).map(([p]) => `${p}: ${links(p).join(', ')}`);
+  const elders = paginas.filter((p) => p !== 'index.html' && !OOK[p] && links(p).length);
+  ok(`werk.html en uitlijn.html laden precies hun eigen stylesheets, andere pagina's geen${zeg('anders', [...anders, ...elders])}`,
+    anders.length === 0 && elders.length === 0);
+}
+
 // ---- 6. server: routes van de sporen en de witte lijst --------------------------
 console.log('\nserver: routes/ en de witte lijst');
 {
