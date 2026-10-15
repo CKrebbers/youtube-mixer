@@ -1060,7 +1060,11 @@ console.log('\nopruimen en worklet-fouten');
   const bron = new StreamBron(ctx, uit, { interval: 1e9 });
   await bron.laad({ url: 'geheugen:S:1', haal: geheugenHaal(wav) });
   const node = bron.node;
+  const info1 = bron.buffer;
+  ok('buffer: één object per geladen bestand, niet per aanroep (afval per beeld, spoor A)',
+    info1 && info1 === bron.buffer && info1.stream === true && info1.duration === bron.duur);
   await bron.laad({ url: 'geheugen:S:2', haal: geheugenHaal(wav) });
+  ok('… een nieuwe laad: een nieuw object', bron.buffer && bron.buffer !== info1);
   ok('herladen: dezelfde node, geen stop, de poort blijft open',
     bron.node === node && nodes.length === 1 && !berichten.some((m) => m.type === 'stop') && !node.port.dicht && node.port.onmessage);
   bron.vernietig();

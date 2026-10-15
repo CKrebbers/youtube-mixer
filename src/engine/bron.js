@@ -473,7 +473,10 @@ export class StreamBron {
   /** Speelt hij? Een rem die op de audioklok al stilstaat is een pauze (remVoorbij). */
   get speelt() { return this.seg.speelt && !remVoorbij(this.seg, this.ctx.currentTime); }
   /** Het deck vraagt alleen "is er iets geladen"; een echte AudioBuffer is er niet. */
-  get buffer() { return this.bestand ? { duration: this.duur, stream: true } : null; }
+  // Eén object per geladen bestand, niet per aanroep: deck.buffer wordt per beeld tientallen
+  // keren gevraagd (snapshot, maatgever, sync) en maakte zo ~1 MB/s afval op de hoofdthread
+  // (tools/headless/beeld-afval.mjs, spoor A 15 okt). Een nieuwe laad = een nieuw object.
+  get buffer() { const b = this.bestand; return b ? (b.info ??= { duration: this.duur, stream: true }) : null; }
   get geheugen() { let n = 0; for (const b of this.geladen.values()) n += b; return n; }
   get remt() { return this.speelt && !!this.seg.rem; }
   /** Hoe snel de positie nu loopt (tracktijd per seconde); tijdens een rem minder (0 na stilstand), stil = de rate. */
@@ -574,7 +577,7 @@ export class StreamBron {
     }
 
     const bpf = bytesPerFrame(kop);
-    this.bestand = { url, kop, bpf, paginaBytes: PAGINA * bpf, duur: kop.dataLengte / bpf / kop.sampleRate, totaal, vervangen: false };
+    this.bestand = { url, kop, bpf, paginaBytes: PAGINA * bpf, duur: kop.dataLengte / bpf / kop.sampleRate, totaal, vervangen: false, info: null };
     this.geladen.clear();
     this.onderweg.clear();
     this.loop = null;

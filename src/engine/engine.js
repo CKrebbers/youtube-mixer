@@ -832,6 +832,8 @@ export class Engine extends Emitter {
       playing: d.playing, position: d.position, duration: d.duration,
       rate: d.rate, cuePoint: d.cuePoint,
       grid: d.grid ? d.grid.toJSON() : null, gridZeker: d.gridZekerHier, bpm: d.bpm, loopBeats: d.loopBeats ?? null,
+      // Telt bij elke gridwijziging (deck.gridVersie): een sleutel zonder het grid elk beeld als tekst te maken.
+      gridVersie: d.gridVersie,
       // Toonsoort die je HOORT op de positie (of null): zie deck.toonsoort.
       toon: d.toonsoort,
       // Secties (docs/SECTIES.md): de stukken van de kaart (dezelfde array zolang de kaart blijft) en welke je hoort.

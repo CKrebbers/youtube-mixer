@@ -3855,6 +3855,41 @@ console.log('\nstemkanalen');
   NOW = NOW0;
 }
 
+// De golfvorm-sleutel (waveform.js) leest gridVersie uit de snapshot in plaats van het grid als tekst
+// (spoor A, 15 okt). Dan moet ELKE gridwijziging hem ophogen, anders tekent een golfvorm oude lijnen:
+// elke action op de grid (tap, grid.*, bewerken, slot, controle) één voor één, met de stand ervoor en erna.
+{
+  console.log('\ngridVersie volgt elke gridwijziging');
+  const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');
+  const d = eng.deck('A');
+  d.stop();
+  d.load(renderDemoTrack(eng.ctx, { seed: 2, bars: 32 }), 'demo');
+  d.setGrid(new BG({ stukken: [{ van: 0, bpm: 124, anker: 0.05, zekerheid: 0.5 }, { van: 30, bpm: 126, anker: 30.02, zekerheid: 0.9 }] }));
+  d.onsets = Array.from({ length: 200 }, (_, i) => 0.05 + i * (60 / 124));
+  const ids = list().map((a) => a).filter((a) => /^track\.1\.(grid\b|tap\b)/.test(a.id));
+  const fouten = [];
+  let veranderd = 0, plek = 0;
+  for (const a of ids) {
+    for (const stap of a.type === 'value' ? [0.3, 0.7] : [true]) {
+      NOW += 0.2;
+      d.seek(5 + (plek++ * 7.3) % 20);
+      const voor = JSON.stringify(eng.snapshot().decks.A.grid), v0 = eng.snapshot().decks.A.gridVersie;
+      try { invoke(a.id, stap); if (a.type !== 'value') invoke(a.id, false); } catch (_) {}
+      const s = eng.snapshot().decks.A;
+      const na = JSON.stringify(s.grid);
+      if (na !== voor) { veranderd++; if (s.gridVersie === v0) fouten.push(a.id); }
+    }
+  }
+  ok(`${ids.length} grid-actions, ${veranderd} veranderden het grid: elke keer ook gridVersie omhoog${fouten.length ? ` (NIET: ${fouten.join(', ')})` : ''}`,
+    ids.length > 10 && veranderd > 5 && fouten.length === 0);
+  const s0 = eng.snapshot().decks.A;
+  ok('snapshot: gridVersie is het getal van het deck', s0.gridVersie === d.gridVersie && Number.isInteger(s0.gridVersie));
+  const v = d.gridVersie;
+  d.setGrid(new BG({ bpm: 124 }));
+  ok('setGrid hoogt hem op', d.gridVersie > v);
+  d.stop();
+}
+
 // Een worklet-fout (spoor A, 15 okt) komt als event op de context en wordt een melding van de engine, met een sleutel.
 {
   console.log('\nworklet-fout -> melding');
