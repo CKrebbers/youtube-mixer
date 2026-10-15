@@ -3,6 +3,7 @@
 Hulpmiddelen voor ontwikkelen en meten. Niets hiervan draait in de app.
 
 ## beatmeting/
+Wat nog leeft en wat eenmalig onderzoek was: `beatmeting/LEESMIJ.md` (15 okt).
 Metingen van het beatgrid op Clay's ECHTE library (docs/BEATGRID.md). Lezen alleen
 `media/<id>/onset.bin` en `audio.wav` en de library via de draaiende server
 (`http://localhost:8777/api/library`); schrijven niets in media/ of de database.
@@ -23,7 +24,8 @@ Draai met `node tools/beatmeting/<script>.mjs` vanuit de projectmap.
 | rest/tel1-synth.mjs `[tempofout]`, rest/tel1-echt.mjs `id:van:duur:bpm` | restpunt 2: "tel 1 hier" met en zonder verfijnen, synthetisch en op echte muziek |
 | rest/gridpast.mjs `[id:van:duur[:nul] ...]` | restpunt 4: past het grid op elk stuk, vóór (12776ba) tegen nu, op 48 fragmenten |
 | rest/gridpast-synth.mjs `[naam ...]` | hetzelfde synthetisch, de echte kicks bekend (`LANGE_MIX=1`: ook een mix van 20 min) |
-| synth/bench.mjs `[namen] [--json f] [--code <checkout>] [--vergelijk a b] [--wav map] [--echt map]` | DE BENCHMARK (14 okt, BEATGRID.md §12): 21 synthetische nummers met bekende tellen en "1"-en (`nummers.mjs`), Beat This!-tellen met zijn fouten (`nep-beatthis.mjs`), de score met vals zeker (`scoor.mjs`); beide analyses zoals de server ze draait. Leest en schrijft alleen in de tijdelijke map. `--wav` + `server/tellen/tellen.py` + `--echt`: het echte model op dezelfde audio |
+| synth/bench.mjs `[namen] [--json f] [--code <checkout>] [--vergelijk a b] [--wav map] [--echt map]` | DE BENCHMARK (14 okt, BEATGRID.md §12): 21 synthetische nummers met bekende tellen en "1"-en (`nummers.mjs`), Beat This!-tellen met zijn fouten (`nep-beatthis.mjs`), de score met vals zeker (`scoor.mjs`); beide analyses zoals de server ze draait. Leest en schrijft alleen in de tijdelijke map. `--wav` + `server/tellen/tellen.py` + `--echt`: het echte model op dezelfde audio; korter: `--beatthis <python>` (15 okt). `--geen-maat`: zonder de tweede mening over de "1" (BEATGRID.md §14) |
+| synth/snap.mjs `[namen] [--varianten bt,ruis,half]` | "tel 1 hier" snappen naar de klap (tot 15 okt) tegen snappen naar de tel (`snapNaarTel`), op de synthetische nummers; ook met een vaste scheefheid van het netwerk (BEATGRID.md §14) |
 | synth/groep.mjs `voor.json na.json ...` | de uitkomst van `bench.mjs --json` per soort fout, en de gewone gevallen (zes soorten; met en zonder vast-72/reggae-75) |
 | synth/opstart.mjs `[--poort 8866] [namen]` | wat een nieuwe kaartversie bij het opstarten kost: een eigen proefserver (VARVE_TESTSERVER=1, tijdelijke map) met grids uit de tellen van versie 1, twee keer gestart (zonder en met `tweede-mening.json`); de `[tellen]`-regels met de tijd per nummer |
 De *.txt-bestanden zijn de uitkomsten van 23 september 2026, ter vergelijking; die in

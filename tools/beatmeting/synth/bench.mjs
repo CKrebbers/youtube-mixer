@@ -121,7 +121,7 @@ async function lageBand(naam, wav) {
 
 /** Het ECHTE Beat This! op de wav (server/tellen/tellen.py), onthouden per audio. Null als het niet lukt. */
 async function echteTellen(naam, wav) {
-  const sleutel = hashVan(wav);
+  const sleutel = hashVan(wav, beatthisPy, readFileSync(path.join(ROOT, 'server/tellen/tellen.py')));   // een andere python of tellen.py = opnieuw
   const uit = path.join(TMP, `echt-${naam}-${sleutel}.json`);
   if (!existsSync(uit)) {
     const wavPad = path.join(TMP, `${naam}.wav`);
