@@ -31,7 +31,10 @@ const heeftFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0 && spawnSync(
 const encoders = heeftFfmpeg ? spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' }).stdout : '';
 const heeftVT = /h264_videotoolbox/.test(encoders);
 // beeld/hercodeer: videotoolbox op de Mac, libx264 elders (U.hercodeerEncoder, spoor C2). Kan deze ffmpeg dat?
-const hercodeer = U.hercodeerEncoder();
+// Zoals start() kiest: videotoolbox alleen als hij hier ECHT codeert (een virtuele Mac heeft hem wel in
+// de lijst, maar levert geen beeld), anders libx264.
+const vtWerkt = heeftFfmpeg && heeftVT ? await U.videotoolboxWerkt() : false;
+const hercodeer = heeftFfmpeg ? await U.standaardEncoder() : U.hercodeerEncoder();
 const kanHercoderen = hercodeer === 'videotoolbox' ? heeftVT : /libx264/.test(encoders);
 const geenHercoder = `geen ${hercodeer === 'videotoolbox' ? 'h264_videotoolbox' : 'libx264'} in deze ffmpeg`;
 const heeftOpus = /libopus/.test(encoders);
@@ -190,7 +193,12 @@ try {
     ok('P4b libx264: -c:v libx264 -preset veryfast -tune zerolatency, geen videotoolbox of -realtime, verder gelijk aan P4', xs.includes('-c:v libx264 -preset veryfast -tune zerolatency')
       && !/videotoolbox|-realtime/.test(xs) && xs.endsWith(hs.slice(hs.indexOf('-b:v'))));
     ok(`P4b de keuze: videotoolbox op darwin, libx264 op linux; standaard het platform (${hercodeer})`, U.hercodeerEncoder('darwin') === 'videotoolbox' && U.hercodeerEncoder('linux') === 'libx264'
-      && U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer' }, { uit: 'u.flv' }).includes(hercodeer === 'libx264' ? 'libx264' : 'h264_videotoolbox'));
+      && U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'hercodeer' }, { uit: 'u.flv' }).includes(U.hercodeerEncoder() === 'libx264' ? 'libx264' : 'h264_videotoolbox'));
+    const [lx, mJa, mNee] = await Promise.all([U.standaardEncoder({ platform: 'linux' }), U.standaardEncoder({ platform: 'darwin', werkt: true }), U.standaardEncoder({ platform: 'darwin', werkt: false })]);
+    ok('P4c start() kiest: linux libx264; een Mac waar videotoolbox echt codeert videotoolbox, anders libx264', lx === 'libx264' && mJa === 'videotoolbox' && mNee === 'libx264');
+    const nep = await U.videotoolboxWerkt('/bestaat/niet/ffmpeg');
+    ok('P4c de proef met een ffmpeg die niet bestaat: false, geen fout', nep === false && (await U.videotoolboxWerkt('/bestaat/niet/ffmpeg')) === nep);
+    if (heeftVT && !vtWerkt) notitie(`videotoolbox staat in deze ffmpeg maar codeert hier niet (virtuele Mac?): beeld/hercodeer is met libx264 getoetst, het videotoolbox-pad niet`);
     const kop = U.bouwArgs({ naam: 't', soort: 'bestand', bron: 'video', video: 'kopie' }, { uit: 'u.flv' }).join(' ');
     ok('P5 beeld/kopie: -c copy', kop.includes('-map 0:v:0 -map 0:a:0 -c copy'));
     const rt = U.bouwArgs({ naam: 't', soort: 'rtmp', bron: 'audio', url: 'rtmp://127.0.0.1:1935/live/test' }, { uit: 'rtmp://127.0.0.1:1935/live/test' });

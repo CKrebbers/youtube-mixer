@@ -80,7 +80,13 @@ function meld({ f, code, uit, s }) {
   nieuweDuur[f] = Math.round(s * 10) / 10;
   uitslag[f] = ok;
   console.log(`${ok ? 'groen' : 'ROOD '}  ${f.padEnd(22)} ${String(goed).padStart(4)} ok${fout ? `  ${fout} FAIL` : ''}  ${s.toFixed(1)} s${alleen.has(f) && !serieel ? '  (alleen)' : ''}`);
-  if (!ok) console.log(uit.split('\n').filter((l) => /^FAIL|^✗|Error|at /.test(l)).slice(0, 12).map((l) => '        ' + l).join('\n'));
+  // Eerst de FAIL-regels, dan wat op een fout lijkt (een stacktrace-regel begint met spaties en "at "): "at " midden
+  // in een regel ("wat", "dat") liet de echte FAIL buiten de twaalf vallen (macOS-run 15 okt, stems).
+  if (!ok) {
+    const regels = uit.split('\n');
+    const toon = [...regels.filter((l) => /^FAIL|^✗/.test(l)), ...regels.filter((l) => !/^FAIL|^✗/.test(l) && /Error|^\s+at /.test(l))];
+    console.log(toon.slice(0, 12).map((l) => '        ' + l).join('\n'));
+  }
 }
 
 const T0 = performance.now();

@@ -16,7 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '26.8.2'
-      - name: ffmpeg
-        run: brew install ffmpeg
+      # yt-dlp: ingest.test haalt een lokaal klikspoor door de echte yt-dlp (geen netwerk).
+      - name: ffmpeg en yt-dlp
+        run: brew install ffmpeg yt-dlp
       - name: tests (pool, langste eerst; @alleen-tests daarna)
         run: node test/alles.mjs

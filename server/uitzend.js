@@ -199,6 +199,39 @@ export function hercodeerEncoder(platform = process.platform) {
 }
 
 /**
+ * Werkt videotoolbox hier ECHT? Op een Mac zonder hardware-encoder (een virtuele Mac, zoals de
+ * runner van de testworkflow) staat h264_videotoolbox wel in `ffmpeg -encoders`, maar levert hij
+ * niets: een stroom zonder beeld. Eén keer tien beelden coderen zegt het; de uitkomst wordt
+ * onthouden (per ffmpeg). Nooit synchroon: de server levert intussen de pagina's van de decks.
+ */
+const vtProef = new Map();
+export function videotoolboxWerkt(ffmpeg = 'ffmpeg') {
+  if (!vtProef.has(ffmpeg)) vtProef.set(ffmpeg, new Promise((klaar) => {
+    let bytes = 0, af = false;
+    const eind = (ja) => { if (!af) { af = true; clearTimeout(klok); klaar(ja); } };
+    let kind;
+    try {
+      kind = spawn(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=30',
+        '-frames:v', '10', '-c:v', 'h264_videotoolbox', '-f', 'h264', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch (_) { klaar(false); return; }
+    const klok = setTimeout(() => { try { kind.kill('SIGKILL'); } catch (_) {} eind(false); }, 10000);
+    kind.stdout.on('data', (d) => { bytes += d.length; });
+    kind.once('error', () => eind(false));
+    kind.once('close', (code) => eind(code === 0 && bytes > 0));
+  }));
+  return vtProef.get(ffmpeg);
+}
+
+/**
+ * De encoder voor beeld/hercodeer zoals start() hem kiest: videotoolbox op een Mac waar hij echt
+ * codeert, anders libx264. `werkt` = de uitkomst van de proef (voor tests).
+ */
+export async function standaardEncoder({ platform = process.platform, ffmpeg = 'ffmpeg', werkt } = {}) {
+  if (hercodeerEncoder(platform) !== 'videotoolbox') return 'libx264';
+  return (werkt ?? await videotoolboxWerkt(ffmpeg)) ? 'videotoolbox' : 'libx264';
+}
+
+/**
  * De argumenten voor ffmpeg (docs/UITZENDEN.md §4). Puur. `uit` is het pad of de url.
  * `encoder` (alleen voor beeld/hercodeer): 'videotoolbox' of 'libx264', standaard hercodeerEncoder().
  */
@@ -427,7 +460,9 @@ class Zending {
       // Het kind. cwd = de uitzendmap: dan blijft het Bureaublad-pad (spaties) uit de filtergraaf.
       await mkdir(uitzendMap, { recursive: true });
       if (this.afbreken) return { ok: false, fout: AFGEBROKEN };
-      let args = bouwArgs(doel, { uit });
+      const encoder = doel.video === 'hercodeer' ? await standaardEncoder({ ffmpeg }) : undefined;
+      if (this.afbreken) return { ok: false, fout: AFGEBROKEN };
+      let args = bouwArgs(doel, { uit, encoder });
       if (_argsHaak) args = _argsHaak(args);
       const kind = spawn(ffmpeg, args, { cwd: uitzendMap, stdio: ['pipe', 'ignore', 'pipe', 'pipe'] });
       const gestart = await new Promise((r) => { kind.once('spawn', () => r(true)); kind.once('error', (e) => r(e)); });
