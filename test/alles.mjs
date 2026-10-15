@@ -18,6 +18,7 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { availableParallelism, cpus } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { versieWaarschuwing } from './node-versie.mjs';
 
 const map = fileURLToPath(new URL('.', import.meta.url));
 const DUUR = map + '.duur.json';
@@ -27,6 +28,10 @@ const bi = args.indexOf('--banen');
 const banen = serieel ? 1 : Math.max(1, Number(bi >= 0 ? args[bi + 1] : 0) || (availableParallelism?.() ?? cpus().length));
 
 const bestanden = readdirSync(map).filter((f) => f.endsWith('.test.mjs')).sort();
+
+// Een andere Node dan .node-version: zeggen, niet overslaan (test/node-versie.mjs, spoor C).
+const versie = versieWaarschuwing();
+if (versie) console.log(versie.kop);
 
 /** De reden achter `// @alleen:` bovenaan, of null. */
 function alleenReden(tekst) {
@@ -98,5 +103,6 @@ const roodLijst = bestanden.filter((f) => uitslag[f] === false);
 if (roodLijst.length) console.log(`\nrood: ${roodLijst.join(', ')}`);
 const tijd = serieel ? `serieel ${((tEind - T0) / 1000).toFixed(0)} s`
   : `${banen} tegelijk, ${((tEind - T0) / 1000).toFixed(0)} s (pool ${((tPool - T0) / 1000).toFixed(0)} s + alleen ${((tEind - tPool) / 1000).toFixed(0)} s)`;
+if (versie) console.log(`\n${versie.staart}`);
 console.log(`\n${bestanden.length} bestanden, ${totaal} checks${overgeslagen.length ? `, ${overgeslagen.length} overgeslagen` : ''} — ${rood ? `${rood} ROOD` : 'alles groen'} · ${tijd}`);
 process.exit(rood ? 1 : 0);
