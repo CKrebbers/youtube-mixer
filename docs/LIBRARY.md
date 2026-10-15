@@ -148,6 +148,102 @@ peiling van `GET /api/stems` alleen de stems-cellen bij, en niet terwijl je in d
 lijst drukt (een knop die tussen indrukken en loslaten vervangen wordt, krijgt in
 Chrome geen klik).
 
+## De zeven browser-instellingen op de server (11 oktober 2026, extra-3 B4)
+
+Tot B4 stonden zeven sleutels die het instrument zijn ALLEEN in Chrome's
+localStorage: een nieuw Chrome-profiel, gewiste sitedata of een nieuwe Mac en
+het master-rack en de klankschaal waren weg, en geen backup had ze. Nu hebben
+ze een spiegel op de server, precies zoals de mapping (`/api/mapping`,
+`mapping-opslag.js`): in de tabel `instellingen` van `library.db`, dus in elke
+kopie van `server/backup.js` en in elke backupset die `library.db` meeneemt.
+
+| Sleutel | Wat | Schrijver |
+|---|---|---|
+| `varve.master.rack` | inhoud en herkomst van het master-rack | `master-paneel.js` |
+| `varve.klankschaal` | instellingen van de klankschaal | `klankschaal-paneel.js` |
+| `varve.midi.ports` | gekozen MIDI-poorten (op naam en id) | `control/midi.js` (via de bewaarder uit `midi-opzet.js`) |
+| `varve.beeld.adres`, `.latentie`, `.aan` | relay-adres, latentie, beeld aan | `beeld-paneel.js` |
+| `varve.stems.standaard` | 2 / 4 / 0 stems bij binnenhalen | `ingest-strook.js` |
+| `varve.koptelefoon.omgewisseld` | zaal en koptelefoon gewisseld | `koptelefoon-paneel.js` |
+| `varve.vormen` | de vlag `?vormen=1` | `vlag.js` |
+
+Samen negen namen (beeld telt drie). De witte lijst staat op één plek,
+`INSTELLING_SLEUTELS` in `src/ui/instellingen-lijst.js` (puur, zonder DOM); de
+server en `instellingen-opslag.js` importeren hem. Gemak-sleutels (panelen open/dicht, sorteringen, `varve.log.altijd`) en de
+mapping (eigen route) staan er bewust niet op.
+
+### API
+
+- `GET /api/instellingen` → `{ instellingen: { <sleutel>: tekst | null } }`: alles
+  wat ooit bewaard is. Een sleutel die ontbreekt is NOOIT bewaard; `null` = gewist.
+- `GET /api/instellingen/<sleutel>` → `{ sleutel, waarde, bewaard }`.
+- `PUT /api/instellingen/<sleutel>` met `{ waarde: tekst | null }` (application/json;
+  hooguit 128 K tekens, anders 413; een verzoek boven 769 KiB wordt afgebroken,
+  ruim genoeg voor 128 K tekens die elk als `\uXXXX` komen). De waarde is precies de tekst die de browser
+  in localStorage zet; `null` is wissen (`localStorage.removeItem`).
+- Een sleutel buiten de lijst: **400** (`{ fout: 'onbekende instelling', sleutels }`).
+  Een getal of object als waarde: 400. Andere methode: 405. Host/Origin zoals elke route.
+
+### De browser (`src/ui/instellingen-opslag.js`)
+
+- **Opstarten:** `app.js` doet `await startInstellingen()` vóór de engine en de
+  panelen. Eén `GET /api/instellingen`; wat de server heeft gaat in localStorage
+  (de server wint). Daardoor lezen alle bestaande `localStorage.getItem`-plekken
+  vanzelf de serverwaarde; die plekken zijn niet veranderd. Had de browser een
+  andere waarde, dan gaat die eerst naar `varve.instellingen.vorige` (per sleutel
+  de laatste vijf, met tijd) en komt er één melding; terugzetten met
+  `instellingen.herstel('varve.master.rack')` in de console en herladen
+  (`instellingen.vorige()` laat zien wat er staat). Lukt die kopie niet (opslag
+  van de browser vol), dan blijft de browserwaarde staan en komt er een
+  foutmelding; `herstel` weigert dan ook.
+- **Lege server, gevulde browser:** per sleutel die de server nog nooit had en de
+  browser wel: één keer omhoog. Daarna is de server de bron.
+- **Schrijven:** de plekken schrijven via `schrijfInstelling`/`wisInstelling` (of
+  `spiegelInstelling` als ze hun opslag zelf al schreven): localStorage meteen,
+  de server 400 ms na de laatste wijziging (een schuif = één PUT), alleen als
+  het anders is dan wat de server al heeft.
+- **Server weg bij het opstarten** (of geen antwoord binnen 1,5 s): de mixer
+  start met wat de browser had, en deze sessie gaat er NIETS naar de server (één
+  melding, meteen bij het opstarten). Bij de volgende start wint de server weer;
+  wat je in deze sessie instelde staat dan bij `vorige`. Dat is de regel van de mapping: het master-paneel schrijft bij de
+  eerste frame zijn rack, en met een lege browser zou dat standaard-rack anders
+  het echte rack op de server overschrijven (gevonden met de headless proef).
+- **Server weg tijdens de sessie:** de sleutel blijft als onverzonden staan
+  (`varve.instellingen.onverzonden` in localStorage); bij de volgende start wint
+  dan de browser en gaat hij omhoog. De serverwaarde die hij vervangt (die kan
+  uit een andere browser komen) gaat eerst naar `vorige`. Eén melding per sessie.
+- Meldingen van vóór `window.meld` (de start loopt eerder) wachten tot `app.js`
+  `toonInstellingMeldingen()` aanroept, direct na `window.meld = meld`.
+- Buiten een pagina van de server (Node-tests, file://) praat de opslag met geen
+  server; `midi.js` (laag control) importeert niets uit ui: de MidiHub krijgt een
+  optionele `bewaar`-functie, zonder die schrijft hij localStorage zoals altijd.
+
+### Getest
+
+- `test/instellingen-server.test.mjs`: eigen server, tijdelijke db: witte lijst
+  (400 op `varve.mapping`, `varve.klankschaal.open`, `..%2fmapping`, kapotte
+  %-codering), tekst en null, 413/415/405/403, mapping ongemoeid, en na een
+  herstart staat alles er nog (rechtstreeks in de tabel gecontroleerd).
+- `test/instellingen-opslag.test.mjs`: tegen een nagebouwde server zo streng als
+  de echte: server eerst, eenmalig omhoog (herladen schrijft niets), server weg /
+  500 / hangend, een schuif = één PUT, onverzonden wint de volgende keer, niet
+  gelezen = niets naar de server; een statische check dat elke plek in `src/`
+  aangesloten is en dat `app.js` vóór de engine ophaalt; en één ronde tegen de
+  echte server. Sinds herstelronde 1 ook: vers profiel eerst en daarna een gevulde
+  browser (de oude waarde staat bij `vorige`, herstel zet hem terug), een mislukte
+  start plus herladen, een oude onverzonden-vlag, en uitgestelde meldingen.
+- `tools/headless/instellingen.mjs` (echte Chrome, eigen poorten 8872/8873): een
+  nieuw profiel krijgt adres, latentie en stems-keuze van de server in het paneel;
+  een wijziging in het paneel staat binnen een seconde op de server; een browser
+  met sleutels tegen een lege server schrijft ze één keer omhoog.
+- Open: `varve.midi.ports` is per machine, maar op de server gedeeld; een tweede
+  machine neemt de poortkeuze van de eerste over (op naam valt hij terug). Per host
+  bewaren of van de lijst halen is een keuze voor Clay.
+- NIET getest: Clay's eigen Chrome-profiel (welke sleutels er nu echt staan; de
+  eerste start na de merge schrijft ze omhoog), Web MIDI (`varve.midi.ports` alleen
+  in de Node-test), en twee tabbladen die tegelijk een sleutel veranderen (de
+  laatste PUT wint, zoals bij localStorage).
+
 ## Schema
 
 Eén element achteraan `SCHEMA`: tabel `hotcues`, kolom `titel_sleutel` (gevuld
@@ -248,6 +344,9 @@ Er is geen Time Machine, dus de server maakt zelf kopieën (`server/backup.js`,
   `<id>/audio.wav|video.mp4|peaks.bin|onset.bin` door. `GET /api/backups` geeft
   alleen de stand: `{ laatste: { naam, tijd, bytes } | null, aantal, gekeken,
   fout, foutTijd, bezig }`, geen pad (behalve in de tekst van een fout).
+- **Ook de browser-sleutels (B4, 11 okt):** de zeven sleutels staan nu in library.db en
+  gaan mee in de backup (master-rack, klankschaal, MIDI-poorten, beeld, stems-standaard,
+  koptelefoon-wissel, vormen-vlag; zie "De zeven browser-instellingen" hierboven).
 
 ### Gemeten (2 okt, deze container, 4 kernen, rustig)
 
@@ -299,6 +398,7 @@ Er is bewust geen knop in de app. Met de hand, in de projectmap:
 - Opnames, handelingenlogs, setplannen (`plannen/` heeft zijn eigen `.versies/`)
   en de speellijst van de Controlekamer.
 - De mapping in localStorage van de browser (de server-kopie zit er wel in).
+  Idem voor de zeven instrument-sleutels sinds B4 (hierboven).
 - Geen backup VÓÓR een schemamigratie: de server migreert bij het openen en
   maakt pas daarna zijn eerste kopie. De laatste kopie van de oude versie
   (hooguit een uur oud, als er iets veranderde) is dan de terugweg.

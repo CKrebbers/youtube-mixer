@@ -2,6 +2,7 @@ import { read as readAction } from '../control/actions.js';
 import { meld } from './meldingen.js';
 import { zetTekst } from './dom.js';
 import { registreerRij } from './rijen.js';
+import { schrijfInstelling } from './instellingen-opslag.js';
 
 /*
  * De KOPTELEFOON-rij (docs/STUDIO.md §3): per track een cue-knop, het
@@ -19,7 +20,8 @@ import { registreerRij } from './rijen.js';
 const OPEN = 'varve.koptelefoon.open';
 const OMGEWISSELD = 'varve.koptelefoon.omgewisseld';
 const lees = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
-const schrijf = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+// De instrument-sleutels gaan ook naar de server (instellingen-opslag.js); de rest alleen localStorage.
+const schrijf = schrijfInstelling;
 
 /** Voor `new Engine(...)`: wat de koptelefoon bij het maken moet weten. */
 export function koptelefoonOpties() {

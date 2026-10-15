@@ -160,6 +160,7 @@ src/
                     kaart-panel.js  de tab kaart in het library-paneel: zoeken, kratten, haal binnen/zoek, wenslijst, nachtwachtrij (docs/LIBRARY.md "De kaart-tab")
                     hotcue-opslag.js hotcues per nummer bewaren: welk nummer op welke track, één verzoek tegelijk
                     mapping-opslag.js je eigen mapping als verschil: standaard ophalen, omzetten, bewaren, herstellen
+                    instellingen-opslag.js de zeven instrument-sleutels (master-rack, klankschaal, poorten, beeld, stems, koptelefoon, vormen) ook op de server: /api/instellingen, server eerst, vervangen waarden bij varve.instellingen.vorige; witte lijst in instellingen-lijst.js (docs/LIBRARY.md)
                     ingest-strook.js de ingest-wachtrij in het library-paneel: plakken, voortgang, ×, laadknoppen
                     logboek.js      ○ log en ↺ naast de opname: vastleggen, vergelijken, lijst, terugspelen
                     klankschaal-paneel.js de KLANKSCHAAL-rij: openen, instellingen bewaren, per frame tonen
@@ -333,6 +334,7 @@ opnames/            je opgenomen sets als WAV (niet in git)
 test/
   engine.test.mjs   engine tegen gemockte Web Audio API, draait in Node
   mapping.test.mjs  mapping + soft-takeover, puur logica, geen mock nodig
+  instellingen-server.test.mjs / instellingen-opslag.test.mjs  de zeven browser-sleutels: route en witte lijst; server eerst, eenmalig omhoog
   feedback.test.mjs LED-diffing en paletproef, bytes worden opgevangen
   feedback-plan.test.mjs  het plan van de LED-laag (byte voor byte de oude berekening, 567 standen) en de wektik
   learn.test.mjs    MIDI-learn, modusherkenning, export/import-rondje

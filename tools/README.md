@@ -254,6 +254,10 @@ bestand heen. Zie `patronen/LEESMIJ.md`.
   server op 8793, tijdelijke database). Laadt de worklet, zet een demotrack in A mineur +43 ct
   op track 1, meet de toonhoogte van een veld achter de schaal (AnalyserNode), transponeert met
   de hand, wrijft, en kijkt of de rij op laptopmaat past. Werkt ook op Linux (`chromium` op het pad).
+- `instellingen.mjs` — de zeven instrument-sleutels op de server (docs/LIBRARY.md, extra-3 B4): een nieuw
+  Chrome-profiel krijgt ze van de server (beeldpaneel, stems-keuze), een wijziging in het paneel gaat terug,
+  een browser met sleutels tegen een lege server schrijft ze één keer omhoog. Eigen servers op 8872/8873
+  (`VARVE_INST_POORT`), tijdelijke databases, geen MIDI.
 - `controle.mjs` — de Controlekamer (docs/CONTROLEKAMER.md) naast een echte mixer in een tweede tabblad van
   dezelfde headless Chromium (Web Lock en BroadcastChannel zoals bij Clay): mixer open/dicht, een tweede mixer
   rood, de knop "mixer openen", wat er in de mixer staat, afvinken en notities na herladen. Eigen server

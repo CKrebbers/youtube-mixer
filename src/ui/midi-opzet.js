@@ -10,6 +10,7 @@ import { LearnMode } from './learn-mode.js';
 import { MidiMonitor } from './midi-monitor.js';
 import { meld } from './meldingen.js';
 import { tabblad, isEersteTabblad } from './tabblad.js';
+import { schrijfInstelling } from './instellingen-opslag.js';
 import { opzetMappingOpslag } from './mapping-opslag.js';
 import { uitgangsVertraging } from '../engine/hoorbaar.js';
 
@@ -34,7 +35,7 @@ export function opzetMidi({ engine, sluitOnderpanelen, lagen, geraakt = null, hu
   const DEVICES = [apc40mk2, generic];   // generic matcht alles, dus als laatste
   const pickDevice = (naam) => DEVICES.find((d) => d.match.test(naam || '')) || generic;
 
-  const midi = hub ? new hub.HubMidi({ url: hub.url, invoke, read: readAction, secties: hub.secties ?? null }) : new MidiHub();
+  const midi = hub ? new hub.HubMidi({ url: hub.url, invoke, read: readAction, secties: hub.secties ?? null }) : new MidiHub({ bewaar: schrijfInstelling });
   /*
    * Maar één VARVE-tabblad praat met de APC (tabblad.js, Web Lock). Een tweede
    * tabblad vraagt helemaal GEEN MIDI-toegang aan: dan kan het ook niets

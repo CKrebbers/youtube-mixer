@@ -4,13 +4,15 @@
  * op als hij aan staat. Zonder vlag komt er geen byte van de vormen binnen.
  */
 
+import { schrijfInstelling, wisInstelling } from './instellingen-opslag.js';
+
 const SLEUTEL = 'varve.vormen';
 
 export function vormenAan(url = location.href) {
   const v = new URL(url).searchParams.get('vormen');
   try {
-    if (v === '1') localStorage.setItem(SLEUTEL, '1');
-    if (v === '0') localStorage.removeItem(SLEUTEL);
+    if (v === '1') schrijfInstelling(SLEUTEL, '1');
+    if (v === '0') wisInstelling(SLEUTEL);
     return localStorage.getItem(SLEUTEL) === '1';
   } catch (_) {
     return v === '1';
