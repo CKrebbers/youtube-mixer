@@ -31,6 +31,10 @@ mengcanvas -> MediaRecorder -----------------> POST /api/opname/<id>/video.mp4 -
 - **Het opnamepad blijft precies zoals het was** (G4): `opnemer.js`, `opname.js` en de opnameroutes zijn niet
   veranderd. De test bewijst het: een WAV met en zonder uitzending is byte voor byte gelijk (S21), en als ffmpeg
   sterft loopt de opname door (S22).
+  *Sinds 15 okt* (docs/WINST.md punt 3, verslag `docs/verslagen/2026-10-15/arch-server-weg.md`) wacht de opnemer als
+  de server even weg is en schrijft hij de stukken daarna op hun plek; videostukken dragen `?van=<byte>` (zonder:
+  erachter, zoals vroeger). Voor de uitzending verandert er niets zolang de server leeft; valt hij weg, dan stopt
+  de uitzending sowieso (ze draait in de server), en na de herstart groeit de WAV in één keer bij.
 - `CLAUDE.md` r.29-31 ("geen publieke streaming") ging over **de cache**: `media/` en `library.db` verlaten deze
   machine nooit. Deze module importeert alleen `node:*` en `kopVan`/`ID` uit `./opname.js`, neemt van buiten alleen
   een opname-id en een doelnaam aan (geen pad, geen url, geen ffmpeg), en leest alleen `opnames/set-<id>.wav|.mp4`
