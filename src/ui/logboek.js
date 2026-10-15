@@ -37,7 +37,8 @@ import { esc, mmss, zetTekst } from './dom.js';
 export function opzetLogboek({ engine, staat, laden, opnemer }) {
   const klok = () => engine.ctx.currentTime;
   const log = new Handelingenlog({ klok });
-  log.onFout = (f) => meld(`handelingenlog: ${f}`, 'fout', 8000);
+  // Eén melding voor het log (sleutel): de server die even weg was gaf anders één rode per verloren stuk.
+  log.onFout = (f) => meld(`handelingenlog: ${f}`, 'fout', 8000, { sleutel: 'handelingenlog' });
   window.addEventListener('pagehide', () => log.noodstop());
 
   // ---- vastleggen -----------------------------------------------------------
