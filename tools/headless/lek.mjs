@@ -23,6 +23,9 @@
 //                            ruimt een StreamBron op (deck.leeg -> vernietig)
 //                    Bij laad en wissel geldt een EIS: de renderer na GC hooguit
 //                    VARVE_LEK_MB (standaard 20) MB boven het begin, anders exit 1.
+//                    Op Linux het PRIVÉ geheugen (Anonymous, /proc/<pid>/smaps_rollup),
+//                    elders RSS; RSS telt gedeelde code van Chrome mee die pas laat
+//                    voor het eerst draait.
 //                    Het begin wordt gemeten na VARVE_LEK_OPWARM (standaard 4)
 //                    stappen: eenmalige kosten (WASM, modules, caches) zijn geen lek.
 //   VARVE_LEK_S      hoe lang de opname loopt in seconden (standaard 300)
@@ -95,6 +98,18 @@ function geheugen() {
   for (let groei = true; groei;) { groei = false; for (const r of rijen) if (boom.has(r.ppid) && !boom.has(r.pid)) { boom.add(r.pid); groei = true; } }
   const per = {};
   for (const r of rijen) if (boom.has(r.pid)) { const t = /--type=([\w-]+)/.exec(r.args)?.[1] ?? 'browser'; per[t] = Math.round((per[t] ?? 0) + r.rss); }
+  // Linux: ook het PRIVÉ geheugen van de renderers (Anonymous uit smaps_rollup). RSS telt de
+  // gedeelde, onveranderde bladzijden van Chrome zelf mee (code die pas laat voor het eerst
+  // draait: gemeten +45 MB "Shared_Clean" rond stap 20, daarna vlak), en dat is geen lek.
+  let prive = 0, gelezen = false;
+  for (const r of rijen) {
+    if (!boom.has(r.pid) || !/--type=renderer/.test(r.args)) continue;
+    try {
+      const m = /^Anonymous:\s+(\d+)/m.exec(readFileSync(`/proc/${r.pid}/smaps_rollup`, 'utf8'));
+      if (m) { prive += +m[1] / 1024; gelezen = true; }
+    } catch (_) {}
+  }
+  if (gelezen) per['renderer-privé'] = Math.round(prive);
   return per;
 }
 
@@ -185,7 +200,7 @@ try {
         const r = await window.library.onLaad(deck, __lek.tracks[id]);
         if (!r) throw new Error('laden gaf null (track ' + n + ')');
         __a.invoke('track.' + n + '.fader', 0.8);
-        if (!window.engine.decks[deck].speelt) { __a.invoke('track.' + n + '.play', true); __a.invoke('track.' + n + '.play', false); }
+        if (!window.engine.decks[deck].playing) { __a.invoke('track.' + n + '.play', true); __a.invoke('track.' + n + '.play', false); }
       };
     })()`);
     // Opwarmen: wat één keer gebeurt (de WASM van keylock compileren, de
@@ -220,15 +235,19 @@ try {
       if ((i + 1) % 10 === 0) log(`${PROEF} ${i + 1}/${N}`, JSON.stringify(geheugen()));
     }
     const eind = geheugen();
-    await ev("for (const d of Object.values(window.engine.decks)) if (d.speelt) d.togglePlay()").catch(() => {});
+    await ev("for (const d of Object.values(window.engine.decks)) if (d.playing) d.togglePlay()").catch(() => {});
     await wacht(500);
     await gc();
     const naGc = geheugen();
     log('na GC', JSON.stringify(naGc));
     const r0 = begin?.renderer ?? NaN, r1 = eind?.renderer ?? NaN, r2 = naGc?.renderer ?? NaN;
-    const groei = r2 - r0;
-    console.log(`\nrenderer: begin ${r0} MB · na ${N}× ${PROEF} ${r1} MB · na GC ${r2} MB`);
-    console.log(`groei na GC ${groei.toFixed(0)} MB (eis ≤ ${EIS_MB} MB): ${groei <= EIS_MB ? 'GOED' : 'TE VEEL'}`);
+    console.log(`\nrenderer (RSS): begin ${r0} MB · na ${N}× ${PROEF} ${r1} MB · na GC ${r2} MB (groei ${(r2 - r0).toFixed(0)} MB)`);
+    // De eis op het privé geheugen als dat er is (Linux), anders op RSS (macOS).
+    const sleutel = begin?.['renderer-privé'] != null && naGc?.['renderer-privé'] != null ? 'renderer-privé' : 'renderer';
+    const p0 = begin?.[sleutel] ?? NaN, p1 = eind?.[sleutel] ?? NaN, p2 = naGc?.[sleutel] ?? NaN;
+    if (sleutel !== 'renderer') console.log(`renderer (privé): begin ${p0} MB · na ${N}× ${PROEF} ${p1} MB · na GC ${p2} MB`);
+    const groei = p2 - p0;
+    console.log(`groei na GC (${sleutel === 'renderer' ? 'RSS' : 'privé'}) ${groei.toFixed(0)} MB (eis ≤ ${EIS_MB} MB): ${groei <= EIS_MB ? 'GOED' : 'TE VEEL'}`);
     const heap1 = await hoofdHeap();
     console.log(`JS-heap hoofdthread na GC: ${heap0} -> ${heap1} MB`);
     code = groei <= EIS_MB ? 0 : 1;
