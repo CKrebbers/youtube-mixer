@@ -57,7 +57,8 @@ console.log('\naanvullen, title-attributen, het paneel zonder DOM');
 {
   const tags = [{ naam: 'Dub', sleutel: 'dub' }, { naam: 'dub techno', sleutel: 'dub techno' }, { naam: 'Nacht', sleutel: 'nacht' }];
   const a = vulAan(['na', 'dub', 'du', 'zzz'], tags);
-  ok('aanvullen: uniek begin = die tag, exact = die tag, dubbelzinnig of onbekend = nieuw', JSON.stringify(a) === JSON.stringify({ namen: ['Nacht', 'Dub', 'du', 'zzz'], nieuw: ['du', 'zzz'] }));
+  ok('Enter: alleen exact = die tag; een begin is NIEUW met een voorstel (nooit stil aanvullen)', JSON.stringify(a)
+    === JSON.stringify({ namen: ['na', 'Dub', 'du', 'zzz'], nieuw: ['na', 'du', 'zzz'], voorstel: ['Nacht'] }));
   // Geen title="… "${…}" …": een letterlijke " in een attribuut liet een naam als attributen in de knop vallen (review S11 a1).
   const fout = ['src/ui/library-indeling.js', 'src/ui/library-panel.js', 'src/ui/library-lijst.js'].flatMap((f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
     .split('\n').map((r, i) => [f, i + 1, r]).filter(([, , r]) => /title="[^"$]+"\$\{/.test(r) || /title="[^"]*"(?![\s>/$`])/.test(r)));
@@ -92,6 +93,18 @@ console.log('\nhet tag-geheugen van track.N.tag.K');
   g.wis();
   ok('wis: opnieuw ophalen', g.lees('x') === null && gehaald === 2);
   ok('geen nummer: null', g.lees(null) === null);
+  // Ouder dan LEEFTIJD: opnieuw ophalen, maar tot dan de oude stand (het lampje gaat niet even uit).
+  let klok = 0;
+  let n2 = 0;
+  const g2 = maakTagGeheugen({ haal: async () => { n2++; return [`v${n2}`]; }, nu: () => klok });
+  g2.lees('y'); await wacht(5);
+  ok('vers: uit het geheugen', JSON.stringify(g2.lees('y')) === '["v1"]' && n2 === 1);
+  klok = 10001;
+  ok('ouder dan 10 s: de oude stand, en opnieuw ophalen', JSON.stringify(g2.lees('y')) === '["v1"]' && n2 === 2);
+  await wacht(5);
+  ok('…daarna de nieuwe', JSON.stringify(g2.lees('y')) === '["v2"]');
+  g2.vergeet('y');
+  ok('vergeet (na een tagwijziging in het paneel): null en opnieuw', g2.lees('y') === null && n2 === 3);
 }
 
 console.log('\nde uitleg van elke nieuwe action');

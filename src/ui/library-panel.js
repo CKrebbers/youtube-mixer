@@ -381,8 +381,9 @@ export class LibraryPanel {
 
   /** Hoeveel van de selectie niet (meer) in de lijst van nu staat (een ander filter, nog niet geladen). */
   selectieBuiten() {
+    const binnen = new Set(this.cache.geladen.map((t) => t.id));   // één keer, niet per gekozen nummer
     let n = 0;
-    for (const id of this.selectie) if (this.cache.index(id) < 0) n++;
+    for (const id of this.selectie) if (!binnen.has(id)) n++;
     return n;
   }
 
@@ -874,6 +875,7 @@ export class LibraryPanel {
     await fetch(`/api/library/${id}`, { method: 'DELETE' }).then(leesWeg, () => {});
     this.melding = { tekst: `${track.titel} uit de lijst (bestanden staan er nog)`, goed: true };
     this.selectie.delete(id);
+    this._selVersie = (this._selVersie ?? 0) + 1;
     this.ververs();
     this.indeling.ververs();   // aantallen per categorie en tag
   }

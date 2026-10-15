@@ -21,24 +21,27 @@ const OVERSLAAN = { log: 'overslaan', beginstand: false };
  * alleen uit het geheugen). Onbekend nummer: één keer ophalen (GET /api/library/<id>), daarna onthouden.
  * `vers(id, tags)` na een eigen wijziging. Puur genoeg om te testen (`haal` komt van buiten).
  */
-export function maakTagGeheugen({ haal, vind = () => null } = {}) {
+export const LEEFTIJD = 10000;
+export function maakTagGeheugen({ haal, vind = () => null, nu = () => Date.now() } = {}) {
   const tags = new Map(), bezig = new Set();
   return {
     lees(id) {
       if (!id) return null;
       const t = vind(id);
-      if (t?.tags) { tags.set(id, t.tags); return t.tags; }
-      if (tags.has(id)) return tags.get(id);
+      if (t?.tags) { tags.set(id, { tags: t.tags, t: nu() }); return t.tags; }
+      // Hooguit LEEFTIJD oud: een import of een tagwijziging van buiten dit paneel komt zo vanzelf binnen.
+      const x = tags.get(id);
+      if (x && nu() - x.t < LEEFTIJD) return x.tags;
       if (!bezig.has(id) && haal) {
         bezig.add(id);
-        Promise.resolve(haal(id)).then((x) => { if (Array.isArray(x)) tags.set(id, x); }, () => {}).finally(() => bezig.delete(id));
+        Promise.resolve(haal(id)).then((y) => { if (Array.isArray(y)) tags.set(id, { tags: y, t: nu() }); }, () => {}).finally(() => bezig.delete(id));
       }
-      return null;
+      return x ? x.tags : null;   // de oude stand tot de nieuwe er is (geen lampje dat even uitgaat)
     },
-    vers(id, t) { tags.set(id, t); },
+    vers(id, t) { tags.set(id, { tags: t, t: nu() }); },
     /** Nu ophalen (en onthouden), voor wie niet op het volgende beeld kan wachten. Null = niet gelukt. */
     async haal(id) {
-      try { const x = await haal(id); if (Array.isArray(x)) { tags.set(id, x); return x; } } catch (_) {}
+      try { const x = await haal(id); if (Array.isArray(x)) { tags.set(id, { tags: x, t: nu() }); return x; } } catch (_) {}
       return null;
     },
     vergeet(id) { tags.delete(id); },
@@ -122,5 +125,6 @@ export default async function opzet(ctx) {
   }
   // Alleen bij hernoemen, samenvoegen of wissen van een tag vergeten (niet bij elke nieuwe stand).
   ind.naHernoem = () => geheugen.wis();
+  ind.naTags = (ids) => { for (const id of ids) geheugen.vergeet(id); };
   window.varveIndeling = { geheugen, lib, stand: () => ind.stand };
 }

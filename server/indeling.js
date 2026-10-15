@@ -463,7 +463,7 @@ export class Indeling {
     if (f.stems === 'ja') delen.push('t.stems_json IS NOT NULL');
     else if (f.stems === 'nee') delen.push('t.stems_json IS NULL');
     // json_valid eerst: één kapotte stems_json liet anders elke vraag met stems:2 een 500 geven.
-    else if (f.stems === '2' || f.stems === '4') { delen.push("(json_valid(t.stems_json) AND json_extract(t.stems_json, '$.aantal') = ?)"); args.push(Number(f.stems)); }
+    else if (f.stems === '2' || f.stems === '4') { delen.push("CASE WHEN json_valid(t.stems_json) THEN json_extract(t.stems_json, '$.aantal') END = ?"); args.push(Number(f.stems)); }
     return leeg;
   }
 

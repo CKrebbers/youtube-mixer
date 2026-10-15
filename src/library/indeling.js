@@ -327,8 +327,9 @@ export function filterKort(f, opties = {}) {
 
 /**
  * De versie van de formules hieronder (en van gridStatus, ToonKaart.hoofd, libraryBpm die ze gebruiken).
- * Anders dan in `instellingen.kenmerk_versie` = de server rekent bij het opstarten alles opnieuw.
- * Verander je een drempel of formule die de lijst toont: verhoog hem.
+ * De server rekent bij ELK openen alles na (Library._kenmerkenNaOpen, alleen wat anders is wordt
+ * geschreven) en zet deze versie in `instellingen.kenmerk_versie`: zo zie je in de database met welke
+ * formules hij het laatst rekende. Verander je een drempel of formule die de lijst toont: verhoog hem.
  */
 export const KENMERK_VERSIE = 1;
 

@@ -208,9 +208,15 @@ try {
   ok('tagveld + Enter: #Dub op echt1 en echt3 (server)', await tot("document.querySelectorAll('#lib-panel .lib-rij[data-id=\"echt1\"] .ik-chip, #lib-panel .lib-rij[data-id=\"echt3\"] .ik-chip').length === 2", 5000)
     && (await api('/api/library?tag=dub&aantal=10')).totaal === 2);
   ok('taggen van twee nummers met een NIEUWE tag: 6 handelingen (zoeken, klik, shift-klik, cmd-klik, typen + Enter, Enter)', handelingen - h0 === 6, `${handelingen - h0}`);
-  // Een bestaande tag: "nac" + Enter wordt #nacht (het enige begin), zonder tweede Enter.
-  await typ('#lib-panel .ik-tagveld', 'nac');
-  ok('aanvullen: "nac" + Enter = #nacht op beide (geen nieuwe tag "nac")', await tot("document.querySelectorAll('#lib-panel .lib-rij[data-id=\"echt1\"] .ik-chip').length === 2", 5000)
+  // Een bestaande tag: "nac" + Tab vult #nacht in (het enige begin), dan Enter: geen tweede Enter nodig.
+  await typ('#lib-panel .ik-tagveld', 'nac', { enter: false });
+  handelingen++;
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  ok('Tab vult "nac" aan tot nacht', await tot("document.querySelector('#lib-panel .ik-tagveld').value === 'nacht'", 2000), await evalueer("document.querySelector('#lib-panel .ik-tagveld').value"));
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  ok('aanvullen: nac + Tab + Enter = #nacht op beide (geen nieuwe tag "nac")', await tot("document.querySelectorAll('#lib-panel .lib-rij[data-id=\"echt1\"] .ik-chip').length === 2", 5000)
     && !(await api('/api/indeling/stand')).tags.some((t) => t.sleutel === 'nac'));
   await foto('indeling-getagd.png');
 

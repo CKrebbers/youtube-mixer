@@ -98,9 +98,9 @@ komt er niet meer overheen.
 - een nummer KIEZEN = klik (zoals nu). Meer kiezen: cmd-klik (erbij/eraf), shift-klik (een reeks),
   cmd+A = alle treffers van het filter (hooguit 5000, van de server). Taggen raakt wat gekozen is,
   of het nummer dat je zelf aanwees (klik, het wiel); na een nieuw filter niets tot je kiest.
-- **taggen**: het tagveld boven de lijst. Tab vult de enige tag aan die zo begint; Enter: een naam
-  die het begin van precies één tag is wordt die tag, een echt nieuwe vraagt een tweede Enter (een
-  tikfout wordt geen tag). Meer met een komma, `-naam` haalt hem eraf. Alt+T = naar het tagveld.
+- **taggen**: het tagveld boven de lijst. Tab vult de enige tag aan die zo begint; Enter neemt alleen
+  een bestaande naam meteen, al het andere is nieuw en vraagt een tweede Enter (met "bedoel je #…?
+  Tab"): een tikfout wordt geen tag, en "deep" mag naast "deep house" bestaan. Meer met een komma, `-naam` haalt hem eraf. Alt+T = naar het tagveld.
   Alt+1…8 = snel-tag 1–8 aan/uit. Een tagchip in een rij: klik = filter, alt-klik = niet, shift-klik
   = van dit nummer af.
 - **slepen** van een (of de gekozen) rij(en) naar een categorie = erin; binnen een categorie

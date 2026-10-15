@@ -47,20 +47,22 @@ export function leesTagInvoer(tekst) {
 }
 
 /**
- * Aanvullen in het tagveld (review S11 b4): een naam die nog geen tag is, maar het begin van precies
- * één bestaande, wordt die. Geeft { namen, nieuw } met `nieuw` = de namen die echt nieuw zijn. Puur.
+ * Wat het tagveld bij Enter doet (review S11 b4, ronde 2): een naam die precies een tag is wordt die
+ * tag (zijn schrijfwijze); al het andere is NIEUW (tweede Enter), met als voorstel de enige tag die zo
+ * begint (`voorstel`: Tab vult hem in). Nooit stil aanvullen: "deep" mag naast "deep house" bestaan.
+ * Geeft { namen, nieuw, voorstel }. Puur.
  */
 export function vulAan(namen, bestaand) {
-  const uit = [], nieuw = [];
+  const uit = [], nieuw = [], voorstel = [];
   for (const n of namen) {
     const s = sleutelVan(n);
     const exact = bestaand.find((t) => t.sleutel === s);
-    const begin = exact ? [] : bestaand.filter((t) => t.sleutel.startsWith(s));
-    if (exact) uit.push(exact.naam);
-    else if (begin.length === 1) uit.push(begin[0].naam);
-    else { uit.push(n); nieuw.push(n); }
+    if (exact) { uit.push(exact.naam); continue; }
+    uit.push(n); nieuw.push(n);
+    const begin = bestaand.filter((t) => t.sleutel.startsWith(s));
+    if (begin.length === 1) voorstel.push(begin[0].naam);
   }
-  return { namen: uit, nieuw };
+  return { namen: uit, nieuw, voorstel };
 }
 
 /** Aan of uit voor een groep: hebben ze hem allemaal, dan eraf; anders erbij. Puur. */
@@ -212,6 +214,7 @@ export class IndelingPaneel {
     if (!ids.length) { this.p.meld('kies eerst een nummer (klik; cmd-klik voor meer, shift-klik voor een reeks)', false); return null; }
     try {
       const r = await json('/api/indeling/tags/zet', { ids, tags: namen, aan });
+      this.naTags?.(ids);   // het tag-geheugen van de bus (track.N.tag.K) vergeet deze nummers
       for (const id of ids) {
         const t = this.p.track(id);
         if (!t) continue;
@@ -399,7 +402,7 @@ export class IndelingPaneel {
       // tweede Enter (zoals de tweede klik elders): een tikfout wordt zo geen nieuwe tag.
       const a = vulAan(erbij, this.stand.tags);
       if (a.nieuw.length && !this.p.bevestigd('nieuwe-tag', a.nieuw.join(','))) {
-        this.p.meld(`nieuw: ${a.nieuw.map((n) => `#${n}`).join(' ')} — Enter nog eens om ${a.nieuw.length > 1 ? 'ze' : 'hem'} te maken`, false);
+        this.p.meld(`nieuw: ${a.nieuw.map((n) => `#${n}`).join(' ')} — Enter nog eens om ${a.nieuw.length > 1 ? 'ze' : 'hem'} te maken${a.voorstel.length ? ` (bedoel je ${a.voorstel.map((n) => `#${n}`).join(' ')}? Tab vult aan)` : ''}`, false);
         return;
       }
       const weg = vulAan(eraf, this.stand.tags).namen;

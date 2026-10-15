@@ -74,7 +74,7 @@ tagbalk tekenen alleen bij een wijziging (`_zet` vergelijkt de html), niet per b
 
 **Handelingen** (`tools/headless/indeling.mjs`, geteld): twee nummers zoeken, kiezen en een nieuwe tag
 geven: 6; een categorie maken: 2; filteren en een gefilterd nummer laden: 2. De hele rondgang (taggen,
-categorie, slepen, filteren, laden, omslepen, snel-tag, slim, cmd+A, planvenster): 29.
+categorie, slepen, filteren, laden, omslepen, snel-tag, slim, cmd+A, planvenster): 30.
 
 **30 nummers taggen en een filter maken** (telling van reviewer b, nagelopen):
 
@@ -84,7 +84,7 @@ categorie, slepen, filteren, laden, omslepen, snel-tag, slim, cmd+A, planvenster
 | 2 | klik het eerste nummer | 1 |
 | 3 | scrollen en shift-klik op het 30e (of: filteren en cmd+A) | 2 |
 | 4 | alt+T | 1 |
-| 5 | `dub, nacht` + Enter (bestaande tags; nieuwe: nog een Enter) | 1 |
+| 5 | `dub, nacht` + Enter (bestaande tags; een nieuwe: nog een Enter; Tab vult aan) | 1 |
 | | **taggen** | **6** |
 | 6 | in het zoekveld `#dub bpm:70-90` | 1 |
 | 7 | `+ ✦`, naam + Enter | 2 |
@@ -101,7 +101,7 @@ Verspreide nummers: filteren tot ze er staan en cmd+A, in plaats van 29 cmd-klik
   import droog/samenvoegen, cascade, k_bpm (hoofdtempo), kapotte stems_json, herstel na een vreemde schrijver.
 - `test/indeling-server.test.mjs` (43): de routes op een eigen server met een nep-kaart: 403 van de iPad en
   een andere Origin, 415, 400/404/409, pagina's met een filter, plek, slim, kaartkrat, export/import.
-- `test/indeling-ui.test.mjs` (30): de URL (zonder filter precies de oude), de pagina-cache bij een nieuw filter,
+- `test/indeling-ui.test.mjs` (35): de URL (zonder filter precies de oude), de pagina-cache bij een nieuw filter,
   tagveld en aanvullen, chips (ontsnapt), geen `"` in een title, het paneel met een nep-paneel, het
   tag-geheugen, de uitleg van alle 83 nieuwe actions, wat de iPad mag, het voorbeeldstuk tegen het model.
 - Bijgewerkt: `library.test` (v10-kolommen), `aanhaakpunten.test` (elf aanhakers), `vrij-paneel.test`,
@@ -120,7 +120,13 @@ wat je typt kon ruimer worden (nu twee blokken voorwaarden), bpm filterde op het
 het getoonde hoofdtempo (k_bpm), de k_* konden stil oud worden (nu nagerekend bij elk openen),
 `json_extract` op kapotte JSON, een kaartkrat van meer dan 5000 en een KaartFout als 500, `track.N.tag.K`
 die bij een onbekend nummer de verkeerde kant op wisselde, de prijs van de read van `library.quicktag.K`,
-de import zonder savepoint en tijdens het spelen. Ronde 2 van a liep de reparaties na (zie onder).
+de import zonder savepoint en tijdens het spelen. Ronde 2 van a liep de reparaties na: alle elf goed, en
+twee nieuwe fouten die ik toen nog maakte, ook gerepareerd: Enter vulde een nieuwe tag stil aan tot een
+bestaande ("dub" werd #dubstep; nu alleen Tab, Enter vraagt bij een nieuwe tag een tweede keer), en het
+tag-geheugen van `track.N.tag.K` kon oud worden voor een nummer buiten de pagina's (nu vergeten na elke
+tagwijziging in het paneel, en hooguit 10 s oud). Bekend en zo gelaten: het opstarten rekent de k_* na
+(~1 s op 20.000 nummers) voordat de server luistert, dus een herstart midden in een set kost een deck dat
+streamt even zijn pagina's; `droog=1` mag met een spelend deck en kost net zoveel.
 
 **Ronde b (acceptatie, bewijs).** Gerepareerd: export/import zonder de nummers per tag, aanvullen dat
 rommeltags maakte, het Maschine-voorbeeld dat met `?stukken=` niets deed (het was zelfs ongeldig: de laag
