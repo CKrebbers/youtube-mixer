@@ -41,15 +41,32 @@ console.log('de speellijst');
   // De volgorde (9 okt, verbeteronderzoek): Clay loopt de lijst van boven af, dus alle "Avond 1" vóór "Avond 2"
   // vóór "Avond 3" vóór "Eerder werk", en avond 1 begint met de kern van ~45 min.
   // S8: de proefavonden van de werkruimte (docs/WERKRUIMTE.md D3) staan tussen avond 3 en "Eerder werk".
-  const AVONDEN = ['Avond 1', 'Avond 2', 'Avond 3', 'Werkruimte', 'Eerder werk'];
+  // 16 okt: "Vooraf" (overdag, vóór avond 1: backup, media, VARVE.app, de herberekening, de opstelling) staat bovenaan.
+  const AVONDEN = ['Vooraf', 'Avond 1', 'Avond 2', 'Avond 3', 'Werkruimte', 'Eerder werk'];
   const rang = SPEELLIJST.map((b) => AVONDEN.indexOf(b.titel.split(' · ')[0]));
   ok('het blok Werkruimte: E0, poort M, A, B, C en D, elk punt met een oordeel', ['werk-e0', 'werk-m', 'werk-a', 'werk-b', 'werk-c', 'werk-d'].every((id) => SPEELLIJST.find((b) => b.id === id)?.punten.every((p) => /Oordeel/.test(p.let))));
   ok(`elke bloktitel begint met ${AVONDEN.map((a) => `"${a} · "`).join(', ')}`, rang.every((r) => r >= 0));
   ok('de blokken staan op avondvolgorde', rang.every((r, i) => i === 0 || r >= rang[i - 1]));
   const KERN = ['start', 'luisteren', 'draaien', 'koptelefoon', 'keylock'];
-  const kern = SPEELLIJST.slice(0, KERN.length);
+  const eersteAvond = SPEELLIJST.findIndex((b) => b.titel.startsWith('Avond 1 · '));
+  const kern = SPEELLIJST.slice(eersteAvond, eersteAvond + KERN.length);
   ok(`de kern van avond 1 staat vooraan (${KERN.join(', ')}: ~${kern.reduce((s, b) => s + b.minuten, 0)} min)`,
     kern.map((b) => b.id).join() === KERN.join() && kern.every((b) => b.titel.startsWith('Avond 1 · ')));
+  // De volgorde van "Vooraf" (16 okt): eerst een kopie buiten de laptop, dan media buiten iCloud (server uit), dan
+  // VARVE.app opnieuw (ar-app), en pas daarna de herberekening van de grids; die vóór alles van het beatgrid.
+  const plek = (id) => ids.indexOf(id);
+  ok('vooraf: kopie → media verhuizen → VARVE.app → herberekening, en dat vóór avond 1',
+    plek('bk-eerste') < plek('mv-doe') && plek('mv-doe') < plek('ar-app') && plek('ar-app') < plek('ar-herreken')
+    && plek('ar-herreken') < plek('start-apc') && plek('ar-herreken') < plek('bg-oordeel'));
+  ok('avond 2: VARVE.app start de hub (app-hub) vóór de terugval met de hand (hb-start)', plek('app-hub') < plek('hb-start') && plek('hb-start') < plek('app-erbij'));
+  // De nacht na avond 1 (nacht-eerste) mag niet geblokkeerd zijn: de speeldag op de companion komt pas na avond 2.
+  ok('vandaag speeldag (co-speeldag) pas na nacht-eerste, en het setboek na de avond', plek('nacht-eerste') < plek('co-speeldag')
+    && plek('ar-wav') < plek('sb-draai') && plek('sb-log') < plek('sb-draai'));
+  // Avond 1 is zonder hub, maar VARVE.app start hem (sinds 13 okt): start-apc en de herstart in ar-weg zeggen hoe niet.
+  const tekstVan = (id) => { const p = punten.find((q) => q.id === id); return `${p.doe} ${p.let}`; };
+  ok('avond 1 zonder hub: start-apc stopt de hub van VARVE.app, ar-weg start de server zonder VARVE.app',
+    /kill \$\(lsof -nP -t -iTCP:7700/.test(tekstVan('start-apc')) && /zonder hub/.test(tekstVan('start-apc'))
+    && /server-lus\.sh >> ~\/\.varve-server\.log/.test(tekstVan('ar-weg')) && !/open ~\/Applications\/VARVE\.app/.test(tekstVan('ar-weg')));
   // De stand op de server hangt aan het id: een punt dat al bestond, blijft bestaan
   // (anders raakt zijn notitie kwijt). De punten van vóór 6 okt:
   const EERDER = ['start-apc', 'start-audio', 'start-scherm', 'dr-laden', 'dr-opdemaat', 'dr-beatjump', 'dr-loop',

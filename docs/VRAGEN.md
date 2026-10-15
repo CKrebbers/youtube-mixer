@@ -191,6 +191,11 @@ Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even 
   server zonder `kijker`: zoals altijd.
 
 **Uit de droogloop van de proefpunten (16 okt, docs/verslagen/2026-10-15/ar-proef.md)**
+- [ ] **AR21. VARVE.app start altijd de hub (sinds 13 okt) als AV-app-hub er staat.** 💬 Gevonden bij het ordenen van de
+  speellijst (16 okt): avond 1 is zonder hub, maar een klik op VARVE (ar-app, en vroeger ar-weg/ar-val) start de hub, die de
+  APC pakt; met de knop "zonder hub" praten dan de hub en de mixer allebei met de APC. De speellijst omzeilt het nu (start-apc
+  stopt de hub, ar-weg start de lus zonder de app). Moet VARVE.app de hub alleen starten als de actieve opstelling
+  `hub.mixerVia` zegt (zoals "Avond 2 · APC + Maschine via de hub")? **Advies:** ja, klein (de opstelling bestaat al).
 - [x] **AR17. "stream hapert" tijdens een storing.** 💬 **Gebouwd 16 okt** (`studio/ar-vervolg`): één melding per track met de
   sleutel `stream:<deck>`, die "track N: stream weer goed" wordt bij de eerste pagina die weer binnenkomt (bron.js `onHapert`).
   De vraag was: Is de server even weg, dan krijgt elke hoorbare track één
