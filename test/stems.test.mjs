@@ -8,7 +8,7 @@
 // of VARVE_STEMS_PY moet demucs hebben). alles.mjs slaat dat over.
 // Draai met: node test/stems.test.mjs
 import { mkdtempSync, rmSync, readFileSync, readdirSync, existsSync, mkdirSync, copyFileSync, renameSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, getPriority } from 'node:os';
 import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { request } from 'node:http';
@@ -253,7 +253,10 @@ try {
     const start = regels().find((x) => x.wat === 'start' && x.in.endsWith('/een/audio.wav'));
     ok(`dezelfde argumenten als splits.py: --in --uit (een werkmap .bezig-stems-een-*) --aantal 2`, !!start && start.aantal === 2
       && /\/\.bezig-stems-een-[0-9a-f]{8}$/.test(start.uit));
-    ok(`met lage prioriteit (nice ${start?.nice})`, start?.nice >= st.NICE);
+    // `nice -n NICE` is RELATIEF: het kind krijgt NICE meer dan de server (hooguit 19). Draait de server zelf al
+    // anders dan 0 (de runner van de macOS-workflow), dan is de absolute waarde van het kind niet NICE.
+    const basis = getPriority();
+    ok(`met lage prioriteit (nice ${start?.nice}, de server ${basis}, verwacht ${Math.min(19, basis + st.NICE)})`, start?.nice >= Math.min(19, basis + st.NICE));
     ok('stems.wav en stems.json staan naast audio.wav, de werkmap is weg', existsSync(join(media1, 'een', 'stems.wav'))
       && existsSync(join(media1, 'een', 'stems.json')) && werkmappen().length === 0);
     const json2 = JSON.parse(readFileSync(join(media1, 'een', 'stems.json'), 'utf8'));
