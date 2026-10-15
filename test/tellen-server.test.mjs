@@ -18,7 +18,7 @@ const tl = await import('../server/tellen.js');
 const { maakNepTellen } = await import('./nep-tellen.mjs');
 const { maakNepStems } = await import('./nep-stems.mjs');
 const { VERSIE: KAART_VERSIE } = await import('../src/engine/tellen.js');
-const { OUDE_ANALYSE_VERSIE } = await import('../server/analyze.js');
+const { OUDE_ANALYSE_VERSIE, LAAG_VERSIE } = await import('../server/analyze.js');
 
 const fails = [];
 const ok = (naam, cond, info = '') => { if (!cond) fails.push(naam); console.log((cond ? '  ok  ' : 'FAIL  ') + naam + (!cond && info ? `  (${info})` : '')); };
@@ -177,6 +177,24 @@ try {
   }
 
   // ======================================================================
+  console.log('\nde bewaarde lage band (15 okt, de "1" tegen kick en bas)');
+  {
+    const media = join(map, 'laag');
+    mkdirSync(join(media, 'x'), { recursive: true });
+    const env = Float32Array.from([0, 1, 2, 3, 4, 5]);
+    writeFileSync(join(media, 'x', tl.LAAG_BESTAND), Buffer.from(env.buffer));
+    ok('zonder laag.json: geen lage band (een halve schrijf telt niet)', (await tl.leesLaag(media, 'x', 1)) === null);
+    ok('laag.json erbij: lezen, met de versie', await tl.bewaarLaagMeta(media, 'x', { versie: 1, envRate: 250, tijdOffset: 0, frames: 6 })
+      && (await tl.leesLaag(media, 'x', 1))?.env?.join() === '0,1,2,3,4,5' && !existsSync(join(media, 'x', tl.LAAG_META + '.tmp')));
+    ok('een andere versie: niet bruikbaar', (await tl.leesLaag(media, 'x', 2)) === null);
+    writeFileSync(join(media, 'x', tl.LAAG_BESTAND), Buffer.from(env.buffer, 0, 16));
+    ok('een bin die korter is dan laag.json zegt: niet bruikbaar', (await tl.leesLaag(media, 'x', 1)) === null);
+    ok('een vreemd id: niets', (await tl.leesLaag(media, '../x', 1)) === null && !(await tl.bewaarLaagMeta(media, '../x', { versie: 1, envRate: 250, frames: 1 })));
+    await tl.wisTellen(media, 'x');
+    ok('nieuwe audio (wisTellen): de lage band ook weg', !existsSync(join(media, 'x', tl.LAAG_BESTAND)) && !existsSync(join(media, 'x', tl.LAAG_META)));
+  }
+
+  // ======================================================================
   console.log('\nde server');
   const db = join(map, 'library.db');
   const media = join(map, 'media');
@@ -257,6 +275,8 @@ try {
   ok('het grid van de oude analyse dat er stond is als tweede mening bewaard (een volgende kaartversie rekent hem niet opnieuw)',
     (await tl.leesTweede(media, 'autoA', OUDE_ANALYSE_VERSIE))?.stukken?.[0]?.bpm === 240
     && JSON.parse(readFileSync(join(media, 'autoA', tl.TWEEDE_BESTAND), 'utf8')).uit === 'grid');
+  ok('de lage band is uitgerekend en bewaard (laag.bin + laag.json), en het logboek zegt het',
+    (await tl.leesLaag(media, 'autoA', LAAG_VERSIE))?.env?.length > 0 && /\[tellen\] titel autoA: .*lage band uitgerekend/.test(uit), uit.slice(-600));
   const gB = await grid('handB'), gC = await grid('slotC');
   ok('een met de hand gezet grid blijft staan', gB.bron === 'hand' && gB.stukken[0].bpm === 121 && !gB.methode);
   ok('een grid op slot ook', gC.slot === true && gC.stukken[0].bpm === 119);

@@ -72,7 +72,10 @@ export function scoor(gridJson, n) {
   uit.naast = nMeet ? naast / nMeet : null;             // tel > 0,1 tel naast een gridlijn (of het tempo klopt niet)
 
   // ---- de "1" ---------------------------------------------------------------
-  let nEen = 0, eenOk = 0;
+  // Daarnaast (15 okt, BEATGRID.md §14): staat er bij een FOUTE "1" geen twijfel (vals zeker over de
+  // "1": het grid zegt niets terwijl de "1" naast ligt), en staat er bij een GOEDE "1" twijfel 'maat'
+  // (onterecht: controleren voor niets)? Zeker = het stuk is zeker en heeft geen twijfel.
+  let nEen = 0, eenOk = 0, eenVals = 0, eenOnterecht = 0, eenMaat = 0;
   for (const d of n.eenen) {
     if (!binnen(d, n.meet)) continue;
     const i = dichtst(T, d);
@@ -81,9 +84,18 @@ export function scoor(gridJson, n) {
     if (o !== 1 && o !== 0.5) continue;               // bij een grover grid valt de helft van de "1"-en tussen zijn maten
     nEen++;
     const k = Math.round(g.beatAt(d));
-    if (Math.abs(d - g.timeOf(k)) < 0.1 * lengte(T, i) && g.isMaatbegin(k)) eenOk++;
+    const goed = Math.abs(d - g.timeOf(k)) < 0.1 * lengte(T, i) && g.isMaatbegin(k);
+    const st = g.stukken[g.stukIndex(d)];
+    const zeker = g.zekerBij(d) && !st.twijfel;
+    if (st.twijfel === 'maat') eenMaat++;
+    if (goed) eenOk++;
+    if (!goed && zeker) eenVals++;
+    if (goed && st.twijfel === 'maat') eenOnterecht++;
   }
   uit.een = nEen ? eenOk / nEen : null;
+  uit.eenVals = nEen ? eenVals / nEen : null;            // deel van de "1"-en: fout, en het grid zegt zeker zonder twijfel
+  uit.eenOnterecht = nEen ? eenOnterecht / nEen : null;  // deel van de "1"-en: goed, maar twijfel 'maat'
+  uit.eenMaat = nEen ? eenMaat / nEen : null;            // deel van de "1"-en in een stuk met twijfel 'maat'
 
   // ---- vals zeker, op de tijd over het hele nummer ---------------------------
   const STAP = 0.25;
