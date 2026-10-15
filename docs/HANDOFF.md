@@ -1,5 +1,19 @@
 # Overdracht — waar we staan (7 oktober 2026)
 
+## Stand 15 okt (nacht): S11 — categorieën en tags in de library (tak `werk/S11`)
+
+- **Gebouwd** (`docs/LIBRARY-TAGS.md` §7): eigen categorieën met volgorde, slimme categorieën (een bewaard
+  filter), tags met kleur en snel-tags 1–8; het zoekveld is het filter (`#tag -#tag @categorie bpm:70-90
+  toon:8A grid:zeker stems energie:hoog`), op de server met dezelfde virtuele lijst; taggen met selectie,
+  cmd+A, het tagveld (aanvullen), alt+T en alt+1…8, slepen; op de bus (`library.category.*`,
+  `library.quick*`, `track.N.tag.K`), de Maschine (het filter in de kop), werk.html/iPad (vak library,
+  bouwsteen `tags`), het planvenster (een set uit een categorie of filter), de kaart-tab (krat →
+  categorie). Schema v10 in library.db; export/import `/api/indeling`.
+- **Ongecommit**: niets; alles op `werk/S11` (gepusht), nog samen te voegen in `werkruimte/integratie`.
+  Na het samenvoegen: server herstarten (schema v10 migreert vanzelf; elk openen rekent k_* na).
+- **Niet getest**: echt slepen met de muis, op de M1, de iPad en de Maschine. Vragen: `docs/VRAGEN.md`
+  blok S11. Verslag: `docs/verslagen/2026-10-14/werk-S11.md`.
+
 ## Stand 14 okt (nacht): S10 — meer effecten, sjablonen en mogelijkheden bij het maken (tak `werk/S10`)
 
 - **Gebouwd** (`docs/EFFECTEN-MEER.md` "Gebouwd"): 25 nieuwe sjablonen (33 in totaal, elk met uitleg

@@ -207,3 +207,21 @@ Alle POST: alleen deze Mac (403), alleen JSON (de algemene regel, 415), Host/Ori
    niet via de engine.
 2. Alle actions zijn triggers (boolean); geen value-action nodig.
 3. Er is geen tijd in het spel.
+
+## 7. Gebouwd (14–15 okt, tak `werk/S11`)
+
+Alles hierboven, met de reparaties van twee reviewronden erin (verslag:
+`docs/verslagen/2026-10-14/werk-S11.md`, met de metingen en de handelingentelling). Bestanden:
+`src/library/indeling.js` (puur), `server/indeling.js`, `server/library.js` (v10), `server/routes/indeling.js`,
+`src/ui/library-indeling.js`, `src/ui/library-panel.js`, `src/ui/aanhakers/indeling.js`,
+`src/ui/beschrijf/indeling.js`, `src/ui/css/indeling.css`, het vak `library` en de bouwsteen `tags`
+(`src/paneel/`), het planvenster, de kaart-tab, de kop van het Maschine-scherm.
+
+Gemeten (deze container): een gefilterde pagina van 100 met het totaal 2–10 ms op 5.000 nummers en 2–18 ms
+op 20.000; de stand van de kolom na een wijziging 4 / 29 ms, daarna onthouden; latentie in rust
+onveranderd (fader → geluid p50 0,31 ms, stijl 20,3 ms/s).
+
+Niet gebouwd: de volgorde van de categorieën zelf omslepen (alleen de route), de naam van een snel-tag op
+de iPad-knoppen (`naamVan` in `src/ui/aanhakers/schermen.js`, een ander spoor), taggen op een filter op de
+server (nu: cmd+A kiest hooguit 5000 en tagt die). Niet getest: echt slepen met de muis (nagebootst met
+DragEvents), op de M1, op de iPad en de Maschine zelf.
