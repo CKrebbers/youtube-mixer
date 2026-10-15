@@ -100,6 +100,7 @@ src/
                     master.js       de master: gain -> insert-rack -> limiter (compressor tot de worklet er is) -> analyser
                     limiter-kern.js de limiter als rekenwerk: vooruitblik 1,5 ms, −1 dBTP (4×), gekoppeld, afvalvrij. Puur.
                     limiter-worklet.js  de AudioWorklet eromheen (uitgang 1 = de gain, voor de gain reduction)
+                    worklet-fout.js meldWorkletFout(ctx, wat, { reden, hint }): een fout in een worklet als event op de context; de engine maakt er een melding van (sleutel worklet:<wat>)
   control/          actions.js      DE ACTION-BUS — alles gaat hierdoorheen
                     acties-effecten.js  spoor S10: track.N.fx.xy.x/.y en master.fx.xy.* (de twee knoppen die het rack in `xy` noemt)
                     acties-precisie.js  werkruimte S1: fase duwen, jog, ±1 ms, beatjump ¼/½/1, op de 1, bend-sterkte, duoklik; Duwer (15 ms samenvoegen) (docs/werkruimte/S1.md)
@@ -130,6 +131,7 @@ src/
                     onderpanelen, midi-opzet, opname-knop, video-paneel,
                     renderloop, mapje-balk — elk een opzet…()-functie
                     vertrek.js      Cmd+R/Cmd+W: eerst vragen zolang er iets speelt, wacht, laadt, de auto-DJ aan staat of er opgenomen wordt (één plek)
+                    gezondheid.js   de AudioContext bewaakt (sleutel `audio`): suspend = melding, de eerste druk op controller/hub/toets doet resume; klok stil = melding
                     aanhakers.js    werkruimte S0: startAanhakers(ctx) laadt aanhakers/<spoor>.js (precisie … inrichten) na alle opzet; renderloop.stap
                     aanhakers/, beschrijf/, css/  per spoor één eigen bestand (opzet · uitleg van zijn actions · stijl); docs/werkruimte/S0.md
                     rijen.js        rijenregister: de acht rijen melden zich aan met hun eigen zet (registreerRij, rij, rijNamen)
@@ -311,7 +313,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen; LEESM
                     led-vertraging.mjs: druk -> lampje in Chrome met de echte hub), bench/ (renderblok.mjs:
                     CPU en afval; draadpool.mjs: hangende iCloud-bestanden tegen de decks, standaard vs UV_THREADPOOL_SIZE=16;
                     feedback.mjs + feedback-samen.mjs: de LED-laag, druk -> lampje, echo's, de Maschine),
-                    headless/lek.mjs (groeit de renderer tijdens een opname?) en headless/acht-video.mjs (acht decks + acht video's: wacht de audio?), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
+                    headless/lek.mjs (groeit de renderer: PROEF=opname, laad (60×) en wissel (50× instrument ↔ nummer), eis ≤ +20 MB privé na GC), headless/gezondheid.mjs (suspend + nep-APC = weer aan, 'stop' komt aan, processorerror hersteld), headless/beeld-afval.mjs (afval per beeld met 8 spelende tracks) en headless/acht-video.mjs (acht decks + acht video's: wacht de audio?), mapping/ (eerder.mjs: voorgangers van de standaardmapping),
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden), varve-app/ (de Dock-app VARVE: start de server via server-lus.sh, opent de Controlekamer;
                     server-lus.sh: POSIX sh, herstart hooguit 5×/min, `stop`/`status`, ~/.varve/server-lus.pid),
@@ -444,6 +446,7 @@ test/
   paneel-schrijf.test.mjs  werkruimte S8: de schrijfweg (model, Uitvoerder, de bron in het log, PaneelSchrijf met nepklok, een eigen server
                     met nep-mixer nep-mixer.mjs (geen test zelf): 404/401/403, invoke -> read, 429, seq, los binnen 1,5 s), de tegel
   inrichten.test.mjs  werkruimte S8: ✎ inrichten (bewerkingen, toewijzen: het model beslist, de zoeker, de Inrichter, terug met 409 op een eigen server)
+  gezondheid.test.mjs  src/ui/gezondheid.js: suspend, resume bij invoer, klok stil, geen alarm vóór de start
   meldingen.test.mjs  de meldingen met een sleutel (één die meegroeit) op een nagebouwd document
   notatie.test.mjs, server-lus.test.mjs, node-versie.test.mjs  src/lib/notatie.js; de herstartlus met een nep-node; de Node-waarschuwing van alles.mjs
   alles.mjs         alle tests in één keer met overzicht (een andere Node dan .node-version: waarschuwing boven en onder, niets overgeslagen)
@@ -1925,6 +1928,25 @@ bouwer niet mag missen:
   All = paniek. Read null zonder verbinding (ring en lampje uit). 15 regels erbij, eerder.mjs gedraaid.
 - Een mislukte WebSocket logt Chrome zelf rood in de console (Log-domein); JavaScript kan dat niet
   onderdrukken. Headless-tools tellen dat apart van fouten van onze code.
+
+## Audio-gezondheid (15 okt, verslag docs/verslagen/2026-10-15/arch-audio.md)
+
+- Een AudioWorkletNode die weg moet krijgt eerst `'stop'` (of `{ type: 'stop' }`) en geeft daarna `false` uit
+  `process()`; pas dan los en `port.close()`. Alleen los of dicht = hij draait voor altijd (gemeten: +68 MB na 50
+  instrumentwissels, na de fix +3 MB). NOOIT op het herlaadpad van de StreamBron (`laad()` hergebruikt de node).
+- Elke AudioWorkletNode krijgt `onprocessorerror` en meldt via `meldWorkletFout(ctx, …)` (src/engine/worklet-fout.js,
+  een event op de context: regel 1). De StreamBron bouwt één keer per laad opnieuw op (zelfde segment {T,P,R}),
+  de limiter valt terug op de compressor, klankschaal en schaal bouwen bij de volgende aanslag opnieuw, een
+  effect en de opnemer melden alleen.
+- `src/ui/gezondheid.js` bewaakt de AudioContext: niet-'running' = melding (sleutel `audio`), de eerste druk op
+  controller, hub of toetsenbord doet `ctx.resume()`; klok twee keer > 0,5 s achter terwijl 'running' = "audio-uitgang
+  staat stil". Vóór de eerste start meldt hij niets.
+- De golfvorm-sleutels lezen `gridVersie` uit de snapshot, niet het grid als tekst (8 kB → 0,3 kB per beeld). Een
+  nieuwe plek die het grid verandert: via `gridGewijzigd()`/`setGrid()`, anders tekent de golfvorm oude lijnen
+  (`engine.test` "gridVersie volgt elke gridwijziging"). `StreamBron.buffer` is één object per bestand (geen afval
+  per beeld); vergelijken op identiteit blijft af te raden (laadSleutel = `bron.bestand`).
+- `lek.mjs` meet op Linux het privé geheugen (smaps `Anonymous`): RSS telt gedeelde code van Chrome mee die pas
+  laat voor het eerst draait.
 
 ## De server mag even weg zijn (15 okt, docs/WINST.md punt 3)
 
