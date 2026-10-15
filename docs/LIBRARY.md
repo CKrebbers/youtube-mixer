@@ -467,8 +467,10 @@ uitgeplaatst.
   (zelfde schijf, geen kopie, niets gewist), `media-VERHUISD.txt` waar `media/` stond, en de
   regels voor `~/.zprofile` en `~/.varve/media-pad`. VARVE.app leest beide (de login-shell leest
   `.zprofile`; `media-pad` gaat voor). Het plan voor Clay's map: HANDOFF.
-- **Backups buiten de laptop:** `VARVE_BACKUPS` naar een externe SSD, die er nog niet is; tot dan
-  staan de kopieën van `library.db` naast de library en is er van de media zelf geen tweede kopie.
+- **Backups buiten de laptop:** de uurlijkse kopieën van `library.db` (`VARVE_BACKUPS`) staan naast
+  de library. Een kopie BUITEN de laptop maakt `tools/backup/kopie.mjs --doel <stick, SSD of pc>`
+  (set A, ~20 MB; met `--media` ook de media), met `controleer.mjs` en `herstel.mjs` erbij
+  (`docs/BACKUP.md`). Er is nog geen doel gekozen, dus nog geen kopie buiten de laptop (BACKUP.md §6).
 - **Niet getest:** de verhuizing van de echte map (de rename uit een door iCloud beheerde map),
   VARVE.app opnieuw gebouwd en echt gestart, `find -flags +dataless` op een echt uitgeplaatst
   bestand. Niet verhuisd door het tool: `opnames/` (`VARVE_OPNAMES`), `patronen/`, `proef/`.
