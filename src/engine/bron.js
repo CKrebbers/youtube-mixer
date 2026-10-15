@@ -450,6 +450,11 @@ export class StreamBron {
     this.geladen = new Map();       // pagina -> bytes, wat de worklet heeft
     this.onderweg = new Set();
     this.fouten = 0;
+    // AR17: hapert het ophalen (de server is even weg), dan meldt de bron dat via onHapert({ hapert: true, tekst }),
+    // en de eerste reeks die daarna weer binnenkomt via onHapert({ hapert: false, weerGoed: true }). Een nieuwe laad
+    // of vernietig haalt hem stil weg ({ hapert: false, weerGoed: false }). Zonder onHapert: onFout, zoals vroeger.
+    this.onHapert = null;
+    this.hapert = false;
     this._herbouwd = false;         // na een worklet-fout al eens opnieuw opgebouwd (per laad)
     this._timer = null;
     this._generatie = 0;            // oude antwoorden na een nieuwe laad() negeren
@@ -550,6 +555,7 @@ export class StreamBron {
   async laad({ url, haal = null, kanalen = null }) {
     this.stop();
     this.haal = haal || this.standaardHaal;
+    this._hapertVoorbij(false);     // een ander nummer: de melding van het vorige gaat stil weg
     this.fouten = 0;
     // Elke laad krijgt een nummer; na elke await kijken of hij nog de
     // laatste is. Twee keer snel laden mengde anders pagina's van twee
@@ -709,11 +715,14 @@ export class StreamBron {
         this.geladen.set(i, stuk.byteLength);
         this.node.port.postMessage({ type: 'pagina', i, data }, [data.buffer]);
       }
+      // Weer binnen na een hapering: één keer "weer goed" (AR17).
+      if (this.fouten > 0) { this.fouten = 0; this._hapertVoorbij(true); }
     } catch (err) {
       this.fouten++;
       if (this.fouten <= 3) console.warn('[stream] pagina ophalen mislukt:', err.message);
-      // Eén keer per reeks fouten laten weten; een hapering zonder uitleg is erger.
-      if (this.fouten === 1 || this.fouten % 20 === 0) this.onFout?.(`stream hapert: ${err.message}`);
+      // Eén keer per reeks fouten laten weten; een hapering zonder uitleg is erger. Elke 20 fouten de tekst
+      // opnieuw: met onHapert is dat dezelfde melding (een sleutel per track), geen nieuwe.
+      if (this.fouten === 1 || this.fouten % 20 === 0) this._meldHapert(`stream hapert: ${err.message}`);
     } finally {
       for (let i = van; i <= tot; i++) this.onderweg.delete(i);
     }
@@ -931,7 +940,22 @@ export class StreamBron {
     else this._segment(p, this.seg.speelt);
   }
 
+  /** De hapering melden (AR17): via onHapert als het deck luistert, anders zoals vroeger via onFout. */
+  _meldHapert(tekst) {
+    this.hapert = true;
+    if (this.onHapert) this.onHapert({ hapert: true, tekst });
+    else this.onFout?.(tekst);
+  }
+
+  /** De hapering is voorbij: `weerGoed` = de pagina's komen weer binnen, anders (laad, vernietig) stil weg. */
+  _hapertVoorbij(weerGoed) {
+    if (!this.hapert) return;
+    this.hapert = false;
+    this.onHapert?.({ hapert: false, weerGoed });
+  }
+
   vernietig() {
+    this._hapertVoorbij(false);
     this.stop();
     this._vernietigd = true;
     this._generatie++;

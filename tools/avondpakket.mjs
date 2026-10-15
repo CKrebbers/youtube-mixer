@@ -13,6 +13,7 @@
 // Tests:    VARVE_AVONDPAKKET_NEP=<map> leest fixtures (<map>/nep.json) in plaats van
 //           commando's, en vraagt dan GEEN server tenzij --poort gegeven is.
 import { readFile, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { leesProfielen, beoordeel } from '../server/avondpakket.js';
@@ -113,9 +114,15 @@ async function main() {
     const paden = { media: MEDIA, wortel: WORTEL, db: DB, extra: extraPaden({ wortel: WORTEL, env }), ...(n?.paden || {}) };
     const t0 = Date.now();
     // Het platform: dat van de fixtures (nep.json "platform"), anders dit (docs/AVONDPAKKET.md "Op Linux").
-    const metingen = await meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden, platform: n?.platform ?? process.platform });
-    metingen.backup = n ? (n.backups ? backupUitNamen(n.backups) : { onbekend: 'geen fixture (backups)' })
-      : await readdir(BACKUPS).then(backupUitNamen, (err) => (err.code === 'ENOENT' ? backupUitNamen([]) : { onbekend: 'backupmap niet leesbaar' }));
+    const platform = n?.platform ?? process.platform;
+    const metingen = await meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden, platform });
+    metingen.platform = platform;
+    // Geen library.db op een machine die geen Mac is (de pc, AR19): de backup is daar grijs, geen vals rood.
+    // Op de Mac blijft een ontbrekende library "nog nooit" (rood): daar hoort er een te staan.
+    const geenLibrary = platform !== 'darwin' && (n ? !n.library : !existsSync(paden.db));
+    metingen.backup = geenLibrary ? { geenLibrary: true }
+      : n ? (n.backups ? backupUitNamen(n.backups) : { onbekend: 'geen fixture (backups)' })
+        : await readdir(BACKUPS).then(backupUitNamen, (err) => (err.code === 'ENOENT' ? backupUitNamen([]) : { onbekend: 'backupmap niet leesbaar' }));
     metingen.achtergrond = { onbekend: 'alleen via de server' };
     metingen.compleet = { onbekend: 'alleen via de server' };
     metingen.server = server ?? n?.server ?? { bereikbaar: false };
@@ -124,7 +131,9 @@ async function main() {
     rapport = beoordeel(metingen, { profiel: a.profiel, fase: a.fase, data, nu: new Date() });
     rapport.duurMs = Date.now() - t0;
     bron = nep ? 'bron: fixtures (VARVE_AVONDPAKKET_NEP)' : `bron: zelf gemeten (${metingen.server.bereikbaar ? `oudere server op ${a.poort} zonder de route` : `geen server op ${a.poort}`})`;
-    if (!metingen.server.bereikbaar && rapport.punten.find((p) => p.id === 'media')?.waarde === 'geen map') {
+    // Alleen op de Mac is een ontbrekende mediamap een fout in de aanroep (VARVE_MEDIA?); op de pc is er gewoon
+    // geen (AR19): dan meet hij wat er te meten valt, en media staat grijs "geen map".
+    if (!metingen.server.bereikbaar && platform === 'darwin' && rapport.punten.find((p) => p.id === 'media')?.waarde === 'geen map') {
       console.error(`avondpakket: geen server op ${a.poort} en geen mediamap: niets te controleren (VARVE_MEDIA?)`);
       return 3;
     }

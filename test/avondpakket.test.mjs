@@ -357,6 +357,13 @@ console.log('22. backup');
   ok('fout → rood met de reden', r({ fout: 'schijf vol' }).licht === 'fout' && r({ fout: 'schijf vol' }).sub === 'schijf vol');
   ok('nog nooit een kopie → rood', r({ laatste: null }).licht === 'fout');
   ok('bezig → grijs', r({ bezig: true }).licht === 'uit');
+  // AR19 (16 okt): een machine zonder library (de pc) is grijs, en de tekst zegt waar hij gemeten is.
+  const pc = beoordeel({ ...goedVertrek(), backup: { geenLibrary: true }, platform: 'linux' }, { profiel: 'apc', data: data(), nu: NU });
+  ok('geen library (de pc) → grijs "geen library", nooit rood, "deze machine"', punt(pc, 'backup').licht === 'uit' && punt(pc, 'backup').waarde === 'geen library'
+    && /geen library\.db op deze machine/.test(punt(pc, 'backup').sub));
+  ok('… en op Linux zegt geen enkel punt "deze Mac"', !pc.punten.some((p) => /deze Mac/.test(`${p.waarde} ${p.sub}`)));
+  ok('zonder platform (oude metingen) of op de Mac: "deze Mac" zoals altijd', /deze Mac/.test(r({}).sub)
+    && /deze Mac/.test(punt(beoordeel({ ...goedVertrek(), platform: 'darwin' }, { profiel: 'apc', data: data(), nu: NU }), 'backup').sub));
   ok('een kopie van gisteren / 8 okt → "gisteren 12:00" / "8 okt 12:00"', r({ laatste: { tijd: new Date(2026, 9, 9, 12, 0).getTime() } }).waarde === 'gisteren 12:00'
     && r({ laatste: { tijd: new Date(2026, 9, 8, 12, 0).getTime() } }).waarde === '8 okt 12:00');
   ok('CLI zonder server (tijd uit de map) → grijs', r({ bron: 'map', gewijzigdSinds: undefined }).licht === 'uit');

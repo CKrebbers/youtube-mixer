@@ -418,8 +418,9 @@ export function maakNep(map) {
   };
   const verbind = async () => cfg.avhub === true;
   // "platform": van welk platform de fixtures zijn (darwin, linux); de sondes van dat platform lezen ze.
+  // "library": false = er staat geen library.db op die machine (de pc, AR19); zonder: er staat er een.
   return { exec, verbind, cfg, geteld, paden: cfg.paden || null, backups: Array.isArray(cfg.backups) ? cfg.backups : null, server: cfg.server ?? null,
-    platform: typeof cfg.platform === 'string' ? cfg.platform : null };
+    platform: typeof cfg.platform === 'string' ? cfg.platform : null, library: cfg.library !== false };
 }
 
 // ---- in het serverproces: backup, achtergrond, compleet -----------------------------
@@ -522,7 +523,7 @@ export function maakAvondpakket({ paden, profielenPad, backupStand = null, rijen
       const data = await leesData();
       const m = await cache.metingen({ vers, auto });
       const deels = m.goedkoop && !m.bevroren;
-      const metingen = { ...m.metingen };
+      const metingen = { ...m.metingen, platform: plat };
       try { metingen.backup = backupStand ? backupMeting(backupStand(), paden) : { onbekend: 'geen server' }; } catch (err) { metingen.backup = { onbekend: reden(err) }; }
       try {
         const r = rijen ? rijen() : null;

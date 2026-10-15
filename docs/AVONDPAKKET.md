@@ -257,6 +257,13 @@ op dit platform`" (grijs). Op Linux draait elk commando met `LC_ALL=C`.
 Elk ander platform: alleen de AV-hub, de rest grijs. In de goedkope ronde (er speelt een deck)
 meet Linux `df`, `pgrep` en de accu uit sysfs (ook een `find`, maar op `/sys`, niet op media/).
 
+**Een machine zonder library (16 okt, AR19).** De pc heeft geen library.db en vaak geen mediamap. Op een machine
+die geen Mac is en geen library.db heeft, is backup grijs "geen library" (niet rood "nog nooit"), en zonder
+server en mediamap meet de CLI gewoon door (media grijs "geen map") in plaats van exit 3. Het oordeel weet waar
+het gemeten is (`metingen.platform`, van de CLI en de route) en zegt daar "op deze machine" in plaats van "op deze
+Mac". Op de Mac verandert niets: daar hoort een library te staan, dus "nog nooit" blijft rood en een ontbrekende
+mediamap blijft exit 3. In de fixtures: `"library": false` in nep.json.
+
 **Gemeten in de container (15 okt, Ubuntu 24.04, Node 22; geen accu, geen USB, geen
 tailscale).** Vóór: media "leeg", instellingen ● "lokaal". Na, de CLI op een kladmediamap: media
 ● "7 lokaal", instellingen/iCloud/accu/geluid ○ grijs met de reden, fase ◐ "niet te bepalen" (USB
@@ -282,7 +289,7 @@ node tools/avondpakket.mjs [--profiel <naam>] [--vertrek|--aankomst] [--streng] 
   `library.db` nooit. Omgeving zoals de server: `VARVE_MEDIA` (anders `media/`, anders `media-VERHUISD.txt`, VI2), `VARVE_DB`, `VARVE_BACKUPS`,
   `VARVE_PLANNEN`/`_PATRONEN`/`_PROEF`, `VARVE_KAART`.
 - Exit: **0** geen rood · **1** oranje, alleen met `--streng` · **2** rood · **3** fout in de
-  aanroep (onbekend profiel, ongeldige vlag, server noch mediamap bereikbaar).
+  aanroep (onbekend profiel, ongeldige vlag, server noch mediamap bereikbaar: dat laatste alleen op de Mac, AR19).
 - `--json` = het antwoord van de route: `{ profiel, profielOnbekend?, fase, faseGekozen,
   faseBron, t, duurMs, bevroren?, deels?: { volledig }, hardwareBevestigd, licht, telling,
   oordeel, letOp, inpakken, paklijst, punten: [{ id, naam, licht, waarde, sub }], titel, kan,

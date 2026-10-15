@@ -304,6 +304,8 @@ export class Deck extends Emitter {
     if (this._vooruit !== undefined) bron.vooruit = this._vooruit;   // zetVooruit
     bron.onEinde = () => this.emit('change', this);
     bron.onFout = (tekst) => this.emit('fout', tekst);
+    // Een stream die hapert en weer loopt (AR17): één melding per track, die "weer goed" wordt (meldingen.js).
+    if ('onHapert' in bron) bron.onHapert = (stand) => this.emit('hapert', stand);
     // De rem is uitgelopen: de bron staat nu stil op die plek (een pauze).
     bron.onRemKlaar = () => { this._heranker(); this.emit('change', this); };
     // Vaste punten: hier springt de DJ heen, dus daar mag een streamende bron
@@ -410,6 +412,9 @@ export class Deck extends Emitter {
     oud.onEinde = null;
     oud.onFout = null;
     oud.onRemKlaar = null;
+    // Happerde het nummer dat eraf gaat: die melding hoort er niet meer bij (AR17).
+    if (oud.hapert) this.emit('hapert', { hapert: false, weerGoed: false });
+    if ('onHapert' in oud) oud.onHapert = null;
     this.bron = null;                       // _zetBron ruimt de oude dan niet meteen op
     this._zetBron(new BufferBron(this.ctx, this.chain.input));
     const t = setTimeout(() => { try { oud.vernietig(); } catch (_) {} }, 100);

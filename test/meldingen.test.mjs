@@ -73,6 +73,29 @@ console.log('\nmet een sleutel: één melding die verandert');
   ok('wisMelding van een sleutel die er niet is: niets', zichtbaar().length === 1);
 }
 
+console.log('\neen stream die hapert: één melding per track (AR17)');
+{
+  const { koppelMeldingen } = await import('../src/ui/meldingen.js');
+  const { Emitter } = await import('../src/lib/emitter.js');
+  const decks = {};
+  const engine = { on() {}, deck: (id) => (decks[id] ??= new Emitter()) };
+  koppelMeldingen(engine);
+  const van = (deel) => zichtbaar().filter((m) => tekst(m).includes(deel));
+  const voor = zichtbaar().length;
+  decks.A.emit('hapert', { hapert: true, tekst: 'stream hapert: Failed to fetch' });
+  decks.B.emit('hapert', { hapert: true, tekst: 'stream hapert: Failed to fetch' });
+  ok('twee tracks: twee meldingen, één per track', van('stream hapert').length === 2 && zichtbaar().length === voor + 2);
+  decks.A.emit('hapert', { hapert: true, tekst: 'stream hapert: Failed to fetch' });
+  ok('dezelfde track nog eens: geen nieuwe (de sleutel)', van('track 1: stream hapert').length === 1 && zichtbaar().length === voor + 2);
+  ok('een fout, met een kruisje', van('track 1: stream hapert')[0].classList.contains('fout') && !!van('track 1: stream hapert')[0].querySelector('.melding-x'));
+  decks.A.emit('hapert', { hapert: false, weerGoed: true });
+  const goed = van('track 1: stream weer goed');
+  ok('weer binnen: dezelfde plek wordt "track 1: stream weer goed" (info, gaat vanzelf weg)', goed.length === 1 && goed[0].classList.contains('info') && goed[0]._weg !== undefined
+    && van('track 1: stream hapert').length === 0);
+  decks.B.emit('hapert', { hapert: false, weerGoed: false });
+  ok('een ander nummer op track 2: zijn melding gaat stil weg', van('track 2:').length === 0);
+}
+
 console.warn = stil;
 console.log(fails.length ? `\n${fails.length} FAIL` : '\nAlle checks groen.');
 process.exit(fails.length ? 1 : 0);

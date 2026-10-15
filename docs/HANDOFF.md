@@ -26,7 +26,9 @@ VRAGEN blok **AR** (AR1–AR16).
   vanaf de diff en een droogloop (`docs/verslagen/2026-10-15/ar-proef.md`): ar-app als eerste punt van het
   opstarten; avond 1 "Tel 1 snapt naar de tel", aan het eind het geheugen, "De server mag even weg" (één opname,
   drie storingen) en als laatste slaap en de Scarlett; avond 3 de pc. Na de avond: `node tools/proef/ar-na.mjs
-  --meet` rekent uit je eigen bestanden na wat de punten beweren. De droogloop vond AR17–AR20 (VRAGEN).
+  --meet` rekent uit je eigen bestanden na wat de punten beweren. De droogloop vond AR17–AR20 (VRAGEN); AR17, AR19 en
+  AR20 zijn op 16 okt gebouwd (`studio/ar-vervolg`): "stream weer goed", het avondpakket eerlijk op de pc, en een
+  tweede server die niets meer aanraakt. AR18 (een hang zien) bewust nog niet.
 
 **De suite:** op een schone Mac (de workflow `test`, `macos-14`, Node 26.8.2, met de hand gestart) **137 bestanden,
 11.778 checks, alles groen** (run 3 van 15 okt). De eerste twee runs vonden wat er op een runner anders is en nooit

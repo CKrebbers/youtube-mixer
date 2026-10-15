@@ -128,7 +128,9 @@ byte voor byte en op tijd gelijk blijven en dat de kladmap weg is.
   stuk. "op de tel" = |mediaan| ≤ 5 ms; "1" klopt = ≥ 90% van de downbeats op een "1".
 - exit 0 = niets mis, 2 = iets gevonden, 1 = verkeerd aangeroepen of niets te lezen.
 
-## 5. Bevindingen (uit de droogloop, niet gebouwd)
+## 5. Bevindingen (uit de droogloop)
+
+AR17, AR19 en AR20 zijn op 16 okt gebouwd (tak `studio/ar-vervolg`, zie §8); AR18 niet (eerst zien of het ooit gebeurt).
 
 1. **"stream hapert" tijdens een storing** (AR17): per hoorbare track één rode melding die blijft staan, naast de
    ene opname-melding. Gemeten: 30 s weg, twee tracks = drie meldingen. Het geluid loopt door.
@@ -172,3 +174,22 @@ node test/ar-na.test.mjs             # het nameetscript op synthetisch materiaal
 node tools/headless/server-weg.mjs   # SIGKILL, 30 s;   VARVE_WEG_SOORT=hang voor een hang
 node tools/proef/ar-na.mjs           # droog; na de avond met --meet [--venster …] [--titel …]
 ```
+
+## 8. Gebouwd na de droogloop (16 okt, tak `studio/ar-vervolg`)
+
+- **AR17**: `StreamBron` meldt een hapering via `onHapert({ hapert, tekst | weerGoed })`. Het deck stuurt dat door
+  als `'hapert'`, en `koppelMeldingen` maakt er één melding per track van (sleutel `stream:<deck>`): "track N:
+  stream hapert: …", na de eerste reeks die weer binnenkomt "track N: stream weer goed" (info, gaat vanzelf weg).
+  Een nieuwe laad, `leeg()` of `vernietig` haalt hem stil weg. Zonder `onHapert` blijft het zoals vroeger via
+  `onFout`. Toets: stream.test (7 checks), meldingen.test (5 checks), `tools/headless/server-weg.mjs`.
+  Gemeten in Chromium (server-weg.mjs, server 30 s weg): "track 1/2: stream hapert: Failed to fetch", na de herstart
+  "track 2: stream weer goed" en "track 1: stream weer goed"; alle eisen van de proef gehaald (0 stille vensters, WAV zonder gat).
+- **AR19**: de CLI geeft het platform aan het oordeel (`metingen.platform`, ook de route). Op een machine die geen
+  Mac is en geen library.db heeft: backup grijs "geen library", geen exit 3 zonder mediamap (media grijs "geen
+  map"), en "op deze machine" in plaats van "op deze Mac". Op de Mac verandert niets. Toets: avondpakket.test (3
+  checks), avondpakket-meet.test (3 checks met de Linux-fixtures, `"library": false` in nep.json).
+- **AR20**: `server/poort.js` (`poortBezet`) vlak na het lezen van de poort, vóór de library, de mappen en het
+  opruimen: bezet = "[server] poort … is bezet … Deze stopt (er is niets aangeraakt)." en exit 3. De exit 3 bij
+  `listen()` blijft voor de kleine kans dat twee tegelijk de proef halen. Toets: test/server-poort.test.mjs: met de
+  fix blijft de `.bezig-*`-map staan en komt er geen library.db; zonder de fix (de oude index.js) faalden precies die
+  twee checks.

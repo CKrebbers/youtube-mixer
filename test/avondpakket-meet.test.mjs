@@ -448,6 +448,20 @@ try {
     const r = await ap.rapport({ profiel: 'apc' });
     const p = (id) => r.punten.find((q) => q.id === id);
     ok(`route op Linux: compleet groen (2 nummers), media groen, geen rood (${r.telling.fout} rood, ${p('compleet').waarde})`, p('compleet').licht === 'ok' && p('media').licht === 'ok' && r.telling.fout === 0);
+
+    // AR19 (16 okt): de pc heeft geen library en vaak geen mediamap. Dan geen exit 3 en geen vals rood op de backup.
+    const cliL = (args, nep) => spawnSync(process.execPath, ['tools/avondpakket.mjs', ...args],
+      { cwd: WORTEL, encoding: 'utf8', env: { ...process.env, VARVE_TESTSERVER: '1', VARVE_AVONDPAKKET_NEP: nep }, timeout: 20000 });
+    const pc = cliL(['--json'], nepMapL('pc', { library: false, 'find-stat': { fout: 'bestaat niet' } }));
+    let pcR = null;
+    try { pcR = JSON.parse(pc.stdout); } catch { /* */ }
+    const pp = (id) => pcR?.punten.find((q) => q.id === id);
+    ok(`AR19: de pc zonder library en zonder mediamap → geen exit 3 (${pc.status}), backup grijs "geen library", media grijs "geen map"`, pc.status !== 3
+      && pp('backup')?.licht === 'uit' && pp('backup')?.waarde === 'geen library' && pp('media')?.licht === 'uit' && pp('media')?.waarde === 'geen map');
+    ok('AR19: … "deze machine" in backup en servers, nergens "deze Mac"', /deze machine/.test(pp('backup')?.sub) && /op deze machine/.test(pp('servers')?.sub)
+      && !pcR.punten.some((q) => /deze Mac/.test(`${q.waarde} ${q.sub}`)));
+    const pcLib = JSON.parse(cliL(['--json'], nepMapL('pclib', {})).stdout).punten.find((q) => q.id === 'backup');
+    ok(`AR19: de pc MET library: de backup uit de backupmap zoals altijd (${pcLib.waarde})`, pcLib.waarde !== 'geen library');
     ok('route op Linux: instellingen, iCloud, accu grijs; het licht nooit groen zolang USB niet gemeten is', ['instellingen', 'icloud', 'accu'].every((id) => p(id).licht === 'uit') && r.licht !== 'ok');
     const expliciet = maakAvondpakket({ paden: { media: '/x/media', wortel: '/x' }, profielenPad: PROFIELEN, nep: FXL, platform: 'darwin' });
     ok('maakAvondpakket: een gegeven platform gaat voor dat van de nep-map', /geen fixture/.test((await expliciet.rapport({})).punten.find((q) => q.id === 'accu').sub));
