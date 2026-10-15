@@ -314,6 +314,7 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen), git/
                     setboek.mjs: de CLI op KOPIEËN, --dag/--vanaf/--log, --db, --proef, stdout; LEESMIJ.md),
                     patronen/ (midi.mjs: een set patronen als MIDI-bestand voor Logic, op een kopie; LEESMIJ.md),
                     beeld-lokaal.sh (beeld op één machine: relay + Stroommachine in een eigen Chrome-bundel, --droog/--stop/--installeer) — zie tools/README.md
+                    backup/: kopie.mjs, controleer.mjs, herstel.mjs, launchd/ — de staat buiten de laptop (docs/BACKUP.md)
 Input/              door Clay aangeleverd materiaal (zips, blueprint) — zie docs/INPUT.md
 mappings/
   apc40mk2.json     standaardmapping (data, geen code), met zijn voorgangers in `eerder`
@@ -344,6 +345,7 @@ test/
   avondpakket.test.mjs  het avondpakket puur: parsers op echte en HANDGEMAAKT-uitvoer (fixtures/avondpakket), fase, oordeel, paklijst, tegel, privacy
   avondpakket-meet.test.mjs  sondes met een nep-exec (time-outs 50 ms), cache en bevriezing, de CLI via spawnSync (nooit een server)
   avondpakket-server.test.mjs  GET /api/avondpakket op een eigen server: compleet, onbekend profiel, bevroren na een Range-verzoek, schrijft niets
+  backup-kopie.test.mjs  tools/backup: WAL-rijen in de kopie, manifest, niets weg, --droog, rsync zonder --delete, doel in de bron (ook via symlink), slot, herstel weigert
   library-lijst.test.mjs  virtuele lijst, pagina-cache (ook de race bij een nieuwe sortering), kolommen
   indeling.test.mjs, indeling-server.test.mjs, indeling-ui.test.mjs  S11: model en zoekregel, schema v10 + migratie met data, filter-SQL,
                     volgorde, slim, hernoemen/samenvoegen/wissen, export/import; de routes (403 van buiten, 409, kaartkrat); URL, race bij een nieuw filter, bus
@@ -477,6 +479,7 @@ docs/
                     §9 gemeten op het echte bestand, §10 na de proefavond, wat niet getest is
   WERKRUIMTE.md     de werkruimte: het ontwerp (A–E) en "Gebouwd" (S0–S8 samengevat)
   werkruimte/       per spoor van de werkruimte wat het bouwde (S0.md: de aanhaakpunten … S8.md: inrichten, bedienen, totaalmeting)
+  BACKUP.md         back-up en herstel van het hele instrument (11 okt): iCloud is geen backup, de WAL-les, set A/B, herstel in acht stappen, launchd
   verslagen/        eindverslagen van de agenten per dag (2026-09-25/README.md = index per spoor)
 ```
 
@@ -2024,6 +2027,8 @@ Volledig in `docs/EFFECTEN-MEER.md` (ontwerp + "Gebouwd"), vragen in VRAGEN blok
 - Bij een keuze met gevolgen: benoem de trade-off en kies, wacht niet op goedkeuring.
 - Meld het expliciet als iets een aanname is die verkeerd kan zijn.
 - Geen features bouwen die niet gevraagd zijn, ook niet als ze voor de hand liggen.
+- Niets verwijderen (Clay): geen data, geen takken, geen bestanden van een ander; ordenen door
+  verplaatsen. Een backup wordt nooit met `--delete` gesynchroniseerd (docs/BACKUP.md §5).
 
 ## Een set klaarzetten, live bijmixen, sets (14 okt, spoor S9)
 

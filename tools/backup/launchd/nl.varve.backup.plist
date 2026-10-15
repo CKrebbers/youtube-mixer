@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Sjabloon van de LaunchAgent die elke ochtend om 08:00 een kopie van de staat maakt
+  (docs/BACKUP.md §6). NIET zelf in ~/Library/LaunchAgents zetten: maak.sh vult de
+  plekken met __…__ in en installeert alleen met --installeer.
+  Een login-shell (zsh -l), want launchd kent het pad naar node niet
+  (zoals tools/varve-app/VARVE.applescript). RunAtLoad uit: niet bij het inloggen.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>nl.varve.backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>exec "$0" "$@"</string>
+    <string>__SCRIPT__</string>
+    <string>__DOEL__</string>
+__EXTRA__  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>__LOG__</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG__</string>
+</dict>
+</plist>

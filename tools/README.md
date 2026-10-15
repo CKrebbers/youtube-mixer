@@ -460,3 +460,8 @@ Draai met `node tools/toonsoort/meet.mjs [id ...]` en `node tools/toonsoort/synt
 24 sep: zie docs/TOONSOORT.md. `uit/` staat niet in git. `server/toon.js` is een kopie van de
 gekozen keten uit toon.mjs; `test/toon.test.mjs` controleert dat ze getal voor getal gelijk rekenen
 (pas je toon.mjs aan voor een proef, laat dan `kaartPerStuk`, `spectrum` en `nietStil` staan of pas de test aan).
+
+## backup/
+`kopie.mjs` (de staat van het instrument naar een andere schijf; `--media` ook media en opnames,
+zonder `--delete`), `controleer.mjs`, `herstel.mjs` en `launchd/` (dagelijks 08:00, standaard niet
+geïnstalleerd). Zie `tools/backup/LEESMIJ.md` en `docs/BACKUP.md`.

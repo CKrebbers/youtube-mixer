@@ -317,6 +317,10 @@ racks, toonsoorten, sampler-pads en je eigen mapping (tabel `instellingen`).
 Er is geen Time Machine, dus de server maakt zelf kopieën (`server/backup.js`,
 `server/backup-werker.js`).
 
+Die kopieën staan op dezelfde schijf. Een kopie van de library én de rest van de staat
+(patronen, plannen, logs, kaart, hub, en met `--media` de media en opnames) BUITEN de laptop,
+en het terugzetten: `docs/BACKUP.md` (`tools/backup/kopie.mjs`, `controleer.mjs`, `herstel.mjs`).
+
 ### Wat hij doet
 
 - **Hoe:** `VACUUM INTO` op een eigen, alleen-lezen verbinding in een
