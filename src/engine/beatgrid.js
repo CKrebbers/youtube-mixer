@@ -684,13 +684,66 @@ function raakDeel(klappen, anker, L, n) {
   return totaal ? raak / totaal : 0;
 }
 export function snapNaarOnset(onsets, t, venster = SNAP_VENSTER) {
-  if (!onsets || !onsets.length || !eindig(t)) return t;
-  let lo = 0, hi = onsets.length - 1;
-  while (lo < hi) { const m = (lo + hi) >> 1; if (onsets[m] < t) lo = m + 1; else hi = m; }
-  // lo = eerste onset >= t (of de laatste); zijn buur ervoor kan dichterbij liggen.
-  let beste = onsets[lo];
-  if (lo > 0 && Math.abs(onsets[lo - 1] - t) < Math.abs(beste - t)) beste = onsets[lo - 1];
-  return Math.abs(beste - t) <= venster + EPS ? beste : t;
+  const b = dichtsteBinnen(onsets, t, venster);
+  return b === null ? t : b;
+}
+
+/** De waarde uit `lijst` (gesorteerd) het dichtst bij t, als die binnen `venster` s ligt; anders null. */
+function dichtsteBinnen(lijst, t, venster) {
+  if (!lijst || !lijst.length || !eindig(t)) return null;
+  let lo = 0, hi = lijst.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (lijst[m] < t) lo = m + 1; else hi = m; }
+  // lo = eerste waarde >= t (of de laatste); zijn buur ervoor kan dichterbij liggen.
+  let beste = lijst[lo];
+  if (lo > 0 && Math.abs(lijst[lo - 1] - t) < Math.abs(beste - t)) beste = lijst[lo - 1];
+  return Math.abs(beste - t) <= venster + EPS ? beste : null;
+}
+
+/**
+ * Snappen naar de TEL (15 okt, docs/BEATGRID.md §14): eerst de tel van Beat
+ * This! (`tellen.beats`, deck.tellen) die het dichtst bij t ligt, binnen
+ * `venster`; is die er niet, dan de klap (`onsets`, deck.onsets) zoals
+ * snapNaarOnset; anders t zelf. Waarom de tellen eerst: de klappen komen uit
+ * de onset-envelope met een VASTE ijking (PIEK_GEIJKT, 68,5 ms in
+ * server/analyze.js), en een scherpe aanslag valt daardoor ~15 ms te vroeg,
+ * een zachte ~10 ms te laat (op Clay's fragmenten gemiddeld −6 tot −12 ms,
+ * tools/beatmeting/rest/tel1.txt). De tellen liggen mediaan ~5 ms van de tel
+ * (BEATGRID.md §11). Telt Beat This! het halve tempo (het DJ-tempo
+ * verdubbelde het grid), dan ligt er op elke tweede gridtel geen tel binnen
+ * het venster: daar snapt hij naar de klap, zoals vroeger.
+ * `tellen`: { beats } of null.
+ */
+export function snapNaarTel(tellen, onsets, t, venster = SNAP_VENSTER) {
+  const tel = dichtsteBinnen(tellen?.beats, t, venster);
+  if (tel !== null) return tel;
+  return snapNaarOnset(onsets, t, venster);
+}
+
+/**
+ * Waar vastzetten (pin) op telt: de tellen van Beat This! en de klappen SAMEN
+ * (gesorteerd, één lijst). pin() kiest het aantal tellen waarbij de gridlijnen
+ * op iets raak vallen; met alleen de tellen viel bij een netwerk op het halve
+ * tempo de helft van de lijnen naast (score ~0,5, de grens van pin), met
+ * alleen de klappen liggen die tot ~15 ms scheef (RAAK_KLAP is 15 ms). Samen
+ * valt elke lijn op een tel of een klap. Eén lijst per paar (tellen, onsets):
+ * onthouden, want een druk op vast mag geen honderdduizend getallen sorteren.
+ */
+const samenCache = new WeakMap();
+export function klappenEnTellen(tellen, onsets) {
+  const B = tellen?.beats?.length ? tellen.beats : null;
+  const O = onsets?.length ? onsets : null;
+  if (!B) return O;
+  if (!O) return B;
+  let per = samenCache.get(B);
+  if (!per) { per = new WeakMap(); samenCache.set(B, per); }
+  let uit = per.get(O);
+  if (!uit) {
+    uit = new Float64Array(B.length + O.length);
+    let i = 0, j = 0, k = 0;
+    while (i < B.length || j < O.length) uit[k++] = j >= O.length || (i < B.length && B[i] <= O[j]) ? B[i++] : O[j++];
+    per.set(O, uit);
+  }
+  return uit;
 }
 
 /**

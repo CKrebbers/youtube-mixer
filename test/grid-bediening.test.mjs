@@ -424,6 +424,41 @@ const drukOfBus = (rest) => {
   D.stop?.();
 }
 {
+  // SNAPPEN OP DE TELLEN (15 okt, BEATGRID.md §14): de klappen liggen zoals op Clay's muziek
+  // systematisch 10 ms vroeg (vaste ijking), de tellen van Beat This! ±3 ms om de tel.
+  // Tel 1 hier, tellen hier en vast snappen naar de tel; waar geen tel is naar de klap.
+  const waar = plaat();
+  const echt = klappen(waar);
+  const scheef = echt.map((t) => t - 0.010);
+  const telRuis = (i) => (((i * 7919) % 7) - 3) * 0.001;              // −3 … +3 ms, vast
+  const alle = { beats: echt.map((t, i) => t + telRuis(i)), downbeats: new Float64Array(0) };
+  // Beat This! op het halve tempo: alleen elke tweede tel (de grid-tellen ertussen hebben er geen).
+  const half = { beats: Float64Array.from([...alle.beats].filter((_, i) => i % 2 === 0)), downbeats: new Float64Array(0) };
+  const ankerFout = () => (D.grid.timeOf(Math.round(D.grid.beatAt(tijdVanTel(waar, 80)))) - tijdVanTel(waar, 80)) * 1000;
+  const zet = (tellen, onsets) => {
+    D.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: WAAR_BPM, anker: T0 + 0.012, maat: T0 + 0.012, zekerheid: 0.9 }] }));
+    D._gridTerug = []; D.tellen = tellen; D.onsets = onsets;
+    lagen.zet('edit', 'aan');
+  };
+  const s = {};
+  zet(alle, scheef); hoorOp(tijdVanTel(waar, 80) + MENS); druk('grid.here'); s.metTellen = ankerFout();
+  zet(null, scheef); hoorOp(tijdVanTel(waar, 80) + MENS); druk('grid.here'); s.zonderTellen = ankerFout();
+  zet(half, scheef); hoorOp(tijdVanTel(waar, 80) + MENS); druk('grid.here'); s.halfOpTel = ankerFout();      // tel 80: even, er is een tel
+  zet(half, scheef); hoorOp(tijdVanTel(waar, 81) + MENS); druk('grid.align'); s.halfZonderTel = ankerFout(); // tel 81: geen tel, dus de klap
+  zet(alle, null); hoorOp(tijdVanTel(waar, 66) + MENS); druk('grid.align'); s.alleenTellen = ankerFout();
+  zet(null, null); hoorOp(tijdVanTel(waar, 80) + MENS); druk('grid.here'); s.niets = ankerFout();
+  // Vast op 5:00 met het grid 0,63 tel uit de pas: telt het goed met de tellen (half tempo) en scheve klappen?
+  D.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 124.19, anker: T0, maat: T0 }] }));
+  D._gridTerug = []; D.tellen = half; D.onsets = scheef;
+  hoorOp(tijdVanTel(waar, 620) + MENS); meldingen.length = 0; druk('grid.pin');
+  s.pinHalf = { ...oordeel(waar), melding: meldingen.at(-1)?.tekst?.slice(0, 80) };
+  D.tellen = null;
+  extra.snapTellen = { metTellen: +s.metTellen.toFixed(2), zonderTellen: +s.zonderTellen.toFixed(2), halfOpTel: +s.halfOpTel.toFixed(2),
+    halfZonderTel: +s.halfZonderTel.toFixed(2), alleenTellen: +s.alleenTellen.toFixed(2), niets: +s.niets.toFixed(2),
+    pinHalf: { tempo: +(s.pinHalf.tempo * 100).toFixed(4), fase: +s.pinHalf.fase.toFixed(2), melding: s.pinHalf.melding } };
+  D.stop?.();
+}
+{
   const m = [...ALLE_MS].sort((a, b) => a - b), q = (f) => m[Math.min(m.length - 1, Math.floor(f * m.length))];
   extra.msBerichten = { aantal: m.length, mediaan: +q(0.5).toFixed(3), p95: +q(0.95).toFixed(3), p99: +q(0.99).toFixed(3), max: +m.at(-1).toFixed(3) };
 }
@@ -562,6 +597,15 @@ if (W === EIGEN) {
     && extra.weigerOnzeker.rateGelijk && extra.weigerOnzeker.geenLoop && extra.weigerOnzeker.nietGesprongen);
   ok('na ✓ klopt: sync en beat-loop mogen, zonder melding', extra.naOk.meldingen === 0 && extra.naOk.gesynct && extra.naOk.loop);
   ok('vast zonder klappen waar het grid ver uit de pas ligt: de melding zegt "LET OP"', extra.vastGokMeldt);
+  {
+    const s = extra.snapTellen, bij = (x, doel, marge) => Math.abs(x - doel) <= marge;
+    ok('snappen: met tellen landt tel 1 hier op de tel (≤ 3 ms), niet op de scheve klap', Math.abs(s.metTellen) <= 3.01, JSON.stringify(s));
+    ok('snappen: zonder tellen op de klap (10 ms vroeg, zoals vroeger)', bij(s.zonderTellen, -10, 0.01));
+    ok('snappen: Beat This! op het halve tempo: op een tel de tel, ertussen de klap', Math.abs(s.halfOpTel) <= 3.01 && bij(s.halfZonderTel, -10, 0.01));
+    ok('snappen: tellen zonder klappen = de tel; niets = de positie zelf (12 ms, de mens)', Math.abs(s.alleenTellen) <= 3.01 && bij(s.niets, 12, 0.5));
+    ok('vast op 5:00 met tellen op het halve tempo en scheve klappen: geteld, tempo ≤ 0,01%, fase ≤ 3 ms',
+      s.pinHalf.tempo <= 0.01 && s.pinHalf.fase <= 3.01 && /geteld/.test(s.pinHalf.melding ?? ''), JSON.stringify(s.pinHalf));
+  }
   ok('draaien met de tellen van een uur: hooguit ~7 metingen per seconde voor de weergave', extra.draaienUur.metingen <= 25 && extra.draaienUur.metingen >= 10, JSON.stringify(extra.draaienUur));
   ok('vasthouden: na 600 ms 5 stappen (1 + 4 herhaald), loslaten stopt, en ↶ zet alles in één keer terug',
     extra.vasthouden.stappen600ms >= 4 && extra.vasthouden.stappen600ms <= 6 && extra.vasthouden.stoptBijLoslaten && extra.vasthouden.nietDoorgelopen, JSON.stringify(extra.vasthouden));
