@@ -171,8 +171,13 @@ Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even 
   opname-melding die meegroeit (gemeten: 30 s weg, twee tracks = drie meldingen). Het geluid loopt door (60 s
   vooruit). Liever ook één melding per track met een sleutel, die "weer goed" wordt als de pagina's weer komen?
   **Advies:** ja, klein (de sleutel bestaat al: `meld(…, { sleutel })`); eerst zien of het je op de avond stoort.
-- [ ] **AR18. Een server die HANGT** (geen antwoord, wel een poort: SIGSTOP, een volle schijf die blokkeert)
-  ziet de herstartlus niet: hij herstart alleen een server die stopt. De mixer redt het 60 s (gemeten: 30 s
+- [x] **AR18. Een server die HANGT** 💬 **Gebouwd 16 okt** (`studio/ar-hang`): een wachter in de herstartlus peilt elke
+  5 s `/api/leeft` (uit het geheugen, 2 s wachten); drie keer niets = kill -9 op de server en wat hij startte, en de lus
+  start hem opnieuw (telt mee in de 5 per minuut). Gemeten onder de echte lus met de mixer: 21,2 s van vastzetten tot
+  een nieuwe server, 0 stille vensters, WAV zonder gat. Een nieuwe server krijgt 120 s tot zijn eerste antwoord. Een
+  schijf die hangt ziet hij bewust niet (een herstart lost dat niet op; de route raakt de schijf niet). Het proefpunt
+  ar-hang laat hem nu hangen zonder los te laten. De vraag was: een server die hangt (geen antwoord, wel een poort:
+  SIGSTOP, een volle schijf die blokkeert) ziet de herstartlus niet: hij herstart alleen een server die stopt. De mixer redt het 60 s (gemeten: 30 s
   hangen = geen gat, de opname-melding pas na de time-out van 10 s); daarna wordt het stil. Een hang-detectie in
   de lus (bv. `curl -m 2 /api/proef` elke 5 s, drie keer niets = kill -9)? **Advies:** ja, maar pas na de
   proefavond: eerst zien of het ooit gebeurt (CLAUDE.md "De server mag even weg": niet gebouwd).

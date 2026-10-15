@@ -48,12 +48,19 @@ herstartlus (POSIX sh). Valt de server om (exitcode ≠ 0, ook SIGKILL of een na
 hem na 1 s opnieuw, hooguit 5 keer per minuut; daarna stopt hij en staat de reden in `~/.varve-server.log`.
 Exitcode 0, SIGTERM/SIGINT/SIGHUP en 3 (poort bezet) starten niet opnieuw. Vóór elke start kijkt hij of er
 al iets op de poort luistert: dan geen tweede server (en de lus stopt). Pidbestand `~/.varve/server-lus.pid`.
+Een server die HANGT (AR18, 16 okt) ziet een wachter naast de server: elke 5 s `curl -m 2 /api/leeft` (een
+antwoord uit het geheugen, nooit schijf of database); drie keer niets = in het log "de server antwoordt niet
+(laatste antwoord UU:MM:SS, …): kill -9", dan kill -9 op de server en wat hij startte (ffmpeg, yt-dlp, Demucs), en
+de lus start hem opnieuw zoals na een crash. Van hangen tot een nieuwe server ~15–22 s (gemeten: 21 s). Een nieuwe
+server telt pas mee na zijn eerste antwoord, of na 120 s zonder. Zonder curl geen wachter (één regel in het log).
+Een schijf die hangt ziet hij bewust niet: een herstart lost dat niet op.
 - **Stoppen**: `sh tools/varve-app/server-lus.sh stop` (lus én server, wacht tot ze weg zijn). Het oude
   `pkill -f server/index.js` werkt ook: een SIGTERM is "bewust gestopt", de lus stopt dan mee.
 - `sh tools/varve-app/server-lus.sh status`: draait hij (exit 0) of niet (exit 1).
 - Niet samen met de LaunchAgent uit docs/TAILSCALE.md (`KeepAlive`): twee starters botsen op 8777. Wie
   hem had: `launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist`.
-- De test: `test/server-lus.test.mjs` (nep-`node` op PATH die op bestelling omvalt; poorten 8964/8965).
+- De test: `test/server-lus.test.mjs` (nep-`node` op PATH die op bestelling omvalt of luistert en dan met
+  SIGSTOP vastgezet wordt; poorten 8964/8965).
 
 ## beeld-lokaal.sh
 Beeld op één machine (docs/BEELD.md §8): `zsh tools/beeld-lokaal.sh [--stand licht|normaal|auto]
@@ -148,6 +155,9 @@ bestand heen. Zie `patronen/LEESMIJ.md`.
   (standaard 30) s weg, opnieuw starten. Eisen: 0 stille vensters van 50 ms op de master, een WAV zonder gat,
   een log zonder gat, hooguit één opname-melding die "weer goed" wordt. `VARVE_CODE=<checkout>` = vóór/na.
   Poorten 8961/8962. 15 okt: vóór 200 stille vensters (10 s), 20 s nullen in de WAV, 20 meldingen; na 0, 0, 1.
+  `VARVE_WEG_SOORT=hang`: SIGSTOP, na `VARVE_WEG_S` SIGCONT. `VARVE_WEG_SOORT=lus` (AR18): de server onder de echte
+  herstartlus, SIGSTOP zonder SIGCONT; eis: de wachter zet hem binnen 30 s neer (gemeten 21,2 s, alle eisen gehaald).
+  `VARVE_WEG_KOPIE=<map>`: de opnames (en met lus het log als `server.log`) blijven bewaard, voor `tools/proef/ar-na.mjs`.
 - `acht-video.mjs` — verdringen de video's de audio? Acht decks die spelen, het videopaneel open, 30
   sprongen; wachttijd van de audioverzoeken, sprong → pagina, gat per deck. Media: `VARVE_ACHT_MEDIA=<map
   met library.db>` (database gekopieerd, nummers gelinkt, er wordt niets in geschreven), anders acht

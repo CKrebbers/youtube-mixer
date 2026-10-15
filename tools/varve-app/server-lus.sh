@@ -14,18 +14,31 @@
 #   exitcode 0                         de server stopte zelf netjes
 #   SIGTERM, SIGINT, SIGHUP (143/130/129)  iemand stopte hem: `pkill -f server/index.js` werkt dus nog
 #   exitcode 3                         de poort is bezet (een andere server; server/index.js)
+# Een server die HANGT (AR18: de poort open, geen antwoord; SIGSTOP, een event loop die vastzit) stopt niet
+# vanzelf. Daarom peilt een wachter naast de server elke 5 s GET /api/leeft (antwoord uit het geheugen, 2 s
+# wachten). Drie keer niets = hij hangt: de wachter schrijft het in het log, doet kill -9 op de server en op
+# wat die zelf startte (ffmpeg, yt-dlp, Demucs: anders blijven ze als wezen draaien), en de lus start hem
+# opnieuw zoals na elke crash (telt mee in de 5 per minuut). Van hangen tot weer een server: ~15–22 s; de decks
+# hebben 60 s vooruit. Een nieuwe server telt pas mee na zijn eerste antwoord, of na 120 s zonder antwoord.
+# Zonder curl geen wachter (de lus zegt het één keer). Een schijf die hangt ziet de wachter bewust niet: de
+# route raakt de schijf niet, en een herstart lost dat niet op.
 # Nooit twee servers op één poort: vóór elke start kijkt de lus of er al iets luistert. Luistert er
 # iets (een server die je met de hand startte, of de LaunchAgent uit docs/TAILSCALE.md), dan start
 # hij niets en stopt hij. Gebruik de lus en de LaunchAgent dus nooit samen.
 #
 # POSIX sh (geen zsh), zodat de test hem ook op Linux kan draaien (test/server-lus.test.mjs).
-# Instelbaar (voor de test): PORT, VARVE_LUS_PID, VARVE_LUS_MAX, VARVE_LUS_VENSTER (s), VARVE_LUS_WACHT (s).
+# Instelbaar (voor de test): PORT, VARVE_LUS_PID, VARVE_LUS_MAX, VARVE_LUS_VENSTER (s), VARVE_LUS_WACHT (s),
+# en voor de wachter VARVE_LUS_PEIL (s), VARVE_LUS_PEIL_MAX (s), VARVE_LUS_MIS, VARVE_LUS_OPSTART (s).
 
 POORT=${PORT:-8777}
 PIDBESTAND=${VARVE_LUS_PID:-$HOME/.varve/server-lus.pid}
 MAX=${VARVE_LUS_MAX:-5}
 VENSTER=${VARVE_LUS_VENSTER:-60}
 WACHT=${VARVE_LUS_WACHT:-1}
+PEIL=${VARVE_LUS_PEIL:-5}
+PEIL_MAX=${VARVE_LUS_PEIL_MAX:-2}
+MIS=${VARVE_LUS_MIS:-3}
+OPSTART=${VARVE_LUS_OPSTART:-120}
 MAP=$(cd "$(dirname "$0")/../.." && pwd)
 
 log() { echo "[lus] $(date '+%d-%m %H:%M:%S') $*"; }
@@ -61,6 +74,41 @@ lus_pid() {
   echo "$p"
 }
 
+# Alle processen die $1 startte, en wat die weer startten (pgrep -P; de kinderen vóór hun kleinkinderen).
+nazaten() {
+  for k in $(pgrep -P "$1" 2>/dev/null); do echo "$k"; nazaten "$k"; done
+}
+
+# De wachter (AR18): draait naast server $1 tot die weg is. Zie bovenaan.
+wachter() {
+  srv=$1
+  begon=$(date +%s)
+  geantwoord=
+  mis=0
+  laatst=$(date '+%H:%M:%S')            # het laatste antwoord (of de start): de hang begon daarna
+  while :; do
+    sleep "$PEIL" >/dev/null 2>&1
+    leeft "$srv" || exit 0
+    if curl -fs -m "$PEIL_MAX" -o /dev/null "http://127.0.0.1:$POORT/api/leeft" >/dev/null 2>&1; then
+      geantwoord=1; mis=0; laatst=$(date '+%H:%M:%S')
+      continue
+    fi
+    # Een server die nog opstart (de library openen, migraties) krijgt de tijd tot zijn eerste antwoord.
+    [ -z "$geantwoord" ] && [ $(($(date +%s) - begon)) -lt "$OPSTART" ] && continue
+    mis=$((mis + 1))
+    [ $mis -lt "$MIS" ] && continue
+    # Nog dezelfde server (een pid kan hergebruikt zijn)? Dan eerst zijn nazaten opzoeken (na de kill -9
+    # zijn ze van init en vindt pgrep -P ze niet meer), dan de server, dan de nazaten.
+    leeft "$srv" || exit 0
+    ps -p "$srv" -o args= 2>/dev/null | grep -q 'server/index.js' || exit 0
+    weg=$(nazaten "$srv")
+    log "de server antwoordt niet (laatste antwoord $laatst, $mis keer niets op /api/leeft binnen $PEIL_MAX s, pid $srv): kill -9$([ -n "$weg" ] && echo " (en $(echo $weg | wc -w | tr -d ' ') die hij startte)"), de lus start hem opnieuw"
+    kill -KILL "$srv" 2>/dev/null
+    [ -n "$weg" ] && kill -KILL $weg 2>/dev/null
+    exit 0
+  done
+}
+
 # Alles hieronder in één functie: sh leest hem dan helemaal in voordat hij begint. Bash (macOS /bin/sh)
 # leest een script anders stuk voor stuk terwijl het loopt, en een `git pull` die dit bestand verandert
 # terwijl de lus draait, zou de lopende lus dan breken.
@@ -89,13 +137,16 @@ mkdir -p "$(dirname "$PIDBESTAND")"
 echo $$ > "$PIDBESTAND"
 
 kind=
+wpid=
 stoppen=
 op_te_ruimen() { [ "$(head -n 1 "$PIDBESTAND" 2>/dev/null)" = "$$" ] && rm -f "$PIDBESTAND"; }
-stop_kind() { stoppen=1; [ -n "$kind" ] && kill -TERM "$kind" 2>/dev/null; }
+stop_wachter() { [ -n "$wpid" ] && kill -TERM "$wpid" 2>/dev/null; wpid=; }
+stop_kind() { stoppen=1; stop_wachter; [ -n "$kind" ] && kill -TERM "$kind" 2>/dev/null; }
 trap stop_kind TERM INT HUP
 trap op_te_ruimen EXIT
 
 cd "$MAP" || { log "de map $MAP bestaat niet"; exit 1; }
+command -v curl >/dev/null 2>&1 || log "geen curl: geen wachter, een server die hangt wordt niet herstart (AR18)"
 crashes=                                # momenten (date +%s) van herstarts binnen het venster
 herstarts=0
 while :; do
@@ -114,12 +165,14 @@ while :; do
   node server/index.js < /dev/null &
   kind=$!
   log "server gestart (pid $kind)$([ $herstarts -gt 0 ] && echo " — herstart $herstarts")"
+  if command -v curl >/dev/null 2>&1; then wachter "$kind" & wpid=$!; fi
   # wait wordt onderbroken door een signaal (de trap); dan opnieuw wachten op het echte einde.
   while :; do
     wait "$kind"
     code=$?
     kill -0 "$kind" 2>/dev/null || break
   done
+  stop_wachter
   kind=
   if [ -n "$stoppen" ]; then log "gestopt (server exitcode $code)"; exit 0; fi
   case $code in

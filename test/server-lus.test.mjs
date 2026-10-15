@@ -2,7 +2,9 @@
 // De herstartlus van de server (tools/varve-app/server-lus.sh), met een nep-`node` op PATH die
 // op bestelling omvalt. Geen echte server: de lus start alleen wat `node` heet.
 // Toetst: herstart na een crash, de grens van 5 per minuut, exit 0 en SIGTERM stoppen hem,
-// stoppen via het pidbestand ruimt lus én server op, nooit twee lussen, nooit op een bezette poort.
+// stoppen via het pidbestand ruimt lus én server op, nooit twee lussen, nooit op een bezette poort,
+// en de wachter (AR18): een server die hangt (SIGSTOP) wordt met kill -9 neergezet en opnieuw gestart,
+// met wat hij startte; een server die antwoordt of nog opstart niet.
 // Draai met: node test/server-lus.test.mjs
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, chmodSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -38,21 +40,46 @@ n=$(( $(cat "$d/teller" 2>/dev/null || echo 0) + 1 ))
 echo $n > "$d/teller"
 echo $$ > "$d/pid"
 if [ -f "$d/crash" ] && [ $n -le $(cat "$d/crash") ]; then exit \${NEP_CODE:-1}; fi
+if [ -f "$d/luister" ]; then exec "$ECHTE_NODE" "$NEP_LUISTER" server/index.js; fi
 if [ -f "$d/netjes" ]; then exit 0; fi
 trap 'echo term >> "$d/signalen"; exit 143' TERM
 while :; do sleep 0.05; done
 `);
 chmodSync(join(bin, 'node'), 0o755);
+// Met `luister`: een echte node die op PORT /api/leeft beantwoordt (na NEP_LUISTER_NA ms) en zelf een kind
+// start (zoals de server ffmpeg of Demucs), zodat de wachter iets heeft om te peilen en op te ruimen.
+const LUISTER = join(kl, 'luister.mjs');
+writeFileSync(LUISTER, `import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const kind = spawn('sleep', ['1000'], { stdio: 'ignore' });
+writeFileSync(join(process.env.NEP_MAP, 'kind'), String(kind.pid));
+setTimeout(() => createServer((req, res) => { res.writeHead(req.url === '/api/leeft' ? 200 : 404); res.end('{}'); })
+  .listen(Number(process.env.PORT), '127.0.0.1'), Number(process.env.NEP_LUISTER_NA || 0));
+process.on('SIGTERM', () => { kind.kill('SIGKILL'); process.exit(143); });
+`);
+const antwoordt = (poort) => new Promise((r) => {
+  const c = spawn('curl', ['-fs', '-m', '0.5', '-o', '/dev/null', `http://127.0.0.1:${poort}/api/leeft`], { stdio: 'ignore' });
+  c.on('exit', (code) => r(code === 0));
+});
+async function totAsync(klaar, ms = 8000) {
+  const eind = Date.now() + ms;
+  while (Date.now() < eind) { if (await klaar()) return true; await slaap(50); }
+  return klaar();
+}
 
 let nr = 0;
 /** Een eigen map per geval; de lus met zijn eigen pidbestand en poort (8960–8969 is van dit spoor). */
-function geval({ crash = 0, netjes = false, code = 1, poort = 8964 } = {}) {
+function geval({ crash = 0, netjes = false, code = 1, poort = 8964, luister = false, luisterNa = 0, wachter = {} } = {}) {
   const d = join(kl, `g${++nr}`);
   mkdirSync(d);
   if (crash) writeFileSync(join(d, 'crash'), String(crash));
   if (netjes) writeFileSync(join(d, 'netjes'), '');
+  if (luister) writeFileSync(join(d, 'luister'), '');
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, NEP_MAP: d, NEP_CODE: String(code), PORT: String(poort),
-    VARVE_LUS_PID: join(d, 'lus.pid'), VARVE_LUS_WACHT: '0.1', VARVE_LUS_MAX: '5', VARVE_LUS_VENSTER: '60' };
+    VARVE_LUS_PID: join(d, 'lus.pid'), VARVE_LUS_WACHT: '0.1', VARVE_LUS_MAX: '5', VARVE_LUS_VENSTER: '60',
+    ECHTE_NODE: process.execPath, NEP_LUISTER: LUISTER, NEP_LUISTER_NA: String(luisterNa), ...wachter };
   const lees = (f) => (existsSync(join(d, f)) ? readFileSync(join(d, f), 'utf8') : '');
   const g = {
     d, env,
@@ -160,6 +187,52 @@ try {
     lussen.push(g);
     await Promise.race([g.einde, slaap(5000)]);
     ok('een oud pidbestand van een dood proces: de lus start gewoon', g.code === 0 && g.starts() === 1);
+  }
+
+  console.log('\nde wachter: een server die hangt (AR18)');
+  // Snel ingesteld: peilen elke 0,2 s, 0,3 s wachten, drie keer niets = hangt.
+  const snel = { VARVE_LUS_PEIL: '0.2', VARVE_LUS_PEIL_MAX: '0.3', VARVE_LUS_MIS: '3', VARVE_LUS_OPSTART: '3' };
+  {
+    const g = geval({ luister: true, wachter: snel }).start();
+    lussen.push(g);
+    ok('de nep-server luistert en antwoordt op /api/leeft', await totAsync(() => antwoordt(8964)));
+    const oud = g.nepPid(), kind = Number(g.lees('kind'));
+    await slaap(1500);
+    ok('een server die antwoordt laat de wachter staan (één start, geen melding)', g.starts() === 1 && leeft(oud) && !/antwoordt niet/.test(g.log));
+    const t0 = Date.now();
+    process.kill(oud, 'SIGSTOP');                 // zoals ar-hang: de poort blijft open, er komt geen antwoord
+    const terug = await totAsync(async () => g.starts() === 2 && g.nepPid() !== oud && await antwoordt(8964), 8000);
+    const ms = Date.now() - t0;
+    ok(`vastgezet (SIGSTOP): neergezet en opnieuw gestart, weer een antwoord na ${ms} ms`, terug);
+    ok('de vastgezette server is weg (kill -9 werkt ook op een gestopt proces)', !leeft(oud));
+    ok('… en het kind dat hij startte ook (geen wees)', kind > 0 && await tot(() => !leeft(kind), 2000));
+    ok('het log zegt het: antwoordt niet, het laatste antwoord, kill -9, en wat hij startte', /de server antwoordt niet \(laatste antwoord \d{2}:\d{2}:\d{2}, 3 keer niets op \/api\/leeft binnen 0\.3 s, pid \d+\): kill -9 \(en 1 die hij startte\), de lus start hem opnieuw/.test(g.log));
+    ok('daarna gewoon de regel van een crash (exitcode 137) en een herstart', /de server viel om \(exitcode 137\)/.test(g.log) && /herstart 1/.test(g.log));
+    ok('pas na de drie keer: niet binnen 0,5 s', ms > 500);
+    ok('de lus draait door met zijn pidbestand (de wachter ruimde het niet op)', g.code === undefined && readFileSync(g.env.VARVE_LUS_PID, 'utf8').trim() === String(g.p.pid));
+    await slaap(1200);
+    ok('de nieuwe server antwoordt en blijft staan', g.starts() === 2 && leeft(g.nepPid()) && (g.log.match(/antwoordt niet/g) || []).length === 1);
+    // Stoppen met een wachter erbij: lus, server en wachter weg.
+    const srv = g.nepPid();
+    const s = await g.cmdAsync('stop');
+    await g.einde;
+    ok(`stop met een wachter erbij: alles weg (exit ${g.code})`, s.status === 0 && g.code === 0 && await tot(() => !leeft(srv), 2000) && !existsSync(g.env.VARVE_LUS_PID));
+    ok('… en de wachter zei niets meer', (g.log.match(/antwoordt niet/g) || []).length === 1);
+  }
+  {
+    // Een server die nooit antwoordt (de nep-node zonder luister): eerst de opstarttijd, dan pas tellen.
+    const g = geval({ wachter: snel }).start();
+    lussen.push(g);
+    await slaap(2000);
+    ok('een server die nog opstart (nog nooit geantwoord, binnen VARVE_LUS_OPSTART) blijft staan', g.starts() === 1 && leeft(g.nepPid()) && !/antwoordt niet/.test(g.log));
+    ok('na de opstarttijd zonder één antwoord: ook neergezet en opnieuw gestart', await tot(() => g.starts() === 2, 6000) && /antwoordt niet/.test(g.log));
+  }
+  {
+    // Een server die pas na 1 s luistert (de library openen) en daarna antwoordt: nooit neergezet.
+    const g = geval({ luister: true, luisterNa: 1000, wachter: { ...snel, VARVE_LUS_OPSTART: '2' } }).start();
+    lussen.push(g);
+    await slaap(4000);
+    ok('een trage start die daarna antwoordt: één start, geen melding', g.starts() === 1 && leeft(g.nepPid()) && !/antwoordt niet/.test(g.log));
   }
   {
     const r = spawnSync('sh', ['-n', LUS]);

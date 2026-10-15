@@ -3,6 +3,8 @@
 // Dan de server SIGKILL, 30 s weg, en opnieuw starten (met dezelfde mappen, zoals de herstartlus).
 // Met VARVE_WEG_SOORT=hang (16 okt, docs/verslagen/2026-10-15/ar-proef.md): de server HANGT (SIGSTOP),
 // 30 s, en loopt dan door (SIGCONT): de poort blijft open, verzoeken krijgen geen antwoord (time-out).
+// Met VARVE_WEG_SOORT=lus (AR18, 16 okt): de server draait onder de echte herstartlus (tools/varve-app/server-lus.sh)
+// en hangt (SIGSTOP) zonder SIGCONT: de wachter van de lus moet hem zelf neerzetten (kill -9) en opnieuw starten.
 //
 // De eisen:
 //   - 0 stille vensters van 50 ms op engine.master.analyser terwijl een deck speelt
@@ -16,14 +18,16 @@
 //
 // Gebruik:  node tools/headless/server-weg.mjs
 //   VARVE_WEG_S      hoe lang de server weg is (standaard 30)
-//   VARVE_WEG_SOORT  kill (standaard: SIGKILL en opnieuw starten) of hang (SIGSTOP, dan SIGCONT)
-//   VARVE_WEG_KOPIE  een map: de opnames (WAV, log, mp4) gaan daarheen vóór het opruimen (voor tools/proef/ar-na.mjs)
+//   VARVE_WEG_SOORT  kill (standaard: SIGKILL en opnieuw starten), hang (SIGSTOP, dan SIGCONT) of lus (SIGSTOP onder
+//                    de herstartlus: wachten tot de lus een nieuwe server neerzet, hooguit 60 s)
+//   VARVE_WEG_KOPIE  een map: de opnames (WAV, log, mp4) gaan daarheen vóór het opruimen (voor tools/proef/ar-na.mjs);
+//                    met lus ook het log van de lus en de server als server.log (ar-na --serverlog)
 //   VARVE_CODE       een andere checkout (server en pagina komen daarvandaan: vóór en na meten)
 //   VARVE_KIJK_POORT / VARVE_KIJK_DEBUG  poorten (standaard 8961 / 8962)
 //   VARVE_CHROME     Chromium; anders de headless shell uit de Playwright-cache, anders op het pad
 // Exitcode 0 = alle eisen gehaald.
-import { spawn, execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync, cpSync } from 'node:fs';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync, cpSync, writeFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +36,9 @@ const WORTEL = process.env.VARVE_CODE || fileURLToPath(new URL('../..', import.m
 const POORT = Number(process.env.VARVE_KIJK_POORT) || 8961, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 8962;
 const B = `http://localhost:${POORT}`;
 const WEG_S = Number(process.env.VARVE_WEG_S) || 30;
-const HANG = process.env.VARVE_WEG_SOORT === 'hang';
+const LUS = process.env.VARVE_WEG_SOORT === 'lus';
+const HANG = process.env.VARVE_WEG_SOORT === 'hang' || LUS;
+const LUS_SH = join(WORTEL, 'tools/varve-app/server-lus.sh');
 const tmp = mkdtempSync(join(tmpdir(), 'varve-serverweg-'));
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const T0 = Date.now();
@@ -64,12 +70,17 @@ const ENV = { ...process.env, PORT: String(POORT), VARVE_TESTSERVER: '1', VARVE_
   VARVE_HERANALYSE: 'uit' };
 let server = null;
 let serverUit = '';
+if (LUS) ENV.VARVE_LUS_PID = join(tmp, 'lus.pid');
 function startServer() {
-  server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], { env: ENV, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Onder de lus is `server` de lus zelf; de lus start `node server/index.js` uit WORTEL.
+  server = LUS ? spawn('sh', [LUS_SH], { env: ENV, stdio: ['ignore', 'pipe', 'pipe'] })
+    : spawn(process.execPath, [join(WORTEL, 'server/index.js')], { env: ENV, stdio: ['ignore', 'pipe', 'pipe'] });
   server.stdout.on('data', (d) => { serverUit += d; });
   server.stderr.on('data', (d) => { serverUit += d; });
 }
 const antwoordt = () => fetch(`${B}/api/proef`, { signal: AbortSignal.timeout(1000) }).then((r) => r.ok, () => false);
+// Het pid van de server die nu antwoordt (AR18: /api/leeft), of null.
+const serverPid = () => fetch(`${B}/api/leeft`, { signal: AbortSignal.timeout(1000) }).then((r) => r.json(), () => null).then((j) => j?.pid ?? null);
 
 startServer();
 const chrome = zoekChrome();
@@ -186,17 +197,36 @@ try {
   eis(`beide decks hoorbaar: 60 s vooruit (A ${voor.A.vooruit}, B ${voor.B.vooruit}), ${voor.A.binnen} s en ${voor.B.binnen} s binnen`,
     voor.A.vooruit === 60 && voor.B.vooruit === 60 && voor.A.binnen > WEG_S + 10 && voor.B.binnen > WEG_S + 10);
 
-  log(HANG ? `SERVER HANGT (SIGSTOP), ${WEG_S} s` : `SERVER SIGKILL, ${WEG_S} s weg`);
-  server.kill(HANG ? 'SIGSTOP' : 'SIGKILL');
+  const oudPid = LUS ? await serverPid() : server.pid;
+  log(LUS ? `SERVER HANGT (SIGSTOP, pid ${oudPid}) onder de herstartlus, zonder SIGCONT` : HANG ? `SERVER HANGT (SIGSTOP), ${WEG_S} s` : `SERVER SIGKILL, ${WEG_S} s weg`);
+  process.kill(oudPid, HANG ? 'SIGSTOP' : 'SIGKILL');
   const tKill = Date.now();
   const kloktijd = (d) => d.toTimeString().slice(0, 8);
   const storingVan = kloktijd(new Date(tKill));
-  while (Date.now() - tKill < WEG_S * 1000) {
+  let nieuwPid = null;
+  if (LUS) {
+    // Wachten tot de wachter van de lus hem neerzet en de lus een nieuwe server start (hooguit 60 s: de decks).
+    let volgende = tKill + 5000;
+    while (Date.now() - tKill < 60000) {
+      await wacht(250);
+      const p = await serverPid();
+      if (p && p !== oudPid) { nieuwPid = p; break; }
+      if (Date.now() >= volgende) {
+        volgende += 5000;
+        const s = JSON.parse(await stand());
+        log(`  hangt +${((Date.now() - tKill) / 1000).toFixed(0)} s: A ${s.A.pos}/${s.A.binnen} s · B ${s.B.pos}/${s.B.binnen} s · stil ${s.stil.stil} · opname wacht ${s.opname?.wacht} s · melding "${s.meld.at(-1) ?? ''}"`);
+      }
+    }
+    log(nieuwPid ? `DE LUS ZETTE HEM NEER EN START EEN NIEUWE (pid ${nieuwPid}) na ${((Date.now() - tKill) / 1000).toFixed(1)} s` : 'GEEN NIEUWE SERVER binnen 60 s');
+  }
+  const weg = LUS ? (Date.now() - tKill) / 1000 : WEG_S;
+  while (!LUS && Date.now() - tKill < WEG_S * 1000) {
     await wacht(5000);
     const s = JSON.parse(await stand());
     log(`  weg +${((Date.now() - tKill) / 1000).toFixed(0)} s: A ${s.A.pos}/${s.A.binnen} s · B ${s.B.pos}/${s.B.binnen} s · stil ${s.stil.stil} · opname wacht ${s.opname?.wacht} s · melding "${s.meld.at(-1) ?? ''}"`);
   }
-  if (HANG) { log('SERVER LOOPT DOOR (SIGCONT)'); server.kill('SIGCONT'); }
+  if (LUS) { /* de lus deed het al */ }
+  else if (HANG) { log('SERVER LOOPT DOOR (SIGCONT)'); server.kill('SIGCONT'); }
   else { log('SERVER WEER AAN (dezelfde mappen, zoals de herstartlus)'); startServer(); }
   const tStart = Date.now();
   while (!(await antwoordt()) && Date.now() - tStart < 15000) await wacht(100);
@@ -230,8 +260,13 @@ try {
   log(`  teksten: ${JSON.stringify(meld.teksten)}`);
   log(`alle meldingen op het scherm (ook na stop): ${JSON.stringify(meldNa.alle)}`);
 
+  if (LUS) {
+    eis(`de wachter van de lus zette de hangende server neer en de lus startte een nieuwe, binnen 30 s (${weg.toFixed(1)} s)`, !!nieuwPid && weg < 30);
+    eis('het log van de lus zegt het ("de server antwoordt niet … kill -9", daarna "herstart 1")',
+      /\[lus\] .*de server antwoordt niet \(laatste antwoord/.test(serverUit) && /\[lus\] .*herstart 1/.test(serverUit));
+  }
   eis(`0 stille vensters van 50 ms terwijl een deck speelt (${stil.stil} van ${stil.n}, langste ${stil.langste} ms)`, stil.stil === 0 && stil.n > 500);
-  eis(`de decks speelden door (A ${voor.A.pos} → ${na.A.pos} s, B ${voor.B.pos} → ${na.B.pos} s)`, na.A.speelt && na.B.speelt && na.A.pos - voor.A.pos > WEG_S);
+  eis(`de decks speelden door (A ${voor.A.pos} → ${na.A.pos} s, B ${voor.B.pos} → ${na.B.pos} s)`, na.A.speelt && na.B.speelt && na.A.pos - voor.A.pos > weg);
   eis(`na de herstart weer een minuut vooruit (A ${na.A.binnen} s, B ${na.B.binnen} s)`, na.A.binnen > 50 && na.B.binnen > 50);
   eis(`WAV zonder gat: geen reeks nullen van 10 ms (${nul.reeksen} reeksen, langste ${(nul.langste / 48).toFixed(2)} ms)`, nul.reeksen === 0);
   eis(`WAV even lang als de opname (${wavS.toFixed(2)} s, ≥ ${opnameS} s), niets kwijt (${na.opname?.verloren} s)`, wavS >= opnameS && na.opname?.verloren === 0);
@@ -246,9 +281,15 @@ try {
 } finally {
   try { ws?.close(); } catch {}
   browser.kill('SIGKILL');
+  if (LUS) {
+    // De lus netjes stoppen (hij stopt de server); een server die nog hangt krijgt eerst SIGCONT.
+    try { const p = await serverPid(); if (p) process.kill(p, 'SIGCONT'); } catch {}
+    spawnSync('sh', [LUS_SH, 'stop'], { env: ENV, encoding: 'utf8', timeout: 15000 });
+  }
   server?.kill('SIGKILL');
   await wacht(300);
   if (process.env.VARVE_WEG_KOPIE && existsSync(join(tmp, 'opnames'))) cpSync(join(tmp, 'opnames'), process.env.VARVE_WEG_KOPIE, { recursive: true });
+  if (process.env.VARVE_WEG_KOPIE && LUS) writeFileSync(join(process.env.VARVE_WEG_KOPIE, 'server.log'), serverUit);
   rmSync(tmp, { recursive: true, force: true });
   process.exit(code);
 }

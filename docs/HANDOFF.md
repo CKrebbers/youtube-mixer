@@ -28,7 +28,10 @@ VRAGEN blok **AR** (AR1–AR16).
   drie storingen) en als laatste slaap en de Scarlett; avond 3 de pc. Na de avond: `node tools/proef/ar-na.mjs
   --meet` rekent uit je eigen bestanden na wat de punten beweren. De droogloop vond AR17–AR20 (VRAGEN); AR17, AR19 en
   AR20 zijn op 16 okt gebouwd (`studio/ar-vervolg`): "stream weer goed", het avondpakket eerlijk op de pc, en een
-  tweede server die niets meer aanraakt. AR18 (een hang zien) bewust nog niet.
+  tweede server die niets meer aanraakt. AR18 op 16 okt (`studio/ar-hang`): een wachter in de herstartlus zet een
+  server die hangt na ~15–22 s neer (kill -9) en de lus start hem opnieuw; ar-hang laat hem nu hangen zonder los te
+  laten. VARVE.app hoeft daarvoor niet opnieuw gebouwd (hij start het script uit de repo), maar een lus die al
+  draait heeft het oude script ingelezen: één keer `sh tools/varve-app/server-lus.sh stop` en VARVE.app openen.
 
 **De suite:** op een schone Mac (de workflow `test`, `macos-14`, Node 26.8.2, met de hand gestart) **137 bestanden,
 11.778 checks, alles groen** (run 3 van 15 okt). De eerste twee runs vonden wat er op een runner anders is en nooit

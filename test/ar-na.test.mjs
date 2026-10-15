@@ -86,8 +86,23 @@ try {
       v.length === 2 && v[0].duur === 1 && /omgevallen/.test(v[0].hoe) && v[1].duur === 2 && v[1].hoe === 'gestopt', JSON.stringify(v.map((x) => [x.duur, x.hoe])));
     const nooit = A.storingen(A.leesServerlog('[lus] 15-10 22:00:00 server gestart (pid 1)\n[lus] 15-10 22:10:00 de server viel om (exitcode 1) en is al 5 keer herstart in 60 s: de lus stopt. Kijk hierboven waarom.\n', 2026));
     ok('een crash-lus zonder start erna: niet teruggekomen', nooit.length === 1 && nooit[0].tot === null && nooit[0].hoe === 'niet teruggekomen');
+    // AR18: een hang die de wachter van de lus neerzette (de regels zoals de lus ze echt schreef, 15 okt).
+    const HANGLOG = `[lus] 15-10 12:27:06 server gestart (pid 13074)
+[lus] 15-10 12:28:18 de server antwoordt niet (laatste antwoord 12:27:58, 3 keer niets op /api/leeft binnen 2 s, pid 13074): kill -9, de lus start hem opnieuw
+[lus] 15-10 12:28:18 de server viel om (exitcode 137): over 1 s opnieuw (1/5 in 60 s)
+[lus] 15-10 12:28:19 server gestart (pid 13425) — herstart 1
+[lus] 15-10 12:28:35 gestopt (server exitcode 143)
+`;
+    const hg = A.leesServerlog(HANGLOG, 2026);
+    ok('een hang: soort hang, op het moment van het laatste antwoord (niet van de kill)',
+      hg.map((x) => x.soort).join() === 'gestart,hang,omgevallen,herstart,gestopt' && hg[1].t.getMinutes() === 27 && hg[1].t.getSeconds() === 58, hg.map((x) => x.soort).join());
+    const hv = A.storingen(hg);
+    ok('één storing van het laatste antwoord tot de herstart (21 s): de kill -9 erna hoort erbij',
+      hv.length === 1 && hv[0].duur === 21 && /hing/.test(hv[0].hoe), JSON.stringify(hv.map((x) => [x.duur, x.hoe])));
+    const nacht = A.leesServerlog('[lus] 16-10 00:00:10 de server antwoordt niet (laatste antwoord 23:59:55, 3 keer niets op /api/leeft binnen 2 s, pid 9): kill -9, de lus start hem opnieuw\n', 2026);
+    ok('een hang over middernacht: het laatste antwoord was de dag ervoor', nacht[0].t.getDate() === 15 && nacht[0].t.getHours() === 23);
     const h = A.leesVenster('22:10:00-22:10:30', new Date(2026, 9, 16));
-    ok('een venster met de hand (een hang staat niet in het log)', h?.duur === 30 && h.van.getHours() === 22);
+    ok('een venster met de hand (een hang korter dan de wachter, of zonder de lus)', h?.duur === 30 && h.van.getHours() === 22);
     ok('een verkeerd venster: null', A.leesVenster('22:10:30-22:10:00', new Date()) === null && A.leesVenster('22:10', new Date()) === null);
   }
 

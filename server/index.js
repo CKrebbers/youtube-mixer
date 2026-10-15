@@ -1176,6 +1176,11 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const pad = url.pathname;
 
+    // Leeft de server nog (AR18)? Voor de herstartlus (tools/varve-app/server-lus.sh): ze peilt dit elke 5 s en
+    // zet een server die drie keer niets zegt opnieuw neer. Alleen uit het geheugen, nooit schijf of database:
+    // een schijf die hangt los je niet op met een herstart (de nieuwe hangt dan ook), een event loop die hangt wel.
+    if (pad === '/api/leeft') return json(res, 200, { ok: true, server: SERVER_RUN, pid: process.pid });
+
     // De splitter erbij: { ok, reden?, python? } (plus apparaat en versies als hij er is).
     if (pad === '/api/tooling') {
       const [t, s, z] = await Promise.all([controleerTooling(), splitter.controleer({ hercontrole: true }),
