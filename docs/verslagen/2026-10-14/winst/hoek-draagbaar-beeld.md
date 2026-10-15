@@ -220,7 +220,7 @@ APC-knop). Met de meting weet Clay of hij de pc ooit kan thuislaten.
    en `window.open(..., 'left=…,top=…')` op het scherm dat niet het ingebouwde is. Volledig scherm
    blijft één klik in dat venster (Chrome eist daar een gebaar).
 4. Stap K van standen voor `vormen.aan` (en `video.clips`), zodat de opstelling `onderweg-licht`
-   bestaat (UITWERKING §3.1).
+   bestaat (`docs/verslagen/2026-10-10/UITWERKING.md` §3.1).
 
 **Risico.** Laag tot gemiddeld. Stap 2-3 raken de videolaag en niet het audiopad. De meting vraagt
 een rustige Mac. Het venster op de beamer zetten hangt af van de toestemming in Chrome.
@@ -267,7 +267,7 @@ kanalen mixen, en dus de cue meenemen: niet gebruiken voor je dat gezien hebt.
 
 ## Wat ik bewust niet als kans opnam
 
-- **Companion zonder internet** (`VARVE_BIND` op de hotspot): UITWERKING §3.1 heeft het al.
+- **Companion zonder internet** (`VARVE_BIND` op de hotspot): `docs/verslagen/2026-10-10/UITWERKING.md` §3.1 heeft het al.
   "Streamen vanaf elke plek" betekent toch al data op de iPhone. De iPad als scherm valt onder de
   werkruimte-workflow.
 - **De hub-lease op de hardware proeven**: dat is een proefavond en geen bouwwerk. Kans 3 zorgt dat

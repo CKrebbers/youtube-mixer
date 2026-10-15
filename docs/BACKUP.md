@@ -2,7 +2,7 @@
 
 *11 oktober 2026, tak `visie/backup-kopie` (PR #28); bijgewerkt 15 okt op `studio/backup-instellingen`,
 samen met de instrument-sleutels op de server (PR #31) en na de werkruimte (#42). Achtergrond:
-`docs/VISIE.md` (de draagbare set) en SYNTHESE §4b.3 (mini-spoor 3). Dit document gaat over de DATA
+`docs/VISIE.md` (de draagbare set) en de uitwerking van 10/11 okt §4b.3 (mini-spoor 3, `docs/verslagen/2026-10-10/UITWERKING.md`). Dit document gaat over de DATA
 van het instrument, niet over de code (die staat op GitHub). De uurlijkse kopie van de library door
 de server zelf staat in `docs/LIBRARY.md` "Backup"; die blijft zoals hij is.*
 
