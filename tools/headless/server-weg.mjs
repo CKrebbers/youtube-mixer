@@ -1,6 +1,8 @@
 // De server mag even weg zijn (docs/WINST.md punt 3, spoor D): een echte mixer in een headless
 // Chromium tegen een EIGEN server, twee decks streamend en hoorbaar, opname en handelingenlog aan.
 // Dan de server SIGKILL, 30 s weg, en opnieuw starten (met dezelfde mappen, zoals de herstartlus).
+// Met VARVE_WEG_SOORT=hang (16 okt, docs/verslagen/2026-10-15/ar-proef.md): de server HANGT (SIGSTOP),
+// 30 s, en loopt dan door (SIGCONT): de poort blijft open, verzoeken krijgen geen antwoord (time-out).
 //
 // De eisen:
 //   - 0 stille vensters van 50 ms op engine.master.analyser terwijl een deck speelt
@@ -14,12 +16,14 @@
 //
 // Gebruik:  node tools/headless/server-weg.mjs
 //   VARVE_WEG_S      hoe lang de server weg is (standaard 30)
+//   VARVE_WEG_SOORT  kill (standaard: SIGKILL en opnieuw starten) of hang (SIGSTOP, dan SIGCONT)
+//   VARVE_WEG_KOPIE  een map: de opnames (WAV, log, mp4) gaan daarheen vóór het opruimen (voor tools/proef/ar-na.mjs)
 //   VARVE_CODE       een andere checkout (server en pagina komen daarvandaan: vóór en na meten)
 //   VARVE_KIJK_POORT / VARVE_KIJK_DEBUG  poorten (standaard 8961 / 8962)
 //   VARVE_CHROME     Chromium; anders de headless shell uit de Playwright-cache, anders op het pad
 // Exitcode 0 = alle eisen gehaald.
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync, cpSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +32,7 @@ const WORTEL = process.env.VARVE_CODE || fileURLToPath(new URL('../..', import.m
 const POORT = Number(process.env.VARVE_KIJK_POORT) || 8961, DEBUG = Number(process.env.VARVE_KIJK_DEBUG) || 8962;
 const B = `http://localhost:${POORT}`;
 const WEG_S = Number(process.env.VARVE_WEG_S) || 30;
+const HANG = process.env.VARVE_WEG_SOORT === 'hang';
 const tmp = mkdtempSync(join(tmpdir(), 'varve-serverweg-'));
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const T0 = Date.now();
@@ -148,9 +153,11 @@ try {
       if (Math.sqrt(q / buf.length) < 1e-4) { s.stil++; s.lopend += 50; s.langste = Math.max(s.langste, s.lopend); } else s.lopend = 0;
     }, 50);
     // Elke opname-melding die ooit op het scherm kwam (nieuw element), en elke tekst die hij had.
-    window.__meld = { nieuw: 0, teksten: [], max: 0 };
+    window.__meld = { nieuw: 0, teksten: [], max: 0, alle: [] };
     const strook = document.getElementById('meldingen');
     const kijk = () => {
+      // Elke melding, van wie ook (de opname, het log, de audio, de stream …): wat ziet Clay op het scherm?
+      for (const m of strook.children) { const t = m.firstChild?.textContent || ''; if (t && !window.__meld.alle.includes(t)) window.__meld.alle.push(t); }
       const op = [...strook.children].filter((m) => !m.classList.contains('weg') && /^opname/.test(m.firstChild?.textContent || ''));
       window.__meld.max = Math.max(window.__meld.max, op.length);
       for (const m of op) { const t = m.firstChild.textContent; if (window.__meld.teksten.at(-1) !== t) window.__meld.teksten.push(t); }
@@ -179,19 +186,21 @@ try {
   eis(`beide decks hoorbaar: 60 s vooruit (A ${voor.A.vooruit}, B ${voor.B.vooruit}), ${voor.A.binnen} s en ${voor.B.binnen} s binnen`,
     voor.A.vooruit === 60 && voor.B.vooruit === 60 && voor.A.binnen > WEG_S + 10 && voor.B.binnen > WEG_S + 10);
 
-  log(`SERVER SIGKILL, ${WEG_S} s weg`);
-  server.kill('SIGKILL');
+  log(HANG ? `SERVER HANGT (SIGSTOP), ${WEG_S} s` : `SERVER SIGKILL, ${WEG_S} s weg`);
+  server.kill(HANG ? 'SIGSTOP' : 'SIGKILL');
   const tKill = Date.now();
+  const kloktijd = (d) => d.toTimeString().slice(0, 8);
+  const storingVan = kloktijd(new Date(tKill));
   while (Date.now() - tKill < WEG_S * 1000) {
     await wacht(5000);
     const s = JSON.parse(await stand());
     log(`  weg +${((Date.now() - tKill) / 1000).toFixed(0)} s: A ${s.A.pos}/${s.A.binnen} s · B ${s.B.pos}/${s.B.binnen} s · stil ${s.stil.stil} · opname wacht ${s.opname?.wacht} s · melding "${s.meld.at(-1) ?? ''}"`);
   }
-  log('SERVER WEER AAN (dezelfde mappen, zoals de herstartlus)');
-  startServer();
+  if (HANG) { log('SERVER LOOPT DOOR (SIGCONT)'); server.kill('SIGCONT'); }
+  else { log('SERVER WEER AAN (dezelfde mappen, zoals de herstartlus)'); startServer(); }
   const tStart = Date.now();
   while (!(await antwoordt()) && Date.now() - tStart < 15000) await wacht(100);
-  log(`server antwoordt na ${Date.now() - tStart} ms`);
+  log(`server antwoordt na ${Date.now() - tStart} ms · de storing op de klok: ${storingVan}-${kloktijd(new Date())} (voor ar-na --venster)`);
   for (let i = 0; i < 6; i++) {
     await wacht(2000);
     const s = JSON.parse(await stand());
@@ -219,6 +228,7 @@ try {
   log(`opname ${wav}: ${wavS.toFixed(2)} s (de opnemer telde ${opnameS} s vóór stop), langste reeks nullen ${(nul.langste / 48).toFixed(2)} ms`);
   log(`meldingen van de opname tot stop: ${meld.nieuw} nieuw, hooguit ${meld.max} tegelijk; daarna bij stop: "${meldNa.teksten.at(-1)}"`);
   log(`  teksten: ${JSON.stringify(meld.teksten)}`);
+  log(`alle meldingen op het scherm (ook na stop): ${JSON.stringify(meldNa.alle)}`);
 
   eis(`0 stille vensters van 50 ms terwijl een deck speelt (${stil.stil} van ${stil.n}, langste ${stil.langste} ms)`, stil.stil === 0 && stil.n > 500);
   eis(`de decks speelden door (A ${voor.A.pos} → ${na.A.pos} s, B ${voor.B.pos} → ${na.B.pos} s)`, na.A.speelt && na.B.speelt && na.A.pos - voor.A.pos > WEG_S);
@@ -238,6 +248,7 @@ try {
   browser.kill('SIGKILL');
   server?.kill('SIGKILL');
   await wacht(300);
+  if (process.env.VARVE_WEG_KOPIE && existsSync(join(tmp, 'opnames'))) cpSync(join(tmp, 'opnames'), process.env.VARVE_WEG_KOPIE, { recursive: true });
   rmSync(tmp, { recursive: true, force: true });
   process.exit(code);
 }

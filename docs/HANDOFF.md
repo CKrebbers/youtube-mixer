@@ -22,8 +22,11 @@ VRAGEN blok **AR** (AR1–AR16).
 - Op de Mac meten (AR2): het echte Beat This! op de bench, en het snappen op je eigen fragmenten. De opdrachten
   staan in `docs/verslagen/2026-10-15/arch-beatgrid.md` §5; het checkpoint was in de cloud niet te downloaden.
 - Bestaande grids krijgen de tweede mening over de "1" pas met kaart-VERSIE 3 (AR1, niet verhoogd).
-- De proefpunten staan in de speellijst van de Controlekamer (ids `ar-`): avond 1 "Tel 1 snapt naar de tel",
-  "De audio blijft gezond" en "De server mag even weg"; avond 3 "Het avondpakket en de tests op de pc".
+- De proefpunten staan in de speellijst van de Controlekamer (ids `ar-`), op 16 okt herschreven na een herleiding
+  vanaf de diff en een droogloop (`docs/verslagen/2026-10-15/ar-proef.md`): ar-app als eerste punt van het
+  opstarten; avond 1 "Tel 1 snapt naar de tel", aan het eind het geheugen, "De server mag even weg" (één opname,
+  drie storingen) en als laatste slaap en de Scarlett; avond 3 de pc. Na de avond: `node tools/proef/ar-na.mjs
+  --meet` rekent uit je eigen bestanden na wat de punten beweren. De droogloop vond AR17–AR20 (VRAGEN).
 
 **De suite:** op een schone Mac (de workflow `test`, `macos-14`, Node 26.8.2, met de hand gestart) **137 bestanden,
 11.778 checks, alles groen** (run 3 van 15 okt). De eerste twee runs vonden wat er op een runner anders is en nooit

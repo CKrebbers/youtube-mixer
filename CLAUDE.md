@@ -319,7 +319,10 @@ tools/              beatmeting/ (metingen op Clay's library, alleen lezen; LEESM
                     stems/ (Demucs-proef meet.py, vergelijk.py, snelheid.py), toonsoort/ (meetinstrument), keylock/ (Signalsmith-proef +
                     luisterbestanden), varve-app/ (de Dock-app VARVE: start de server via server-lus.sh, opent de Controlekamer;
                     server-lus.sh: POSIX sh, herstart hooguit 5×/min, `stop`/`status`, ~/.varve/server-lus.pid),
-                    headless/server-weg.mjs (de server 30 s weg met twee decks, opname en log: 0 stille vensters, WAV zonder gat),
+                    headless/server-weg.mjs (de server 30 s weg met twee decks, opname en log: 0 stille vensters, WAV zonder gat;
+                    VARVE_WEG_SOORT=hang = SIGSTOP/SIGCONT, VARVE_WEG_KOPIE = de opnames bewaren),
+                    proef/ar-na.mjs (na de proefavond van de architectuurronde: nullen in de WAV in een storing, het log, de herstartlus
+                    in ~/.varve-server.log, het grid tegen de tellen; alleen lezen, op kopieën, droog standaard; docs/verslagen/2026-10-15/ar-proef.md),
                     setboek/ (lees.mjs: wat er op een avond KLONK uit de handelingenlogs, puur; gebruik.mjs: de teller;
                     setboek.mjs: de CLI op KOPIEËN, --dag/--vanaf/--log, --db, --proef, stdout; LEESMIJ.md),
                     patronen/ (midi.mjs: een set patronen als MIDI-bestand voor Logic, op een kopie; LEESMIJ.md),
@@ -418,6 +421,7 @@ test/
   patronen-engine.test.mjs  patronen op de echte engine: actions en reads, een deck als maatgever, instrument weg, log, terugspelen, modus patronen, LED's
   smf.test.mjs      de bytes van een MIDI-bestand (src/lib/smf.js): vlq, meta, tempo, ascii, sporen, lezen (running status, SysEx, kapot = byte-offset)
   patronen-midi.test.mjs  patronen als MIDI-bestand: S1–S13/L1–L2, de kick bytegewijs (met de hand + fixtures), 500 patronen tegen de vensters van de speler, rondreis, de CLI tools/patronen/midi.mjs
+  ar-na.test.mjs    tools/proef/ar-na.mjs op synthetisch materiaal: WAV met een gat, log met NUL, het log van de lus, grid vs tellen, droog leest niets, --meet laat de bronnen staan
   setboek.test.mjs  het setboek (tools/setboek): hoorbaar (fader, kant, trim, kills, stems, master via faderGain), cue/play/laad/rem/gridcontrole zoals het deck, trackeinde met lengte, positie in de bron (secties), één stuk over de grens van twee logs (ook door een log zonder acties), proefpunten (alleen van deze avond), Buma/Stemra, --vanaf op de klok (ook binnen één log), de CLI
   fixtures/midi/    gouden .mid's (kick met en zonder meta, proef-set): de test vergelijkt ermee, en ze zijn het materiaal voor de Logic-proef
   secties.test.mjs  secties: synthetische nummers met een bekend antwoord, worker, library, deck, actions, server, marges op de "1"
@@ -1975,7 +1979,9 @@ Verslag `docs/verslagen/2026-10-15/arch-server-weg.md`. Wat een bouwer niet mag 
   docs/TAILSCALE.md. Na een wijziging aan de Dock-app: `zsh tools/varve-app/maak.sh`.
 - Toets: `tools/headless/server-weg.mjs` (poorten 8961/8962): gemeten 0 stille vensters van 50 ms in 1040, een
   WAV van 49 s zonder nullen, één opname-melding die op "weer goed" eindigt (zonder dit: 10 s stilte, 20 s
-  nullen, 20 meldingen). Niet gebouwd: hang-detectie en de noodlus op de maat (volgende versie).
+  nullen, 20 meldingen). Niet gebouwd: hang-detectie en de noodlus op de maat (volgende versie). Met
+  `VARVE_WEG_SOORT=hang` (16 okt) hangt de server 30 s: ook goed, de melding pas na de time-out van 10 s (AR18).
+  Een tweede server ruimt bij het opstarten eerst `.bezig-*` en de stems-rij, vóór hij de bezette poort ziet (AR20).
 
 ## Het avondpakket per platform (15 okt, docs/AVONDPAKKET.md §9b)
 

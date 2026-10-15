@@ -128,6 +128,11 @@ Wat er op een avond KLONK, uit de handelingenlogs (spoor produceren-uit, 10 okt)
 "hoorbaar (benaderd)", geladen maar niet gehoord, gebruik, verslagblok. Alleen op een KOPIE van
 `opnames/*.acties.jsonl`, nooit tijdens een set. Zie `setboek/LEESMIJ.md`.
 
+## proef/
+`ar-na.mjs`: na de proefavond van de architectuurronde. Rekent uit KOPIEËN van de opname (nullen in een storing),
+het handelingenlog, `~/.varve-server.log` (de herstartlus) en library.db + tellen.json (het grid tegen de tellen)
+na wat de ar-punten van de speellijst beweren. Droog standaard; `--meet` meet. Zie `docs/verslagen/2026-10-15/ar-proef.md`.
+
 ## patronen/
 `midi.mjs`: een set patronen (of één track of patroon) als MIDI-bestand voor Logic (type 1, 384 PPQN;
 docs/PATRONEN.md §8). Op een KOPIE van `patronen/<naam>.json`; schrijft nooit over een bestaand
