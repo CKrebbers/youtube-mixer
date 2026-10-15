@@ -14,6 +14,10 @@
  *     gemeten; twee keer achter elkaar meer dan 0,5 s achter = melding.
  *     Eén keer achter (de Mac sliep, een haperend tabblad) zegt niets.
  *
+ * Sinds AR6 (16 okt) probeert hij het bij een stille context ook meteen zelf, zonder druk: één `resume()`,
+ * hooguit eens per ZELF_MS (een uitgang die steeds wegvalt mag geen lus van stil-aan-stil geven). Lukt het
+ * niet (zonder gebaar weigert Chrome het soms), dan blijft de melding staan en doet de eerste druk het.
+ *
  * Eén melding met de sleutel `audio` (meldingen.js): "staat stil" blijft
  * staan (fout) en wordt "audio loopt weer" (info) zodra het weer loopt.
  * Vóór de audio ooit liep ("audio starten" is nog niet gedrukt) is er niets
@@ -33,6 +37,8 @@ export const KLOK_KEER = 2;
 export const KLOK_MS = 1000;
 /** Hoe lang "audio loopt weer" blijft staan. */
 export const WEER_MS = 4000;
+/** Zo vaak (ms) probeert hij het hooguit zelf, zonder druk (AR6). */
+export const ZELF_MS = 10000;
 
 /**
  * De melding bij deze stand, of null (niets te zeggen). Puur.
@@ -91,10 +97,13 @@ export class KlokWachter {
  *   venster?: EventTarget,                  // waar keydown op binnenkomt (window)
  *   nu?: () => number,                      // wandklok in ms (performance.now)
  *   elke?: (fn, ms) => any,                 // setInterval
+ *   zelf?: boolean,                         // meteen zelf een resume() proberen (AR6; standaard ja)
  * }} opties
  */
-export function opzetGezondheid({ ctx, meld, midi = null, venster = null, nu = () => performance.now(), elke = (fn, ms) => setInterval(fn, ms) }) {
+export function opzetGezondheid({ ctx, meld, midi = null, venster = null, nu = () => performance.now(), elke = (fn, ms) => setInterval(fn, ms), zelf = true }) {
   let gestart = ctx.state === 'running';
+  let zelfOp = -Infinity;              // wanneer hij het het laatst zelf probeerde (wandklok, ms)
+  let zelfKeer = 0;
   let klokStil = false;
   let gemeld = false;                  // er staat een fout met de sleutel audio
   const wachter = new KlokWachter();
@@ -114,6 +123,12 @@ export function opzetGezondheid({ ctx, meld, midi = null, venster = null, nu = (
     if (ctx.state === 'running') gestart = true;
     else { klokStil = false; wachter.reset(); }
     toon();
+    // AR6: meteen zelf proberen, zonder op een druk te wachten (hooguit eens per ZELF_MS).
+    if (zelf && gestart && ctx.state !== 'running' && ctx.state !== 'closed' && nu() - zelfOp >= ZELF_MS) {
+      zelfOp = nu();
+      zelfKeer++;
+      try { Promise.resolve(ctx.resume()).catch(() => {}); } catch (_) {}
+    }
   });
 
   function tik() {
@@ -136,5 +151,5 @@ export function opzetGezondheid({ ctx, meld, midi = null, venster = null, nu = (
   midi?.onInput?.(hervat);
   venster?.addEventListener?.('keydown', hervat, { capture: true });
 
-  return { hervat, tik, stand: () => ({ state: ctx.state, gestart, klokStil, gemeld, achter: wachter.laatsteAchter }) };
+  return { hervat, tik, stand: () => ({ state: ctx.state, gestart, klokStil, gemeld, achter: wachter.laatsteAchter, zelfKeer }) };
 }

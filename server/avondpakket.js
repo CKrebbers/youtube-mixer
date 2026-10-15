@@ -374,8 +374,32 @@ export function parseTailscale(json) {
   if (!j || typeof j !== 'object' || typeof j.BackendState !== 'string') return null;
   const peers = Object.values(j.Peer || {}).map((p) => ({
     naam: tekst(p?.HostName), online: !!p?.Online, direct: !!p?.CurAddr, relay: tekst(p?.Relay) || null,
+    // Het besturingssysteem van de peer (AR13: de pc zoekt zo "de Mac" in de tailnet); null als het ontbreekt.
+    os: tekst(p?.OS) || null,
   }));
   return { backend: j.BackendState, naam: tekst(j.Self?.HostName) || null, peers };
+}
+
+/**
+ * De beelduitgangen van de pc (AR13) uit `grep -H '' /sys/class/drm/<kaart>-<poort>/status`:
+ * regels "/sys/class/drm/card1-HDMI-A-1/status:connected". Geeft [{ poort: 'HDMI-A-1', extern, verbonden }]
+ * (extern = HDMI of DisplayPort, niet het eigen scherm eDP/LVDS/DSI), of null als er niets te lezen viel.
+ */
+export function parseDrm(t) {
+  const uit = [];
+  for (const regel of String(t ?? '').split('\n')) {
+    const m = /\/card\d+-([A-Za-z]+(?:-[A-Za-z])?-\d+)\/status:(\w+)\s*$/.exec(regel.trim());
+    if (!m) continue;
+    uit.push({ poort: m[1], extern: /^(HDMI|DP)\b/.test(m[1]), verbonden: m[2] === 'connected' });
+  }
+  return uit.length ? uit : null;
+}
+
+/** De Node-versie (AR14): "v26.8.2" en de inhoud van .node-version ("26.8.2") → { versie, verwacht, gelijk }. */
+export function nodeVersie(versie, verwacht) {
+  const v = String(versie ?? '').trim().replace(/^v/, ''), w = String(verwacht ?? '').trim().replace(/^v/, '');
+  if (!/^\d+\.\d+\.\d+$/.test(v)) return null;
+  return { versie: v, verwacht: /^\d+\.\d+\.\d+$/.test(w) ? w : null, gelijk: v === w };
 }
 
 /** Een absoluut pad relatief maken aan een map; erbuiten: alleen de bestandsnaam (nooit /Users/…). */
@@ -882,6 +906,47 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
         if (offline.length && aankomst && waardeVan(p, 'beeld') === 'verwacht') punt('tailscale', 'Tailscale', 'half', 'aan', `${sub}: zet ${offline.join(', ')} aan`);
         else punt('tailscale', 'Tailscale', 'ok', 'aan', sub);
       }
+    }
+  }
+
+  // De pc (AR13, 16 okt): alleen gemeten waar de Stroommachine staat (Linux). Op de Mac verandert er niets.
+  if (m.platform === 'linux') {
+    const beeld = waardeVan(p, 'beeld');
+    const wilBeeld = beeld === 'verwacht';
+    // De relay (poort 7702, docs/BEELD.md): daar stuurt VARVE de klok en de nummers heen.
+    const r = m.relay;
+    const relayStart = 'node tools/varve-relay.js 7702 in de Stroommachine-repo (docs/BEELD.md §5)';
+    if (onbekend(r)) punt('relay', 'Relay beeld', 'uit', '?', nietGemeten(r));
+    else if (r.draait) punt('relay', 'Relay beeld', 'ok', 'draait', 'poort 7702: VARVE op de Mac stuurt hierheen (ws://clayk:7702/app)');
+    else if (wilBeeld && aankomst) punt('relay', 'Relay beeld', 'fout', 'dicht', `start de relay: ${relayStart}`);
+    else punt('relay', 'Relay beeld', 'uit', 'dicht', wilBeeld ? `straks bij aankomst: ${relayStart}` : 'niet in dit profiel');
+    // De beamer aan de HDMI-uitgang (of DisplayPort).
+    const h = m.hdmi;
+    const extern = Array.isArray(h) ? h.filter((x) => x.extern) : [];
+    const aan = extern.filter((x) => x.verbonden);
+    if (onbekend(h)) punt('hdmi', 'Beamer (HDMI)', 'uit', '?', nietGemeten(h));
+    else if (aan.length) punt('hdmi', 'Beamer (HDMI)', 'ok', `${aan[0].poort} verbonden`, aan.length > 1 ? `ook ${aan.slice(1).map((x) => x.poort).join(', ')}` : 'het beeld kan naar de beamer');
+    else if (!extern.length) punt('hdmi', 'Beamer (HDMI)', 'uit', 'geen uitgang', 'geen HDMI- of DisplayPort-uitgang gevonden in /sys/class/drm');
+    else if (wilBeeld && aankomst) punt('hdmi', 'Beamer (HDMI)', streng, 'niet gezien', `beamer aansluiten (${extern.map((x) => x.poort).join(', ')})`);
+    else if (wilBeeld) punt('hdmi', 'Beamer (HDMI)', 'uit', 'inpakken', 'inpakken: HDMI-kabel en de adapter');
+    else punt('hdmi', 'Beamer (HDMI)', 'uit', 'niet verbonden', 'niet in dit profiel');
+    // De Mac in de tailnet (een peer met OS macOS): zonder hem krijgt de Stroommachine geen klok.
+    const t = m.tailscale;
+    if (onbekend(t)) punt('mac', 'De Mac', 'uit', '?', `Tailscale ${nietGemeten(t)}`);
+    else if (t.backend !== 'Running') punt('mac', 'De Mac', wilBeeld && aankomst ? 'half' : 'uit', 'niet te zien', 'Tailscale staat hier niet aan: de Mac is zo niet te bereiken');
+    else {
+      const macs = t.peers.filter((x) => /^macos$/i.test(x.os || ''));
+      const online = macs.filter((x) => x.online);
+      if (online.length) punt('mac', 'De Mac', 'ok', `${online[0].naam} online`, online[0].direct ? 'direct' : `via relay${online[0].relay ? ` ${online[0].relay}` : ''} (trager)`);
+      else if (!macs.length) punt('mac', 'De Mac', 'uit', 'geen Mac', 'geen macOS-apparaat in de tailnet');
+      else if (wilBeeld && aankomst) punt('mac', 'De Mac', 'half', `${macs[0].naam} offline`, 'zet de Mac aan, met Tailscale');
+      else punt('mac', 'De Mac', 'uit', `${macs[0].naam} offline`, '');
+    }
+    // Node (AR14): de pc op dezelfde Node als de Mac (.node-version), anders vallen de afvalmetingen van de suite anders uit.
+    const n = m.node;
+    if (n && !onbekend(n) && n.versie) {
+      if (!n.verwacht || n.gelijk) punt('node', 'Node', 'ok', `v${n.versie}`, n.verwacht ? 'zoals .node-version (de Mac)' : '');
+      else punt('node', 'Node', 'half', `v${n.versie}`, `de Mac draait ${n.verwacht} (.node-version): installeer die, dan is de suite hier gelijk`);
     }
   }
 

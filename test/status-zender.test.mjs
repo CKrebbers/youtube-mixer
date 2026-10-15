@@ -17,7 +17,7 @@ globalThis.BroadcastChannel = class {
   close() { this.dicht = true; }
 };
 
-const { startStatusZender, maakStatus, eindUitActions, SERVER_MS, RUST_WEIGER_MS, RUST_FOUT_MS, KANAAL } = await import('../src/ui/status-zender.js');
+const { startStatusZender, maakStatus, eindUitActions, SERVER_MS, SERVER_RUST_MS, RUST_WEIGER_MS, RUST_FOUT_MS, KANAAL } = await import('../src/ui/status-zender.js');
 
 const snap = { focus: 'A', maat: 'A', decks: { A: { id: 'A', loaded: true, playing: true, title: 'Proef A', bpm: 124, toon: null, position: 600, duration: 3600, rate: 1 } } };
 const lees = () => ({ snap, midi: null, audio: 'running', tab: 'tab-proef-1', eind: { zwart: false, bevroren: true, master: 0.8 } });
@@ -72,6 +72,36 @@ console.log('\nnaarServer: hooguit één POST per 900 ms');
   ok('de body heeft tab, eind en positie/duur/rate', body.tab === 'tab-proef-1' && body.eind.bevroren === true && body.eind.master === 0.8
     && body.tracks[0].positie === 600 && body.tracks[0].duur === 3600 && body.tracks[0].rate === 1);
   z.stop();
+}
+
+console.log('\nAR16: zonder kijker rustiger (1× per 4 s), met kijker weer 900 ms');
+{
+  let nu = 1_500_000;
+  let kijkt = false;
+  const haal = nepFetch(() => ({ ok: true, status: 200, json: async () => ({ ok: true, kijker: kijkt }) }));
+  const z = startStatusZender({ lees, interval: 60_000, naarServer: true, haalFn: haal, klok: () => nu });
+  await tik(); await tik();
+  ok('het eerste antwoord zegt kijker: false → de zender weet het', haal.aanroepen.length === 1 && z.kijker === false);
+  for (let i = 0; i < 3; i++) { nu += 1000; z.stuur(); await tik(); }
+  ok(`drie keer 1 s later: geen tweede POST (onder ${SERVER_RUST_MS} ms)`, haal.aanroepen.length === 1);
+  nu += 1000; z.stuur(); await tik(); await tik();
+  ok(`na ${SERVER_RUST_MS} ms: de tweede`, haal.aanroepen.length === 2);
+  const { VERS_MS } = await import('../src/companion/companion-lijst.js');
+  ok(`SERVER_RUST_MS (${SERVER_RUST_MS}) onder VERS_MS van de companion (${VERS_MS}): wie gaat kijken ziet nooit een oude stand`, SERVER_RUST_MS < VERS_MS);
+  kijkt = true;
+  nu += SERVER_RUST_MS; z.stuur(); await tik(); await tik();
+  ok('iemand kijkt: het antwoord zegt het', haal.aanroepen.length === 3 && z.kijker === true);
+  nu += SERVER_MS; z.stuur(); await tik();
+  ok(`… en meteen weer elke ${SERVER_MS} ms`, haal.aanroepen.length === 4);
+  z.stop();
+  // Een oudere server zonder `kijker` in het antwoord: zoals altijd.
+  let nu2 = 1_700_000;
+  const oud = nepFetch(() => ({ ok: true, status: 200, json: async () => ({ ok: true }) }));
+  const z2 = startStatusZender({ lees, interval: 60_000, naarServer: true, haalFn: oud, klok: () => nu2 });
+  await tik(); await tik();
+  nu2 += SERVER_MS; z2.stuur(); await tik();
+  ok('een oudere server (antwoord zonder kijker): gewoon elke 900 ms', oud.aanroepen.length === 2 && z2.kijker === true);
+  z2.stop();
 }
 
 console.log('\nniet het eerste tabblad: niets naar de server');

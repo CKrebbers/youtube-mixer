@@ -266,6 +266,15 @@ try {
     ok('een trage start die daarna antwoordt: één start, geen melding', g.starts() === 1 && leeft(g.nepPid()) && !/antwoordt niet/.test(g.log));
   }
   {
+    // AR8 (16 okt): de LaunchAgent in docs/TAILSCALE.md start de LUS, niet node, en zonder KeepAlive.
+    const doc = readFileSync(join(dirname(LUS), '..', '..', 'docs', 'TAILSCALE.md'), 'utf8');
+    const plist = /<plist[\s\S]*?<\/plist>/.exec(doc)?.[0] ?? '';
+    ok('AR8: de LaunchAgent in TAILSCALE.md start /bin/sh tools/varve-app/server-lus.sh (niet node direct)',
+      /<string>\/bin\/sh<\/string><string>tools\/varve-app\/server-lus\.sh<\/string>/.test(plist) && !/server\/index\.js/.test(plist));
+    ok('AR8: … zonder KeepAlive (anders start launchd een crash-lus eindeloos opnieuw), met UV_THREADPOOL_SIZE 16',
+      !/KeepAlive/.test(plist) && /UV_THREADPOOL_SIZE<\/key><string>16</.test(plist) && /RunAtLoad/.test(plist));
+  }
+  {
     const r = spawnSync('sh', ['-n', LUS]);
     ok('het script is geldige POSIX sh (sh -n)', r.status === 0);
     const tekst = readFileSync(LUS, 'utf8');

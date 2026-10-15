@@ -7,7 +7,7 @@ import { homedir } from 'node:os';
 import {
   parsePmset, parsePmsetAc, parseIoregAccu, parseDf, parseOptimize, parseAudio, parseBluetooth, parseUsbHost,
   parseIoregUsb, voegUsbSamen, parseTailscale, parseBestanden, parseInstellingen, vergelijkCompleet, verwachtePaden,
-  leesProfielen, beoordeel, schoon, parsePowerSupply, parseLsusb, parseSysUsb,
+  leesProfielen, beoordeel, schoon, parsePowerSupply, parseLsusb, parseSysUsb, parseDrm, nodeVersie,
 } from './avondpakket.js';
 import { kopieen } from './backup.js';
 import { allePunten } from '../src/controle/speellijst.js';
@@ -46,11 +46,19 @@ import { allePunten } from '../src/controle/speellijst.js';
 export const STANDAARD_TIMEOUTS = Object.freeze({
   bestanden: 2000, instellingen: 1500, icloud: 1000, schijf: 1000, accu: 1000, audio: 2500,
   bluetooth: 1500, usb: 2500, avhub: 800, servers: 2000, tailscale: 1500, backup: 2000,
+  relay: 800, hdmi: 1000, node: 500,
 });
 /** Wat ook mag terwijl er een deck speelt (met `vers`): pmset, df, defaults, pgrep, één TCP-verbinding. */
-export const GOEDKOOP = Object.freeze(['icloud', 'schijf', 'accu', 'avhub', 'servers']);
+export const GOEDKOOP = Object.freeze(['icloud', 'schijf', 'accu', 'avhub', 'servers', 'relay', 'node']);
 /** De sondes die commando's uitvoeren (backup alleen in de CLI zonder server). */
-export const SONDES = Object.freeze(['bestanden', 'instellingen', 'icloud', 'schijf', 'accu', 'audio', 'bluetooth', 'usb', 'avhub', 'servers', 'tailscale']);
+export const SONDES = Object.freeze(['bestanden', 'instellingen', 'icloud', 'schijf', 'accu', 'audio', 'bluetooth', 'usb', 'avhub', 'servers', 'tailscale',
+  'relay', 'hdmi', 'node']);
+/** De sondes die alleen de pc meet (AR13/AR14); op de Mac zeggen ze ALLEEN_PC en toont het oordeel ze niet. */
+export const ALLEEN_PC_SONDES = Object.freeze(['relay', 'hdmi', 'node']);
+/** De poort van de relay van beeld op de pc (docs/BEELD.md: node tools/varve-relay.js 7702). */
+export const RELAY_POORT = 7702;
+/** De Node die de suite verwacht (.node-version in de projectmap), voor de sonde node (AR14). */
+const NODE_VERSIE_BESTAND = new URL('../.node-version', import.meta.url);
 /** Hoe lang de route wacht op een eigen bestand (profielen.json, de speellijst); uitgeplaatst en offline zou hij anders blijven hangen. */
 export const LEES_MS = 1000;
 /** De poort van de AV-app-hub (~/Projects/AV-app-hub, config.json). */
@@ -127,6 +135,9 @@ const regels = (t) => String(t || '').split('\n').map((r) => r.trim()).filter(Bo
  * Gooien mag: meet() maakt er { onbekend } van.
  */
 const DARWIN = {
+  relay: async () => { throw fout(ALLEEN_PC); },
+  hdmi: async () => { throw fout(ALLEEN_PC); },
+  node: async () => { throw fout(ALLEEN_PC); },
   async bestanden({ exec, paden, t }) {
     if (!paden.media) throw fout('geen mediamap');
     const opts = { timeout: t, codes: [0, 1] };
@@ -245,6 +256,8 @@ const DARWIN = {
 const niet = (waarom) => async () => { throw fout(waarom); };
 export const NIET_HIER = 'niet op dit platform';
 export const NIET_HIER_MIXER = 'niet op dit platform (de live-mixer draait op de Mac)';
+/** Wat alleen de pc meet (AR13/AR14): relay, beamer, Node. Op de Mac grijs en niet getoond (beoordeel). */
+export const ALLEEN_PC = 'alleen op de pc (de beeld-machine)';
 
 /**
  * Linux (de Omarchy-pc: beeld, ontwikkelen, testen; de live-mixer draait er niet).
@@ -304,6 +317,24 @@ const LINUX = {
     return voegUsbSamen(ls.status === 'fulfilled' ? parseLsusb(ls.value) : [], sys.status === 'fulfilled' ? parseSysUsb(sys.value) : []);
   },
   async tailscale(o) { return DARWIN.tailscale({ ...o, plekken: TAILSCALE_LINUX }); },
+  // AR13: wat de pc zelf moet hebben voor beeld. De relay is één TCP-verbinding (zoals de AV-hub).
+  async relay({ verbind, t }) {
+    return { draait: await verbind(RELAY_POORT, { timeout: t }) };
+  },
+  async hdmi({ exec, t }) {
+    const uit = await exec('find', ['-L', '/sys/class/drm', '-mindepth', '2', '-maxdepth', '2', '-name', 'status', '-type', 'f', '-exec', 'grep', '-H', '', '{}', '+'],
+      { timeout: t, codes: [0, 1], env: C, sleutel: 'drm' })
+      .catch((err) => { throw err?.message === 'bestaat niet' ? fout('geen beelduitgang in sysfs') : err; });
+    const u = parseDrm(uit);
+    if (!u) throw fout('geen beelduitgang in sysfs');
+    return u;
+  },
+  // AR14: de Node van deze machine tegen .node-version (die van de Mac en de workflow).
+  async node({ nodeInfo }) {
+    const n = nodeVersie(nodeInfo.versie, nodeInfo.verwacht());
+    if (!n) throw fout('onleesbaar');
+    return n;
+  },
 };
 
 /** Elk ander platform: alleen de AV-hub (een TCP-poort); de rest grijs. */
@@ -327,7 +358,8 @@ export function metersVoor(platform) {
  * @param {string} [o.platform]          process.platform (standaard); de tests kiezen 'darwin' of 'linux'
  * @returns {Promise<object>} per sonde het object of { onbekend }
  */
-export async function meet({ exec = voerUit, verbind = poortOpen, paden = {}, timeouts = {}, alleen = null, vorige = null, waarom = 'er speelt een deck', platform = process.platform } = {}) {
+export async function meet({ exec = voerUit, verbind = poortOpen, paden = {}, timeouts = {}, alleen = null, vorige = null, waarom = 'er speelt een deck', platform = process.platform,
+  nodeInfo = { versie: process.version, verwacht: () => { try { return readFileSync(NODE_VERSIE_BESTAND, 'utf8'); } catch { return null; } } } } = {}) {
   const t = { ...STANDAARD_TIMEOUTS, ...timeouts };
   const METERS = metersVoor(platform);
   const wel = alleen ? new Set(alleen) : null;
@@ -336,7 +368,7 @@ export async function meet({ exec = voerUit, verbind = poortOpen, paden = {}, ti
   await Promise.all(SONDES.map(async (id) => {
     if (wel && !wel.has(id)) { uit[id] = vorige?.[id] !== undefined ? vorige[id] : { onbekend: waarom }; return; }
     try {
-      uit[id] = await metGrens(Promise.resolve().then(() => METERS[id]({ exec, verbind, paden, t: t[id], goedkoop, vorige: vorige?.[id] })), t[id] + 50);
+      uit[id] = await metGrens(Promise.resolve().then(() => METERS[id]({ exec, verbind, paden, t: t[id], goedkoop, vorige: vorige?.[id], nodeInfo })), t[id] + 50);
     } catch (err) {
       uit[id] = { onbekend: reden(err) };
     }
@@ -416,11 +448,14 @@ export function maakNep(map) {
     if (typeof v === 'object' && typeof v.tekst === 'string') return Promise.resolve(v.tekst);
     return readFile(isAbsolute(String(v)) ? String(v) : join(map, String(v)), 'utf8').catch(() => Promise.reject(fout(`fixture ontbreekt (${sleutel})`)));
   };
-  const verbind = async () => cfg.avhub === true;
+  // Per poort: de AV-hub (7700, "avhub") en de relay van beeld op de pc (7702, "relay", AR13).
+  const verbind = async (poort) => (poort === RELAY_POORT ? cfg.relay === true : cfg.avhub === true);
   // "platform": van welk platform de fixtures zijn (darwin, linux); de sondes van dat platform lezen ze.
   // "library": false = er staat geen library.db op die machine (de pc, AR19); zonder: er staat er een.
+  // "node": { "versie": "v22.22.0", "verwacht": "26.8.2" } (AR14); zonder: de echte van dit proces.
+  const nodeInfo = cfg.node && typeof cfg.node === 'object' ? { versie: cfg.node.versie, verwacht: () => cfg.node.verwacht ?? null } : undefined;
   return { exec, verbind, cfg, geteld, paden: cfg.paden || null, backups: Array.isArray(cfg.backups) ? cfg.backups : null, server: cfg.server ?? null,
-    platform: typeof cfg.platform === 'string' ? cfg.platform : null, library: cfg.library !== false };
+    platform: typeof cfg.platform === 'string' ? cfg.platform : null, library: cfg.library !== false, nodeInfo };
 }
 
 // ---- in het serverproces: backup, achtergrond, compleet -----------------------------
@@ -501,7 +536,8 @@ export function maakAvondpakket({ paden, profielenPad, backupStand = null, rijen
   const meetPaden = n?.paden ? { ...paden, ...n.paden } : paden;
   const plat = platform ?? n?.platform ?? process.platform;
   const cache = maakCache({
-    meet: (opties) => meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden: meetPaden, timeouts, platform: plat, ...opties }),
+    meet: (opties) => meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden: meetPaden, timeouts, platform: plat,
+      ...(n?.nodeInfo ? { nodeInfo: n.nodeInfo } : {}), ...opties }),
     speeltDeck, klok, ...(ttlMs ? { ttlMs } : {}),
   });
   // Alleen de verwachte paden per nummer, niet de hele rij (review 2, fix 16).

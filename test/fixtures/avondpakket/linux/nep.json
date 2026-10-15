@@ -1,16 +1,43 @@
 {
-  "_doc": "VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket/linux: de sondes van Linux (server/avondpakket-meet.js, metersVoor('linux')) uit echte uitvoer van de container van 15 okt (Ubuntu 24.04, GNU findutils 4.9.0, coreutils 9.4): een kladmediamap van 9 bestanden, df, geen accu, geen lsusb, geen /sys/bus/usb, geen tailscale. Zie LEESMIJ.md in de map erboven.",
+  "_doc": "VARVE_AVONDPAKKET_NEP=test/fixtures/avondpakket/linux: de sondes van Linux (server/avondpakket-meet.js, metersVoor('linux')) uit echte uitvoer van de container van 15 okt (Ubuntu 24.04, GNU findutils 4.9.0, coreutils 9.4): een kladmediamap van 9 bestanden, df, geen accu, geen lsusb, geen /sys/bus/usb, geen tailscale, geen /sys/class/drm, geen relay; Node v22.22.0 tegen .node-version 26.8.2 (AR13/AR14). Zie LEESMIJ.md in de map erboven.",
   "platform": "linux",
-  "paden": { "media": "/tmp/varve-linux/media", "wortel": "/tmp/varve-linux", "db": "/tmp/varve-linux/media/library.db", "extra": [] },
+  "paden": {
+    "media": "/tmp/varve-linux/media",
+    "wortel": "/tmp/varve-linux",
+    "db": "/tmp/varve-linux/media/library.db",
+    "extra": []
+  },
   "find-stat": "find-stat-9.txt",
   "df": "df-k.txt",
   "power-supply": "power-supply-leeg.txt",
-  "lsusb": { "fout": "lsusb niet gevonden" },
-  "sys-usb": { "fout": "bestaat niet" },
-  "tailscale": { "fout": "tailscale niet gevonden" },
-  "lsof": { "tekst": "" },
-  "pgrep": { "tekst": "4242\n" },
+  "lsusb": {
+    "fout": "lsusb niet gevonden"
+  },
+  "sys-usb": {
+    "fout": "bestaat niet"
+  },
+  "tailscale": {
+    "fout": "tailscale niet gevonden"
+  },
+  "drm": {
+    "fout": "bestaat niet"
+  },
+  "lsof": {
+    "tekst": ""
+  },
+  "pgrep": {
+    "tekst": "4242\n"
+  },
   "avhub": false,
-  "backups": ["library-2026-10-15_08-00-00.db"],
-  "server": { "bereikbaar": false }
+  "relay": false,
+  "node": {
+    "versie": "v22.22.0",
+    "verwacht": "26.8.2"
+  },
+  "backups": [
+    "library-2026-10-15_08-00-00.db"
+  ],
+  "server": {
+    "bereikbaar": false
+  }
 }

@@ -212,14 +212,36 @@ export function laadFxWorklet(ctx) {
  * dan (en als het nooit lukt) blijft het wat het zonder is. Wordt het effect
  * intussen opgeruimd, dan komt er geen node meer.
  */
+/** Zo vaak bouwt een effect zijn worklet opnieuw op na een fout (AR5); daarna blijft het stil (de StreamBron: één keer per laad). */
+export const HERBOUW_MAX = 1;
+
 export function metWorklet(ctx, naam, opties, klaar) {
-  const w = { node: null, weg: false };
+  const w = { node: null, weg: false, herbouwd: 0 };
+  const wat = `effect ${String(naam).replace(/^varve-fx-/, '')}`;
+  const losVan = (node) => {
+    try { node.port.postMessage('stop'); } catch (_) {}
+    try { node.port.onmessage = null; node.port.close(); } catch (_) {}
+    try { node.disconnect(); } catch (_) {}
+  };
+  // Een fout in de worklet = stil effect (spoor A): melden via de context (worklet-fout.js, WORKLET_FOUT), de
+  // dode node eruit, en één keer een nieuwe die invloeit zoals na het laden (AR5, 16 okt). Gaat dat ook mis,
+  // dan blijft het effect stil tot je het opnieuw kiest (dezelfde melding, met die hint).
+  const fout = (node, e) => {
+    if (w.node !== node) return;
+    const opnieuw = !w.weg && w.herbouwd < HERBOUW_MAX;
+    try {
+      ctx.dispatchEvent?.(new CustomEvent('varve-workletfout', { detail: { wat, reden: String(e?.message || ''),
+        hint: opnieuw ? 'het effect bouwt zichzelf één keer opnieuw op' : 'het effect is stil; kies het opnieuw' } }));
+    } catch (_) {}
+    w.node = null;
+    losVan(node);
+    if (opnieuw) { w.herbouwd++; maak(false); }
+  };
   const maak = (meteen) => {
     if (w.weg || w.node) return;
     let node;
     try { node = new AudioWorkletNode(ctx, naam, opties); } catch (_) { return; }
-    // Een fout in de worklet = stil effect: melden via de context (worklet-fout.js, WORKLET_FOUT; spoor A).
-    node.onprocessorerror = (e) => { try { ctx.dispatchEvent?.(new CustomEvent('varve-workletfout', { detail: { wat: `effect ${String(naam).replace(/^varve-fx-/, '')}`, reden: String(e?.message || ''), hint: 'het effect is stil; kies het opnieuw' } })); } catch (_) {} };
+    node.onprocessorerror = (e) => fout(node, e);
     w.node = node;
     try { klaar(node, meteen); } catch (_) {}
   };
@@ -231,9 +253,7 @@ export function metWorklet(ctx, naam, opties, klaar) {
     if (!w.node) return;
     // 'stop' en meteen de poort dicht: het bericht komt nog aan (in Chrome gemeten, spoor A), en een open
     // poort hield de processor in leven (hij rekende door na het losmaken).
-    try { w.node.port.postMessage('stop'); } catch (_) {}
-    try { w.node.port.onmessage = null; w.node.port.close(); } catch (_) {}
-    try { w.node.disconnect(); } catch (_) {}
+    losVan(w.node);
   };
   return w;
 }

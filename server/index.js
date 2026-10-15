@@ -1810,9 +1810,9 @@ const server = createServer(async (req, res) => {
       const body = await leesJson(req, MIXER_MAX);
       if (!isMelding(body)) return json(res, 400, { fout: 'geen melding van de mixer' });
       mixer.zet(body, Date.now());
-      return json(res, 200, { ok: true });
+      return json(res, 200, { ok: true, kijker: mixer.kijker(Date.now()) });   // AR16: zonder kijker meldt de mixer zich rustiger
     }
-    if (pad === '/api/mixer' && req.method === 'GET') return json(res, 200, { ...mixer.lees(Date.now()), speelt: speeltDeck() });
+    if (pad === '/api/mixer' && req.method === 'GET') { mixer.kijk(Date.now()); return json(res, 200, { ...mixer.lees(Date.now()), speelt: speeltDeck() }); }
 
     // ---- de muziekkaart (docs/KAART.md) ---------------------------------
     if (pad.startsWith('/api/kaart') || pad.startsWith('/api/nacht')) {

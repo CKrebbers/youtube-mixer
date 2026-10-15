@@ -23,9 +23,10 @@
  *
  * De server mag even weg zijn (docs/WINST.md punt 3, zoals de opname): een
  * stuk dat geen antwoord krijgt blijft op volgorde wachten en wordt opnieuw
- * geprobeerd (0,25 → 2 s, src/lib/herhaal.js) zolang het log loopt en de rij
- * kleiner is dan `rijBytes`; bij stoppen nog `stopGrens` ms. Daarna de oude
- * regel: een gat van nullen op die plek.
+ * geprobeerd (0,25 → 2 s, src/lib/herhaal.js) zolang het log loopt; bij stoppen
+ * nog `stopGrens` ms. Daarna de oude regel: een gat van nullen op die plek. Past
+ * een NIEUW stuk niet meer in de rij (`rijBytes`), dan valt dat stuk weg (een gat
+ * op zijn plek, VRAGEN AR10): je houdt het begin, zoals de opname.
  */
 
 /** Zoveel tekst mag er hooguit op de server wachten (een druk log is ~1–5 kB/s: dit is uren). */
@@ -221,6 +222,12 @@ export class Handelingenlog {
     this.buffer = [];
     const van = s.van;
     s.van += tekst.length;                // ASCII: tekens = bytes
+    // De rij is vol (AR10): dit NIEUWE stuk valt weg (een gat van nullen op zijn plek), wat wacht blijft wachten.
+    if (s.inRij + tekst.length > this.rijBytes) {
+      s.fout = `stuk kwijt (${tekst.split('\n').length - 1} regels): ${s.storing?.fout ?? 'de server antwoordt niet'} (de rij is vol: het begin blijft)`;
+      this.onFout?.(s.fout);
+      return;
+    }
     s.inRij += tekst.length;
     s.rij = s.rij.then(() => this._verstuur(s, van, tekst)).finally(() => {
       s.inRij -= tekst.length;
@@ -228,10 +235,9 @@ export class Handelingenlog {
     });
   }
 
-  /** Mag dit stuk nog wachten? Zolang het log loopt (of tot de grens na stop) en de rij niet te groot is. */
+  /** Mag dit stuk nog wachten? Zolang het log loopt (of tot de grens na stop). De rij blijft begrensd in _spoel (AR10). */
   _magNog(s) {
-    const loopt = s.doorTot === null ? this.sessie === s : this.nu() < s.doorTot;
-    return loopt && s.inRij <= this.rijBytes;
+    return s.doorTot === null ? this.sessie === s : this.nu() < s.doorTot;
   }
 
   async _verstuur(s, van, tekst) {

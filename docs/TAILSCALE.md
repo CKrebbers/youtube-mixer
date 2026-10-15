@@ -63,15 +63,13 @@ zonder zegt de server bij het opstarten `VARVE_HOSTS is leeg: iPad en iPhone kri
   op batterij slaapt een MacBook toch: dan is VARVE onbereikbaar.
 - **De server blijft draaien** (15 okt, docs/WINST.md punt 3): VARVE.app start hem in een herstartlus
   (`tools/varve-app/server-lus.sh`): valt hij om, dan staat hij na ~1 s weer op, hooguit 5 keer per
-  minuut. Stoppen: `sh tools/varve-app/server-lus.sh stop`, of `pkill -f server/index.js` (een SIGTERM
-  start de lus niet opnieuw). Gebruik de lus en de LaunchAgent hieronder **nooit samen**: allebei
-  starten ze een server op 8777 (de lus ziet een bezette poort en stopt dan, maar de LaunchAgent met
-  `KeepAlive` blijft het proberen). Kies er één: VARVE.app (de lus) voor het spelen, de LaunchAgent
-  alleen als de Mac zonder jou na een herstart bereikbaar moet zijn; zet hem dan uit met
-  `launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist` voordat je VARVE.app gebruikt.
-- De server vanzelf laten starten na een herstart (optioneel): een LaunchAgent.
-  Zet dit in `~/Library/LaunchAgents/nl.varve.server.plist` (vul de drie
-  paden in; `which node` geeft het eerste), en dan
+  minuut; hangt hij, dan zet een wachter hem neer en start de lus hem opnieuw (AR18). Stoppen:
+  `sh tools/varve-app/server-lus.sh stop`, of `pkill -f server/index.js` (een SIGTERM start de lus niet
+  opnieuw). De lus is de enige weg (VRAGEN AR8, 16 okt): ook de LaunchAgent hieronder start de LUS,
+  niet `node` zelf. Dan botsen ze nooit: start VARVE.app een lus terwijl die van de LaunchAgent al draait,
+  dan zegt de tweede "draait al" en doet niets (het pidbestand `~/.varve/server-lus.pid`).
+- De server vanzelf laten starten na een herstart van de Mac (optioneel): een LaunchAgent die de lus start.
+  Zet dit in `~/Library/LaunchAgents/nl.varve.server.plist` (vul de paden in), en dan
   `launchctl load ~/Library/LaunchAgents/nl.varve.server.plist`:
   ```xml
   <?xml version="1.0" encoding="UTF-8"?>
@@ -79,7 +77,7 @@ zonder zegt de server bij het opstarten `VARVE_HOSTS is leeg: iPad en iPhone kri
   <plist version="1.0"><dict>
     <key>Label</key><string>nl.varve.server</string>
     <key>ProgramArguments</key><array>
-      <string>/opt/homebrew/bin/node</string><string>server/index.js</string>
+      <string>/bin/sh</string><string>tools/varve-app/server-lus.sh</string>
     </array>
     <key>WorkingDirectory</key><string>/Users/<jij>/src/varve</string>
     <key>EnvironmentVariables</key><dict>
@@ -88,15 +86,19 @@ zonder zegt de server bij het opstarten `VARVE_HOSTS is leeg: iPad en iPhone kri
       <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
     <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
     <key>StandardOutPath</key><string>/Users/<jij>/.varve-server.log</string>
     <key>StandardErrorPath</key><string>/Users/<jij>/.varve-server.log</string>
   </dict></plist>
   ```
-  PATH moet erin: de ingest roept `yt-dlp` en `ffmpeg` aan, en launchd kent
-  Homebrew niet. `UV_THREADPOOL_SIZE` ook (zoals VARVE.app): een paar codebestanden
-  die macOS uit iCloud moet halen leggen anders alle decks stil (docs/WINST.md punt 4). Een LaunchAgent in een iCloud-map werkt slecht: eerst VARVE
-  uit iCloud halen.
+  Bewust GEEN `KeepAlive`: de lus herstart de server zelf, en stopt alleen met een reden (bewust gestopt,
+  de poort bezet, of meer dan 5 herstarts in een minuut: een crash-lus die je moet zien). Met `KeepAlive`
+  zou launchd die crash-lus eindeloos opnieuw starten. PATH moet erin: de lus roept `node` aan (en de ingest
+  `yt-dlp` en `ffmpeg`), en launchd kent Homebrew niet. `UV_THREADPOOL_SIZE` ook (zoals VARVE.app): een paar
+  codebestanden die macOS uit iCloud moet halen leggen anders alle decks stil (docs/WINST.md punt 4). Een
+  LaunchAgent in een iCloud-map werkt slecht: eerst VARVE uit iCloud halen.
+  Had je de OUDE LaunchAgent (die `node server/index.js` direct startte, met `KeepAlive`): eerst
+  `launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist`, het bestand vervangen door het blok
+  hierboven, en dan weer `launchctl load …`.
 
 ## Wat er waar werkt
 

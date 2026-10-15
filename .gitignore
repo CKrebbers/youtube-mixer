@@ -30,3 +30,4 @@ test/.duur.json
 
 # de afdruk van de handenkaart (tools/handen/handenkaart.mjs --html)
 tools/handen/uit/
+tools/beatmeting/uit/

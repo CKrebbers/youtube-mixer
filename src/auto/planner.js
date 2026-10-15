@@ -69,7 +69,8 @@ export function kenmerken(track, t) {
   const stuk = kaart ? kaart.stukAt(t) : null;
   return {
     grid,
-    gridZeker: !!grid && grid.zekerBij(t),
+    // Zeker genoeg voor een blend = sync mag (Beatgrid.syncBij, AR3): ook de "1" niet in twijfel.
+    gridZeker: !!grid && grid.syncBij(t),
     bpm: grid ? grid.bpmAt(t) : null,
     k: stuk?.k ?? null,
     toonZeker: stuk?.soort === 'zeker',

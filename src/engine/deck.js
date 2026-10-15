@@ -108,6 +108,15 @@ export function controleerStems(stems) {
   return null;
 }
 
+/** Diep bevriezen (objecten en arrays), voor gedeelde gegevens in de snapshot (gridJson). */
+function bevries(o) {
+  if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+    Object.freeze(o);
+    for (const v of Object.values(o)) bevries(v);
+  }
+  return o;
+}
+
 /**
  * Eén deck: transport, cues, loops, beatgrid, kanaalstrip.
  *
@@ -1070,6 +1079,23 @@ export class Deck extends Emitter {
    */
   get gridZekerHier() { return this.grid ? this.grid.zekerBij(this.position) : null; }
 
+  /**
+   * Het grid als JSON voor de snapshot (AR7, 16 okt): één GEDEELD object per gridVersie, in plaats van elk
+   * beeld `grid.toJSON()` (14–17 kB per beeld, de stukken als nieuwe kopieën). Diep bevroren: wie de snapshot
+   * leest kan het niet aanpassen (een poging gooit in strict mode), en dus ook niet het grid van een ander beeld.
+   * Een nieuwe versie bij elke wijziging (setGrid, gridGewijzigd), en ook als er een ander grid-object staat.
+   */
+  get gridJson() {
+    const k = this._gridJson;
+    if (k && k.versie === this.gridVersie && k.grid === this.grid) return k.json;
+    const json = this.grid ? bevries(this.grid.toJSON()) : null;
+    this._gridJson = { versie: this.gridVersie, grid: this.grid, json };
+    return json;
+  }
+
+  /** Mag sync of een beat-loop hier (Beatgrid.syncBij, AR3): zeker én de "1" niet in twijfel. null zonder grid. */
+  get gridSyncHier() { return this.grid ? this.grid.syncBij(this.position) : null; }
+
   /** Hoorbare bpm op de huidige plek: het grid staat in tracktijd, de rate rekt dat op. */
   get bpm() { return this.grid ? this.grid.bpmAt(this.position) * this.rate : null; }
 
@@ -1299,9 +1325,9 @@ export class Deck extends Emitter {
    */
   setBeatLoop(beats) {
     if (!this.buffer || !this.grid) return false;
-    // In een onzeker stuk niet: een loop die naast de tel valt hoor je meteen.
-    // De action meldt waarom (gridZekerHier), hier alleen de regel zelf.
-    if (!this.gridZekerHier) return false;
+    // In een onzeker stuk niet: een loop die naast de tel valt hoor je meteen. Ook niet als de "1" er
+    // in twijfel staat (AR3). De action meldt waarom (gridZekerHier/gridSyncHier), hier alleen de regel zelf.
+    if (!this.gridSyncHier) return false;
     // In TELLEN rekenen, niet in seconden: over een stukgrens heen is een
     // tel niet overal even lang, dus het einde komt van timeOf.
     const g = this.grid;

@@ -28,6 +28,8 @@ import { uitgangsVertraging } from '../engine/hoorbaar.js';
  *   {t:'midi', dev:'maschine-mk2'} -> "Maschine MK2 (hub)"  -> maschine.js
  *   Maschine-uitgang send(bytes)   -> wachtrij -> per beeld {t:'led', dev:'maschine-mk2', bytes}
  *   scherm(nr, 2048 bytes)         -> wachtrij -> {t:'scherm', dev:'maschine-mk2', nr, data: base64}
+ *                                     of, als de hub `kan: ['scherm-bin']` meldde (AR15), één binair frame:
+ *                                     0x01, lengte id, id (ASCII), nr, 2048 bytes (schermFrame)
  * Geen focusfilter: wie speelt beslist de hub, en een loslaten komt altijd bij
  * wie het indrukken kreeg. Valt de verbinding weg, dan gaan de poorten op
  * 'disconnected' (met een statechange): wie ze gekoppeld heeft laat los.
@@ -170,6 +172,22 @@ const isLos = (b) => (b[0] & 0xf0) === 0x80 || ((b[0] & 0xf0) === 0x90 && b[2] =
 const isLampje = (b) => b.length === 3 && [0x80, 0x90, 0xb0].includes(b[0] & 0xf0) && b[1] <= 0x7f && b[2] <= 0x7f;
 /** Bytes -> base64 (zonder Buffer: dit draait in de browser). */
 const base64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); };
+/** Wat de hub in zijn welkom (of hallo) moet noemen voordat we schermen binair sturen (AR15). */
+export const SCHERM_BIN = 'scherm-bin';
+/** Soort van een binair frame: een scherm (docs/verslagen/2026-10-15/arch-opruimen.md §a). */
+export const FRAME_SCHERM = 0x01;
+/**
+ * Een leeg binair schermframe voor `dev`: byte 0 = 0x01, byte 1 = de lengte L van de id, dan de id in
+ * ASCII, dan het schermnummer, dan 2048 bytes. Eén per scherm, hergebruikt (de inhoud wordt overschreven).
+ */
+export function schermFrame(dev, nr) {
+  const id = String(dev);
+  const f = new Uint8Array(3 + id.length + SCHERM_BYTES);
+  f[0] = FRAME_SCHERM; f[1] = id.length;
+  for (let i = 0; i < id.length; i++) f[2 + i] = id.charCodeAt(i) & 0x7f;
+  f[2 + id.length] = nr;
+  return f;
+}
 
 export class HubMidi extends MidiHub {
   /**
@@ -248,7 +266,10 @@ export class HubMidi extends MidiHub {
         rx: 0, leds: 0, schermen: 0, geweigerd: 0,
       };
     }
-    this.uitRij = [];            // naar de speelapparaten: { dev, bytes } of { dev, nr, data }
+    this.uitRij = [];            // naar de speelapparaten: { dev, bytes } of { dev, nr, frame }
+    this.kan = new Set();        // wat de hub op deze verbinding zei te kunnen (welkom/hallo `kan`, AR15)
+    this.frames = new Map();     // `${dev}:${nr}` -> het hergebruikte schermframe (schermFrame)
+    this.schermenBin = 0;
     this.uitTikker = null;
   }
 
@@ -294,6 +315,7 @@ export class HubMidi extends MidiHub {
     for (const s of Object.values(this.speel)) {
       speelt[s.dev] = { naam: s.in.name, verbonden: s.in.state === 'connected', rx: s.rx,
         ...(s.uit ? { leds: s.leds, schermen: s.schermen, geweigerd: s.geweigerd } : {}) };
+      if (s.uit) speelt[s.dev].binair = this.kan.has(SCHERM_BIN);
     }
     const l = this.lezer;
     return { ...super.status(), hub: { url: this.url, verbonden: this.poortIn.state === 'connected', focus: this.focus,
@@ -307,6 +329,13 @@ export class HubMidi extends MidiHub {
   _stuur(b) {
     if (!this.open) return;
     this.ws.send(JSON.stringify(b));
+    this.laatsteUit = this.klok();
+  }
+
+  /** Een binair bericht (AR15). WebSocket.send kopieert de bytes, dus het frame mag daarna hergebruikt worden. */
+  _stuurBin(bytes) {
+    if (!this.open) return;
+    this.ws.send(bytes);
     this.laatsteUit = this.klok();
   }
 
@@ -325,6 +354,7 @@ export class HubMidi extends MidiHub {
       if (this.ws !== ws) return;
       clearTimeout(this.openTimer);
       this.focus = false;
+      this.kan = new Set();          // een andere (oudere) hub: pas binair als deze het zegt
       this._stuur({ t: 'hallo', app: APP, inst: this.inst, v: 1 });
       this._stuur({ t: 'manifest', manifest: MANIFEST });
       this._stuur({ t: 'staat', waarden: this._waarden() });
@@ -414,11 +444,13 @@ export class HubMidi extends MidiHub {
         this.invoke(p.action, klem(b.v));
         this.gezet.set(p.id, this.read(p.action) ?? klem(b.v));   // niet terugkaatsen
       }
+    } else if ((b.t === 'welkom' || b.t === 'hallo') && Array.isArray(b.kan)) {
+      this.kan = new Set(b.kan.filter((x) => typeof x === 'string'));
     } else if (b.t === 'fout') {
       console.warn('[hub]', b.reden);
       if (/^vervangen/.test(String(b.reden))) this._zetVervangen(true);
     }
-    // welkom, globaal, scene en alles wat nog komt: negeren
+    // globaal, scene en alles wat nog komt: negeren
   }
 
   // ---- naar de hub ---------------------------------------------------------
@@ -612,7 +644,13 @@ export class HubMidi extends MidiHub {
   _scherm(dev, nr, data) {
     const s = this.speel[dev];
     if (!s?.uit || s.uit.state !== 'connected' || (nr !== 0 && nr !== 1) || data?.length !== SCHERM_BYTES) { if (s) s.geweigerd++; return false; }
-    const item = { dev, nr, data: base64(data) };
+    // De bytes meteen in het frame van dit scherm (een nieuwer beeld overschrijft een ouder dat nog in de rij staat);
+    // base64 of binair beslist pas het versturen, dan telt wat de hub NU kan.
+    const sleutel = `${dev}:${nr}`;
+    let frame = this.frames.get(sleutel);
+    if (!frame) { frame = schermFrame(dev, nr); this.frames.set(sleutel, frame); }
+    frame.set(data, frame.length - SCHERM_BYTES);
+    const item = { dev, nr, frame };
     const i = this.uitRij.findIndex((x) => x.dev === dev && x.nr === nr);
     if (i >= 0) this.uitRij[i] = item; else this._rij(item);
     return true;
@@ -643,6 +681,7 @@ export class HubMidi extends MidiHub {
     this.speelI = (this.speelI + 1) % PER_TIK;
     const s = this.speel[x.dev];
     if (x.bytes) { (s.bundel ??= []).push(x.bytes); s.leds++; this._beeld(); }
-    else { this._stuur({ t: 'scherm', dev: x.dev, nr: x.nr, data: x.data }); s.schermen++; }
+    else if (this.kan.has(SCHERM_BIN)) { this._stuurBin(x.frame); s.schermen++; this.schermenBin++; }
+    else { this._stuur({ t: 'scherm', dev: x.dev, nr: x.nr, data: base64(x.frame.subarray(x.frame.length - SCHERM_BYTES)) }); s.schermen++; }
   }
 }

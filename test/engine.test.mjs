@@ -342,6 +342,26 @@ const te = eng.sync('B');
 ok('te groot tempoverschil wordt geweigerd', !te.ok && te.reden.includes('x2'));
 ok('en de rate blijft dan staan', sB.rate > 0.5);
 
+// AR3 (16 okt): twijfel over de "1" (maatMening) = sync en beat-loops weigeren; slot of goedgekeurd = wel.
+{
+  const { EEN_TWIJFEL } = await import('../src/engine/engine.js');
+  const twijfel = () => new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, maat: 0, zekerheid: 0.9, twijfel: 'maat' }] });
+  sB.setGrid(twijfel());
+  ok('AR3: twijfel "maat" telt nog als zeker (beatjump, quantize, secties)', sB.gridZekerHier === true && sB.grid.zekerBij(sB.position));
+  ok('AR3: maar sync mag niet', sB.gridSyncHier === false);
+  const rT = eng.sync('B');
+  ok(`AR3: sync weigert met de reden van de "1" ("${rT.reden}")`, !rT.ok && rT.reden === EEN_TWIJFEL);
+  ok('AR3: een beat-loop ook niet', sB.setBeatLoop(4) === false && sB.loopBeats == null);
+  sA.setGrid(twijfel()); sB.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
+  const rM = eng.sync('B');
+  ok(`AR3: twijfel bij de MAATGEVER: ook geweigerd, met zijn tracknummer ("${rM.reden}")`, !rM.ok && /de "1" van track 1 is daar niet zeker/.test(rM.reden));
+  sA.grid.slot = true;
+  ok('AR3: het grid op slot: sync mag weer', eng.sync('B').ok);
+  sA.setGrid(new Beatgrid({ stukken: [{ van: 0, bpm: 120, anker: 0, maat: 0, zekerheid: 0.9, twijfel: 'maat', ok: true }] }));
+  ok('AR3: met het oor goedgekeurd (ok): sync mag ook', sA.gridSyncHier === true && eng.sync('B').ok);
+  sA.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 })); sB.setGrid(new Beatgrid({ bpm: 128, firstBeat: 0 }));
+}
+
 // faseverschil is symmetrisch van teken
 sB.setGrid(new Beatgrid({ bpm: 120, firstBeat: 0 }));
 sB.setRate(1);
@@ -3871,15 +3891,24 @@ console.log('\nvooruit voor wat je hoort (docs/WINST.md punt 3)');
   b.set('fader', 0);
   b.play();
   ok('speelt met de fader dicht (voorbeluisteren): 20 s', b.vooruit === 20);
+  // AR11 (16 okt): niet meer hoorbaar = pas na VOORUIT_NA s (audioklok) terug naar 20 s, niet meteen.
+  const { VOORUIT_NA: NA } = await import('../src/engine/engine.js');
+  const later = () => { NOW += NA + 1; eV.emit('change'); };
   eV.setXfader(1);                                   // helemaal naar B: A (kant A) hoor je niet meer
-  ok(`crossfader weg van zijn kant (${eV.xfadeGain('A').toFixed(2)}): 20 s`, eV.xfadeGain('A') < 1e-6 && a.vooruit === 20);
+  ok(`crossfader weg van zijn kant (${eV.xfadeGain('A').toFixed(2)}): eerst nog 60 s (AR11)`, eV.xfadeGain('A') < 1e-6 && a.vooruit === 60);
+  later();
+  ok(`… na ${NA} s niet-hoorbaar: 20 s`, a.vooruit === 20);
   eV.setKant('A', 'thru');
   ok('kant thru: de crossfader telt niet, 60 s', a.vooruit === 60);
   a.pause();
-  ok('pauze: weer 20 s', a.vooruit === 20);
+  ok('pauze: eerst nog 60 s', a.vooruit === 60);
+  later();
+  ok('… daarna weer 20 s', a.vooruit === 20);
   a.play();
   a.set('fader', 0);
-  ok('fader dicht: 20 s', a.vooruit === 20);
+  ok('fader dicht: eerst nog 60 s (een cut haalt niet elke keer 40 s opnieuw op)', a.vooruit === 60);
+  later();
+  ok('… daarna 20 s', a.vooruit === 20);
   a.set('fader', 0.5);
   ok('fader weer open: 60 s', a.vooruit === 60);
   a.pause(); b.pause();
@@ -3888,6 +3917,55 @@ console.log('\nvooruit voor wat je hoort (docs/WINST.md punt 3)');
 // De golfvorm-sleutel (waveform.js) leest gridVersie uit de snapshot in plaats van het grid als tekst
 // (spoor A, 15 okt). Dan moet ELKE gridwijziging hem ophogen, anders tekent een golfvorm oude lijnen:
 // elke action op de grid (tap, grid.*, bewerken, slot, controle) één voor één, met de stand ervoor en erna.
+// AR11 (16 okt): vooruit met hysterese. Hoorbaar = 60 s vooruit; pas VOORUIT_NA s na het laatste hoorbare
+// moment terug naar 20 s (de audioklok beslist); een nieuw nummer begint opnieuw.
+{
+  console.log('\nvooruit met hysterese (AR11)');
+  const { VOORUIT_NA } = await import('../src/engine/engine.js');
+  const d = eng.deck('C');
+  d.stop();
+  d.load(renderDemoTrack(eng.ctx, { seed: 3, bars: 16 }), 'vooruit');
+  invoke('track.3.fader', 1);
+  d.play();
+  eng.emit('change');
+  ok(`AR11: een track die je hoort: 60 s vooruit (${d._vooruit})`, d._vooruit === 60);
+  NOW += 100;                                        // 100 s hoorbaar zonder één 'change'
+  invoke('track.3.fader', 0);
+  eng.emit('change');
+  ok('AR11: na 100 s hoorbaar zonder change de fader dicht: blijft 60 (het moment van dichtgaan telt, niet de vorige aanroep)', d._vooruit === 60);
+  ok('AR11: fader even dicht: blijft 60 (geen 40 s opnieuw ophalen bij de volgende beweging)', d._vooruit === 60);
+  NOW += VOORUIT_NA - 1; eng.emit('change');
+  ok(`AR11: ${VOORUIT_NA - 1} s later nog steeds 60`, d._vooruit === 60);
+  NOW += 2; eng.emit('change');
+  ok(`AR11: na ${VOORUIT_NA} s niet-hoorbaar: terug naar 20`, d._vooruit === 20);
+  invoke('track.3.fader', 1); eng.emit('change');
+  ok('AR11: weer hoorbaar: meteen 60', d._vooruit === 60);
+  invoke('track.3.fader', 0);
+  d.load(renderDemoTrack(eng.ctx, { seed: 4, bars: 16 }), 'ander nummer');
+  eng.emit('change');
+  ok('AR11: een ANDER nummer op dat deck, niet hoorbaar: meteen 20 (de hysterese hoort bij het nummer)', d._vooruit === 20);
+  d.stop();
+}
+
+// AR7 (16 okt): het grid in de snapshot is één gedeeld, bevroren object per gridVersie (deck.gridJson).
+{
+  console.log('\nhet grid in de snapshot: gedeeld en bevroren (AR7)');
+  const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');
+  const d = eng.deck('A');
+  d.setGrid(new BG({ stukken: [{ van: 0, bpm: 124, anker: 0.05, zekerheid: 0.9 }, { van: 30, bpm: 126, anker: 30.02 }] }));
+  const s1 = eng.snapshot().decks.A.grid, s2 = eng.snapshot().decks.A.grid;
+  ok('AR7: twee snapshots zonder wijziging: hetzelfde object (geen nieuwe 14–17 kB per beeld)', s1 === s2 && s1.stukken.length === 2);
+  ok('AR7: diep bevroren (het object, de stukken, elk stuk)', Object.isFrozen(s1) && Object.isFrozen(s1.stukken) && s1.stukken.every((x) => Object.isFrozen(x)));
+  let gooit = false;
+  try { s1.stukken[0].bpm = 99; } catch { gooit = true; }
+  ok('AR7: aanpassen kan niet (strict mode gooit) en het grid van het deck blijft heel', gooit && d.grid.bpmAt(1) === 124);
+  ok('AR7: dezelfde inhoud als toJSON()', JSON.stringify(s1) === JSON.stringify(d.grid.toJSON()));
+  d.grid.zetStuk(1, { bpm: 128, anker: 0.05 }); d.gridGewijzigd();
+  const s3 = eng.snapshot().decks.A.grid;
+  ok('AR7: na een wijziging (gridGewijzigd) een nieuw object met de nieuwe inhoud', s3 !== s1 && s3.stukken[0].bpm === 128 && s3.bron === 'hand');
+  d.setGrid(null);
+  ok('AR7: zonder grid: null', eng.snapshot().decks.A.grid === null);
+}
 {
   console.log('\ngridVersie volgt elke gridwijziging');
   const { Beatgrid: BG } = await import('../src/engine/beatgrid.js');

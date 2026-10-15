@@ -17,7 +17,7 @@ import { Beatgrid, TapTempo, MIN_BPM, MAX_BPM, snapNaarTel, klappenEnTellen } fr
 import { ToonKaart, WIJZER } from '../engine/toonsoort.js';
 import { teControleren, plekkenTeControleren, volgendTeControleren, oordeelStuk, oordeelBij, afwijkingBij } from '../engine/tellen.js';
 import { EFFECTEN } from '../engine/fx.js';
-import { DECK_IDS, XFADE_KANTEN, ONZEKER } from '../engine/engine.js';
+import { DECK_IDS, XFADE_KANTEN, ONZEKER, EEN_TWIJFEL } from '../engine/engine.js';
 import { PITCH_BEREIKEN, SPRONG_TELLEN, GLIJ, TOON_MAX } from '../engine/deck.js';
 import { hoorbaar as hoorbaarVan, uitgangsVertraging } from '../engine/hoorbaar.js';
 import { VIDEO_FX, MODI } from '../video/instellingen.js';
@@ -539,9 +539,10 @@ export function bindEngine(engine) {
         if (!on) return;
         // In een onzeker stuk niet stil verkeerd loopen, maar zeggen waarom.
         if (d.grid && d.gridZekerHier === false) engine.emit('melding', { tekst: `track ${nr}: ${ONZEKER}`, soort: 'fout' });
+        else if (d.grid && d.gridSyncHier === false) engine.emit('melding', { tekst: `track ${nr}: ${EEN_TWIJFEL}`, soort: 'fout' });
         else d.setBeatLoop(beats);
       }, { label: `Track ${nr} loop ${beats} ${beats === 1 ? 'tel' : 'tellen'}`,
-          read: () => (!d.buffer || !d.grid || d.gridZekerHier === false ? null : d.loopBeats === beats ? 1 : 0) });
+          read: () => (!d.buffer || !d.grid || d.gridSyncHier === false ? null : d.loopBeats === beats ? 1 : 0) });
     }
 
     for (let i = 0; i < 4; i++) {

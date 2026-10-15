@@ -14,11 +14,11 @@ import { fileURLToPath } from 'node:url';
 
 const fails = [];
 const ok = (name, cond) => { if (!cond) fails.push(name); console.log((cond ? '  ok  ' : 'FAIL  ') + name); };
-
 const M = await import('../server/avondpakket-meet.js');
-const { leesProfielen, beoordeel } = await import('../server/avondpakket.js');
+const A = await import('../server/avondpakket.js');
+const { leesProfielen, beoordeel } = A;
 const { voerUit, poortOpen, maakCache, maakNep, maakAvondpakket, backupMeting, backupUitNamen, achtergrondMeting, extraPaden,
-  speellijstStand, GOEDKOOP, SONDES, KAART_STANDAARD, ONBEKENDE_OPTIE, NIET_HIER, NIET_HIER_MIXER, metersVoor } = M;
+  speellijstStand, GOEDKOOP, SONDES, KAART_STANDAARD, ONBEKENDE_OPTIE, NIET_HIER, NIET_HIER_MIXER, metersVoor, ALLEEN_PC, ALLEEN_PC_SONDES, RELAY_POORT } = M;
 // De fixtures in FX zijn uitvoer van de Mac: meet() met de sondes van de Mac, op welk platform
 // de test ook draait (spoor C, arch/linux). De Linux-sondes toetsen groep 11-13 met platform 'linux'.
 const meet = (o = {}) => M.meet({ platform: 'darwin', ...o });
@@ -75,8 +75,11 @@ try {
     const n = maakNep(FX);
     const t0 = Date.now();
     const m = await meet({ exec: n.exec, verbind: n.verbind, paden: n.paden });
-    ok(`alle ${SONDES.length} sondes gemeten, niets onbekend (${Object.entries(m).filter(([, v]) => v && typeof v === 'object' && 'onbekend' in v).map(([k, v]) => `${k}: ${v.onbekend}`)})`,
-      SONDES.every((id) => id in m && !(m[id] && typeof m[id] === 'object' && !Array.isArray(m[id]) && 'onbekend' in m[id])));
+    // Op de Mac meten de sondes van de pc (AR13/AR14: relay, hdmi, node) per ontwerp niet: die zeggen "alleen op de pc".
+    const MAC = SONDES.filter((id) => !ALLEEN_PC_SONDES.includes(id));
+    ok(`alle ${MAC.length} sondes van de Mac gemeten, niets onbekend (${Object.entries(m).filter(([k, v]) => MAC.includes(k) && v && typeof v === 'object' && 'onbekend' in v).map(([k, v]) => `${k}: ${v.onbekend}`)})`,
+      MAC.every((id) => id in m && !(m[id] && typeof m[id] === 'object' && !Array.isArray(m[id]) && 'onbekend' in m[id])));
+    ok('AR13/AR14: de sondes van de pc zeggen op de Mac "alleen op de pc"', ALLEEN_PC_SONDES.every((id) => m[id]?.onbekend === ALLEEN_PC));
     ok(`bestanden: 131, relatief, bestaat (${m.bestanden.totaal})`, m.bestanden.totaal === 131 && m.bestanden.paden.has('nr00_test/audio.wav') && m.bestanden.bestaat === true);
     ok('accu: 65 %, AC, 8 W, gezondheid 78 %, 591 cycli', m.accu.procent === 65 && m.accu.bron === 'AC' && m.accu.laderW === 8 && m.accu.gezondheid === 78 && m.accu.cycli === 591);
     ok('servers: lsof 1 pid, pgrep 1', m.servers.opDb === 1 && m.servers.varve === 1);
@@ -93,7 +96,7 @@ try {
     const t0 = Date.now();
     const m = await meet({ exec: nooit, verbind: () => new Promise(() => {}), paden: NEP_PADEN, timeouts });
     const duur = Date.now() - t0;
-    ok(`alles "time-out" binnen 10× de time-out (${duur} ms)`, SONDES.every((id) => m[id]?.onbekend === 'time-out') && duur < 500);
+    ok(`alles "time-out" binnen 10× de time-out (${duur} ms)`, SONDES.filter((id) => !ALLEEN_PC_SONDES.includes(id)).every((id) => m[id]?.onbekend === 'time-out') && duur < 500);
     const r = beoordeel(m, { profiel: 'apc', fase: 'aankomst', data: { ...DATA, hardwareBevestigd: true }, nu: new Date() });
     ok(`→ geen rood, de sondepunten grijs "niet gemeten: time-out" (${r.telling.fout} rood)`, r.telling.fout === 0
       && r.punten.find((p) => p.id === 'schijf').sub === 'niet gemeten: time-out');
@@ -478,6 +481,94 @@ try {
       && /niet op dit platform/.test(p('instellingen')?.sub) && p('icloud')?.licht === 'uit');
     ok('--json: geen enkel punt groen dat op Linux niet gemeten is (instellingen, iCloud, geluid, accu, Bluetooth)', ['instellingen', 'icloud', 'geluid', 'accu', 'bluetooth']
       .every((id) => !p(id) || p(id).licht !== 'ok'));
+  }
+
+  console.log('14. de pc (AR12/AR13/AR14): relay, beamer, de Mac, Node, --vastleggen');
+  {
+    const lees = (naam) => JSON.parse(readFileSync(join(FXL, 'nep.json'), 'utf8'))[naam];
+    const nepMap = (naam, wijzig) => {
+      const cfg = { ...JSON.parse(readFileSync(join(FXL, 'nep.json'), 'utf8')), ...wijzig };
+      for (const [k, v] of Object.entries(cfg)) if (typeof v === 'string' && /\.(txt|json)$/.test(v)) cfg[k] = join(FXL, v);
+      const map = join(tmp, `pc-${naam}`);
+      mkdirSync(map, { recursive: true });
+      writeFileSync(join(map, 'nep.json'), JSON.stringify(cfg));
+      return map;
+    };
+    const metPc = async (naam, wijzig) => { const x = maakNep(nepMap(naam, wijzig)); return M.meet({ exec: x.exec, verbind: x.verbind, paden: x.paden, platform: 'linux', nodeInfo: x.nodeInfo }); };
+    const n = maakNep(FXL);
+    const m = await M.meet({ exec: n.exec, verbind: n.verbind, paden: n.paden, platform: 'linux', nodeInfo: n.nodeInfo });
+    ok(`container: relay dicht, geen /sys/class/drm, Node 22.22.0 tegen 26.8.2 (${m.hdmi.onbekend})`, m.relay.draait === false && m.hdmi.onbekend === 'geen beelduitgang in sysfs'
+      && m.node.versie === '22.22.0' && m.node.verwacht === '26.8.2' && m.node.gelijk === false && lees('relay') === false);
+    const drm = await metPc('drm', { drm: 'drm-hdmi-HANDGEMAAKT.txt', relay: true, node: { versie: 'v26.8.2', verwacht: '26.8.2\n' } });
+    ok('drm (handgemaakt): eDP intern, HDMI-A-1 extern verbonden, DP-1 extern los; relay open; Node gelijk', drm.relay.draait === true
+      && JSON.stringify(drm.hdmi) === JSON.stringify([{ poort: 'eDP-1', extern: false, verbonden: true }, { poort: 'HDMI-A-1', extern: true, verbonden: true }, { poort: 'DP-1', extern: true, verbonden: false }])
+      && drm.node.gelijk === true);
+    ok('de drm-sonde draait in een kindproces met LC_ALL=C (find -L /sys/class/drm … grep -H)', await (async () => {
+      const log = [];
+      await M.meet({ exec: async (cmd, args, o) => { log.push({ cmd, args, o }); return ''; }, verbind: async () => false, paden: NEP_PADEN, platform: 'linux' });
+      const d = log.find((x) => x.o.sleutel === 'drm');
+      return d && d.cmd === 'find' && d.args.includes('/sys/class/drm') && d.args.includes('grep') && d.o.env?.LC_ALL === 'C';
+    })());
+    ok('parseDrm: rommel en lege tekst → null; een kaart zonder poortnaam telt niet', A.parseDrm('') === null && A.parseDrm('iets\n/sys/class/drm/card0/status:connected') === null);
+    ok('nodeVersie: "v26.8.2" tegen "26.8.2\\n" is gelijk; onleesbaar → null; zonder .node-version verwacht null', A.nodeVersie('v26.8.2', '26.8.2\n').gelijk === true
+      && A.nodeVersie('rommel', '26.8.2') === null && A.nodeVersie('v26.8.2', null).verwacht === null);
+    const ts = (peers) => ({ tekst: JSON.stringify({ BackendState: 'Running', Self: { HostName: 'clayk', OS: 'linux' },
+      Peer: Object.fromEntries(peers.map((p, i) => [`k${i}`, { HostName: p.naam, DNSName: `${p.naam}.x.ts.net.`, OS: p.os, Online: p.online, CurAddr: p.direct ? '1.2.3.4:41641' : '', Relay: 'ams' }])) }) });
+    const ap = (map) => maakAvondpakket({ paden: { media: '/x/media', wortel: '/x', db: '/x/media/library.db', backups: '/x/media/backups' }, profielenPad: PROFIELEN, nep: map,
+      backupStand: () => ({ laatste: null, aantal: 0, gekeken: Date.now(), fout: null, bezig: false, gewijzigdSinds: false }),
+      rijen: () => ({ ingest: [], stems: [], nacht: { aan: false, speeldagen: [] } }), library: () => ({ sleutel: 'l', tracks: () => [] }) });
+    const goed = await ap(nepMap('goed', { drm: 'drm-hdmi-HANDGEMAAKT.txt', relay: true, node: { versie: 'v26.8.2', verwacht: '26.8.2' },
+      tailscale: ts([{ naam: 'air', os: 'macOS', online: true, direct: true }, { naam: 'telefoon', os: 'iOS', online: true }]) })).rapport({ profiel: 'beeld', fase: 'aankomst' });
+    const q = (r, id) => r.punten.find((x) => x.id === id);
+    ok(`beeld bij aankomst, alles goed: relay, beamer (HDMI-A-1), de Mac (air, direct) en Node groen (${['relay', 'hdmi', 'mac', 'node'].map((id) => q(goed, id)?.licht).join(',')})`,
+      ['relay', 'hdmi', 'mac', 'node'].every((id) => q(goed, id)?.licht === 'ok') && q(goed, 'hdmi').waarde === 'HDMI-A-1 verbonden' && q(goed, 'mac').waarde === 'air online');
+    const slecht = await ap(nepMap('slecht', { drm: 'drm-geen-beamer-HANDGEMAAKT.txt', relay: false,
+      tailscale: ts([{ naam: 'air', os: 'macOS', online: false }]) })).rapport({ profiel: 'beeld', fase: 'aankomst' });
+    ok(`beeld bij aankomst, relay dicht: rood met hoe je hem start (${q(slecht, 'relay')?.sub})`, q(slecht, 'relay')?.licht === 'fout' && /varve-relay\.js 7702/.test(q(slecht, 'relay').sub));
+    ok(`… beamer niet gezien (oranje of rood, nooit groen), de Mac offline oranje, Node 22 tegen 26 oranje (${q(slecht, 'hdmi')?.licht}, ${q(slecht, 'mac')?.licht}, ${q(slecht, 'node')?.licht})`,
+      ['half', 'fout'].includes(q(slecht, 'hdmi')?.licht) && /HDMI-A-1/.test(q(slecht, 'hdmi').sub) && q(slecht, 'mac')?.licht === 'half' && q(slecht, 'node')?.licht === 'half'
+      && /26\.8\.2/.test(q(slecht, 'node').sub));
+    const thuis = await ap(nepMap('thuis', { relay: false })).rapport({ profiel: 'laptop' });
+    ok(`een profiel zonder beeld: relay en beamer grijs, nooit rood (${q(thuis, 'relay')?.licht}, ${q(thuis, 'hdmi')?.licht})`, q(thuis, 'relay')?.licht === 'uit' && q(thuis, 'hdmi')?.licht === 'uit');
+    const vertrek = await ap(nepMap('vertrek', { drm: 'drm-geen-beamer-HANDGEMAAKT.txt', relay: false })).rapport({ profiel: 'beeld', fase: 'vertrek' });
+    ok(`beeld bij vertrek: relay "straks bij aankomst", beamer "inpakken" (grijs) (${q(vertrek, 'hdmi')?.sub})`, q(vertrek, 'relay')?.licht === 'uit' && /straks/.test(q(vertrek, 'relay').sub)
+      && q(vertrek, 'hdmi')?.licht === 'uit' && /inpakken/.test(q(vertrek, 'hdmi').sub));
+    const mac = await ap(FX).rapport({ profiel: 'beeld', fase: 'aankomst' });
+    ok('op de Mac: geen punt relay, hdmi, mac of node (het oordeel van de Mac verandert niet)', ['relay', 'hdmi', 'mac', 'node'].every((id) => !q(mac, id)));
+    ok('parseTailscale geeft het OS van een peer (null als het ontbreekt)', (() => {
+      const t = A.parseTailscale(ts([{ naam: 'air', os: 'macOS', online: true }]).tekst);
+      const z = A.parseTailscale(JSON.stringify({ BackendState: 'Running', Peer: { a: { HostName: 'x', Online: true } } }));
+      return t.peers[0].os === 'macOS' && z.peers[0].os === null;
+    })());
+
+    // --vastleggen: met een nep-exec die tekst met de thuismap en een Tailscale vol adressen geeft.
+    const { vastleggen, kaalTailscale } = await import('../tools/avondpakket.mjs');
+    const thuisMap = '/home/clay';
+    const vl = join(tmp, 'vastgelegd');
+    const tsVol = JSON.stringify({ BackendState: 'Running', Self: { HostName: 'clayk', OS: 'linux', TailscaleIPs: ['100.64.1.2'] },
+      Peer: { nodekey1: { HostName: 'air', OS: 'macOS', Online: true, CurAddr: '192.168.1.5:41641', Relay: 'ams', TailscaleIPs: ['100.64.1.3'], UserID: 42 } } });
+    const r = await vastleggen(vl, { platform: 'linux', thuis: thuisMap, paden: { media: `${thuisMap}/media`, wortel: thuisMap, db: `${thuisMap}/media/library.db`, extra: [] },
+      verbind: async (poort) => poort === 7702,
+      exec: async (cmd, args, o) => {
+        if (o.sleutel === 'tailscale') return tsVol;
+        if (o.sleutel === 'find-stat') return `12 ${thuisMap}/media/a/audio.wav\n`;
+        if (o.sleutel === 'lsusb') throw new Error('lsusb niet gevonden');
+        return '';
+      } });
+    const nj = JSON.parse(readFileSync(join(vl, 'nep.json'), 'utf8'));
+    const alles = readFileSync(join(vl, 'nep.json'), 'utf8') + r.sleutels.filter((k) => typeof nj[k] === 'string').map((k) => readFileSync(join(vl, nj[k]), 'utf8')).join('');
+    ok(`--vastleggen: per sleutel een bestand of een fout, platform linux, relay open, avhub dicht (${r.sleutels.join(',')})`, nj.platform === 'linux' && nj.relay === true && nj.avhub === false
+      && nj['find-stat'] === 'find-stat.txt' && nj.lsusb?.fout === 'lsusb niet gevonden' && r.sleutels.includes('drm') && /^v\d/.test(nj.node.versie));
+    ok('--vastleggen: de thuismap is overal /home/test; geen IP-adres en geen UserID in de bestanden', !alles.includes(thuisMap) && alles.includes('/home/test/media')
+      && !/\b(100\.64|192\.168)\.\d/.test(alles) && !alles.includes('UserID'));
+    ok('kaalTailscale: naam, OS, online, "direct" en de relay blijven; geen tekst die geen JSON is wordt verminkt', (() => {
+      const k = JSON.parse(kaalTailscale(tsVol));
+      return k.Peer.peer1.HostName === 'air' && k.Peer.peer1.OS === 'macOS' && k.Peer.peer1.CurAddr === 'direct' && k.Self.HostName === 'clayk' && kaalTailscale('geen json') === 'geen json';
+    })());
+    const terug = maakNep(vl);
+    const mt = await M.meet({ exec: terug.exec, verbind: terug.verbind, paden: terug.paden, platform: terug.platform, nodeInfo: terug.nodeInfo });
+    ok(`--vastleggen: de map leest terug als nep (media 1 bestand, de Mac in de tailnet, relay open) (${mt.bestanden.totaal})`, mt.bestanden.totaal === 1 && mt.relay.draait === true
+      && mt.tailscale.peers?.[0]?.os === 'macOS');
   }
 } finally {
   rmSync(tmp, { recursive: true, force: true });

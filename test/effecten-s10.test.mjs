@@ -369,6 +369,14 @@ for (const e of S.S10_EFFECTEN) {
   for (const n of wn) n.onprocessorerror?.({ message: 'nep' });
   ok(`${e.id}: processorerror = een melding op de context per worklet ("${fouten[0]?.wat}")`,
     fouten.length === wn.length && fouten.every((f) => /^effect /.test(f.wat) && f.reden === 'nep' && /opnieuw/.test(f.hint)));
+  // AR5 (16 okt): de eerste keer bouwt het effect zichzelf opnieuw op: een nieuwe node, de oude kreeg 'stop'.
+  const nieuw = staat.WORKLET_NODES.filter((n) => n.ctx === ctx && !wn.includes(n));
+  ok(`${e.id}: AR5: na de fout een nieuwe worklet-node (${nieuw.length}), de hint zegt "bouwt zichzelf opnieuw op"`,
+    nieuw.length === wn.length && fouten.every((f) => /bouwt zichzelf één keer opnieuw op/.test(f.hint)));
+  for (const n of nieuw) n.onprocessorerror?.({ message: 'nep 2' });
+  const derde = staat.WORKLET_NODES.filter((n) => n.ctx === ctx && !wn.includes(n) && !nieuw.includes(n));
+  ok(`${e.id}: AR5: een tweede fout: geen derde node, de melding zegt "kies het opnieuw"`,
+    derde.length === 0 && fouten.slice(wn.length).every((f) => f.reden === 'nep 2' && /kies het opnieuw/.test(f.hint)));
   inst.vernietig?.();
 }
 

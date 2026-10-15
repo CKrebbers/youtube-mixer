@@ -111,60 +111,84 @@ iemand kijkt.
 Vijf sporen: A audio-gezondheid, B fase en tel 1, C Linux, D de server mag even weg zijn, E kleine opruimingen.
 
 **Beatgrid (B)**
-- [ ] **AR1. Kaart-VERSIE 3, zodat de hele library de tweede mening over de "1" krijgt?** 💬 Bij de eerste start
-  rekent de server elk automatisch grid uit de tellen opnieuw: milliseconden per nummer plus één keer de lage
-  band (~0,5 s per 3 minuten), wachtend zolang er een deck speelt. Tempo, tellen en "1" blijven gelijk; alleen
-  staat er bij een verdachte "1" een "?". **Advies:** ja, samen met GA2, op een dag zonder optreden, na de
-  meting van AR2.
-- [ ] **AR2. Twee metingen op je Mac.** 🎧 (a) het echte Beat This! op de bench (GA3): `node
-  tools/beatmeting/synth/bench.mjs --beatthis <python van ~/.varve/tellen-venv>`; (b) het snappen op je eigen
-  fragmenten: `node tools/beatmeting/rest/tel1-echt.mjs` (kolom T = naar de tel van Beat This!). De exacte
-  opdrachten staan in docs/verslagen/2026-10-15/arch-beatgrid.md §5. Het checkpoint was hier niet te downloaden.
-- [ ] **AR3. Twijfel over de "1" en sync.** 💬 Bij twijfel 'maat' mogen sync en beat-loops (tempo en tel
-  kloppen); starten op de maat, secties en de auto-DJ gebruiken die "1" gewoon. Liever ook onzeker (sync
-  weigert)? **Advies:** zo laten; de "1" zet je met ← 1 / → 1 in twee drukken.
+- [x] **AR1. Kaart-VERSIE 3, zodat de hele library de tweede mening over de "1" krijgt?** 💬 **Gebouwd 16 okt**
+  (`studio/ar-alles`, Clay: "bouw AR1 … en alle andere"): `VERSIE = 3` in src/engine/tellen.js. Bij de eerste start
+  rekent de server elk automatisch grid uit de tellen opnieuw: milliseconden per nummer plus één keer de lage band
+  (~0,5 s per 3 minuten), wachtend zolang er een deck speelt. Tempo, tellen en "1" blijven gelijk; alleen staat er
+  bij een verdachte "1" een "?". **Start de server na de merge op een dag zonder optreden.** Samen met AR3: meer
+  nummers met twijfel 'maat', dus vaker een sync die weigert tot je ✓ drukt of de "1" zet. (Was: advies "ja, na AR2".)
+- [ ] **AR2. Twee metingen op je Mac.** 🎧 Het gereedschap staat er (16 okt): `node tools/beatmeting/ar2.mjs` zegt
+  droog wat er ontbreekt (de Python met beat-this: `VARVE_TELLEN_PY` of ~/.varve/stems-venv; het checkpoint), `--meet` draait (a) het echte Beat
+  This! op de bench (GA3), (b) de groep en (c) het snappen op je eigen fragmenten (`tel1-echt.mjs`, kolom T) en
+  schrijft één verslag in `tools/beatmeting/uit/ar2-<datum>.txt`. Het checkpoint is in de container niet te halen
+  (de proxy weigert cloud.cp.jku.at): dit kan alleen op de Mac.
+- [x] **AR3. Twijfel over de "1" en sync.** 💬 **Gebouwd 16 okt** (tegen het advies "zo laten" in, Clay: "alles
+  bouwen"): bij twijfel 'maat' (en elk onzeker stuk) weigeren sync en beat-loops met "de "1" is hier niet zeker — zet
+  de "1" in de grid-modus (Device ◀ ▶), keur hem goed (✓) of zet het grid op slot" (`Beatgrid.syncBij`,
+  `deck.gridSyncHier`, `EEN_TWIJFEL` in engine.js). Een goedgekeurde (`ok`) of vastgezette "1" telt als zeker. Smal
+  gehouden: beatjump, quantize, starten op de maat en secties blijven op `zekerBij`; de bewakers van de auto-DJ volgen
+  `syncBij` (anders koos hij een blend die sync daarna weigert, en viel hij terug op filter-uit of beatloos).
 - [ ] **AR4. Vier op de vloer.** 🎧 Een "1" die bij house/techno een tel naast staat krijgt geen "?" (elke tel
-  heeft een kick). Komt het bij jou voor? Dan is de bas-toon of de crash de volgende bron. **Advies:** eerst
-  kijken of het voorkomt.
+  heeft een kick). Het meetinstrument staat er (16 okt): `node tools/beatmeting/vloer.mjs` leest (op een kopie) per
+  nummer de tellen en de lage band en noemt de stukken met vier op de vloer (de lage band zegt niets) waar de
+  downbeats niet op de "1" vallen (`vloerOordeel`: vloer, mening, twijfel, stil, te kort). Bewust geen bas-toon- of crash-detector erbij: samen met
+  AR3 zou een gok sync blokkeren. Eerst kijken of het voorkomt.
 
 **Audio (A)**
-- [ ] **AR5. Een vastgelopen effect.** 💬 Bij een fout in een effect-worklet nu alleen een melding (de
-  klankschaal bouwt zichzelf bij de volgende aanslag opnieuw, de StreamBron één keer per laad, de limiter valt
-  terug op de compressor). Moet een effect zichzelf ook opnieuw opbouwen? **Advies:** eerst zien of het ooit
-  gebeurt.
-- [ ] **AR6. Audio staat stil.** 💬 De melding is rood tot hij weer loopt, en de eerste druk op de APC,
-  Maschine of een toets zet hem weer aan. Ook meteen (zonder druk) een poging? **Advies:** zo laten; zonder
-  gebaar weigert Chrome het soms, en dan zie je de melding.
-- [ ] **AR7. Het grid in de snapshot als gedeeld object.** 💬 `grid.toJSON()` kost nog ~14–17 kB per beeld.
-  Gedeeld kan, maar dan mag niemand het aanpassen. **Advies:** ja, met een check die het bevriest.
+- [x] **AR5. Een vastgelopen effect.** 💬 **Gebouwd 16 okt** (tegen het advies in): na een fout in een
+  effect-worklet haalt `metWorklet` (fx-meer.js) de dode node eruit (stop, poort dicht, los) en bouwt hem één keer
+  opnieuw (`HERBOUW_MAX` = 1), invloeiend zoals na het laden; de melding zegt "het effect bouwt zichzelf één keer
+  opnieuw op". Gaat het nog eens mis, dan blijft het stil tot je het opnieuw kiest (de oude melding).
+- [x] **AR6. Audio staat stil.** 💬 **Gebouwd 16 okt** (tegen het advies in): naast de eerste druk probeert de mixer
+  het bij een stille context ook meteen zelf (`ctx.resume()`, hooguit eens per `ZELF_MS` = 10 s, zodat een uitgang
+  die steeds wegvalt geen lus geeft). Weigert Chrome het zonder gebaar, dan blijft de melding staan en doet de
+  eerste druk het, zoals voorheen.
+- [x] **AR7. Het grid in de snapshot als gedeeld object.** 💬 **Gebouwd 16 okt**: `deck.gridJson` geeft per
+  `gridVersie` één object, diep bevroren (`Object.freeze`), dat elke snapshot deelt; geen 14–17 kB per beeld meer.
+  engine.test controleert dat het bevroren is en pas na een gridwijziging verandert; kijk.mjs, grid-bediening,
+  uitlijn, precisie, rijen en auto liepen in headless Chrome zonder TypeError.
 
 **De server even weg (D)**
-- [ ] **AR8. Na de merge: VARVE.app opnieuw bouwen** 💬 (`zsh tools/varve-app/maak.sh`), anders start hij de
-  server nog zonder lus. Had je de LaunchAgent uit TAILSCALE.md geladen: eerst `launchctl unload
-  ~/Library/LaunchAgents/nl.varve.server.plist`. En die LaunchAgent: weg of houden? **Advies:** de lus gebruiken.
+- [x] **AR8. Na de merge: VARVE.app opnieuw bouwen** 💬 (`zsh tools/varve-app/maak.sh`), anders start hij de
+  server nog zonder lus. **Gebouwd 16 okt** (de LaunchAgent: het alternatief, houden): de LaunchAgent in
+  docs/TAILSCALE.md start nu `/bin/sh tools/varve-app/server-lus.sh` (zonder KeepAlive: de lus herstart zelf), dus
+  er is nog maar één weg naar de server; start VARVE.app daarna, dan zegt de lus "draait al". Wie hem al geladen
+  had: `launchctl unload`, de plist vervangen (TAILSCALE.md, kop "Altijd: de Mac moet aan staan"), `launchctl load`.
 - [x] **AR9. Een herstart van de server in de Controlekamer** ("server herstart om 22:14, 1 keer")? 💬 **Gebouwd 16 okt**
   (`studio/ar-herstart`): de lus geeft elke nieuwe server mee wat hij weet (`VARVE_LUS_SINDS`, `_AANTAL`, `_HERSTARTS`),
   de server zet het in `GET /api/leeft`, en de tegel Server zegt "herstart om 22:14 (viel om, exitcode 137) · 1 keer
   sinds 21:30" (of "hing, de wachter zette hem neer"), 10 minuten oranje. Ook na herladen, en ook als de tegel de
   herstart tussen twee peilingen miste. Was: nu alleen in ~/.varve-server.log. **Advies:** ja, klein.
-- [ ] **AR10. Rij vol na 5 minuten weg:** nu valt het OUDSTE stuk weg (je houdt de laatste 5 minuten). Liever de
-  eerste 5 houden? 💬 **Advies:** zo laten.
-- [ ] **AR11. Vooruit halen met hysterese** (pas na ~30 s niet-hoorbaar terug van 60 naar 20 s)? 💬 Nu haalt een
-  fader die even dicht gaat de extra 40 s later opnieuw op. **Advies:** pas als je het ziet.
+- [x] **AR10. Rij vol na 5 minuten weg.** 💬 **Gebouwd 16 okt** (tegen het advies in): is de rij vol, dan valt nu
+  het NIEUWSTE stuk weg (opname, videostukken en handelingenlog): je houdt de eerste 5 minuten van de storing,
+  aaneengesloten na wat er al stond. De melding zegt "(de rij is vol: de eerste 5 minuten blijven)".
+- [x] **AR11. Vooruit halen met hysterese.** 💬 **Gebouwd 16 okt**: een track die je niet meer hoort houdt nog
+  `VOORUIT_NA` (30 s audioklok) 60 s vooruit, pas daarna 20 s; per nummer (een nieuwe laad begint opnieuw). Een
+  fader die even dicht gaat haalt de extra 40 s dus niet meer opnieuw op.
 
 **Linux (C)**
-- [ ] **AR12. Eén keer `node tools/avondpakket.mjs --json` op de Omarchy-pc** 🎛 met de APC eraan (en met en
-  zonder lader als hij een accu heeft): dan vervallen de HANDGEMAAKT-fixtures voor Linux.
-- [ ] **AR13. Moet het avondpakket op de pc iets eigens meten** (de Stroommachine, de HDMI-uitgang, de verbinding
-  naar de Mac), of is "eerlijk grijs" genoeg? 💬 **Advies:** eerlijk grijs, tot de pc mee op reis gaat.
-- [ ] **AR14. Node 26.8.2 op de pc** (dan is de suite daar gelijk aan de Mac) of de afwijking accepteren? 💬
-  **Advies:** 26.8.2 installeren (`.node-version` staat erin).
+- [ ] **AR12. Eén keer het avondpakket op de Omarchy-pc** 🎛 met de APC en de beamer eraan (en met en zonder
+  lader als hij een accu heeft). Sinds 16 okt in één opdracht: `node tools/avondpakket.mjs --vastleggen <map>`
+  schrijft de ruwe uitvoer van elke sonde als fixtures (`<sleutel>.txt` + `nep.json`, de thuismap als
+  `/home/test`, Tailscale zonder adressen of sleutels). Nakijken en meesturen: dan vervallen de HANDGEMAAKT-fixtures.
+- [x] **AR13. Het avondpakket op de pc meet iets eigens.** 💬 **Gebouwd 16 okt** (tegen het advies "eerlijk grijs"
+  in): alleen op Linux vier punten: **Relay beeld** (poort 7702 open; rood bij aankomst met beeld, met hoe je hem
+  start), **Beamer (HDMI)** (`/sys/class/drm/*/status`, HDMI of DisplayPort verbonden), **De Mac** (een macOS-peer
+  online in de tailnet) en **Node** (AR14). Op de Mac verandert het oordeel niet (de sondes zeggen daar "alleen op
+  de pc").
+- [ ] **AR14. Node 26.8.2 op de pc.** 💬 Het avondpakket zegt het nu op de pc (punt Node, oranje met "de Mac draait
+  26.8.2 (.node-version): installeer die"). Installeren kan alleen op de pc zelf.
 
-**Opruimen (E), alleen voorstellen**
-- [ ] **AR15. Binaire schermframes voor de Maschine** in de AV-app-hub (aangekondigd met `kan` in `hallo`)? 💬
-  ~56–140 kB/s base64 in JSON. **Advies:** pas na de hub-proef ms-scherm, als die laat zien dat de pads wachten.
-- [ ] **AR16. De status-zender rustiger zonder kijker** (het POST-antwoord krijgt `kijker`; zonder kijker 1× per
-  4 s, onder VERS_MS)? 💬 **Advies:** klein, maar pas na de proefavond.
+**Opruimen (E)**
+- [x] **AR15. Binaire schermframes voor de Maschine.** 💬 **Gebouwd 16 okt, alleen de Varve-kant** (Clay):
+  hub.js stuurt een scherm als één binair frame (0x01, lengte id, id, nr, 2048 bytes; `schermFrame`) zodra de hub
+  in zijn welkom (of hallo) `kan: ['scherm-bin']` zegt, anders JSON met base64 zoals altijd. Elke nieuwe verbinding
+  begint weer met JSON. De hub zelf moet het nog leren (repo AV-app-hub, voorstel in
+  docs/verslagen/2026-10-15/arch-opruimen.md §a); tot dan verandert er niets.
+- [x] **AR16. De status-zender rustiger zonder kijker.** 💬 **Gebouwd 16 okt**: het antwoord op `POST /api/mixer`
+  zegt `kijker` (las iemand `GET /api/mixer` de laatste `KIJK_MS` = 10 s); zonder kijker gaat er hooguit één per
+  `SERVER_RUST_MS` = 4 s (onder `VERS_MS` 5 s van de companion), met een kijker weer elke 900 ms. Een oudere
+  server zonder `kijker`: zoals altijd.
 
 **Uit de droogloop van de proefpunten (16 okt, docs/verslagen/2026-10-15/ar-proef.md)**
 - [x] **AR17. "stream hapert" tijdens een storing.** 💬 **Gebouwd 16 okt** (`studio/ar-vervolg`): één melding per track met de

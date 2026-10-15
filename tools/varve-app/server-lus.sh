@@ -23,8 +23,9 @@
 # Zonder curl geen wachter (de lus zegt het één keer). Een schijf die hangt ziet de wachter bewust niet: de
 # route raakt de schijf niet, en een herstart lost dat niet op.
 # Nooit twee servers op één poort: vóór elke start kijkt de lus of er al iets luistert. Luistert er
-# iets (een server die je met de hand startte, of de LaunchAgent uit docs/TAILSCALE.md), dan start
-# hij niets en stopt hij. Gebruik de lus en de LaunchAgent dus nooit samen.
+# iets (een server die je met de hand startte, of een oude LaunchAgent die node zelf start), dan start
+# hij niets en stopt hij. De LaunchAgent uit docs/TAILSCALE.md start sinds AR8 deze lus (zonder KeepAlive):
+# draait die al, dan zegt een tweede lus (VARVE.app) "draait al" en doet niets.
 #
 # POSIX sh (geen zsh), zodat de test hem ook op Linux kan draaien (test/server-lus.test.mjs).
 # Wat de lus van zijn herstarts weet, krijgt elke nieuwe server mee in zijn omgeving (AR9): VARVE_LUS_SINDS (de start

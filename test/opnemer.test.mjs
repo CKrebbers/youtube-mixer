@@ -278,7 +278,7 @@ try {
     ok('na de 502 staat het stuk er gewoon', r.ok && buf.subarray(O.kopVan(buf)).equals(stuk(0)));
   }
 
-  // ---- 6. de rij is vol: het oudste stuk valt weg, op zijn plek -----------------
+  // ---- 6. de rij is vol: het NIEUWSTE stuk valt weg, op zijn plek (AR10, 16 okt; tot dan het oudste) ----
   {
     const op = new Opnemer({ engine: maakEngine(), haal, ...klok, rijSeconden: 5 });
     const fouten = [], standen = [];
@@ -289,15 +289,16 @@ try {
     serverWeg(20000);
     for (let n = 0; n < 10; n++) geef(node, n);       // 10 s in de rij, er passen er 5
     await rustTot(() => op.wachtSeconden === 0);
-    ok(`rij vol: de oudste 5 s weg, gemeld (${fouten.length} keer)`, op.verloren === 5 && fouten.length === 5 && /stuk kwijt/.test(fouten[0]));
+    ok(`rij vol: de nieuwste 5 s weg, gemeld (${fouten.length} keer), "de eerste … minuten blijven"`, op.verloren === 5 && fouten.length === 5
+      && /stuk kwijt \(5 s/.test(fouten[0]) && /de rij is vol/.test(fouten[0]));
     ok('de stand zegt: 5 s verloren in deze storing', standen.some((x) => x.storing && x.verloren === 5)
       && JSON.stringify(standen.at(-1)) === JSON.stringify({ storing: false, goed: true, verloren: 5 }));
     const r = await op.stop();
     const buf = readFileSync(join(map, s.bestand));
     const kop = O.kopVan(buf);
-    ok('rij vol: WAV toch 10 s, de eerste 5 s stilte, de rest op zijn tijd', r.ok && buf.length === kop + 10 * 192000
-      && buf.subarray(kop, kop + 5 * 192000).every((x) => x === 0)
-      && [5, 6, 7, 8, 9].every((n) => buf.subarray(kop + n * 192000, kop + (n + 1) * 192000).equals(stuk(n))));
+    ok('rij vol: WAV toch 10 s, de eerste 5 s op hun tijd (het begin van de storing blijft), de laatste 5 s stilte', r.ok && buf.length === kop + 10 * 192000
+      && [0, 1, 2, 3, 4].every((n) => buf.subarray(kop + n * 192000, kop + (n + 1) * 192000).equals(stuk(n)))
+      && buf.subarray(kop + 5 * 192000, kop + 10 * 192000).every((x) => x === 0));
     ok('en stop waarschuwt met het totaal', /in totaal 5 s stilte/.test(r.waarschuwing || ''));
   }
 

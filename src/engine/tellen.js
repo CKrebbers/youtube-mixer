@@ -55,8 +55,12 @@ export const MIN_TELLEN = 8;
  * server/tellen.js; sinds review ronde 1). Die wacht zolang er een deck
  * speelt (gridsUitTellen in server/index.js). Een volgende VERSIE met een
  * bewaarde tweede mening: milliseconden.
+ * 3 (16 okt, VRAGEN AR1): de tweede mening over de "1" tegen de lage band (maatMening, BEATGRID.md §14)
+ * voor de hele library, niet alleen voor nieuwe nummers. Tempo, tellen en "1" blijven gelijk; bij een
+ * verdachte "1" staat er twijfel 'maat'. Kost per nummer milliseconden plus één keer de lage band
+ * (~0,5 s per 3 minuten, laag.bin), wachtend zolang er een deck speelt.
  */
-export const VERSIE = 2;
+export const VERSIE = 3;
 
 /** Verder dan dit (deel van een tel) van het rooster: deze tel hoort er niet bij. */
 const LOS = 0.25;
@@ -1004,7 +1008,7 @@ export const TWIJFEL_TEKST = {
   rubato: 'het tempo beweegt (rubato): een vast grid volgt het niet',
   drift: 'het grid loopt hier van de tellen weg',
   los: 'veel tellen vallen hier naast het grid',
-  maat: 'de "1" is niet zeker: de downbeats zijn het onderling oneens, of de kick en de bas vallen vooral op een andere tel',
+  maat: 'de "1" is niet zeker: de downbeats zijn het onderling oneens, of de kick en de bas vallen vooral op een andere tel; sync en beat-loops wachten tot je hem zet of goedkeurt (✓)',
   oneens: 'twee analyses zijn het hier oneens: controleer even',
   tel: 'Beat This! telt hier het dubbele tempo: welke van de twee de tel is, is niet bevestigd (controleer, of ½ tel opschuiven)',
 };

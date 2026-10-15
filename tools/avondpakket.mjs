@@ -8,11 +8,14 @@
 // library.db wordt nooit geopend.
 //
 // Gebruik:  node tools/avondpakket.mjs [--profiel <naam>] [--vertrek|--aankomst] [--streng] [--json] [--poort 8777]
+//           node tools/avondpakket.mjs --vastleggen <map>   (VRAGEN AR12) de ruwe uitvoer van elke sonde op DEZE
+//           machine als fixtures in <map> (met een nep.json erbij), om de HANDGEMAAKT-fixtures te vervangen
 // Exit:     0 = geen rood · 1 = oranje, alleen met --streng · 2 = rood · 3 = fout in de aanroep
 //           (onbekend profiel, ongeldige vlag, server noch mediamap bereikbaar).
 // Tests:    VARVE_AVONDPAKKET_NEP=<map> leest fixtures (<map>/nep.json) in plaats van
 //           commando's, en vraagt dan GEEN server tenzij --poort gegeven is.
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,10 +30,11 @@ const HULP = `node tools/avondpakket.mjs [--profiel <naam>] [--vertrek|--aankoms
   --streng    exit 1 bij oranje
   --json      het rapport als JSON (zoals GET /api/avondpakket)
   --poort     de poort van de server (standaard 8777)
+  --vastleggen <map>   de ruwe uitvoer van elke sonde op deze machine als fixtures (AR12); niets anders
 exit: 0 geen rood · 1 oranje (--streng) · 2 rood · 3 fout in de aanroep`;
 
 export function leesArgs(argv) {
-  const a = { profiel: null, fase: null, streng: false, json: false, poort: 8777, poortGegeven: false, hulp: false };
+  const a = { profiel: null, fase: null, streng: false, json: false, poort: 8777, poortGegeven: false, hulp: false, vastleggen: null };
   for (let i = 0; i < argv.length; i++) {
     const x = argv[i];
     if (x === '--profiel') { a.profiel = argv[++i]; if (!a.profiel || a.profiel.startsWith('--')) return { fout: '--profiel zonder naam' }; }
@@ -45,7 +49,8 @@ export function leesArgs(argv) {
       const v = x === '--poort' ? argv[++i] : x.slice(8);
       if (!/^\d{1,5}$/.test(v || '') || +v < 1 || +v > 65535) return { fout: `ongeldige poort: ${v ?? ''}` };
       a.poort = +v; a.poortGegeven = true;
-    } else if (x === '--help' || x === '-h') a.hulp = true;
+    } else if (x === '--vastleggen') { a.vastleggen = argv[++i]; if (!a.vastleggen || a.vastleggen.startsWith('--')) return { fout: '--vastleggen zonder map' }; }
+    else if (x === '--help' || x === '-h') a.hulp = true;
     else return { fout: `onbekende vlag: ${x}` };
   }
   return a;
@@ -76,6 +81,53 @@ export function alsTekst(r, { bron = '', nu = new Date() } = {}) {
   return uit.join('\n');
 }
 
+/**
+ * Tailscale zonder wat de wereld niet hoeft te weten (AR12): alleen de toestand, en per apparaat naam, OS,
+ * online, of het direct is ('direct' in plaats van het adres) en de relay. Geen IP-adressen, sleutels of gebruikers.
+ */
+export function kaalTailscale(tekst) {
+  let j;
+  try { j = JSON.parse(tekst); } catch { return tekst; }
+  const peer = (p) => ({ HostName: p?.HostName ?? '', OS: p?.OS ?? '', Online: !!p?.Online, CurAddr: p?.CurAddr ? 'direct' : '', Relay: p?.Relay ?? '' });
+  return JSON.stringify({ BackendState: j?.BackendState ?? '', Self: { HostName: j?.Self?.HostName ?? '', OS: j?.Self?.OS ?? '' },
+    Peer: Object.fromEntries(Object.values(j?.Peer || {}).map((p, i) => [`peer${i + 1}`, peer(p)])) }, null, 1);
+}
+
+/**
+ * VRAGEN AR12: alle sondes op deze machine met de echte commando's, en per commando (de `sleutel` van de sonde)
+ * de ruwe uitvoer in <map>/<sleutel>.txt, met een nep.json die precies die bestanden aanwijst
+ * (VARVE_AVONDPAKKET_NEP=<map> leest ze dan terug). De thuismap wordt "/home/test" en Tailscale kaal
+ * (kaalTailscale); kijk de rest na vóór het in test/fixtures gaat. Geeft { map, sleutels }.
+ */
+export async function vastleggen(map, { exec = voerUit, verbind = poortOpen, platform = process.platform, paden, thuis = homedir() } = {}) {
+  await mkdir(map, { recursive: true });
+  const anoniem = (t) => String(t).split(thuis).join('/home/test');
+  const nep = { _doc: `vastgelegd met node tools/avondpakket.mjs --vastleggen (AR12), ${new Date().toISOString().slice(0, 16)}, ${platform}`, platform,
+    paden: JSON.parse(anoniem(JSON.stringify({ ...paden, extra: [] }))) };
+  const opnemer = async (cmd, args, opts = {}) => {
+    try {
+      const uit = await exec(cmd, args, opts);
+      if (opts.sleutel) {
+        const tekst = opts.sleutel === 'tailscale' ? kaalTailscale(uit) : anoniem(uit);
+        await writeFile(join(map, `${opts.sleutel}.txt`), tekst);
+        nep[opts.sleutel] = `${opts.sleutel}.txt`;
+      }
+      return uit;
+    } catch (err) {
+      if (opts.sleutel) nep[opts.sleutel] = { fout: anoniem(err?.message || String(err)) };
+      throw err;
+    }
+  };
+  const poorten = {};
+  const opnemerVerbind = async (poort, opts) => { const open = await verbind(poort, opts); poorten[poort] = open; return open; };
+  await meet({ exec: opnemer, verbind: opnemerVerbind, paden, platform });
+  nep.avhub = poorten[7700] === true;
+  nep.relay = poorten[7702] === true;
+  nep.node = { versie: process.version, verwacht: (await readFile(new URL('../.node-version', import.meta.url), 'utf8').catch(() => '')).trim() || null };
+  await writeFile(join(map, 'nep.json'), JSON.stringify(nep, null, 1) + '\n');
+  return { map, sleutels: Object.keys(nep).filter((k) => !['_doc', 'platform', 'paden', 'avhub', 'relay', 'node'].includes(k)) };
+}
+
 /** De route van een draaiende server, of waarom niet: { rapport } | { bereikbaar, nummers?, status? }. */
 async function vraagServer(poort, a) {
   const q = new URLSearchParams({ vers: '1' });
@@ -96,6 +148,13 @@ async function main() {
   if (a.hulp) { console.log(HULP); return 0; }
   const nep = process.env.VARVE_AVONDPAKKET_NEP || null;
   const WORTEL = fileURLToPath(new URL('..', import.meta.url));
+  if (a.vastleggen) {
+    const MEDIA = kiesMedia({ env: process.env, wortel: WORTEL }).map;
+    const DB = process.env.VARVE_DB || join(MEDIA, 'library.db');
+    const v = await vastleggen(a.vastleggen, { paden: { media: MEDIA, wortel: WORTEL, db: DB } });
+    console.log(`vastgelegd in ${v.map}: ${v.sleutels.join(', ')}\nkijk de bestanden na (namen, paden) vóór ze in test/fixtures/avondpakket gaan; zie LEESMIJ.md daar`);
+    return 0;
+  }
 
   let rapport = null, bron = '', server = null;
   if (!nep || a.poortGegeven) {
@@ -115,7 +174,7 @@ async function main() {
     const t0 = Date.now();
     // Het platform: dat van de fixtures (nep.json "platform"), anders dit (docs/AVONDPAKKET.md "Op Linux").
     const platform = n?.platform ?? process.platform;
-    const metingen = await meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden, platform });
+    const metingen = await meet({ exec: n ? n.exec : voerUit, verbind: n ? n.verbind : poortOpen, paden, platform, ...(n?.nodeInfo ? { nodeInfo: n.nodeInfo } : {}) });
     metingen.platform = platform;
     // Geen library.db op een machine die geen Mac is (de pc, AR19): de backup is daar grijs, geen vals rood.
     // Op de Mac blijft een ontbrekende library "nog nooit" (rood): daar hoort er een te staan.

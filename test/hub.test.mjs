@@ -39,7 +39,7 @@ Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { re
 class NepWS {
   static alle = [];
   constructor(url) { this.url = url; this.readyState = 0; this.uit = []; this.uitT = []; this.gemaakt = nu; NepWS.alle.push(this); }
-  send(s) { this.uit.push(JSON.parse(s)); this.uitT.push(nu); }
+  send(s) { this.uit.push(typeof s === 'string' ? JSON.parse(s) : { t: '_bin', bytes: Uint8Array.from(s) }); this.uitT.push(nu); }
   close(code = 1000) { if (this.readyState === 3) return; this.readyState = 3; this.onclose?.({ code }); }
   open() { this.readyState = 1; this.onopen?.(); }
   krijg(b) { this.onmessage?.({ data: typeof b === 'string' ? b : JSON.stringify(b) }); }
@@ -320,6 +320,37 @@ console.log('\nspeelapparaten (PROTOCOL §17)');
   ok('{t:\'scherm\', dev:\'maschine-mk2\', nr, data}: base64 van 2048 bytes', sch.length === 2 && sch.every((b) => b.dev === 'maschine-mk2') && terug.every((d) => d.length === 2048));
   ok('… een nieuwer beeld voor hetzelfde scherm vervangt het oudere in de rij (alleen het laatste gaat weg)', sch[0].nr === 0 && terug[0][0] === 0x80 && terug[0][2047] === 1 && terug[0][5] === 0 && sch[1].nr === 1);
   ok('status: lampjes en schermen geteld', midi.status().hub.speelt['maschine-mk2'].leds === 40 && midi.status().hub.speelt['maschine-mk2'].schermen === 2);
+
+  // AR15: binair alleen als de hub het in zijn welkom zei (kan: ['scherm-bin']); de rij en het vervangen blijven.
+  {
+    const { schermFrame, SCHERM_BIN, FRAME_SCHERM } = await import('../src/control/hub.js');
+    const f = schermFrame('maschine-mk2', 1);
+    ok('schermFrame: 0x01, lengte 12, "maschine-mk2", nr 1, dan 2048 bytes (2063 in totaal)', f[0] === FRAME_SCHERM && f[1] === 12
+      && String.fromCharCode(...f.subarray(2, 14)) === 'maschine-mk2' && f[14] === 1 && f.length === 15 + 2048);
+    ok('zonder kan: status binair false (een oude hub krijgt JSON)', midi.status().hub.speelt['maschine-mk2'].binair === false);
+    ws.krijg({ t: 'welkom', hub: 'varve-hub', v: 1, kan: [SCHERM_BIN, 42] });
+    const binVoor = ws.soort('_bin').length, jsonVoor = ws.soort('scherm').length;
+    const b1 = new Uint8Array(2048); b1[0] = 0x11; b1[2047] = 0x22;
+    const b2 = new Uint8Array(2048); b2[0] = 0x33;
+    mm.scherm(0, ander); mm.scherm(0, b1); mm.scherm(1, b2);
+    vooruit(50);
+    const bin = ws.soort('_bin').slice(binVoor);
+    ok(`met kan scherm-bin: twee binaire frames, geen JSON-scherm (${bin.length}, ${ws.soort('scherm').length - jsonVoor})`, bin.length === 2 && ws.soort('scherm').length === jsonVoor);
+    ok('… frame = kop + nr + de 2048 bytes; het nieuwere beeld voor scherm 0 verving het oudere', bin.every((x) => x.bytes.length === 2063 && x.bytes[0] === 1 && x.bytes[1] === 12)
+      && bin[0].bytes[14] === 0 && bin[0].bytes[15] === 0x11 && bin[0].bytes[2062] === 0x22 && bin[0].bytes[20] === 0 && bin[1].bytes[14] === 1 && bin[1].bytes[15] === 0x33);
+    ok('… status: binair true, schermen doorgeteld (4), binair geteld (2)', midi.status().hub.speelt['maschine-mk2'].binair === true
+      && midi.status().hub.speelt['maschine-mk2'].schermen === 4 && midi.schermenBin === 2);
+    mm.scherm(0, b2); vooruit(50);
+    ok('… het frame wordt hergebruikt (één per scherm), en wat al weg is verandert niet mee (send kopieert)', midi.frames.size === 2 && bin[0].bytes[15] === 0x11
+      && ws.soort('_bin').at(-1).bytes[15] === 0x33);
+    ws.krijg({ t: 'welkom', hub: 'varve-hub', v: 1, kan: [] });
+    const j0 = ws.soort('scherm').length;
+    mm.scherm(1, b1); vooruit(50);
+    const j = ws.soort('scherm').slice(j0);
+    ok('kan zonder scherm-bin: weer JSON met base64, dezelfde bytes', j.length === 1 && j[0].nr === 1 && Buffer.from(j[0].data, 'base64')[0] === 0x11
+      && Buffer.from(j[0].data, 'base64').length === 2048);
+    ws.krijg({ t: 'welkom', hub: 'varve-hub', v: 1, kan: [SCHERM_BIN] });
+  }
   ok('nog geen statechange zolang de verbinding blijft', standen === 0);
   globalThis.__speelStanden = () => standen;
 }
@@ -374,6 +405,8 @@ console.log('\nherverbinden');
   laatste().open();
   ok('terug: opnieuw hallo/manifest/staat en de LED-laag opnieuw', laatste().uit[0].t === 'hallo' && laatste().uit[1].t === 'manifest' && uitvoer === 2);
   ok('focus begint weer uit tot de hub hem geeft', midi.focus === false);
+  ok('AR15: een nieuwe verbinding vergeet wat de vorige hub kon (eerst JSON tot het welkom het zegt)', midi.kan.size === 0
+    && midi.status().hub.speelt['maschine-mk2'].binair === false);
   ok('terug: de speelpoorten weer connected (statechange: maschine.js tekent alles opnieuw)', midi.speelPoort('maschine-mk2').in.state === 'connected' && globalThis.__speelStanden() === 2);
   vooruit(100);
   ok('alle LED\'s opnieuw naar de hub', laatste().soort('led').reduce((n, b) => n + b.bytes.length, 0) >= apc40mk2.allLeds().length);

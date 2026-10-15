@@ -56,7 +56,7 @@ export const SPEELLIJST = [
   { id: 'start', titel: 'Avond 1 · Opstarten', minuten: 5, punten: [
     // De architectuurronde (VRAGEN AR8): vóór alles, want "De server mag even weg" rekent op de herstartlus.
     { id: 'ar-app', doe: 'Vóór de avond, in Terminal in de projectmap: had je de LaunchAgent uit docs/TAILSCALE.md geladen, dan eerst launchctl unload ~/Library/LaunchAgents/nl.varve.server.plist. Stop een server die nog los draait (pkill -f server/index.js), bouw VARVE.app opnieuw (zsh tools/varve-app/maak.sh) en start VARVE vanuit het Dock.',
-      let: 'sh tools/varve-app/server-lus.sh status zegt "de lus draait (pid …)", en ~/.varve-server.log heeft de regel "[lus] … server gestart (pid …)". Zegt hij "de lus draait niet", dan draait er een server zonder lus (VARVE.app start geen tweede): stop hem en klik VARVE opnieuw. Mag de LaunchAgent weg? (AR8)',
+      let: 'sh tools/varve-app/server-lus.sh status zegt "de lus draait (pid …)", en ~/.varve-server.log heeft de regel "[lus] … server gestart (pid …)". Zegt hij "de lus draait niet", dan draait er een server zonder lus (VARVE.app start geen tweede): stop hem en klik VARVE opnieuw. Wil je de LaunchAgent houden (de server na het inloggen al aan): die start sinds 16 okt de lus zelf (docs/TAILSCALE.md, AR8); laad hem dan opnieuw en kijk of status hetzelfde zegt.',
       citeert: ['de lus draait (pid', 'de lus draait niet', 'server gestart (pid'] },
     { id: 'start-apc', doe: 'Sluit de APC40 aan (Logic en andere muziekprogramma\'s dicht) en open de mixer met de knop hierboven.',
       let: 'APC hierboven groen, geen melding "verkeerde poort".' },
@@ -182,12 +182,12 @@ export const SPEELLIJST = [
     { id: 'ar-tellen', doe: 'Zelfde nummer: Clip/Device View (tellen hier) op een kick, en ruim 5 minuten later Shift + scene 1 (vast) op een kick. Grid-modus uit en laat hem doorspelen.',
       let: 'Liggen de lijnen ook aan het eind nog op de kicks? (ar-ok meet het: raak bijna 100%, grootste afwijking niet meer dan een paar ms.)' },
     { id: 'ar-een', doe: 'Haal een nieuw nummer binnen met een duidelijke "1" en geen kick op elke tel (breakbeat, dub of hiphop). Wacht op de regel "[tellen] <titel>: … lage band uitgerekend" in ~/.varve-server.log (Beat This! moet het eerst tellen; komt hij er na 5 min niet, schrijf dat op en doe dit punt een andere keer). Laad het, zet de grid-modus aan en kijk naar scene 1.',
-      let: 'Staat de "1" op de echte "1"? Brandt scene 1 oranje en zegt het oordeel naast de bpm (aanklikken) "de "1" is niet zeker …": staat de "1" dan echt een tel naast (de tweede mening klopt) of niet (vals alarm)? Werkt sync dan nog? (AR3)',
-      citeert: ['[tellen] ', 'lage band ', 'de "1" is niet zeker'] },
+      let: 'Staat de "1" op de echte "1"? Brandt scene 1 oranje en zegt het oordeel naast de bpm (aanklikken) "de "1" is niet zeker …": staat de "1" dan echt een tel naast (de tweede mening klopt) of niet (vals alarm)? Sinds 16 okt weigert sync dan met "de "1" is hier niet zeker — zet de "1" …" (AR3): ✓ of de "1" zetten en sync werkt weer. Hinderde het je?',
+      citeert: ['[tellen] ', 'lage band ', 'de "1" is niet zeker', 'de "1" is hier niet zeker — '] },
     { id: 'ar-vloer', doe: 'Hetzelfde met een nieuw house- of technonummer (een kick op elke tel).',
-      let: 'Staat de "1" daar ooit een tel naast zonder dat scene 1 oranje brandt? Dat is de bekende grens (vier op de vloer zegt de lage band niets): bij welk nummer? (AR4)' },
-    { id: 'ar-meet', doe: 'Overdag of na afloop, in Terminal: de twee metingen uit docs/verslagen/2026-10-15/arch-beatgrid.md §5 (bench.mjs --beatthis met de python van ~/.varve/tellen-venv, en tel1-echt.mjs).',
-      let: 'Zet de getallen in de notitie (AR2). Daarna kun je beslissen of de hele library de tweede mening over de "1" krijgt (AR1).' },
+      let: 'Staat de "1" daar ooit een tel naast zonder dat scene 1 oranje brandt? Dat is de bekende grens (vier op de vloer zegt de lage band niets): bij welk nummer? Na afloop noemt node tools/beatmeting/vloer.mjs de stukken in je library met zo\'n vloer waar de downbeats niet op de "1" vallen (AR4).' },
+    { id: 'ar-meet', doe: 'Overdag of na afloop, in Terminal: node tools/beatmeting/ar2.mjs (droog: zegt wat ontbreekt), dan hetzelfde met --meet (de twee metingen uit docs/verslagen/2026-10-15/arch-beatgrid.md §5, met de Python van ~/.varve/stems-venv of VARVE_TELLEN_PY; het verslag in tools/beatmeting/uit/).',
+      let: 'Zet de getallen in de notitie (AR2). De hele library krijgt de tweede mening over de "1" sinds 16 okt vanzelf bij de eerste start van de server (kaart-VERSIE 3, AR1): klopten de oranje "1"-en daarna?' },
     { id: 'ar-ok', doe: 'Na de avond, in Terminal: node tools/proef/ar-na.mjs --titel "<titel van ar-snap>" --titel "<titel van ar-een>" (droog: zegt wat hij zou lezen), dan hetzelfde met --meet erbij.',
       let: 'Zegt hij bij ar-snap "oordeel: op de tel (≤ 5 ms)" en "1" klopt? Bij ar-een: wat zegt "1" op de downbeats? Plak het rapport in de notitie; "NAAST de tel" is een fout, ook als het er goed uitzag.',
       citeert: ['oordeel: ', 'op de tel (≤ ', 'NAAST de tel'] },
@@ -301,7 +301,7 @@ export const SPEELLIJST = [
   ] },
   { id: 'ar-uitgang', titel: 'Avond 1 · Slaap en een uitgang die wegvalt (als laatste)', minuten: 10, punten: [
     { id: 'ar-slaap', doe: 'Muziek op pauze, mixer open. Laat de Mac slapen (Apple-menu → Sluimer), wacht een halve minuut en maak hem wakker.',
-      let: 'Staat er een rode "audio staat stil (…)", en zet de eerste druk op de APC het geluid terug ("audio loopt weer")? Liep de audio gewoon door zonder melding: ook goed, schrijf het op. Doen de lampjes van de APC het nog? Weg terug: klik in de mixer, anders herladen (Cmd+R vraagt eerst). (AR6)',
+      let: 'Staat er een rode "audio staat stil (…)", en kwam het geluid vanzelf terug ("audio loopt weer", sinds 16 okt probeert de mixer het zelf, hooguit eens per 10 s, AR6) of pas bij de eerste druk op de APC? Liep de audio gewoon door zonder melding: ook goed, schrijf het op. Doen de lampjes van de APC het nog? Weg terug: klik in de mixer, anders herladen (Cmd+R vraagt eerst). (AR6)',
       citeert: ['audio staat stil (', 'audio loopt weer'] },
     { id: 'ar-scarlett', doe: 'Masterfader en Cue Level laag, koptelefoon af. Er speelt iets: trek de USB van de Scarlett eruit, wacht 5 s en steek hem terug.',
       let: 'Welke melding kwam er ("audio-uitgang staat stil …" of "audio staat stil (…)"), en wat moest je doen om weer geluid te hebben: een druk, de uitgang opnieuw kiezen, of herladen? Kwam het geluid intussen uit de MacBook zelf? Werkt de koptelefoon (vier kanalen) daarna nog?',
@@ -523,11 +523,11 @@ export const SPEELLIJST = [
   // De architectuurronde (15 okt, spoor C, VRAGEN AR): het avondpakket en de suite op de Omarchy-pc. De pc heeft geen
   // library: sinds 16 okt (AR19) zegt de CLI daar grijs "geen library" en stopt hij niet meer zonder mediamap.
   { id: 'ar-pc', titel: 'Avond 3 · Het avondpakket en de tests op de pc', minuten: 15, punten: [
-    { id: 'ar-pakket', doe: 'Op de Omarchy-pc, in een kopie van de repo, met de APC eraan: node tools/avondpakket.mjs --json > avondpakket-pc.json. Voor de fixtures ook de ruwe uitvoer: lsusb > lsusb.txt, en find -L /sys/class/power_supply -mindepth 2 -maxdepth 2 -name uevent -exec grep -H "" {} + > power.txt. Heeft de pc een accu: alles nog eens zonder lader.',
-      let: 'Verwacht: geen exit 3, grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth, de APC herkend, backup grijs "geen library" en "op deze machine" (nergens "deze Mac"; sinds 16 okt, AR19). Een rood punt is nu echt: welk? Klopt de rest? Stuur de drie bestanden mee, dan worden de HANDGEMAAKT-fixtures echt. Is eerlijk grijs genoeg? (AR12, AR13)',
-      citeert: ['niet op dit platform', 'geen library', 'op deze machine'] },
+    { id: 'ar-pakket', doe: 'Op de Omarchy-pc, in een kopie van de repo, met de APC en de beamer eraan en de relay van de Stroommachine aan: node tools/avondpakket.mjs --json --profiel beeld --aankomst > avondpakket-pc.json, en voor de fixtures node tools/avondpakket.mjs --vastleggen pc-fixtures (de ruwe uitvoer van elke sonde, de thuismap als /home/test, Tailscale zonder adressen; AR12). Heeft de pc een accu: alles nog eens zonder lader.',
+      let: 'Verwacht: geen exit 3, grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth, de APC herkend, backup grijs "geen library" en "op deze machine" (nergens "deze Mac"; sinds 16 okt, AR19). Sinds 16 okt ook vier punten van de pc zelf (AR13): Relay beeld, Beamer (HDMI), De Mac en Node. Kloppen ze? Een rood punt is nu echt: welk? Stuur avondpakket-pc.json en de map pc-fixtures mee (eerst nakijken), dan worden de HANDGEMAAKT-fixtures echt.',
+      citeert: ['niet op dit platform', 'geen library', 'op deze machine', 'Relay beeld', 'Beamer (HDMI)'] },
     { id: 'ar-node', doe: 'Op de pc: node --version, daarna node test/alles.mjs (een paar minuten).',
-      let: 'Staat er v26.8.2? Anders zegt alles.mjs bovenaan "LET OP: Node v…, .node-version zegt 26.8.2" met de checks die op een andere V8 anders uitvallen: rood daarbuiten is echt. Welke? (AR14)',
+      let: 'Staat er v26.8.2? Anders zegt alles.mjs bovenaan "LET OP: Node v…, .node-version zegt 26.8.2" met de checks die op een andere V8 anders uitvallen: rood daarbuiten is echt. Welke? Het avondpakket zegt het sinds 16 okt ook (punt Node, oranje als hij afwijkt, AR14): installeer dan 26.8.2.',
       citeert: ['LET OP: Node v', '.node-version zegt '] },
   ] },
 
