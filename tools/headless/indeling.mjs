@@ -301,8 +301,9 @@ try {
   await zetZoek('#deep grid:zeker bpm:120-140');
   await klik('#lib-panel .lib-indeling button[data-nieuw="slim"]');
   await typ('#lib-panel .ik-nieuwnaam', 'Deep vlot');
-  const stand = await api('/api/indeling/stand');
-  const slim = stand.categorieen.find((c) => c.naam === 'Deep vlot');
+  // Bewaren gaat na het typen naar de server (async): wachten tot hij er staat, anders een wedloop met de vraag hieronder.
+  let slim = null;
+  for (let i = 0; i < 50 && !slim; i++) { slim = (await api('/api/indeling/stand')).categorieen.find((c) => c.naam === 'Deep vlot'); if (!slim) await wacht(100); }
   const verwacht = (await api('/api/library?tag=deep&grid=zeker&bpm=120-140&aantal=1')).totaal;
   ok(`een slimme categorie uit het filter: ${slim?.aantal} nummers, wat de regel nu vindt`, slim?.soort === 'slim' && slim.aantal === verwacht && verwacht > 0);
   ok('…en hij staat meteen als filter', await tot(`document.querySelector('#lib-panel .lib-zoek').value === '@"deep vlot"'`, 3000));
