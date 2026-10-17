@@ -483,7 +483,11 @@ try {
   ok('een muisklik op 1→13 zet sampler-pad 1 op drumpad 13 van track 3, met de melding', naKlik.gevuld && naKlik.naam === 'S1 · track 1' && naKlik.meld.some((t) => /^S1 staat op drumpad 13 van track 3 \(noot C3 · 48\)/.test(t)) && naKlik.sampler === false);
   // De koppelmodus: aan, klik 8→12, dan wacht MIDI-learn op een knop voor sampler.8.drums.
   await evalueer('window.leerModus.toggle(), true');
-  await klik(mw.knoppen[7]);
+  // In de koppelmodus verschijnen de knopnamen en schuift de rij (droogloop 17 okt: 15 px hoger): de knop opnieuw
+  // opmeten, anders valt de klik er net naast en ziet de koppelmodus niets.
+  await wacht(200);
+  const k8 = await evalueer(`(() => { const r = document.querySelector('[data-action="sampler.8.drums"]').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`);
+  await klik(k8);
   const leer = await evalueer(`(() => { const l = window.leerModus.learn; const uit = { busy: !!l.busy, action: l.action ?? null, gevuld: !!window.engine.instrumentOp('C')?.stand().pads[11].gevuld }; try { l.stop?.(); } catch (_) {} window.leerModus.toggle(); return uit; })()`);
   meld(`koppelmodus na een klik op 8→12: learn ${leer.busy ? 'wacht' : 'wacht niet'} op "${leer.action}"; drumpad 12 ${leer.gevuld ? 'gevuld (fout: de klik ging door)' : 'leeg (de klik ging niet door, zoals het hoort)'}`);
   ok('de koppelmodus ziet de knop: klik 8→12 = koppel sampler.8.drums (en voert hem niet uit)', leer.busy && leer.action === 'sampler.8.drums' && !leer.gevuld);
