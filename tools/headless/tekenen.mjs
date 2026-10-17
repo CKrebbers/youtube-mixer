@@ -16,10 +16,15 @@ const POORT = Number(process.env.VARVE_KIJK_POORT) || 8823, DEBUG = Number(proce
 const uitkomst = [];
 const ok = (naam, cond, extra = '') => { uitkomst.push([naam, !!cond]); console.log(`${cond ? '  ok  ' : 'FAIL  '}${naam}${extra ? ` (${extra})` : ''}`); };
 const tmp = mkdtempSync(join(tmpdir(), 'varve-profiel-'));
-const cache = join(homedir(), 'Library/Caches/ms-playwright');
-const shell = readdirSync(cache).filter((d) => d.startsWith('chromium_headless_shell')).sort().pop();
-const sub = readdirSync(join(cache, shell)).find((d) => existsSync(join(cache, shell, d, 'chrome-headless-shell')));
-const chromePad = join(cache, shell, sub, 'chrome-headless-shell');
+// VARVE_CHROME zoals de andere headless-proeven (op de Mac niet nodig: dan de headless shell van Playwright).
+function zoekChrome() {
+  if (process.env.VARVE_CHROME) return process.env.VARVE_CHROME;
+  const cache = join(homedir(), 'Library/Caches/ms-playwright');
+  const shell = readdirSync(cache).filter((d) => d.startsWith('chromium_headless_shell')).sort().pop();
+  const sub = readdirSync(join(cache, shell)).find((d) => existsSync(join(cache, shell, d, 'chrome-headless-shell')));
+  return join(cache, shell, sub, 'chrome-headless-shell');
+}
+const chromePad = zoekChrome();
 const wacht = (ms) => new Promise((r) => setTimeout(r, ms));
 const server = spawn(process.execPath, [join(WORTEL, 'server/index.js')], { cwd: WORTEL,
   env: { ...process.env, PORT: String(POORT), VARVE_DB: join(tmp, 'lib.db'), VARVE_TESTSERVER: '1', VARVE_MEDIA: join(tmp, 'media'), VARVE_OPNAMES: join(tmp, 'opn'), VARVE_HERANALYSE: 'uit', VARVE_PATRONEN: join(tmp, 'pat') }, stdio: 'ignore' });
