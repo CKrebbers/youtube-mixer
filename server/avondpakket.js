@@ -1001,6 +1001,9 @@ export function beoordeel(metingen = {}, { profiel: gevraagd = null, fase: faseI
     const s = m.server;
     if (onbekend(s)) punt('server', 'Server', 'uit', '?', nietGemeten(s));
     else if (s.bereikbaar) punt('server', 'Server', 'ok', 'bereikbaar', Number.isFinite(s.nummers) ? `${s.nummers} nummers` : '');
+    // Een machine zonder library (de pc, AR19) draait geen Varve-server: geen server is daar gewoon, nooit rood
+    // (droogloop 17 okt: op de pc maakte "--aankomst" het oordeel anders rood met "start VARVE in het Dock").
+    else if (m.backup?.geenLibrary) punt('server', 'Server', 'uit', 'niet op deze machine', 'de Varve-server draait op de Mac');
     else punt('server', 'Server', aankomst ? 'fout' : 'half', 'niet bereikbaar', 'start VARVE in het Dock');
   }
 

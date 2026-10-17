@@ -362,6 +362,14 @@ console.log('22. backup');
   ok('geen library (de pc) → grijs "geen library", nooit rood, "deze machine"', punt(pc, 'backup').licht === 'uit' && punt(pc, 'backup').waarde === 'geen library'
     && /geen library\.db op deze machine/.test(punt(pc, 'backup').sub));
   ok('… en op Linux zegt geen enkel punt "deze Mac"', !pc.punten.some((p) => /deze Mac/.test(`${p.waarde} ${p.sub}`)));
+  // Droogloop 17 okt: de pc draait geen Varve-server; zonder library is "niet bereikbaar" daar gewoon (grijs), ook bij aankomst.
+  for (const fase of ['vertrek', 'aankomst']) {
+    const z = beoordeel({ ...goedVertrek(), backup: { geenLibrary: true }, server: { bereikbaar: false }, platform: 'linux' }, { profiel: 'beeld', fase, data: data(), nu: NU });
+    ok(`de pc zonder server (${fase}) → grijs "niet op deze machine", nooit rood of "start VARVE in het Dock"`, punt(z, 'server').licht === 'uit'
+      && punt(z, 'server').waarde === 'niet op deze machine' && !/Dock/.test(punt(z, 'server').sub));
+  }
+  const mac = beoordeel({ ...goedVertrek(), server: { bereikbaar: false } }, { profiel: 'apc', fase: 'aankomst', data: data(), nu: NU });
+  ok('… op de Mac (met library) blijft geen server bij aankomst rood, "start VARVE in het Dock"', punt(mac, 'server').licht === 'fout' && /Dock/.test(punt(mac, 'server').sub));
   ok('zonder platform (oude metingen) of op de Mac: "deze Mac" zoals altijd', /deze Mac/.test(r({}).sub)
     && /deze Mac/.test(punt(beoordeel({ ...goedVertrek(), platform: 'darwin' }, { profiel: 'apc', data: data(), nu: NU }), 'backup').sub));
   ok('een kopie van gisteren / 8 okt → "gisteren 12:00" / "8 okt 12:00"', r({ laatste: { tijd: new Date(2026, 9, 9, 12, 0).getTime() } }).waarde === 'gisteren 12:00'
