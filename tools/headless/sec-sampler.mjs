@@ -124,6 +124,8 @@ const zetEchtGrid = (deel) => evalueer(`fetch('/api/library').then((r) => r.json
   const r = await fetch('/api/library/' + t.id + '/grid', { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ grid: { stukken: [{ van: 0, bpm: ${BPM}, anker: ${ANKER} }], bron: 'hand', slot: true } }) });
   await r.text();
+  // De lijst opnieuw ophalen: laden neemt het grid uit de rij van het paneel, niet van de server.
+  await window.library.ververs();
   return r.status;
 })`);
 async function laadOpA() {
