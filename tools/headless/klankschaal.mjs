@@ -198,8 +198,24 @@ try {
     const m = [...document.getElementById('klankschaal').children].map((el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; });
     return Math.max(...m) - Math.min(...m) < 12;
   })()`));
-  ok(`op 1440 × 790 past de rij (onderkant ${Math.round(maat.onder)} ≤ ${maat.scherm}, ${Math.round(maat.hoog)} px hoog; kolommen ${Math.round(maat.kolommen)} px)`,
-    maat.onder <= maat.scherm + 1 && maat.kolommen > 150);
+  // Sinds 6 okt staan de rijen in #rijen, dat zelf scrolt (CLAUDE.md, tools/headless/rijen.mjs): de pagina scrolt niet,
+  // en elk deel van de rij is te zien nadat #rijen erheen scrolt. Strenger ("past zonder scrollen") hing op het lettertype.
+  const heel = await evalueer(`(() => {
+    const rij = document.getElementById('klankschaal');
+    const gebied = document.getElementById('rijen');
+    const pagina = document.scrollingElement.scrollHeight <= innerHeight + 1;
+    const delen = [...rij.querySelectorAll('button, select, input, .knop, label')].filter((el) => el.offsetParent);
+    // Per element: het rij-gebied erheen scrollen, dan moet het er helemaal in staan (zoals rijen.mjs).
+    const mis = delen.filter((el) => {
+      el.scrollIntoView({ block: 'nearest' });
+      const g = gebied.getBoundingClientRect(), r = el.getBoundingClientRect();
+      return r.top < g.top - 1 || r.bottom > g.bottom + 1 || r.bottom > innerHeight + 1;
+    }).length;
+    gebied.scrollTop = 0;
+    return { pagina, delen: delen.length, mis };
+  })()`);
+  ok(`op 1440 × 790: de pagina scrolt niet en elk deel van de rij is te zien in het rij-gebied (${heel.delen - heel.mis}/${heel.delen}; onderkant zonder scrollen ${Math.round(maat.onder)} bij ${maat.scherm}; kolommen ${Math.round(maat.kolommen)} px)`,
+    heel.pagina && heel.mis === 0 && heel.delen > 5 && maat.kolommen > 150);
   await foto('klankschaal-laptop.png');
   await evalueer("document.getElementById('klankschaal-btn').click(), true");
   await wacht(300);
