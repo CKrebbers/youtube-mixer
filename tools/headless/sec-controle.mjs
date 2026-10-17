@@ -140,7 +140,9 @@ try {
   const tegel = () => ctl.ev(`(() => { const t = [...document.querySelectorAll('.tegel')].find((x) => x.querySelector('.tegel-naam').textContent.trim() === 'Server');
     return t ? { licht: t.dataset.licht, waarde: t.querySelector('.tegel-waarde').textContent, sub: t.querySelector('.tegel-sub').textContent,
       regel: t.querySelector('.tegel-regel')?.textContent.replace(/\u00a0/g, ' ') ?? null } : null; })()`);
-  const regel = async () => (await tegel())?.regel;
+  // Sinds AR9 (16 okt) staat boven de secties een regel over de herstartlus (hier "zonder herstartlus …"):
+  // alleen de regel over de secties telt hier.
+  const regel = async () => { const r = (await tegel())?.regel; return r == null ? r : (r.split('\n').find((x) => x.startsWith('secties:')) ?? ''); };
   const wordt = (tekst, maxMs = 8000) => tot(async () => (await regel()) === tekst, maxMs);
   const api = (pad, opties = {}) => ctl.ev(`fetch(${JSON.stringify(pad)}, ${JSON.stringify(opties)}).then(async (r) => ({ status: r.status, data: await r.json().catch(() => null) }))`);
 
