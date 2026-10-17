@@ -37,7 +37,7 @@ groen, 19 niet**. Niets daarvan was een fout in de mixer of de server. Wat er aa
 | sec-toets, sec-sampler | het grid van de oude analyse ligt op dit nummer deels op de offbeat en heet daarna "drift" (zie §4) | het bekende grid op slot zetten en daarna de library-lijst verversen (laden neemt het grid uit de rij van het paneel) |
 | sec-auto, vorm-maat, vormen-plaat | belasting: 397 ms stilte, één gemiste klap, Chromium startte niet binnen de tijd | opnieuw, los: groen |
 | werk-ipad | twee functionele FAILs in één ronde, daarna niet meer; de tijdmeting (grens ~5 ms) faalt onder belasting (max 5,04 ms, mediaan 1,6) | niets: op de Mac meten (punt werk-ipad in de speellijst) |
-| rijen | geen FAIL, maar te traag voor 900 s in deze container | met 3600 s: zie §5 |
+| rijen | geen FAIL, maar te traag voor 900 s in deze container (swiftshader tekent op de CPU) | met 3600 s: 565/565 groen in 28 min |
 
 **Regel voor wie een proef schrijft:** verlaat een proef de mixer (navigate, reload) terwijl er iets speelt,
 wacht, laadt, opneemt of de auto-DJ aan staat, dan vraagt de mixer eerst (vertrek.js). Beantwoord
@@ -70,4 +70,10 @@ het bekende grid, niet de analyse.
 - Alles met geluid uit de luidspreker, de APC zelf, de Mac (osascript, VARVE.app, launchd, iCloud, Tailscale):
   dat is de speellijst van de Controlekamer.
 
-<!-- RIJEN -->
+## 6. Daarna nog gedraaid
+
+- **latentie**: groen (knop → geluid p50 0,8–2,2 ms, geen lange taken).
+- **werk-alles** (de totaalmeting van de werkruimte, C6): 12 van 13. Wat faalt is het budget "≤ 2 ms per beeld
+  extra, gemeten per beeld" zonder mac-2 (3,26 ms). Hier haalt de pagina maar 36 beelden/s (geen GPU), dus elk
+  beeld duurt langer; dezelfde meting als Δtaak / 60 is 0,78 ms en slaagt. Geen fout gevonden; op de Mac meten
+  (werk-alles in de speellijst).
