@@ -165,13 +165,15 @@ try {
   const rij = () => evalueer(`(() => { const r = document.getElementById('auto'); return {
     aan: r.querySelector('.au-aan').textContent, nu: r.querySelector('.au-nu').textContent,
     volgende: r.querySelector('.au-volgende b').textContent, onder: r.querySelector('.au-volgende small').textContent,
-    plan: r.querySelector('.au-plan').textContent }; })()`);
+    // Sinds S9 staat er vóór het planlabel een tweede .au-plan (.au-set: DAARNA en de eindtijd).
+    plan: r.querySelector('.au-plan:not(.au-set)').textContent, daarna: r.querySelector('.au-set')?.textContent ?? '' }; })()`);
   // Headless tekent soms maar eens per paar seconden: wachten tot de rij bij is.
   let r1 = await rij();
   for (let i = 0; i < 50 && !(/▶ 1 · een/.test(r1.nu) && /→ 2/.test(r1.volgende)); i++) { await wacht(200); r1 = await rij(); }
   ok(`aan: speelt de eerste van het plan (${r1.nu})`, /aan/.test(r1.aan) && /▶ 1 · een/.test(r1.nu));
   ok(`de volgende staat klaar, met soort en aftellen (${r1.volgende} / ${r1.onder})`, /→ 2 · twee \(Em\)/.test(r1.volgende) && /lange blend · over \d+ maten · plan/.test(r1.onder));
   ok(`plan: ${r1.plan}`, r1.plan === 'proefset · 2/3');
+  ok(`DAARNA: het nummer na de volgende, met de verwachte eindtijd (${r1.daarna})`, /^DAARNA mist · klaar ~\d\d:\d\d/.test(r1.daarna));
   await foto('auto-klaar.png');
 
   const eerste = await (async () => { for (let i = 0; i < 600; i++) { const n = await evalueer('window.__stil.overgangen.length'); if (n >= 1) return true; await wacht(250); } return false; })();

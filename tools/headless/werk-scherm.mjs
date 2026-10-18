@@ -383,6 +383,8 @@ async function proef() {
     ok('mac-2: xy, fx, mixer en library', await h.totdat(W, "document.querySelector('.wp-vak-paneel .vp-xy') && document.querySelectorAll('.wp-vak-bouwsteen').length === 2 && document.querySelector('.wp-vak-library .wp-lib')", 8000) !== false);
     const nFx = await h.ev(W, "document.querySelector('.wp-vak-bouwsteen .vp').querySelectorAll('.vp-draai').length");
     ok('fx: de acht plekken en mix (en superknoppen als S4 ze heeft)', nFx >= 9, `${nFx} draaiknoppen`);
+    // De lijst haalt /api/library asynchroon: wachten tot hij getekend is (anders een wedloop met het lege vak).
+    await h.totdat(W, "/niets gevonden/.test(document.querySelector('.wp-lib')?.textContent ?? '')", 6000);
     const lib = await h.ev(W, "document.querySelector('.wp-lib').textContent");
     ok('library: de lijst (leeg in deze proef) en een zoekveld', /niets gevonden/.test(lib) && !!(await h.ev(W, "!!document.querySelector('.wp-lib-zoek')")));
     const f = await h.ev(M, 'window.engine.focus === "B" ? 2 : 1');

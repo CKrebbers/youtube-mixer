@@ -9,9 +9,32 @@ daarna in CLAUDE.md of ROADMAP.md.
 
 Legenda — nodig: 🎧 luisteren · 🎛 de APC erbij · 👀 kijken · 💬 alleen een keuze
 
-Nieuwste blokken (14–15 okt): **AR, de architectuurronde** (15 okt), **W, de werkruimte** en **GA, afmaken:
+Nieuwste blok (17 okt): **DL, de droogloop** (DL1, de oude beat-analyse). Daarvoor (14–15 okt): **AR, de architectuurronde** (15 okt), **W, de werkruimte** en **GA, afmaken:
 controllers en beatgrid** (hieronder), en achteraan **S9**, **S10**, **S11** en **HA, handen** (de controllers en de
 hub-middag, 11 okt, gemerged 15 okt).
+
+---
+
+## DL. De droogloop van 17 okt (tak `studio/droogloop-17okt`, docs/verslagen/2026-10-17/droogloop.md)
+
+- [ ] **DL1. De oude beat-analyse vergist zich op een nummer met bezettingswissels.** 💬 Gevonden met de headless
+  proeven (sec-toets, sec-sampler) op het synthetische sectienummer (`test/synth-nummer.mjs`: 124 bpm vanaf 0,3 s,
+  zeven secties). De oude analyse (`maakGrid`: wat de server zonder Beat This! doet, en op de Mac de tweede mening en
+  de terugval) geeft:
+  - 0–42,7 s **zeker (0,82)**, maar ~0,45 tel naast de echte tel: op de **offbeat** (in het intro staan alleen
+    hats en pad);
+  - vanaf 46,7 s **onzeker (0,60, twijfel "drift")**, terwijl het grid daar maar 0,05–0,07 tel (25–35 ms) vroeg ligt.
+    `blokDrift` (sinds 0158e3b, 14 okt) meet de mediaan van de onset-pieken per blok; in de opbouw (snare, pad, bas,
+    géén kick) en de break liggen die stelselmatig 25–45 ms vóór de tel, ook tegen het ECHTE grid (0,09 tel > 0,08).
+    Een andere bezetting is dus geen drift, maar de controle ziet hem zo. Vóór 0158e3b was dat stuk 0,77 (zeker).
+  Gevolg zonder Beat This!: secties, sync en beat-loops weigeren na zo'n bezettingswissel, en het begin synct op de
+  offbeat. Op de Mac komt het grid uit de tellen van Beat This!; de oude analyse beslist daar mee als tweede mening
+  (`vergelijk`) en als Beat This! niets geeft. **Advies:** niet vlak vóór de proefavond aan de analyse draaien; eerst
+  op de avond kijken (beatgrid-punten ga-dj, bg-*): gebeurt het op echte nummers, dan (1) `blokDrift` de mediaan van
+  het hele stuk laten aftrekken (een vaste verschuiving per bezetting is geen helling), gemeten met
+  `tools/beatmeting/synth/bench.mjs` vóór/na en `test/beatbench.test.mjs` (nergens vals zeker), en (2) het offbeat-
+  stuk als apart punt. De headless sectieproeven zetten nu het bekende grid op slot (ze toetsen secties, niet de
+  analyse).
 
 ---
 

@@ -8,7 +8,7 @@
 // Gebruik:  node tools/headless/standen.mjs [uitmap]
 // Poorten:  VARVE_KIJK_POORT (8822) en VARVE_KIJK_DEBUG (9422).
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -125,7 +125,8 @@ try {
   ok('de Controlekamer start', await tot(() => ctl.ev('!!window.controle && document.querySelectorAll(".tegel").length >= 4')));
   ok('tegel "Opstelling" bestaat en toont "geen", "kies er een onder Openen"',
     await tot(async () => { const t = await tegel(); return t?.waarde === 'geen' && t.sub === 'kies er een onder Openen'; }));
-  ok('de tegel staat direct na "Server"', await ctl.ev(`[...document.querySelectorAll('.tegel-naam')].map((x) => x.textContent.trim()).slice(0, 2).join() === 'Server,Opstelling'`));
+  // Sinds 16 okt staat de tegel Versie vooraan; Opstelling hoort nog steeds direct na Server.
+  ok('de tegel staat direct na "Server"', await ctl.ev(`(() => { const n = [...document.querySelectorAll('.tegel-naam')].map((x) => x.textContent.trim()); return n.indexOf('Opstelling') === n.indexOf('Server') + 1 && n.indexOf('Server') >= 0; })()`));
   ok('het kopje boven de kiezer is het label "Opstelling"', (await tekst('h-opstelling')) === 'Opstelling');
   ok('#stand-kies heeft 4 opties (de voorbeelden)', await tot(() => ctl.ev(`document.querySelectorAll('#stand-kies option').length === 4 && !document.getElementById('stand-kies').disabled`)));
   await kies('apc');
@@ -188,7 +189,9 @@ try {
   const api = (pad, opties) => fetch(`${B}${pad}`, opties).then((r) => r.json());
   await kies('apc');
   await ctl.ev(`document.getElementById('stand-bewerk').open = true`);
-  ok('bewerk open: velden voor apc, met de 8 sjablonen', await tot(() => ctl.ev(`document.querySelectorAll('#bw-velden select[name="master"] option').length === 9
+  // Het aantal kant-en-klare sjablonen groeit (S10: 33); de kiezer heeft ze allemaal plus "ongemoeid".
+  const SJABLONEN = JSON.parse(readFileSync(join(WORTEL, 'racks/sjablonen.json'), 'utf8')).racks.length;
+  ok(`bewerk open: velden voor apc, met de ${SJABLONEN} sjablonen`, await tot(() => ctl.ev(`document.querySelectorAll('#bw-velden select[name="master"] option').length === ${SJABLONEN + 1}
     && document.querySelector('#bw-velden select[name="master"]').value === 'Dub-worp'`)));
   ok('de status zegt: voorbeeld (bewaren maakt een eigen kopie)', /voorbeeld \(bewaren maakt een eigen kopie\)/.test(await tekst('bw-status')));
   await ctl.ev(`(() => { const s = document.querySelector('#bw-velden select[name="master"]'); s.value = 'Oplossen'; })()`);

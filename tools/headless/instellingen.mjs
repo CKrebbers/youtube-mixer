@@ -130,7 +130,10 @@ try {
   ok('latentie 25 in het paneel: op de server', na?.['varve.beeld.latentie'] === '25', JSON.stringify(na));
   ok('stems "geen" in de strook: op de server (0)', na?.['varve.stems.standaard'] === '0');
   ok('…en de rest is niet veranderd', na?.['varve.beeld.adres'] === ADRES && na?.['varve.koptelefoon.omgewisseld'] === '1');
-  ok('niets meer onverzonden', await evalueer(`localStorage.getItem('varve.instellingen.onverzonden') === null`));
+  // De server heeft de waarde al vóór de browser zijn antwoord verwerkt (en het merk "onverzonden" wist): even wachten.
+  let leeg = false;
+  for (let i = 0; i < 30 && !leeg; i++) { leeg = await evalueer(`localStorage.getItem('varve.instellingen.onverzonden') === null`); if (!leeg) await wacht(100); }
+  ok('niets meer onverzonden', leeg);
   ok('geen fouten', meldingen.length === 0, meldingen.join(' | '));
   meldingen.length = 0;
 

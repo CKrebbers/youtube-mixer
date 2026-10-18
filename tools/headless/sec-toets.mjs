@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { maakNepYtdlp } from '../../test/nep-ytdlp.mjs';
 import { maakNepStems } from '../../test/nep-stems.mjs';
-import { synthNummer } from '../../test/synth-nummer.mjs';
+import { synthNummer, BPM, ANKER } from '../../test/synth-nummer.mjs';
 
 const WORTEL = fileURLToPath(new URL('../..', import.meta.url));
 const UIT = process.argv[2] || join(WORTEL, 'tools/headless/uit');
@@ -113,6 +113,20 @@ async function toets(code, shift = false) {
   if (shift) await cdp('Input.dispatchKeyEvent', { type: 'keyUp', modifiers: 0, key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16 });
 }
 
+// Het bekende grid van het synthetische nummer (BPM vanaf ANKER) op slot zetten, vóór het laden. Deze proef toetst
+// secties, geen grid-analyse: de oude analyse noemt het stuk na de break sinds 14 okt onzeker (blokDrift, vals alarm
+// op een andere bezetting) en het begin zeker op de offbeat (droogloop 17 okt, docs/VRAGEN.md DL1). Met het echte grid
+// hangen de secties niet van die heuristiek af.
+const zetEchtGrid = (deel) => evalueer(`fetch('/api/library').then((r) => r.json()).then(async (j) => {
+  const t = (j.tracks || j).find((x) => String(x.title || x.titel || '').includes(${JSON.stringify(deel)}) || String(x.url || '').includes(${JSON.stringify(deel)}));
+  if (!t) return 'geen nummer';
+  const r = await fetch('/api/library/' + t.id + '/grid', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ grid: { stukken: [{ van: 0, bpm: ${BPM}, anker: ${ANKER} }], bron: 'hand', slot: true } }) });
+  await r.text();
+  // De lijst opnieuw ophalen: laden neemt het grid uit de rij van het paneel, niet van de server.
+  await window.library.ververs();
+  return r.status;
+})`);
 const deck = (id) => `window.engine.deck(${JSON.stringify(id)})`;
 const opDeMaat = (id) => evalueer(`${deck(id)}.sectieOpDeMaat`);
 const meldtekst = () => evalueer("document.getElementById('meldingen').textContent");
@@ -167,6 +181,7 @@ async function doorloop() {
   await evalueer(`(() => { const v = document.querySelector('#lib-panel .lib-url'); v.value = 'https://www.youtube.com/watch?v=secToets';
     v.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
   ok('het nummer staat in de lijst', await totdat(rij('secToets'), 90000));
+  ok(`het bekende grid (${BPM} bpm) op slot`, (await zetEchtGrid('secToets')) === 200);
   await evalueer(`${rij('secToets')}.querySelector('button[data-deck="A"]').click()`);
   ok('op track 1', await totdat(`${deck('A')}.duration > 150`, 30000));
   ok('track 1 heeft secties', await totdat(`${deck('A')}.sectieKaart?.aantal >= 6`, 60000));

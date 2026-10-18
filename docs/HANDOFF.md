@@ -1,5 +1,22 @@
 # Overdracht — waar we staan (15 oktober 2026)
 
+## 17 OKT: DROOGLOOP ZONDER DE MAC (tak `studio/droogloop-17okt`)
+
+Clay: "ga je verder met wat je nu zelf kunt uitvoeren". Verslag: `docs/verslagen/2026-10-17/droogloop.md`. De suite
+is groen op Node 26.8.2. 66 headless proeven zijn gedraaid. In de eerste ronde waren er 19 niet groen. Geen
+daarvan was een fout in de mixer: de proeven waren verouderd of liepen voor op de server. Ze zijn gerepareerd en nu
+groen, behalve de tijdmeting van werk-ipad onder belasting.
+
+- **Eén echte fout:** het avondpakket op de pc gaf Server rood ("start VARVE in het Dock"). Nu staat het punt daar
+  grijs.
+- **Eén vraag:** **DL1**. De oude beat-analyse zet op een nummer met bezettingswissels het begin op de offbeat.
+  Daarna noemt `blokDrift` een stuk zonder kick "drift". Advies: eerst op de avond kijken, niet nu aan de analyse
+  draaien.
+- **Regel voor proeven:** wie de mixer verlaat terwijl er iets speelt of laadt, beantwoordt "Site verlaten?"
+  (vertrek.js). Anders hangt de proef zonder melding.
+
+Niet gedaan, want het hangt aan de hub, de Stroommachine, de GPU of de Mac: §5 van het verslag.
+
 ## 16 OKT (avond): ÉÉN CONTROLEKAMER, EN DE TEGEL VERSIE (tak `studio/controle-een`)
 
 Clay: "waarom zijn er twee controle kamers? laten we die zo goed mogelijk samenvoegen" en "hoe kan ik snel en

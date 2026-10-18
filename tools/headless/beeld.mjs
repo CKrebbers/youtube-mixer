@@ -512,6 +512,13 @@ try {
   // code, en de zender probeert het rustig opnieuw (1, 2, 4, 8, 10 s …).
   console.log('\nopstarten met een onbereikbaar adres');
   await tab.evalueer(`localStorage.setItem('varve.beeld.aan', '1'); localStorage.setItem('varve.beeld.adres', ${JSON.stringify(LEEG_ADRES)}); true`);
+  // Sinds 11 okt (extra-3 B4) staan beeld.aan en beeld.adres ook op de server, en de server wint bij het opstarten:
+  // zet ze daar ook, zoals een avond zonder pc ze zou vinden (anders start beeld terecht niet: de server zei "uit").
+  for (const [k, w] of [['varve.beeld.aan', '1'], ['varve.beeld.adres', LEEG_ADRES]]) {
+    const r = await fetch(`http://localhost:${POORT}/api/instellingen/${encodeURIComponent(k)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ waarde: w }) });
+    await r.text();
+    if (!r.ok) throw new Error(`instelling ${k} niet op de server gezet: ${r.status}`);
+  }
   const jsVoor8 = tab.js.length, logVoor8 = tab.log.length;
   await tab.cdp('Page.navigate', { url: `http://localhost:${POORT}/` });
   await tab.tot('!!(window.engine && window.beeld && window.meld)', 30000);

@@ -260,8 +260,10 @@ try {
     const { Master } = await import('/src/engine/master.js');
     const m = new Master(ctx, ctx.destination, { limiter: false });
     bron(ctx, m.input, 1, (i) => { const x = 0.25 * Math.sin(2 * Math.PI * 440 * i / SR); return [x, x]; });
+    // De module vóór het renderen laden: addModule tijdens een gepauzeerde offline render kwam in headless Chromium 1194
+    // nooit terug (droogloop 17 okt, de proef hing 15 min). Getoetst wordt de wissel zelf, midden in de toon.
+    await ctx.audioWorklet.addModule('/src/engine/limiter-worklet.js');
     ctx.suspend(0.5).then(async () => {
-      await ctx.audioWorklet.addModule('/src/engine/limiter-worklet.js');
       const node = new AudioWorkletNode(ctx, 'varve-limiter', { numberOfInputs: 1, numberOfOutputs: 2, outputChannelCount: [2, 1], processorOptions: m.opties });
       Object.defineProperty(ctx, 'state', { get: () => 'running', configurable: true });   // alsof hij speelt: de kruisfade
       m._neemOver(node);
