@@ -966,7 +966,7 @@
       "id": "systeem-040",
       "titel": "Herstartlus: POSIX sh, hooguit 5 herstarts per minuut",
       "soort": "besluit",
-      "wat": "tools/varve-app/server-lus.sh start node server/index.js en start hem na 1 s opnieuw als hij omvalt. Niet opnieuw na exit 0, SIGTERM/SIGINT/SIGHUP (143/130/129) of exit 3 (poort bezet). Meer dan 5 per minuut = crash-lus: de lus stopt en logt waarom. Pidbestand ~/.varve/server-lus.pid; een tweede lus zegt \"draait al\". stop/status als subcommando. POSIX sh zodat de test ook op Linux draait.",
+      "wat": "tools/varve-app/server-lus.sh start node server/index.js en start hem na 1 s opnieuw als hij omvalt. Niet opnieuw na exit 0, SIGTERM/SIGINT/SIGHUP (143/130/129) of exit 3 (poort bezet); meer dan 5 per minuut = crash-lus, dan stopt de lus en logt waarom. Pidbestand ~/.varve/server-lus.pid (een tweede lus zegt \"draait al\"), stop/status als subcommando, POSIX sh zodat de test ook op Linux draait.",
       "waarom": "Vroeger startte de Dock-app één keer nohup node &: viel hij om, dan herstartte niemand hem. De LaunchAgent start sinds AR8 dezelfde lus, zonder KeepAlive (launchd zou een crash-lus eindeloos herstarten): één weg naar de server.",
       "bron": [
         {
@@ -1276,8 +1276,8 @@
       "id": "systeem-052",
       "titel": "De Controlekamer: één beginplek die zelf geen MIDI opent",
       "soort": "besluit",
-      "wat": "/controle is waar een sessie begint: tegels met een lampje (Versie, Server, Opstelling, Binnenhalen, Ingest-rij, Stems, Backup, Avondpakket, Mixer, Audio, APC40), de knop \"mixer openen\" en de speellijst. Hij opent nooit MIDI. \"mixer openen\" staat uit zolang er al een mixer open is (hij ziet de Web Lock varve-mixer), en opent via ?hub= als de opstelling dat zegt. Planvenster en beamer open je vanuit de mixer (opener nodig). De mixer meldt zich elke seconde op BroadcastChannel varve-status (alleen het Lock-tabblad); de Controlekamer vraagt elke 2 s { vraag: 'status' }, omdat Chrome de timers van een achtergrondtab knijpt; ouder dan 5 s = \"wacht op melding\". Dat werkt alleen binnen één oorsprong.",
-      "waarom": "Clay: \"maak 1 plek waar de hele controle room samen komt\". Op 16 okt samengevoegd met een los claude.ai-artifact dat hetzelfde deed (\"waarom zijn er twee controle kamers?\").",
+      "wat": "/controle is waar een sessie begint: tegels met een lampje (Versie, Server, Opstelling, Binnenhalen, Ingest-rij, Stems, Backup, Avondpakket, Mixer, Audio, APC40), de knop \"mixer openen\" en de speellijst. Hij opent nooit MIDI; \"mixer openen\" staat uit zolang er al een mixer open is (hij ziet de Web Lock varve-mixer) en opent via ?hub= als de opstelling dat zegt.",
+      "waarom": "Clay: \"maak 1 plek waar de hele controle room samen komt\"; op 16 okt samengevoegd met een los claude.ai-artifact (\"waarom zijn er twee controle kamers?\"). De mixer meldt zich elke seconde op BroadcastChannel varve-status (alleen het Lock-tabblad) en de Controlekamer vraagt elke 2 s { vraag: 'status' }, omdat Chrome de timers van een achtergrondtab knijpt; dat werkt alleen binnen één oorsprong. Planvenster en beamer open je vanuit de mixer (opener nodig).",
       "bron": [
         {
           "pad": "docs/CONTROLEKAMER.md",
@@ -1595,7 +1595,7 @@
       "id": "systeem-067",
       "titel": "Uitzenden is een uitgang die een groeiende opname volgt",
       "soort": "besluit",
-      "wat": "server/uitzend.js leest de WAV (profiel stil) of mp4 (profiel beeld) die de opname al schrijft en voert de nieuwe bytes in de stdin van één ffmpeg naar één doel. Geen eigen klok: de achterstand wordt gemeten tegen de WAV-bytes (frames van de audioklok); een poll van 250 ms zegt alleen wanneer. Het opnamepad blijft byte voor byte gelijk, ook als ffmpeg sterft. Geen uitzending zonder opname. Niets roept de module nog aan: geen route, knop of action.",
+      "wat": "server/uitzend.js leest de WAV (profiel stil) of mp4 (profiel beeld) die de opname al schrijft en voert de nieuwe bytes in de stdin van één ffmpeg naar één doel. Geen eigen klok: de achterstand wordt gemeten tegen de WAV-bytes (frames van de audioklok); een poll van 250 ms zegt alleen wanneer. Het opnamepad blijft byte voor byte gelijk, ook als ffmpeg sterft; geen uitzending zonder opname, en nog roept niets de module aan (geen route, knop of action).",
       "waarom": "VISIE §4: \"de eigen set live uitzenden\" is een uitgang, geen distributie van de cache. Alternatief A (in-app naar een dienst) en C (Varve -> lokaal udp -> OBS -> dienst); C eerst.",
       "bron": [
         {

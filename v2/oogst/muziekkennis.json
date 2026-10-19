@@ -1,6 +1,6 @@
 {
   "onderwerp": "muziekkennis",
-  "samenvatting": "Volgens Clay (19 okt: \"ritme en bpm en een soort grid\") is ritme/bpm/grid de ruggengraat van v2; daarom staan alle kaartjes over tempo, grid, maat en fase op kern, en vraagt kaartje -082 wat hij met \"een soort grid\" bedoelt. De kern van wat v1 over een nummer weet is drie kaarten in TRACKTIJD van de plaat (tempokaart met maat-anker per stuk, toonsoortkaart met stemming per stuk, sectiekaart op de maten van het grid), plus één afgeleide laag 'wat je hoort' (positie min uitgangsvertraging, × rate) en één maatgever met hysterese waar sync, starten op de maat, effecten, sampler en beeld allemaal aan hangen. Het grootste inzicht van v1: 'zeker' moet een METING zijn (tellen van Beat This! tegen het grid, een tweede mening ernaast, twijfel met een reden) en een onzeker grid gebruiken is erger dan weigeren; elke correctie met de hand telt meteen als zeker en wordt nooit door de analyse overschreven. De pure rekenmodules (beatgrid.js, tellen.js, toonsoort.js, secties.js, hoorbaar.js, peaks.js, detect.js, toon.js, server/secties.js) zijn goed getest en kunnen vrijwel ongewijzigd mee, net als de benchmark met bekende antwoorden. Wat schuurt is de laag eromheen: zes losse versienummers, acht cachebestanden/kolommen en vier eigen 'moet opnieuw'-regels, een muteerbaar grid dat bij elke bewerking met de hand een versie moet ophogen, en dubbele constanten en code tussen browser, server en meetgereedschap. In v2 zou ik de analyse als één afhankelijkheidsgraaf bouwen (audio → onset/laag/tellen → grid → secties, elk artefact met versie en invoer-vingerafdruk), het grid onveranderlijk maken (een bewerking geeft een nieuw grid), en één 'muzikale positie'-dienst aanbieden (tel, maat, sectie, toon die je hoort) in plaats van dat elk subsysteem zelf marges en loop-terugvouwen doet. Open voor Clay: blijft de oude onset-analyse (2052 regels) als tweede mening, het DJ-tempobereik 88–180, en de regel welke sprongen op twijfel over de \"1\" moeten weigeren.",
+  "samenvatting": "Volgens Clay (19 okt: \"ritme en bpm en een soort grid\") is ritme/bpm/grid de ruggengraat van v2; daarom staan alle kaartjes over tempo, grid, maat en fase op kern, en op 19 okt koos hij \"b en a, een maatklok waar alles op valt\" (kaartje -082): één maatklok als kern, en het grid van een nummer is hoe dat nummer aan die klok vastzit; wie de klok stuurt staat open (-083). De kern van wat v1 over een nummer weet is drie kaarten in TRACKTIJD van de plaat (tempokaart met maat-anker per stuk, toonsoortkaart met stemming per stuk, sectiekaart op de maten van het grid), plus één afgeleide laag 'wat je hoort' (positie min uitgangsvertraging, × rate) en één maatgever met hysterese waar sync, starten op de maat, effecten, sampler en beeld allemaal aan hangen. Het grootste inzicht van v1: 'zeker' moet een METING zijn (tellen van Beat This! tegen het grid, een tweede mening ernaast, twijfel met een reden) en een onzeker grid gebruiken is erger dan weigeren; elke correctie met de hand telt meteen als zeker en wordt nooit door de analyse overschreven. De pure rekenmodules (beatgrid.js, tellen.js, toonsoort.js, secties.js, hoorbaar.js, peaks.js, detect.js, toon.js, server/secties.js) zijn goed getest en kunnen vrijwel ongewijzigd mee, net als de benchmark met bekende antwoorden. Wat schuurt is de laag eromheen: zes losse versienummers, acht cachebestanden/kolommen en vier eigen 'moet opnieuw'-regels, een muteerbaar grid dat bij elke bewerking met de hand een versie moet ophogen, en dubbele constanten en code tussen browser, server en meetgereedschap. In v2 zou ik de analyse als één afhankelijkheidsgraaf bouwen (audio → onset/laag/tellen → grid → secties, elk artefact met versie en invoer-vingerafdruk), het grid onveranderlijk maken (een bewerking geeft een nieuw grid), en één 'muzikale positie'-dienst aanbieden (tel, maat, sectie, toon die je hoort) in plaats van dat elk subsysteem zelf marges en loop-terugvouwen doet. Open voor Clay: blijft de oude onset-analyse (2052 regels) als tweede mening, het DJ-tempobereik 88–180, en de regel welke sprongen op twijfel over de \"1\" moeten weigeren.",
   "kaartjes": [
     {
       "id": "muziekkennis-001",
@@ -1607,7 +1607,7 @@
       "pijler": "dj",
       "gewicht": "kern",
       "voorstel": "houden",
-      "reden": "Werkt voor acht tracks en voor instrumenten/patronen; volgMaatgever is puur en kan als losse module mee."
+      "reden": "In v2 is er één maatklok als kern (kaartje -082); de maatgever wordt één manier om die klok te sturen: de klok volgt het nummer dat je het hardst hoort, en het grid van dat nummer zegt waar de tellen van de klok liggen. De hysterese (3 dB, 250 ms) en volgMaatgever (puur) gaan mee als regel voor wanneer de klok van nummer wisselt. Wie de klok stuurt: kaartje -083."
     },
     {
       "id": "muziekkennis-069",
@@ -1627,7 +1627,7 @@
       "pijler": "dj",
       "gewicht": "kern",
       "voorstel": "houden",
-      "reden": "Elke trap is een gevonden randgeval."
+      "reden": "Elke trap is een gevonden randgeval. In v2 gaan ze over op de maatklok: syncen = een nummer via zijn grid aan de klok vastzetten, en deze trappen regelen alleen wat de klok volgt als er niets klinkt, iets wacht of iets remt."
     },
     {
       "id": "muziekkennis-070",
@@ -1648,7 +1648,7 @@
       "pijler": "dj",
       "gewicht": "kern",
       "voorstel": "open",
-      "reden": "Clay kiest of v2 een 'sync aan'-stand krijgt die tempo en fase blijft volgen (nodig bij tempokaarten en live opnames), of eenmalig blijft."
+      "reden": "Clay kiest of v2 een 'sync aan'-stand krijgt die tempo en fase blijft volgen (nodig bij tempokaarten en live opnames), of eenmalig blijft. Met één maatklok (kaartje -082) ligt een doorlopende sync voor de hand: een nummer zit via zijn grid aan de klok vast in plaats van eenmalig gelijkgezet te worden."
     },
     {
       "id": "muziekkennis-071",
@@ -1697,7 +1697,7 @@
       "pijler": "programmeren",
       "gewicht": "kern",
       "voorstel": "anders",
-      "reden": "Het contract houden, maar in v2 als abonnement (een 'klok veranderd'-gebeurtenis) zodat geen afnemer een heranker kan missen."
+      "reden": "Het contract houden als de vorm van de maatklok (kaartje -082): in v2 publiceert de klok tel, tellengte, maat en de \"1\" op de audioklok en abonneert elke afnemer zich, zodat niemand een heranker kan missen."
     },
     {
       "id": "muziekkennis-073",
@@ -1917,10 +1917,10 @@
     },
     {
       "id": "muziekkennis-082",
-      "titel": "Wat bedoel je met \"een soort grid\"?",
-      "soort": "open",
-      "wat": "Clay (19 okt): \"ik heb vooral het idee dat ritme en bpm en een soort grid iets is wat ik heel belangrijk vind.\" Drie lezingen: (a) het beatgrid onder elk nummer (tempokaart, de \"1\", zekerheid); (b) één gedeelde maatklok waar alles op valt (decks, patronen, sampler, effecten, beeld); (c) een grid als bediening of weergave (zoals de uitlijnweergave of een stappenraster).",
-      "waarom": "In v1 bestaan alle drie, maar los: (a) beatgrid.js/tellen.js per nummer, (b) de maatgever met hysterese plus fxKlok en de patronenklok die zich erop richt, (c) uitlijn.html en de stapmodus van de patronen. Welke de ruggengraat van v2 is bepaalt de architectuur.",
+      "titel": "Eén maatklok waar alles op valt, met het beatgrid onder elk nummer",
+      "soort": "besluit",
+      "wat": "Ritme, bpm en grid zijn de ruggengraat van v2, in twee lagen: (b) één gedeelde maatklok waar alles op valt (decks, patronen, sampler, effecten, beeld), en (a) het beatgrid onder elk nummer (tempokaart, de \"1\", zekerheid), dat zegt hoe dat nummer aan die klok vastzit. (c) een grid als bediening of weergave (uitlijnweergave, stappenraster) volgt daaruit en is geen eigen bron.",
+      "waarom": "Clay, 19 okt: \"b en a, een maatklok waar alles op valt.\" Daarvóór, dezelfde dag: \"ik heb vooral het idee dat ritme en bpm en een soort grid iets is wat ik heel belangrijk vind.\" In v1 bestaan klok en grid los: de maatgever plus fxKlok, de patronenklok die zich daarop richt, en het grid per nummer.",
       "bron": [
         {
           "pad": "v2/oogst/muziekkennis.json",
@@ -1939,8 +1939,34 @@
       ],
       "pijler": "dj",
       "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Besloten door Clay; wie de klok stuurt staat nog open (kaartje -083)."
+    },
+    {
+      "id": "muziekkennis-083",
+      "titel": "Wie stuurt de maatklok?",
+      "soort": "open",
+      "wat": "Drie mogelijkheden: (a) de klok volgt het nummer dat je hoort, zoals de maatgever in v1 (DJ-stijl: hardst klinkend, met hysterese); (b) de klok leidt met een eigen tempo en nummers syncen erop (Ableton-stijl); (c) beide, met een schakelaar of een overname (bv. de klok neemt het tempo van een nummer over en houdt het vast als dat stopt).",
+      "waarom": "Volgt uit het besluit van 19 okt (kaartje -082). v1 doet (a) voor de decks en een mengvorm voor de patronen: met een maatgever richt de PatroonSpeler zich daarop zonder sprong, zonder maatgever loopt hij op set.tempo, en valt de maatgever weg terwijl er iets speelt, dan houdt hij het laatste tempo vast.",
+      "bron": [
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "volgMaatgever regel 69-109, syncMaster"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Patronen (gebouwd 5 okt), eerste bullet"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (maatgever)",
+        "src/engine/patronen/klok.js",
+        "src/engine/patronen/speler.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
       "voorstel": "open",
-      "reden": "Clay moet kiezen (of rangschikken); advies: (b) als ruggengraat met (a) als invoer per nummer en (c) als weergave erop, zodat alles op één klok valt."
+      "reden": "Clay moet kiezen. Advies: (c), met (a) als standaard bij het dj-en en (b) zodra er patronen of instrumenten zonder nummer spelen; overnemen zonder sprong kan zoals klok.js het nu al doet (gebroken lijn naar de doellijn)."
     }
   ],
   "onderdelen": [
