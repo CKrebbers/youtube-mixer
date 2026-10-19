@@ -1,0 +1,28 @@
+# VarveDJ v2 op een schone machine (meetpunt M14, v2/meting/BUDGET.md): de hele testsuite
+# en de proef in echte Chrome. Alleen bij een wijziging in v2/app, en met de hand.
+# Geen media, geen library, niets naar buiten: de proef gebruikt de demonummers.
+name: v2
+on:
+  push:
+    paths: ['v2/app/**', '.github/workflows/v2.yml']
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: v2/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: tests
+        run: node --test test/*.test.mjs
+      - name: playwright (alleen voor de proef, niet in de app)
+        run: |
+          npm install -g playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: proef in Chrome (sync, tempowissel, jog)
+        run: PLAYWRIGHT_MODULE="$(npm root -g)/" node tools/proef-sync.mjs

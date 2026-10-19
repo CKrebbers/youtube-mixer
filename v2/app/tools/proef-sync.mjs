@@ -11,7 +11,8 @@
  */
 import { createRequire } from 'node:module';
 
-const require = createRequire('/opt/node22/lib/node_modules/');
+// Playwright staat globaal (deze machine: /opt/node22; CI: npm root -g via PLAYWRIGHT_MODULE).
+const require = createRequire(process.env.PLAYWRIGHT_MODULE ?? '/opt/node22/lib/node_modules/');
 const { chromium } = require('playwright');
 const POORT = 8791;
 const schermPad = process.argv.includes('--scherm') ? process.argv[process.argv.indexOf('--scherm') + 1] : null;
