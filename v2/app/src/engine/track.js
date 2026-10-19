@@ -28,7 +28,7 @@ export const BEND = 0.04;
 /** Pitchbereiken, als fractie (±8, ±16, ±50%). */
 export const BEREIKEN = [0.08, 0.16, 0.5];
 /** Soft-takeover van de pitchfader: zo dicht moet hij bij de stand van de klok komen. */
-const GRIJP = 0.01;
+const GRIJP = 1e-6;
 
 export class Track extends Emitter {
   constructor({ n, engine, speler, strip }) {
@@ -137,7 +137,9 @@ export class Track extends Emitter {
     this.vakken.push({ ...vak, van: A });
     if (glij && vak.soort === 'vrij' && this.sync) {
       const P = vak.P + (glij.van - A) * vak.R;
-      this.vakken.push({ van: glij.van, soort: 'gekoppeld', naGlijden: true, v: verschuivingUitPlek(this.klok, this.grid, glij.van, P) });
+      // Nooit koppelen op een onzeker stuk (klok-B08, K16); kwam hij daar door een sprong, dan sync uit.
+      if (this.telZeker(P)) this.vakken.push({ van: glij.van, soort: 'gekoppeld', naGlijden: true, v: verschuivingUitPlek(this.klok, this.grid, glij.van, P) });
+      else if (vak.zoek) this.sync = false;
     }
     this._klaar();
   }
@@ -234,7 +236,6 @@ export class Track extends Emitter {
   zetSync(aan) {
     const A = this.engine.straks();
     const P = this.plek(A);
-    this.bend = 0;
     if (!aan) {
       this.sync = false;
       // Alles wat gekoppeld is OF gekoppeld zou worden (wacht op de maat, na "klok naar dit
@@ -284,7 +285,6 @@ export class Track extends Emitter {
     if (!this.speeltOp(A)) return { geweigerd: 'speelt niet' };
     if (!this.klok.loopt) { this.zetSync(true); return; }
     if (this.gekoppeldOp(A)) return;   // ligt al op de klok
-    this.bend = 0;
     const R = this.snelheid(A);
     const bA = Math.ceil(this.grid.beatAt(P) - 1e-9);
     const a = A + (this.grid.timeOf(bA) - P) / R;
@@ -295,7 +295,7 @@ export class Track extends Emitter {
     this.sync = true;
     this.grijpt = true;   // de klok neemt het tempo van deze fader over
     // Lag de klok er al op, dan meteen koppelen (K9: het eind van het glijden lag anders in het verleden).
-    const klaar = veranderd ? Math.max(this.klok.seg.at(-1).T, A) : A;
+    const klaar = Math.max(this.klok.seg.at(-1).T, A);
     this.vakken = this.vakken.filter((v) => v.van < A);
     if (klaar > A) this.vakken.push({ van: A, soort: 'vrij', P, R });
     this.vakken.push({ van: klaar, soort: 'gekoppeld', naGlijden: klaar > A, v: bA - N });
@@ -307,11 +307,15 @@ export class Track extends Emitter {
     const A = this.engine.straks();
     if (this.gekoppeldOp(A)) {
       // Waar staat de fader voor het tempo van nu? Pas grijpen als hij erlangs komt (K4).
-      const nodig = 0.5 + (this.snelheid(A) - 1) / (2 * this.bereik);
+      // De stand is "bpm van het nummer hier × pitch = klok" (B13); niet uit de snelheid, die wijkt
+      // in de overgangstel van een tempokaart af (K18).
+      const nodig = 0.5 + (this.klok.bpm(A) / this.grid.bpmAt(this.plek(A)) - 1) / (2 * this.bereik);
       const was = this.pitch;
       this.pitch = v01;
       if (!this.engine.hoorbaar(this.n)) { this.grijpt = false; this.emit('verander'); return; }
-      if (!this.grijpt) {
+      // Elke beweging moet langs de stand komen of erop beginnen: ook na een tempowissel in het
+      // grid zelf (K13) is de oude greep niets meer waard.
+      {
         const erlangs = (was - nodig) * (v01 - nodig) <= 0 || Math.abs(v01 - nodig) < GRIJP || Math.abs(was - nodig) < 1e-6;
         if (!erlangs) { this.emit('verander'); return; }
         this.grijpt = true;
@@ -341,7 +345,7 @@ export class Track extends Emitter {
   _naarCue(A, P) {
     const wachtte = this.wacht !== null;
     this._zet(A, { soort: 'stil', P });
-    if (wachtte) this.startOpDeMaat();
+    if (wachtte && this.klok.loopt) this.startOpDeMaat();
   }
 
   /**
@@ -383,12 +387,13 @@ export class Track extends Emitter {
       const doel = this.grid.timeOf(this.klok.tel(A) + v);
       if (!this.telZeker(doel)) {
         this.sync = false;
+        this.pitch = Math.min(1, Math.max(0, 0.5 + (this.snelheid(A) - 1) / (2 * this.bereik)));   // de fader op wat hij doet (K17)
         this._zet(A, { soort: 'vrij', P: P2, R: this.snelheid(A) });
         this.engine.meld(`track ${this.n}: het grid is daar onzeker, hij speelt vrij verder (sync uit)`, 'info', `sync:${this.n}`);
         return;
       }
       this._zet(A, { soort: 'gekoppeld', v });
-    } else if (x.soort === 'vrij') this._zet(A, { soort: 'vrij', P: P2, R: x.R });
+    } else if (x.soort === 'vrij') this._zet(A, { soort: 'vrij', P: P2, R: x.R, zoek: true });
     else this._naarCue(A, P2);
   }
 
@@ -414,7 +419,6 @@ export class Track extends Emitter {
     const k = Math.ceil((vanaf - (b0 - m)) / per - 1e-9);
     const startTel = b0 - m + per * k;
     this.sync = true;
-    this.bend = 0;
     this.vakken = this.vakken.filter((v) => v.van < A);
     this.vakken.push({ van: A, soort: 'stil', P: P0 });
     this.vakken.push({ van: this.klok.tijd(startTel), soort: 'gekoppeld', v: b0 - startTel, vanTel: startTel });
@@ -429,6 +433,8 @@ export class Track extends Emitter {
     for (let i = 1; i < this.vakken.length; i++) {
       const v = this.vakken[i];
       if (v.vanTel !== undefined && v.van > nu) v.van = Math.max(this.vakken[i - 1].van + 1e-9, this.klok.tijd(v.vanTel));
+      const w = this.vakken[i - 1];
+      if (v.naGlijden && v.van > nu && w.soort === 'vrij') v.v = verschuivingUitPlek(this.klok, this.grid, v.van, w.P + (v.van - w.van) * w.R);
     }
     if (this.vakken.some((v) => v.soort === 'gekoppeld')) this.plan();
   }
