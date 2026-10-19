@@ -1,0 +1,2071 @@
+{
+  "onderwerp": "produceren",
+  "samenvatting": "Produceren in v1 is technisch sterk: een helder instrumentcontract (noteOn met audiokloktijd, acht plekken 0..1, gebaar-vlag), vier gemeten instrumenten (Poly, FM, Schaal, Drums) op −14 LUFS, en een sequencer met een klok als gebroken lijn op 384 PPQN die 120 ms vooruit plant en aantoonbaar elke noot één keer op de tel van de maatgever zet. De sampler knipt in tracktijd op het grid, loopt exact op de maat via playbackRate uit de bufferlengte en bewaart alleen een verwijzing naar het nummer; patronen gaan als MIDI-bestand naar Logic volgens vastgelegde regels. Maar produceren is naast het DJ-model gezet, niet erin: een instrumenttrack geeft nooit de maat, de sampler en de klankschaal hangen los op de master zonder strip of cue, patronen spelen alleen instrumenten, en de enige weg van een nummer naar een patroon is een brug via drumpad 9–16 die op het tempo van het knippen blijft en na herladen leeg is. Noten en instrumentstanden staan niet in het handelingenlog, dus een eigen-werk-set is niet terug te spelen. Niets ervan is gehoord of op de Xboard, Maschine of APC gespeeld. In v2 zou ik de track als drager centraal zetten (nummer, instrument of sampler, met één strip en dezelfde eigenschappen), patronen gebeurtenissen laten sturen naar alles wat een track draagt, de sampler een track-instrument maken, noten als eigen stroom in het log opnemen, zetParam met tijd meteen in het contract zetten, en eerst één keten tot op de hardware proeven. Open voor Clay: wie de baas van de klok is, en wat Logic moet krijgen (export, multitrack of live tempo).",
+  "kaartjes": [
+    {
+      "id": "produceren-001",
+      "titel": "Een track draagt een nummer óf een instrument",
+      "soort": "besluit",
+      "wat": "Een instrument woont op een van de acht tracks, met dezelfde kanaalstrip als een nummer: trim, EQ, insert-effect, filter, fader, crossfader, sends en koptelefoon-cue. Een instrument erop haalt het nummer eraf (deck.leeg()), een nummer laden haalt het instrument weg.",
+      "waarom": "Clay 5 okt (ST7). Alternatief was een apart instrumentkanaal; gekozen omdat dan alle mixgereedschap vanzelf werkt en de APC-indeling (één kolom = één track) niet verandert. VISIE §2 noemt dit de kern van de crossover.",
+      "bron": [
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§0 tabel ST7"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§1, §6.1"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§2 laatste alinea"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (zetInstrument, instrumentOp)",
+        "src/engine/deck.js (leeg)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Dit is precies de crossover uit VISIE: dezelfde strip, fader en cue voor nummer en instrument. In v2 het uitgangspunt van het trackmodel, niet een uitbreiding erop."
+    },
+    {
+      "id": "produceren-002",
+      "titel": "Instrumentdefinitie { soort, naam, maak(ctx, {uit, klok, toon}) }, vaste lijst",
+      "soort": "contract",
+      "wat": "Elke instrumentmodule exporteert één definitie; index.js zet ze in een expliciete lijst INSTRUMENTEN. maak() krijgt de AudioNode waar hij op aansluit (uit), een functie voor de klok van de maatgever (fxKlok of null) en een functie voor de toonsoort die je hoort.",
+      "waarom": "Geen registratie via bijwerkingen van imports: dan hangt wat er bestaat af van welke module toevallig al geladen is. klok en toon als functies houden het instrument los van de engine.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "src/engine/instrumenten/index.js",
+          "waar": "r. 1-18"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/index.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Klein, getest en zonder koppeling aan MIDI of DOM; zo mee."
+    },
+    {
+      "id": "produceren-003",
+      "titel": "Het instrument-object: noten met tijd, acht plekken 0..1, stil en vernietig",
+      "soort": "contract",
+      "wat": "noteOn(noot 0..127, snelheid 0..1, t?), noteOff(noot, t?), alleUit(t?), stil() (paniek met korte fade), druk(w, noot?), buig(−1..1 = ±2 halve tonen), mod(w), houd(aan), zetParam/leesParam(1..8, 0..1), stand(), start() (Promise, idempotent; een noteOn vóór klaar is stil en gooit nooit) en vernietig(). t is audiokloktijd; weggelaten of voorbij = nu.",
+      "waarom": "Eén interface voor Poly, FM, Schaal en Drums; de sequencer plant vooruit met t (regel 3), het toetsenbord speelt nu.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§3 tabel"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/poly.js",
+        "src/engine/instrumenten/fm.js",
+        "src/engine/instrumenten/schaal.js",
+        "src/engine/instrumenten/drums.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het contract heeft zich bij vier verschillende instrumenten gehouden. Uitbreiden met zetParam(k, v, t), zie de kaart over p-locks."
+    },
+    {
+      "id": "produceren-004",
+      "titel": "Parameters: hooguit acht, met eenheid en een gebaar-vlag",
+      "soort": "contract",
+      "wat": "params = [{ id, label, standaard 0..1, eenheid?(v), gebaar? }], plek k = params[k−1]. eenheid(v) geeft de waarde in echte eenheden met dezelfde formule als zetParam. gebaar: true = een knop die zelf klank maakt (wrijven op de Schaal); die wordt niet onthouden, zodat er na het laden niets vanzelf klinkt.",
+      "waarom": "Acht = de device knobs van de APC en de draaiknoppen van de Maschine. Een eenheid die van zet() afwijkt laat het scherm liegen (dezelfde les als bij de effecten).",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§3 (params)"
+        },
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.6"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/*.js (params)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Plekken in plaats van parameternamen laten een mapping staan als je van instrument wisselt, net als bij de FX-racks."
+    },
+    {
+      "id": "produceren-005",
+      "titel": "Instrumentregels: audioklok, geen afval, geen curves, stemroof zonder tik",
+      "soort": "regel",
+      "wat": "Noten plannen met t op de Web Audio-klok, nooit setTimeout. In een worklet niets aanmaken per blok. Nooit setValueCurveAtTime: envelopes vanaf houdVast met setTargetAtTime/linearRamp. Bij volle polyfonie de oudste stem roven met een korte fade. De engine kent geen MIDI: noten komen binnen als getallen.",
+      "waarom": "Dezelfde regels als de rest van het audiopad (AUDIOPAD.md, overgang.js); een GC op de audiothread is een tik, een afgebroken curve speelt Chrome opnieuw af.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§4 regels 1-7"
+        }
+      ],
+      "code": [
+        "src/engine/overgang.js",
+        "src/engine/instrumenten/"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Algemene engine-regels die voor instrumenten net zo gelden; in v2 één keer in het contract zetten."
+    },
+    {
+      "id": "produceren-006",
+      "titel": "De regels van de oorspronkelijke apps gelden niet: chromatisch en op de maat",
+      "soort": "besluit",
+      "wat": "Instrumenten uit MediSynth, AVBRNC en de filter app spelen in VARVE chromatisch en met tempo. Geen toonladderslot, geen minimale aanslag van 200 ms, geen invarianten. Een schaalinstrument mag noten op zijn eigen velden leggen, maar elke MIDI-noot moet iets doen.",
+      "waarom": "Clay 5 okt (ST4). In hun eigen app blijven die regels; in een DJ- en productieomgeving moet een noot doen wat hij zegt.",
+      "bron": [
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§0 tabel ST4"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§4 regel 6, §7.1 \"Niet meegenomen\""
+        }
+      ],
+      "code": [],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Voorkomt dat geporteerde instrumenten hun eigen wereld meenemen."
+    },
+    {
+      "id": "produceren-007",
+      "titel": "Luidheid: elk instrument gemeten op −14 LUFS",
+      "soort": "meting",
+      "wat": "Een akkoord van drie noten op snelheid 0,8 moet ongeveer zo luid zijn als een nummer (−14 LUFS, BS.1770). Gemeten ophogingen: Poly 0,52 (−13,99 LUFS), FM 0,55 (−14,03), Schaal 2,73 (−13,93), Drums 3,6 (een maat vier-op-de-vloer, −14,0). De pieken liggen rond of boven 0 dBFS; de master-limiter vangt dat.",
+      "waarom": "Zonder ophoging piekte de klankschaal op −28..−33 dBFS naast tracks van −14 LUFS en de Poly zat op −16,3 LUFS. Gemeten in Chrome op een OfflineAudioContext (tools/headless/instrument.mjs, instrumenten.mjs, drums.mjs).",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.5, §7.3, §8 \"Gemeten\""
+        },
+        {
+          "pad": "docs/KLANKSCHAAL.md",
+          "waar": "§3 Luidheid"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/poly.js (OPHOGING)",
+        "src/engine/instrumenten/fm.js (OPHOGING)",
+        "src/engine/instrumenten/schaal.js (OPHOGING)",
+        "src/engine/instrumenten/drums.js (UIT_OPHOGING)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "De regel (meten, dan vastzetten) hoort mee; de getallen alleen als de klank ongewijzigd meegaat. Verandert de klank, opnieuw meten."
+    },
+    {
+      "id": "produceren-008",
+      "titel": "Instrumenten zijn droog: galm, echo en limiter komen van de strip en de master",
+      "soort": "besluit",
+      "wat": "Een instrument hangt aan een eigen GainNode die op chain.input van zijn track aansluit, niet aan ctx.destination. Bij het overnemen van MediSynth vielen galm, korrelwolk, tape-warmte en de eigen limiter weg: galm en echo zijn de sends van de track, de limiter is die van de master.",
+      "waarom": "Zo werkt alles van de strip vanzelf (ook de cue in de koptelefoon) en klinkt er nooit een tweede limiter of galm in een keten.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.1 Aansluiten, §7.1 \"Niet meegenomen\""
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (zetInstrument)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Scheiding van klankbron en mixgereedschap is wat de crossover mogelijk maakt."
+    },
+    {
+      "id": "produceren-009",
+      "titel": "Instrument weghalen: eerst dicht, dan vernietigen; een worklet eerst stop",
+      "soort": "valkuil",
+      "wat": "Weghalen gaat in stappen: alleUit(), de aansluiting dicht met de zachte S van killVersterking (na startDrempel), en pas na een timer met marge vernietig() en disconnect(). Een AudioWorkletNode krijgt eerst een stop-bericht en geeft dan false uit process(); alleen losmaken laat hem voor altijd draaien.",
+      "waarom": "disconnect() is niet sample-accuraat en klikt. Gemeten 15 okt: +68 MB na 50 instrumentwissels zonder stop, +3 MB erna.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.1 Weghalen"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-15/arch-audio.md",
+          "waar": "r. 15-30, 184"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Audio-gezondheid"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (_haalInstrumentWeg)",
+        "src/engine/instrumenten/schaal-worklet.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Ging al mis met geheugen; het patroon geldt voor elke bron die komt en gaat."
+    },
+    {
+      "id": "produceren-010",
+      "titel": "Een instrumenttrack geeft nooit de maat en doet niet mee met DJ-gereedschap",
+      "soort": "pijn",
+      "wat": "Een track met een instrument heeft geen buffer, grid of transport: hij is nooit maatgever, sync en starten op de maat weigeren, sampler-knippen weigert, de auto-DJ laadt er niet op en de video ziet een lege track. Nieuwe code die \"een lege track\" zoekt moest apart naar instrumentOp(id) kijken.",
+      "waarom": "Het trackmodel is een deck met een nummer; het instrument is er in v1 later bij gezet als uitzondering. Elke DJ-functie kreeg een eigen controle (_vrijDeck, syncMaster, maatgever).",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.1 \"Geen nummer, wel geluid\""
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Instrumenten op een track"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js",
+        "src/auto/automaat.js (_vrijDeck)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "In v2 een track met \"wat hij draagt\" als eerste begrip en een gedeelde vraag \"geeft maat / heeft positie / klinkt\", zodat een patroon of instrument ook maat kan geven als er geen nummer is."
+    },
+    {
+      "id": "produceren-011",
+      "titel": "De speeltrack: waar noten heen gaan",
+      "soort": "regel",
+      "wat": "speeltrack() = de focus-track als die een instrument heeft, anders de laatste focus-track met een instrument, anders de eerste track met een instrument, anders null. Toetsenbord, schermklavier, Maschine-speelmodus, live opnemen en de crossover naar de Drums gebruiken alle dezelfde regel.",
+      "waarom": "Je knipt en mixt met de focus op een nummer; de noten moeten dan toch op het laatst bespeelde instrument blijven landen.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.1 tabel"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§8 \"Welke Drums\""
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (speeltrack, drumsDoel)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Eén regel op één plek; meer bronnen (iPad, tweede keyboard) vragen later misschien een speeltrack per ingang."
+    },
+    {
+      "id": "produceren-012",
+      "titel": "Een spelend nummer pas bij een tweede druk vervangen door een instrument",
+      "soort": "besluit",
+      "wat": "track.N.inst loopt rond (geen → elk instrument → geen). Staat er een nummer dat speelt, dan haalt kiezen het er pas af bij een tweede druk binnen 3 s, ook op de APC; een stil nummer gaat meteen. Andersom telt een instrument dat klinkt als \"speelt\" bij laden uit de library.",
+      "waarom": "Dezelfde destructief-regel als elders in de app (tweede klik binnen 3 s); een instrument kiezen midden in een set mag het lopende nummer niet wegslaan.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.2"
+        }
+      ],
+      "code": [
+        "src/control/actions.js (track.N.inst)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Goedkope bescherming tegen een fout op het podium."
+    },
+    {
+      "id": "produceren-013",
+      "titel": "Noten en instrumentknoppen staan niet in het handelingenlog",
+      "soort": "pijn",
+      "wat": "track.N.inst* gaat het log in maar terugspelen slaat het over, de instrumentknoppen staan niet in de beginstand, en noten gaan niet over de bus en worden dus niet gelogd. Een set waarin je live speelde is daardoor niet terug te spelen of opnieuw te renderen, en het setboek ziet die noten niet.",
+      "waarom": "Gevolg van \"noten niet over de bus\" plus een log dat aan de bus hangt. In v1 OVERSLAAN en NIET_IN_WAARDEN in handelingen.js/terugspelen.js.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.1 laatste punt"
+        },
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.6 Handelingenlog"
+        },
+        {
+          "pad": "src/control/terugspelen.js",
+          "waar": "r. 45-52"
+        }
+      ],
+      "code": [
+        "src/control/handelingen.js",
+        "src/control/terugspelen.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Noten hoeven niet over de bus, maar wel in het log: een eigen notenstroom met tijd op de audioklok, en instrument plus knoppen in de beginstand. Dan is een eigen-werk-set (VRAGEN U2) ook opnieuw te renderen."
+    },
+    {
+      "id": "produceren-014",
+      "titel": "Noten gaan niet over de action-bus, knoppen van het keyboard wel",
+      "soort": "besluit",
+      "wat": "Een noot is een nummer met een snelheid, geen 0..1, en loslaten hoort bij de noot die je aansloeg, niet bij een knop. Daarom gaan noten rechtstreeks van noten.js naar het instrument. De knoppen van een keyboard gaan wel over de bus, via een kleine apparaatmapping (mappings/xboard49.json, {speel} = de speeltrack) met soft-takeover.",
+      "waarom": "Regel 2 (alle value-actions 0..1) past niet op noten; een noot als trigger verliest snelheid en toonhoogte.",
+      "bron": [
+        {
+          "pad": "src/control/noten.js",
+          "waar": "r. 1-45"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.3"
+        }
+      ],
+      "code": [
+        "src/control/noten.js",
+        "mappings/xboard49.json"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Juist gescheiden; zie wel de pijn over het log: niet over de bus mag, ongezien mag niet."
+    },
+    {
+      "id": "produceren-015",
+      "titel": "Noot-uit gaat naar waar de noot-aan heen ging",
+      "soort": "regel",
+      "wat": "noten.js onthoudt per bron, kanaal en noot welk instrument de noot-aan kreeg; noot-uit en pedaal gaan daarheen, ook als de focus intussen wisselde of het instrument vervangen is (dan niets). Twee keer aan zonder uit = eerst uit. Verdwijnt een poort (state niet meer connected), dan laten zijn noten en pedaal los.",
+      "waarom": "Zelfde principe als loslaten in de mapping (mapping.vast); anders blijven noten hangen na een focuswissel.",
+      "bron": [
+        {
+          "pad": "src/control/noten.js",
+          "waar": "_aan/_uit, r. 120-200"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.3"
+        }
+      ],
+      "code": [
+        "src/control/noten.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Hangende noten zijn het eerste dat een live-instrument onbruikbaar maakt."
+    },
+    {
+      "id": "produceren-016",
+      "titel": "Hoe MIDI naar het instrumentcontract gaat",
+      "soort": "contract",
+      "wat": "note on/off (velocity 0 = off) → noteOn(noot, v/127)/noteOff; pitchbend 14 bit met 8192 = 0, precies −1 en +1 op de aanslagen → buig; kanaal- en polyfone aftertouch → druk(w) / druk(w, noot); CC 1 → mod, CC 64 → houd, CC 120 → stil(), CC 123 → alleUit(); andere CC → apparaatmapping; SysEx Master Volume (F0 7F dev 04 01 ll mm F7, de schuif van de Xboard49) → signature master-volume. Systeemberichten (clock, active sensing) doen niets.",
+      "waarom": "Het instrument kent geen MIDI (regel 1); alleen src/control vertaalt.",
+      "bron": [
+        {
+          "pad": "src/control/noten.js",
+          "waar": "r. 30-60 en ontvang()"
+        }
+      ],
+      "code": [
+        "src/control/noten.js (ontvang, leesMasterVolume)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Volledig en getest (instrumenten.test, maschine.test)."
+    },
+    {
+      "id": "produceren-017",
+      "titel": "noten.js vraagt zelf geen MIDI aan; de Maschine-poort nooit aan noten koppelen",
+      "soort": "valkuil",
+      "wat": "noten.js luistert mee op de MidiHub van midi-opzet.js (alleen in het eerste tabblad, Web Lock) of krijgt een poortobject van buiten via koppel(poort) (de nep-poorten van de hub). De APC speelt nooit noten (op naam). De Maschine-poort mag niet aan koppel: zijn knoppen 0–47 zijn noten op kanaal 1; maschine.js geeft alleen de pads door via ontvang(). Een speelapparaat is nooit \"de controller\".",
+      "waarom": "Chrome crashte in de MIDI-dienst met meerdere tabbladen die tegelijk MIDI openden (23 sep). Knoppen als noten zouden willekeurige tonen spelen.",
+      "bron": [
+        {
+          "pad": "src/control/noten.js",
+          "waar": "kopcommentaar"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Xboard49 en Maschine via de hub"
+        }
+      ],
+      "code": [
+        "src/control/noten.js (hoorHub, koppel)",
+        "src/control/maschine.js",
+        "src/ui/speelapparaten.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "De regel \"één partij opent MIDI\" blijft; in v2 doet de hub dat voor alle apparaten."
+    },
+    {
+      "id": "produceren-018",
+      "titel": "De CC-nummers van de Xboard49 zijn een aanname",
+      "soort": "grens",
+      "wat": "Knop 1–8 = CC 21–28 (instrumentknoppen van de speeltrack), knop 9–16 = CC 31–38 (FX van de speeltrack), de schuif = SysEx Master Volume (volume). De CC-nummers komen uit Ardour's xboard-map en zijn niet op Clay's apparaat gemeten. De Xboard ontvangt niets: geen LED's of scherm. Knoppen zijn absolute potmeters, dus pickup.",
+      "waarom": "Fabrieks-CC's staan niet in de handleiding; de proef speelapparaten in AV-app-hub moet ze leveren.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.3 De knoppen, §6.6"
+        },
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§4 tabel"
+        }
+      ],
+      "code": [
+        "mappings/xboard49.json"
+      ],
+      "pijler": "controllers",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Als data in een apparaatmapping blijft het makkelijk te corrigeren na de proef."
+    },
+    {
+      "id": "produceren-019",
+      "titel": "Latentie: toets → noteOn gemeten, toets → geluid niet",
+      "soort": "meting",
+      "wat": "In JS gemeten: Xboard-toets → noteOn 3,5–4,4 ms, Maschine-pad → noteOn 2,6–3,1 ms. Toets → geluid (doel < 15 ms; noten spelen \"nu\", dus Web MIDI plus de uitgangsbuffer) is nooit gemeten, ook niet in een realtime AudioContext naast acht streamende decks.",
+      "waarom": "Alle instrumentmetingen zijn offline gedaan (OfflineAudioContext).",
+      "bron": [
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§5 S3"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.6, §7.4"
+        }
+      ],
+      "code": [],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Het doel van < 15 ms meenemen als toets die op de echte Mac draait, vóór er meer instrumenten komen."
+    },
+    {
+      "id": "produceren-020",
+      "titel": "Poly: twee oscillatoren, twaalf stemmen, decay en release op één knop",
+      "soort": "besluit",
+      "wat": "De polysynth uit de filter app: per stem twee oscillatoren met ontstemming, lowpass met envelope, VCA met ADSR, 12 stemmen. Stemroof: eerst wat los is, dan het pedaal, dan de oudste toets, 5 ms zachte S. Acht plekken: golf, ontstem, filter, reso, env, attack, decay/rel (één knop, zoals de Volca Keys), sustain. Snelheid² op de amplitude. Gemeten A4 = 440,000 Hz.",
+      "waarom": "Een volle ADSR plus de rest zou negen knoppen zijn; acht is de grens van het contract. Hard afkappen bij stemroof gaf 97× de tweede afgeleide van de rust, de fade 1,24×.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.5"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/poly.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Gemeten en klein; klank nog door niemand gehoord."
+    },
+    {
+      "id": "produceren-021",
+      "titel": "cancelAndHoldAtTime zet niet altijd een beginpunt: reken de envelope zelf uit",
+      "soort": "valkuil",
+      "wat": "In Chrome begon een lineaire helling na cancelAndHoldAtTime midden in een setTargetAtTime op 0: een sprong bij een geplande stemroof. De Poly rekent nu zelf de stand van zijn envelope op dat moment uit (_envOp) en zet een expliciet beginpunt. Bij de Drums hetzelfde: cancelAndHold zet alleen een punt als hij een helling doorsnijdt, anders begint de helling bij het vorige punt (_kap zet het zelf).",
+      "waarom": "Gemeten in Chrome: de open hat zakte zo al vanaf zijn aanslag weg; de mock in de test doet het nu net zo.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.5 laatste alinea, §8 De stem (Afkappen)"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/poly.js (_envOp)",
+        "src/engine/instrumenten/drums.js (_kap)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Elk toekomstig instrument met native envelopes loopt hier tegenaan; de mock moet net zo streng zijn als Chrome."
+    },
+    {
+      "id": "produceren-022",
+      "titel": "FM: de Glass-stem van MediSynth, zweving in Hz in plaats van cent",
+      "soort": "besluit",
+      "wat": "Harmonische FM (modulator = ratio × de noot) met een index die na de halve aanslag naar 5% zakt, een draaggolf als PeriodicWave, twee draaggolven in unison die een vast aantal Hz tegen elkaar zweven, lowpass, envelope en panner; 12 stemmen. Ratio in tien standen (0,5 … 7). Dezelfde noot opnieuw laat de vorige los; opruimen op de audioklok, niet op onended. Gemeten A4 +0,10 ct.",
+      "waarom": "Zweving in Hz klinkt in de bas even traag als in de hoogte. onended komt asynchroon en is geen klok.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§7.1, §7.3"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/fm.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Alleen gewone Web Audio-nodes, gemeten; zo mee."
+    },
+    {
+      "id": "produceren-023",
+      "titel": "Schaal als instrument: elke noot een eigen veld op zijn toonhoogte",
+      "soort": "besluit",
+      "wat": "Tien notenvelden, elk het handpan-veld van de Waterschaal (grondtoon, zwevende partner, boventonen), per noot precies gestemd (A4 = 440 Hz). Dezelfde noot slaat hetzelfde veld opnieuw aan; een nieuwe noot neemt een uitgeklonken veld, anders het oudste losse, anders het oudste. De kern staat op de grondtoon van wat je hoort en klinkt mee als een noot op zijn boventonen valt.",
+      "waarom": "Alternatief was noten op de acht velden van een ladder leggen; dat maakt van een melodie iets anders (Kurd heeft gaten van één tot drie halve tonen). Een resonator stemmen is één coëfficiënt, dus elke noot zijn eigen veld kan.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§7.2"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/schaal.js",
+        "src/engine/instrumenten/schaal-kern.js",
+        "src/engine/instrumenten/schaal-worklet.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Respecteert ST4 (chromatisch) en houdt het karakter van de schaal."
+    },
+    {
+      "id": "produceren-024",
+      "titel": "Omstemmen van een resonator moet de amplitude houden",
+      "soort": "valkuil",
+      "wat": "SchaalKern liet bij een nieuwe stemming de toestand (y1, y2) staan. Voor een paar cent is dat goed, maar een veld dat van 2 kHz naar 55 Hz gaat klonk zo × 7,8 harder. Nu blijft y1 (de golfvorm springt niet: geen tik) en wordt y2 uitgerekend voor dezelfde amplitude en fase bij de nieuwe frequentie (_coef). Geldt ook voor buigen en fijn.",
+      "waarom": "Gemeten bij het bouwen van de Schaal als track-instrument (5 okt).",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§7.2 \"Omstemmen houdt de amplitude\""
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/schaal-kern.js (_coef)",
+        "src/engine/klankschaal-kern.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een fysiek model dat van toon wisselt (stemroof, pitchbend) heeft dit nodig."
+    },
+    {
+      "id": "produceren-025",
+      "titel": "In een worklet: klok uit currentFrame, berichten op hun sample",
+      "soort": "valkuil",
+      "wat": "De klok in de worklet is currentFrame / sampleRate: de getter currentTime maakt elk blok een getal-object (afval). Elk bericht (noot, parameter) draagt een tijd op de audioklok; de kern zet ze in een vaste, gesorteerde rij en past ze toe op hun sample (blok() rendert tot dat moment).",
+      "waarom": "Gemeten: 0 GC over 3000 blokken met tien velden en wrijven; met een noot per 25 blokken 0,3–0,7 kB per noot. Rekentijd ~0,19 ms per blok van 128 frames.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§7.2 Tijd, §7.3 tabel"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/schaal-kern.js",
+        "src/engine/instrumenten/schaal-worklet.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Het patroon voor elk instrument dat sample-exact vooruit gepland moet worden in een worklet."
+    },
+    {
+      "id": "produceren-026",
+      "titel": "Drums: zestien pads op noot 36–51, kit op 1–8, eigen stukken op 9–16",
+      "soort": "contract",
+      "wat": "Pad 1 = noot 36, linksonder op de Maschine, per rij van vier omhoog; elke andere noot valt erop terug: pad = (noot − 36) mod 16 + 1. Pads 1–8: KICK, SNARE, CLAP, HAT / TOM, RIM, BAS, HAT OPEN (de hats boven elkaar: één vinger kapt de open hat af). Pads 9–16 leeg; laadPad(pad, buffer, naam) zet er een kopie op met 2 ms in- en 5 ms uitfade, wisPad haalt hem weg.",
+      "waarom": "De indeling volgt de fysieke Maschine-pads, zodat de padmodus en de speelmodus dezelfde plek gebruiken.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§8 Pads, Pads 9–16"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/drums.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "De noten-indeling is een contract met patronen en de MIDI-export; zo houden."
+    },
+    {
+      "id": "produceren-027",
+      "titel": "De drumkit wordt gerekend, niet geladen",
+      "soort": "besluit",
+      "wat": "Bij start() rekent de Drums de acht geluiden op ctx.sampleRate (~18 ms voor alle acht) met de formules van Elektronlearn's sounds.js en hetzelfde zaad (mulberry32(0x5eed)): bit voor bit wat Elektronlearn maakt, behalve een fade van 5 ms aan het einde. Geen samplebestanden. KICK, SNARE en HATS rekenen opnieuw bij een knopwijziging, maar pas bij de volgende aanslag op die pad.",
+      "waarom": "De kick hield op −35 dB op: een tik, vandaar de fade. Een kick opnieuw rekenen kost ~3 ms; bij elke knopstap zou dat 300 ms per seconde zijn.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§8 Pads (alinea onder de tabel), De stem"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/drums.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Geen bestanden, deterministisch, en de klank is te sturen met knoppen."
+    },
+    {
+      "id": "produceren-028",
+      "titel": "Drums: mono per pad, choke tussen de hats, noteOff doet niets",
+      "soort": "regel",
+      "wat": "Een nieuwe aanslag kapt de vorige van dezelfde pad af (6 ms), ook voor de stukken op 9–16; de gesloten en open hat zijn één choke-groep. Hooguit 12 stemmen, de oudste gaat. noteOff, alleUit, houd, druk en mod doen niets (een drumgeluid klinkt uit); buig = ±2 halve tonen. stil() kapt alles in 12 ms. noteOn(noot, snelheid, t) is sample-exact.",
+      "waarom": "Zoals een drumcomputer; gemeten in Chrome: choke-afwijking 3·10⁻⁸, een kick op sample 12 345 begint op sample 12 345.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§8 De stem, Gemeten"
+        }
+      ],
+      "code": [
+        "src/engine/instrumenten/drums.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Bekend en goed gedrag."
+    },
+    {
+      "id": "produceren-029",
+      "titel": "Twee klankschalen: een globale naast de sampler en een Schaal op een track",
+      "soort": "pijn",
+      "wat": "De klankschaal (29 sep) is een globaal instrument op master.input met eigen klankschaal.*-actions, een eigen rij en eigen send-aftakkingen: geen trackfader, EQ, insert of cue in de koptelefoon. Op 5 okt kwam Schaal als track-instrument op dezelfde kern (SchaalKern). Twee wegen naar hetzelfde geluid, met elk een eigen bediening.",
+      "waarom": "De globale schaal is gebouwd vóór het contract \"een track draagt een instrument\" en is daarna niet opgegaan in dat contract.",
+      "bron": [
+        {
+          "pad": "docs/KLANKSCHAAL.md",
+          "waar": "§1, §3"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§7.2"
+        },
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "r. 206-216"
+        }
+      ],
+      "code": [
+        "src/engine/klankschaal.js",
+        "src/engine/klankschaal-worklet.js",
+        "src/ui/klankschaal-paneel.js",
+        "src/engine/instrumenten/schaal.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 één Schaal op een track; aanslaan van de acht velden van de ladder (kern, veld 1–8, wrijf, demp) wordt een speelwijze van dat instrument, zodat strip, cue en patronen er vanzelf bij komen."
+    },
+    {
+      "id": "produceren-030",
+      "titel": "De schaal stemt op wat je HOORT, en valt nooit terug naar een standaard",
+      "soort": "regel",
+      "wat": "Stemming = de toonsoort van de gevolgde track (maatgever, focus of met de hand) + pitch (zonder keylock) + de stemming in cent van dat stuk. Past de ladder niet bij majeur/mineur, dan de relatieve toonsoort (alle tonen in de toonladder van de plaat). Zonder toonsoort: de laatste toon houden, nooit terug naar D. De kern ligt altijd rond D3. Onder een halve cent verschil niet omstemmen.",
+      "waarom": "Clay 29 sep: \"op de juiste tuning gebaseerd op audio van andere tracks\". stemming() is puur en getest over alle 24 toonsoorten en alle diatonische ladders; een plaat op +43 ct gaf een schaal op +43,0 ct.",
+      "bron": [
+        {
+          "pad": "docs/KLANKSCHAAL.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Klankschaal"
+        }
+      ],
+      "code": [
+        "src/engine/klankschaal.js (stemming, TOONLADDERS)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Dit is een echte crossover: het instrument hoort de mix. Ook in v2 de bron van de toon voor elk toonvolgend instrument."
+    },
+    {
+      "id": "produceren-031",
+      "titel": "Klankschaal: open vragen KS1–KS5",
+      "soort": "open",
+      "wat": "KS1: waar op de APC (nu nergens, koppelen werkt; advies een fragment-mapje). KS2: een ringende schaal die van toonsoort wisselt meteen mee laten glijden (nu) of pas bij de volgende aanslag. KS3: is VOL 0,8 de goede standaard. KS4: aanslagen op de tel als quantize aan staat (niet gebouwd). KS5: een eigen schaal meten als vijfde soort (niet gebouwd).",
+      "waarom": "Nog door niemand beluisterd; alle vijf wachten op Clay's oren.",
+      "bron": [
+        {
+          "pad": "docs/KLANKSCHAAL.md",
+          "waar": "§6"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "KS1-KS5"
+        }
+      ],
+      "code": [],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "Hangt af van luisteren; KS1 vervalt als de klankschaal een track-instrument wordt (dan gelden de instrumentknoppen)."
+    },
+    {
+      "id": "produceren-032",
+      "titel": "Klankschaal en Schaal: afvalvrij, slapen bij stilte, lichte rekentijd",
+      "soort": "meting",
+      "wat": "Kern zonder afval per blok (0 GC over 3000 blokken), toeval uit een eigen LCG (geen Math.random op de audiothread), slapen als er niets klinkt (kost dan niets, is precies stil). Rekentijd globale klankschaal 0,13 ms per blok van 128 frames op de M1; Schaal-instrument ~0,19 ms met alles aan. Twee Schaal-tracks laden de worklet één keer en hebben elk een eigen node.",
+      "waarom": "Gemeten met GCProfiler in Node en in headless Chrome (klankschaal.test, instrumenten-fm-schaal.test).",
+      "bron": [
+        {
+          "pad": "docs/KLANKSCHAAL.md",
+          "waar": "§3"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§7.3"
+        }
+      ],
+      "code": [
+        "src/engine/klankschaal-kern.js",
+        "src/engine/instrumenten/schaal-kern.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "De kern is herbruikbaar zoals hij is."
+    },
+    {
+      "id": "produceren-033",
+      "titel": "Het patroon als data",
+      "soort": "contract",
+      "wat": "{ id (vast, nooit hergebruikt), naam, lengte 1–64 stappen, deling (stappen per tel: 1, 2, 3, 4, 6, 8), swing 50–75 (50 = recht, 66,7 = triool), noten: [{ stap, noot 0..127, snelheid 0,01..1, duur in stappen, micro −0,5..0,5 stap }] }, gesorteerd op stap en noot, één noot per (stap, noot). normaliseerPatroon() gooit nooit: wat niet klopt wordt begrensd of weggelaten en staat in fouten. Noten voorbij de lengte blijven bewaard.",
+      "waarom": "Puur JSON, gedeeld door speler, actions, scherm, server en de MIDI-export. Korter maken en weer terug kost zo niets.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "src/engine/patronen/model.js",
+          "waar": "r. 1-80"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/model.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Klein, puur en door de server en de export al hergebruikt."
+    },
+    {
+      "id": "produceren-034",
+      "titel": "384 ticks per tel",
+      "soort": "besluit",
+      "wat": "De patroonklok rekent in ticks van 384 per tel (PPQN), overgenomen uit Elektronlearn. 384 is deelbaar door elke deling 1, 2, 3, 4, 6 en 8, dus elke stap valt op een hele tick; het MIDI-bestand gebruikt dezelfde resolutie.",
+      "waarom": "Elektronlearn (217 tests) is Clay's eigen code; dezelfde resolutie in klok en export voorkomt afronding tussen spelen en exporteren.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.1, §8.2"
+        },
+        {
+          "pad": "src/engine/patronen/venster.js",
+          "waar": "r. 24"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/venster.js (PPQN)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Geen reden om te wijzigen."
+    },
+    {
+      "id": "produceren-035",
+      "titel": "De patroonklok is een gebroken lijn, overgangen staan in ticks",
+      "soort": "regel",
+      "wat": "Alle patronen delen één klok: segmenten { T, C, R } = vanaf audiokloktijd T staat de klok op tel C en loopt hij R tellen per seconde. De lijn is continu en stijgend. Starten, wisselen en stoppen staan in klok-ticks, niet in seconden: verschuift de klok terwijl een start wacht, dan valt hij nog op hetzelfde maatbegin.",
+      "waarom": "Regel 3 over een extra laag: geen eigen teller, alleen een afbeelding van de audioklok. Puur en in Node getest.",
+      "bron": [
+        {
+          "pad": "src/engine/patronen/klok.js",
+          "waar": "kopcommentaar"
+        },
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.2"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/klok.js"
+      ],
+      "pijler": "programmeren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Dit is het hart van de sequencer en het werkt (drift 0,000 µs over 64 maten)."
+    },
+    {
+      "id": "produceren-036",
+      "titel": "Wat gepland is staat vast: de klok glijdt naar de maatgever, springt nooit",
+      "soort": "regel",
+      "wat": "De klok verandert alleen ná geplandTot. richt() zoekt de doellijn (klok-tel N = de dichtstbijzijnde hele tel op de volgende tel a van de maatgever) en glijdt er in één tot twee tellen naartoe: een rechte lijn tot een tel van de maatgever, dan de doellijn. Vensters zijn halfopen [van, tot) in ticks, dus elke noot komt precies één keer.",
+      "waarom": "Een noot die op de audioklok staat haal je niet terug; een sprong in de klok zou een noot dubbel spelen of overslaan. Getest met 1000 willekeurige venstergrenzen: precies dezelfde noten als in één keer.",
+      "bron": [
+        {
+          "pad": "src/engine/patronen/klok.js",
+          "waar": "richt()"
+        },
+        {
+          "pad": "src/engine/patronen/venster.js",
+          "waar": "notenInVenster"
+        },
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.2 Volgen, §7.7"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/klok.js",
+        "src/engine/patronen/venster.js"
+      ],
+      "pijler": "programmeren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het enige ontwerp dat pitch, sprongen en een andere maatgever doorstaat zonder dubbele of gemiste noten."
+    },
+    {
+      "id": "produceren-037",
+      "titel": "Een timer van 25 ms, noten 120 ms vooruit, te laat = weg",
+      "soort": "regel",
+      "wat": "De timer kijkt elke 25 ms (TIK_MS), alleen zolang er iets speelt of wacht, en plant 120 ms vooruit (VOORUIT) via noteOn(noot, snelheid, t) en noteOff(noot, t + duur). Een noot die meer dan 100 ms te laat zou komen (LAAT_MAX, de timer haperde) valt weg in plaats van in een salvo na te komen; dat staat in stats.",
+      "waarom": "Zoals Elektronlearn en de auto-DJ: de timer zegt wanneer, de audioklok wat. Getest met een timer die 400 ms wegviel.",
+      "bron": [
+        {
+          "pad": "src/engine/patronen/speler.js",
+          "waar": "r. 1-60"
+        },
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.2 De timer, §7.7"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/speler.js"
+      ],
+      "pijler": "programmeren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Nog niet realtime gemeten naast acht decks en video, ook niet in een achtergrondtabblad."
+    },
+    {
+      "id": "produceren-038",
+      "titel": "Starten en wisselen op het eerste maatbegin ná wat al gepland is",
+      "soort": "besluit",
+      "wat": "Een start valt op het eerste maatbegin na het geplande (tot 120 ms vooruit), niet na de drempel van ~8 ms zoals play.quant: een druk minder dan ~0,1 s vóór een maatbegin wordt de maat erna. Shift = de volgende tel. Bij stoppen of wisselen alleUit(t) op het maatbegin, vóór de eerste noot van het nieuwe patroon. Een wachtende wissel wordt vervangen door een nieuwe druk.",
+      "waarom": "Wat al op de audioklok staat haal je niet terug; zo vallen alle starts in een rij op hetzelfde maatbegin. Bewuste afwijking van het contract.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§3, §7.2 Starten op de maat, Overgangen"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/speler.js (start, stop, _vroegst)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Of de 0,1 s goed voelt, moet de proef zeggen (PATRONEN §7.8)."
+    },
+    {
+      "id": "produceren-039",
+      "titel": "Patronen volgen de maatgever; zonder maatgever een eigen tempo",
+      "soort": "besluit",
+      "wat": "Met een nummer dat klinkt volgt de klok de maatgever van de engine (fxKlok: tempo en tel van wat je hoort, plus het maat-anker van zijn grid). Zonder maatgever een eigen tempo (set.tempo, standaard 120, tap), en dan begint een patroon meteen. Valt de maatgever weg terwijl er iets speelt, dan houdt de klok het laatste tempo; pas als er niets meer speelt geldt het eigen tempo weer.",
+      "waarom": "Terugvallen naar 120 midden in een set verspringt hoorbaar (dezelfde les als de echo op de maat).",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§3, §7.2 Zonder maatgever"
+        },
+        {
+          "pad": "src/engine/patronen/speler.js",
+          "waar": "maatVan()"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/speler.js (maatVan, _zetKlok)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Goed gedrag; zie de open vraag wie de baas van de klok is."
+    },
+    {
+      "id": "produceren-040",
+      "titel": "Patronen na een sprong die geen hele maat is (S16)",
+      "soort": "open",
+      "wat": "Springt de maatgever een aantal tellen dat geen hele maat is (een hotcue op tel 3), dan blijven patronen die al spelen in hun eigen fase en glijdt de klok in één à twee tellen terug; een patroon dat daarna start valt op de nieuwe \"1\". Alternatief: een korte stilte en dan op de nieuwe tel.",
+      "waarom": "Gemeten na een sprong van 0,37 tel: twee kicks 161 en 80 ms naast de tel, daarna 0. Advies in v1: glijden laten; niet gehoord.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.2 Maten, §7.7"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "S16"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/klok.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "Een muzikale keuze die alleen met spelen te beslissen is."
+    },
+    {
+      "id": "produceren-041",
+      "titel": "Patronen vallen in Chrome exact op de tellen van de track",
+      "soort": "meting",
+      "wat": "Node: 64 maten zestienden op 120 bpm drift 0,000 µs; een kick op elke tel bleef < 1 ns op de tel na +3% pitch, een sprong, 32 tellen terug en een andere maatgever. Chrome, OfflineAudioContext, demotrack als maatgever: elke kick op een tel (0,000 ms), ook na +3% en een sprong; tijdens de overgang na +3% 0,19 en 1,54 ms ernaast. In de opname vallen de drums 0,02 ms naast de kicks van de track.",
+      "waarom": "Meting 5 okt (tools/headless/patronen.mjs, test/patronen.test.mjs).",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.7 tabel"
+        }
+      ],
+      "code": [],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Het bewijs dat het tijdmodel klopt; de metingen horen als toets mee."
+    },
+    {
+      "id": "produceren-042",
+      "titel": "Live opnemen op wat je hoorde, met overdub",
+      "soort": "regel",
+      "wat": "Met opnemen aan gaat wat noten.js speelt in het patroon dat op de speeltrack speelt, op de dichtstbijzijnde stap van wat je HOORDE (de klok op nu min de uitgangsvertraging), erbij (dezelfde stap en noot = vervangen). Loslaten zet de duur (afgerond, minstens 1 stap). Klinkt die stap in deze omloop nog, dan slaat de speler hem één keer over. Stap voor stap: een stap zet de laatst gespeelde noot (zonder: 36 bij drums, anders 60).",
+      "waarom": "Je hoorde de noot al van je vinger; anders klinkt hij dubbel. De latentie van het keyboard is niet meegerekend; de kwantisering vangt het meeste op.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.3"
+        },
+        {
+          "pad": "src/engine/patronen/speler.js",
+          "waar": "noot(), r. 236-275"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/speler.js (noot, wisselStap)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Nooit met een echt keyboard geprobeerd; de regel zelf is goed."
+    },
+    {
+      "id": "produceren-043",
+      "titel": "Patronen zijn gevormd naar het APC-grid: 8 tracks × 5 plekken",
+      "soort": "pijn",
+      "wat": "De set is { tracks: { \"1\"..\"8\": [5 plekken] }, instrumenten, tempo }: kolom = track, rij = plek, precies het grid van de APC (zoals clips in Ableton). Patronen horen bij de SET, niet bij een nummer. Een vijfde rij meer, of een Maschine met 16 pads en pagina's, moet zich naar die vorm voegen.",
+      "waarom": "Ontworpen vanuit de grid-modus PATRONEN van de APC (S4).",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§1, §7.5"
+        },
+        {
+          "pad": "src/engine/patronen/model.js",
+          "waar": "r. 22-32"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/model.js (PLEKKEN, TRACKS)"
+      ],
+      "pijler": "programmeren",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 patronen als lijst met een plek als eigenschap; het APC-grid is één weergave ervan, de Maschine en de iPad een andere."
+    },
+    {
+      "id": "produceren-044",
+      "titel": "Patronen spelen alleen instrumenten; een nummer kan niet in een patroon",
+      "soort": "pijn",
+      "wat": "De speler vraagt per track instrument(id); een track met een nummer, de sampler-pads, hotcues of secties van een nummer kunnen niet als stap in een patroon. De enige weg van een nummer naar een patroon is: knippen in de sampler → sampler.N.drums naar drumpad 9–16 van de Drums → noot 44–51 in een drumpatroon. Na herladen zijn die drumpads leeg.",
+      "waarom": "Instrumenten en patronen zijn naast de DJ-laag gebouwd; de crossover (10 okt) is een brug achteraf. VISIE §2: één nummer moet tegelijk gemixt, geknipt en als patroon geprogrammeerd kunnen worden.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§8 \"Uit de sampler\""
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "r. 220-222"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/speler.js",
+        "src/engine/engine.js (samplerNaarDrums)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "In v2 speelt een patroon gebeurtenissen naar wat een track draagt: noten naar een instrument, pad-starts naar een sampler, hotcue of sectie naar een nummer. Dan is de crossover ingebouwd in plaats van een brug."
+    },
+    {
+      "id": "produceren-045",
+      "titel": "De patronenset op de server, met versie en 409",
+      "soort": "contract",
+      "wat": "GET /api/patronen/<naam> → { set, versie, fouten }; PUT met { set, versie }: 409 bij een botsing (met wat er staat), de vorige in patronen/.versies/<naam>/. De mixer bewaart 0,6 s na een bewerking, kijkt elke 3 s of het bestand van buiten veranderde en neemt dat over; met eigen wijzigingen een botsing met \"hun versie\" of \"mijn versie\". Claude mag het bestand direct schrijven.",
+      "waarom": "Hetzelfde patroon als plannen, standen, werkruimtes, sets en sjablonen: nooit stil overschrijven.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.6"
+        }
+      ],
+      "code": [
+        "server/patronen.js",
+        "src/ui/patronen-opslag.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Het gedrag mee; de code als één gedeelde versie-opslag in plaats van vijf losse (zie onderdelen)."
+    },
+    {
+      "id": "produceren-046",
+      "titel": "De set onthoudt het instrument en zijn knoppen, door te peilen",
+      "soort": "besluit",
+      "wat": "set.instrumenten onthoudt per track met patronen welk instrument erop staat, met zijn acht knoppen (0..1, null = gebaar). Na elke geladen set komt het instrument terug op een lege track (VRAGEN S15); een track met een nummer houdt dat. Omdat een instrument zelf niets meldt, kijkt de opslag elke 3 s of een knop gedraaid is (onthoudKlank).",
+      "waarom": "Zonder dit speelden patronen na herladen op niets. Gebaren niet onthouden: er mag niets vanzelf klinken.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.6"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "S15"
+        },
+        {
+          "pad": "src/engine/patronen/speler.js",
+          "waar": "onthoudKlank"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/speler.js (_klank, onthoudKlank)",
+        "src/engine/engine.js (herstelInstrumenten)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Het idee mee, maar het instrument meldt zijn eigen wijzigingen (event) in plaats van peilen, en de instrumentstand hoort bij de track, niet bij de patronenset."
+    },
+    {
+      "id": "produceren-047",
+      "titel": "Geen p-locks en geen pianorol; het contract mist zetParam met tijd",
+      "soort": "grens",
+      "wat": "Een parameter per stap (p-lock) en een pianorol zijn bewust niet gebouwd (\"pas als je ze mist\"). Het instrumentcontract kent alleen zetParam(k, v) voor nu; voor p-locks of automatie is zetParam(k, v, t) nodig.",
+      "waarom": "Elektronlearn heeft p-locks al; in v1 uitgesteld om eerst te proeven.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§6"
+        },
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§1 Stukken programmeren"
+        }
+      ],
+      "code": [],
+      "pijler": "programmeren",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Niet bouwen voordat het gemist wordt, maar zetParam(k, v, t) wel meteen in het v2-contract zetten: anders moeten alle instrumenten later opnieuw open."
+    },
+    {
+      "id": "produceren-048",
+      "titel": "Terugspelen slaat patroonbewerkingen over, want een stap omzetten is een wissel",
+      "soort": "valkuil",
+      "wat": "Starten, stoppen, rijen en tempo gaan over de bus, staan in het log en spelen terug. Bewerken (stappen, lengte, swing, wissen, opnemen, tap) slaat terugspelen over: track.N.pattern.step.S zet een noot aan óf uit, dus nog eens afspelen haalt hem weer weg. Terugspelen gebruikt de noten van de set van NU.",
+      "waarom": "wisselStap is niet idempotent; de set is al bewaard.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.6 Handelingenlog"
+        },
+        {
+          "pad": "src/control/terugspelen.js",
+          "waar": "r. 45-55, 535-540"
+        }
+      ],
+      "code": [
+        "src/control/terugspelen.js",
+        "src/engine/patronen/speler.js (wisselStap)"
+      ],
+      "pijler": "programmeren",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 bewerkingen als absolute waarde op de bus (zet stap S op noot X / wis) en de knop zelf rekent \"wissel\" uit; dan kan het log het bouwen van een patroon wel terugspelen."
+    },
+    {
+      "id": "produceren-049",
+      "titel": "APC-modus patronen: pad = plek, scene = rij, knipperen zelf gerekend",
+      "soort": "contract",
+      "wat": "Grid-modus patronen (oranje, Shift + scene 2): pad (kolom k, rij r) = plek r van track k: starten / stoppen / wisselen op de maat, lege plek = kiezen; shift = meteen; scene 1–5 = die rij op alle tracks met een instrument; Stop All Clips = alles stoppen. Lampje: uit = geen instrument, donkergrijs = leeg, donker oranje = gevuld, fel = speelt, knippert = wacht. 89 regels erbij, geen bestaande veranderd.",
+      "waarom": "De read knippert zelf, omdat track.N.phase niet bestaat op een track zonder nummer (weer de uitzondering van het trackmodel).",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.5"
+        }
+      ],
+      "code": [
+        "mappings/apc40mk2.json",
+        "src/control/lagen.js",
+        "src/control/feedback.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Een bruikbare indeling; nooit op de APC geprobeerd (VRAGEN S17)."
+    },
+    {
+      "id": "produceren-050",
+      "titel": "Naar Logic als MIDI-bestand: een uitgang, buiten de engine",
+      "soort": "besluit",
+      "wat": "src/export/patronen-smf.js maakt een Standard MIDI File type 1 met 384 ticks per tel: spoor 0 de tempotrack (naam, tempo, 4/4), daarna één spoor per gevuld patroon. Het bestand wordt gemaakt uit dezelfde vensters als de speler (notenInVenster). Het staat buiten src/engine/; regels.test eist dat er in de engine geen MThd, MTrk of 0x99 staat.",
+      "waarom": "Clay produceert ook in Logic (VISIE pijler 2). Een export naar de eigen schijf is een uitgang, geen distributie (VI1). Regel 1: de engine kent geen MIDI.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§8, §8.1"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Patronen (Naar Logic)"
+        }
+      ],
+      "code": [
+        "src/export/patronen-smf.js",
+        "src/lib/smf.js",
+        "tools/patronen/midi.mjs"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Puur, gouden bytes, één bron voor spelen en exporteren."
+    },
+    {
+      "id": "produceren-051",
+      "titel": "De regels van het MIDI-bestand (S1–S13)",
+      "soort": "contract",
+      "wat": "Venster = de eerste omlopen zoals de speler ze vanaf een verse start speelt. aan = round(tick), uit = max(aan + 1, round(tick + duur)): swing en micro zijn tijdverschuiving. Zelfoverlap: begint dezelfde noot opnieuw, dan gaat de oude uit op de nieuwe aan (bewust anders dan de speler). Drums op kanaal 10 zonder GM-vertaling (36 blijft 36, 44–51 blijven zichzelf). Met meta een FF 01 \"varve:patroon {json}\" per spoor. Namen ASCII. Schrijven zonder running status.",
+      "waarom": "Een MIDI-bestand kan dezelfde noot niet twee keer tegelijk hebben; de meta maakt de rondreis verliesvrij, ook noten voorbij de lengte. Elke regel is een commentaar in de code en een check.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§8.2 tabel S1-S13, L1-L3"
+        }
+      ],
+      "code": [
+        "src/export/patronen-smf.js",
+        "src/lib/smf.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een volledig vastgelegd formaat; zo mee."
+    },
+    {
+      "id": "produceren-052",
+      "titel": "Een in Logic bewerkt bestand met meta komt terug als de oude meta",
+      "soort": "valkuil",
+      "wat": "Lezen met meta neemt het patroon uit de tekst varve:patroon, niet uit de noten. Bewerk je het bestand in Logic en blijft de meta staan, dan komt de oude versie terug, niet de bewerkte noten. negeerMeta: true leest de noten (benaderd, met het raster dat je meegeeft). Er is geen controle die het verschil ziet.",
+      "waarom": "Gevonden bij het ontwerp (10 okt); niet opgelost.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§8.4 tweede punt"
+        }
+      ],
+      "code": [
+        "src/export/patronen-smf.js (smfNaarPatronen)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "Een vingerafdruk van de noten in de meta zetten en bij verschil de noten lezen: dan wint wat er echt in het bestand staat."
+    },
+    {
+      "id": "produceren-053",
+      "titel": "MIDI-rondreis: bytegewijs gelijk met het juiste raster",
+      "soort": "meting",
+      "wat": "Met het juiste raster en niet-dubbelzinnige noten is het opnieuw geschreven bestand bytegewijs hetzelfde (1000/1000); helemaal willekeurig 957/1000. 3000 willekeurige sets bytegewijs gelijk aan een onafhankelijke referentie; mido leest de drie gouden bestanden. Bestanden uit Logic (480 ppqn) lezen goed. Mutaties (venster te ruim, drums op kanaal 1) maken de test rood.",
+      "waarom": "Meting 10 okt (test/smf.test.mjs 43 checks, test/patronen-midi.test.mjs 73 checks).",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§8.2 L3, §8.3"
+        }
+      ],
+      "code": [
+        "test/fixtures/midi/"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "De gouden bestanden en de toets horen mee."
+    },
+    {
+      "id": "produceren-054",
+      "titel": "Wat moet Logic in v2: export, multitrack of live meespelen?",
+      "soort": "open",
+      "wat": "Gebouwd: alleen een CLI op een kopie van de set (tools/patronen/midi.mjs); route en .mid-knop niet. Logic is nooit geopend met een export (tempo, kanaal 10, spoornamen: aanname). Standaardkeuzes in v1: Logic-richting = opnemen en nabewerken, geen Link (D4); terug uit Logic = een bounce op de library slepen (D5). Niet gebouwd: de set als multitrack met tempokaart (C8), Ableton Link via Carabiner (C6).",
+      "waarom": "ONTBREEKT vraag 2 (\"de set opnemen en nabewerken, of live meespelen op het tempo van VARVE?\") is nooit door Clay beantwoord.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§8.4, §8.5"
+        },
+        {
+          "pad": "docs/ONTBREEKT.md",
+          "waar": "C6, C8, vragen 2 en 4"
+        }
+      ],
+      "code": [
+        "tools/patronen/midi.mjs"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Bepaalt of v2 per track moet kunnen opnemen en of er een gedeelde klok naar buiten komt. Eerst de proef van ~10 minuten met de fixtures in Logic."
+    },
+    {
+      "id": "produceren-055",
+      "titel": "Knippen in tracktijd op het grid: de laatste N tellen vóór de positie",
+      "soort": "regel",
+      "wat": "Een lege pad knipt de laatste N tellen (1, 2, 4 of 8) van de track met focus, eindigend op de laatste tel vóór de positie. Rekenen in TELLEN met timeOf (een tempokaart heeft geen vaste tellengte); vlak na het begin minder hele tellen in plaats van een afgekapt stuk. bpm = van het stuk, of gemiddeld als er een tempowissel in ligt. Zonder grid: N × 0,5 s, geen tempo. Een streamende track wordt opnieuw van schijf gelezen (bron.knip).",
+      "waarom": "Een afgekapt stuk dat als N tellen gaat loopen, loopt uit de maat. De pagina's van een streamende track zitten in de worklet.",
+      "bron": [
+        {
+          "pad": "src/engine/sampler.js",
+          "waar": "knipBereik, r. 98-125"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen (Sampler)"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js (knipBereik)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Puur, en precies de brug tussen dj'en en produceren."
+    },
+    {
+      "id": "produceren-056",
+      "titel": "Een loop exact op de maat via playbackRate uit de bufferlengte",
+      "soort": "meting",
+      "wat": "De afspeelsnelheid van een pad = duur van de buffer / (tellen × tellengte van de maat), niet hoorbare bpm / sample-bpm. Een buffer heeft hele samples; een periode die een fractie van een sample afwijkt loopt weg.",
+      "waarom": "Gemeten: via de bufferlengte liep een loop ~1/16 naast na 26 minuten. Dezelfde les geldt voor de gate.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen (Gate en sampler lopen EXACT)"
+        },
+        {
+          "pad": "src/engine/sampler.js",
+          "waar": "_rate"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js (_rate)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Een gemeten valkuil voor alles wat loopt op de maat."
+    },
+    {
+      "id": "produceren-057",
+      "titel": "Spelende pads volgen de maat met een segment en herankeren op de volgende tel",
+      "soort": "regel",
+      "wat": "Elke spelende pad houdt een segment { T, P, R } bij (regel 3). heranker() rekent uit waar de pad op de volgende tel van de maat is; daar start een nieuwe bron op het nieuwe tempo, op de dichtstbijzijnde hele tel van het sample, en de oude vloeit er 5 ms in over. Kloppen tempo en fase al, dan gebeurt er niets. De engine roept heranker() aan bij elke change van een deck of de mixer.",
+      "waarom": "Clay 23 sep: pads lopen mee met tempo én tel. Niemand anders weet wanneer de maat verandert.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen (Spelende pads lopen mee)"
+        },
+        {
+          "pad": "src/engine/sampler.js",
+          "waar": "heranker"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js (heranker, _startBron)",
+        "src/engine/engine.js (volgMaat)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Goed mechanisme; in v2 hangt het aan één klok in plaats van een lijst \"wie moet herankeren\"."
+    },
+    {
+      "id": "produceren-058",
+      "titel": "Een naadloze loop: de laatste 5 ms overvloeien naar wat vóór het begin stond",
+      "soort": "regel",
+      "wat": "Bij het knippen wordt een stukje (NAAD 5 ms) vóór het begin meegelezen; het einde van de pad wordt equal-power overgevloeid naar dat stuk, zodat het einde naadloos in het begin overloopt (naadloos()). Starten gaat via startOpDeTel: valt de volgende tel binnen de uitgangsbuffer, dan de tel erna.",
+      "waarom": "Hetzelfde idee als de loop-naad in de streamkern (LOOP_NAAD). Web Audio begint een bron in het verleden gewoon nu: zonder de tel erna start hij blijvend een paar ms te laat.",
+      "bron": [
+        {
+          "pad": "src/engine/sampler.js",
+          "waar": "naadloos, r. 127-148"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen (startOpDeTel)"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js (naadloos)",
+        "src/engine/fx.js (startOpDeTel)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Puur en klein."
+    },
+    {
+      "id": "produceren-059",
+      "titel": "Sampler-pads horen bij het nummer en bewaren alleen waar het stuk zit",
+      "soort": "besluit",
+      "wat": "Bewaard wordt per nummer (tabel samples, schema v4) alleen van/tot in tracktijd, tellen en bpm, geen audio; terughalen knipt opnieuw van schijf. De engine kent geen library: de sampler heeft herinneringen (pure data) en meldt onGevuld/onVergeet, de app vult en bewaart. Laad je het nummer, dan staan zijn pads als ↺ op lege pads. Pads van een los bestand of de demo worden niet bewaard.",
+      "waarom": "Clay 23 sep. Audio bewaren kost ~23 MB per minuut per pad; de bron ligt al op schijf.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen (Sampler-pads horen bij het NUMMER)"
+        },
+        {
+          "pad": "src/engine/sampler.js",
+          "waar": "herinneringen, herstel"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js",
+        "server/library.js (samples)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Verwijzen in plaats van kopiëren is het juiste idee; in v2 ook voor drumpads en patroonstappen die een stuk van een nummer gebruiken."
+    },
+    {
+      "id": "produceren-060",
+      "titel": "Een sectie als pad: hele maten, hooguit 32 maten en 90 s",
+      "soort": "regel",
+      "wat": "sampler.N.section knipt een hele sectie van haar \"1\" tot de \"1\" van de volgende, in hele maten, en stopt vóór een maat die niet vol is (een eigen \"1\" in het grid). Een pad van meer dan 8 tellen IS een sectie en start op de \"1\" van de maatgever. Grens: 32 maten en 90 s. Weigeren met een reden in gewone taal (geen grid, onzeker grid, te lang, al gevuld).",
+      "waarom": "Stereo float op 48 kHz is ~23 MB per minuut per pad; 90 s houdt één pad onder ~35 MB en acht pads onder ~280 MB. 32 maten is de langste sectie die de analyse maakt.",
+      "bron": [
+        {
+          "pad": "src/engine/sampler.js",
+          "waar": "r. 28-95, _sectie"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Secties (Sampler)"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js (knipSectie, neemSectie, _sectie)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Secties maken de sampler muzikaal; de geheugengrens is gemeten."
+    },
+    {
+      "id": "produceren-061",
+      "titel": "Knippen met stems neemt wat je nu hoort",
+      "soort": "regel",
+      "wat": "Heeft het nummer stems, dan knipt de sampler wat je NU hoort vóór de EQ (niveau en kill per stem, deck.knipGewichten()): een pad die je knipt terwijl de zang weg is, klinkt zonder zang. De gewichten en stemnamen gaan als data mee op de pad, zodat een latere drumpad kan melden \"stems: drums\". Een herstelde pad knipt met de stand van het moment van herstellen.",
+      "waarom": "Wie het stuk later gebruikt, hoort te weten wat erin zit.",
+      "bron": [
+        {
+          "pad": "src/engine/sampler.js",
+          "waar": "_vul, r. 270-285"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§8 De melding"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js (_vul)",
+        "src/engine/deck.js (knipGewichten)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Een kleine echte crossover (stems → sample) die zo mee kan; de stand bij herstellen bewaren zou het vollediger maken."
+    },
+    {
+      "id": "produceren-062",
+      "titel": "Twee padsystemen met een brug: sampler (8, master) en Drums (16, track)",
+      "soort": "pijn",
+      "wat": "De sampler is een globaal instrument van acht pads op master.input: geen fader, EQ, insert of cue, niet in patronen. De Drums zijn een track-instrument met 16 pads. De crossover (10 okt) kopieert een sampler-pad naar drumpad 9–16 (S1–S4 → 13–16, S5–S8 → 9–12, dezelfde fysieke Maschine-pad): daar speelt het one-shot op het tempo van het knippen (niet meer op de maat), en na herladen is het weg.",
+      "waarom": "Gemeten bij Clay's knips: bij de mediane tempowisseling van 1,43% is een knip van 4 tellen ~20 ms te lang of te kort per aanslag; een knip van 4 tellen op 174 bpm is in een set op 146 bpm 265 ms korter dan de maat. De tabel moest in een eigen bestand zonder imports (drumpads.js).",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§8 \"Uit de sampler\""
+        },
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "r. 203-204, 413-480"
+        },
+        {
+          "pad": "src/control/drumpads.js",
+          "waar": "r. 1-17"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js",
+        "src/engine/instrumenten/drums.js (laadPad)",
+        "src/engine/engine.js (samplerNaarDrums, drumsDoel)",
+        "src/control/drumpads.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "In v2 één sampler-instrument op een track: pads die op de maat loopen óf one-shot spelen, met de strip en cue van de track, bespeelbaar door patronen, en bewaard als verwijzing naar het nummer. Dan vervallen de brug, de tabel en drumsDoel."
+    },
+    {
+      "id": "produceren-063",
+      "titel": "Drumpads bewaren en eigen opnames naar de library (CX2, CX3)",
+      "soort": "open",
+      "wat": "CX2: pads 9–16 zijn na herladen leeg; bewaren (geschat ~2–2,5 dagen) zou per pad het library-nummer, van–tot, tellen, bpm en stems in de set zetten en bij laden opnieuw knippen. CX3: een opname (of een gerenderd patroon) terug in de library. CLAUDE.md zegt sinds VI1 dat eigen opnames en renders naar de eigen library mogen; een knop record.library is niet gebouwd.",
+      "waarom": "Advies in v1: beslissen na de proef; 3b niet bouwen zonder Clay's ja.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "CX2, CX3"
+        },
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§5 S5"
+        }
+      ],
+      "code": [],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Met een sampler-instrument dat naar het nummer verwijst (vorige kaart) vervalt CX2; CX3 (render naar library) blijft een keuze voor Clay en is de weg om eigen werk weer te mixen."
+    },
+    {
+      "id": "produceren-064",
+      "titel": "Je set opnemen: de master na de limiter, elk stuk op zijn frame",
+      "soort": "regel",
+      "wat": "De opname tapt de master NA de limiter (wat de zaal hoort; de koptelefoon-cue zit er niet in). De worklet geeft per seconde een stuk; elk stuk gaat met ?frame=N naar de server, die het op precies die plek schrijft. Herhalen na een verloren antwoord is daardoor veilig, en een weggevallen stuk wordt stilte op zijn plek. De WAV-kop krijgt zijn lengte pas bij klaar; na een crash herstelt de server hem uit de bestandsgrootte. Boven 4 GB RF64.",
+      "waarom": "Een crash kost hooguit een seconde; zonder vaste plek schoof alles na een gat t.o.v. de video.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen (Opnemen tapt de master)"
+        },
+        {
+          "pad": "src/opname/opnemer.js",
+          "waar": "kopcommentaar"
+        }
+      ],
+      "code": [
+        "src/opname/opnemer.js",
+        "src/opname/opnemer-worklet.js",
+        "server/opname.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Robuust en getest, ook met een server die even weg is."
+    },
+    {
+      "id": "produceren-065",
+      "titel": "Elke fetch moet zijn antwoord lezen, ook als het gelukt is",
+      "soort": "valkuil",
+      "wat": "Een ongelezen antwoord houdt Chrome vast. De opname groeide zo 26,6 MB per minuut, ook na GC; na de fix (leesWeg in src/lib/antwoord.js) 0,2 MB per minuut. Geldt voor elke POST die vaker dan af en toe gaat (opname, videostukken, log).",
+      "waarom": "Gemeten 14 okt met tools/headless/lek.mjs.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen (ELKE fetch leest zijn antwoord)"
+        }
+      ],
+      "code": [
+        "src/lib/antwoord.js",
+        "src/opname/opnemer.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een stille geheugenlek die alleen in lange sets opvalt."
+    },
+    {
+      "id": "produceren-066",
+      "titel": "Alleen de stereo master wordt opgenomen, niet per track",
+      "soort": "grens",
+      "wat": "De opname is één stereo WAV van de master (plus optioneel video). Per track of per stem opnemen (de set als multitrack naar Logic, C8) en patronen opnemen naar audio in de library (S5) zijn niet gebouwd.",
+      "waarom": "Bewust: S5 staat onder \"later, alleen als je het mist\"; C8 hangt aan de open Logic-vraag.",
+      "bron": [
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§5 S5"
+        },
+        {
+          "pad": "docs/ONTBREEKT.md",
+          "waar": "C8"
+        }
+      ],
+      "code": [
+        "src/opname/opnemer.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "Of v2 per track moet opnemen, volgt uit de keuze wat Logic moet doen."
+    },
+    {
+      "id": "produceren-067",
+      "titel": "Niets van produceren is gehoord of op de hardware gespeeld",
+      "soort": "pijn",
+      "wat": "Poly, FM, Schaal, Drums, patronen, de crossover, de Xboard49 en de Maschine-stapmodus zijn gebouwd op 5–10 okt en alleen gemeten in Node en op een OfflineAudioContext in headless Chrome. Niemand heeft ze beluisterd, niet realtime naast acht decks, niet op de APC, Xboard of Maschine. Het \"klaar als\" van S3 en S4 (een drumpatroon op de Maschine, een baslijn van de Xboard, gestart vanaf de APC) is niet gehaald.",
+      "waarom": "VISIE §5: sinds 23 september ruim 500 commits zonder proef op de APC. Elk spoor sluit af met \"niet getest\" en \"Clay's oren nodig\".",
+      "bron": [
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§5 S3, S4"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.6, §7.4, §8 Niet getest"
+        },
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.8"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§5 punt 4"
+        }
+      ],
+      "code": [],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "In v2 eerst één produceren-keten tot op de hardware (Xboard → instrument → patroon → APC-start, gehoord) voordat er een tweede instrument of laag komt."
+    },
+    {
+      "id": "produceren-068",
+      "titel": "Produceren is er naast gezet: rijen, grid-modi en uitzonderingslijsten",
+      "soort": "pijn",
+      "wat": "Elke produceren-functie kreeg een eigen rij op het scherm (INSTRUMENT, PATROON, SAMPLER, KLANKSCHAAL), een eigen grid-modus op de APC (sampler, klank, patronen) en eigen uitzonderingen in log, terugspelen en auto-DJ (OVERSLAAN, NIET_IN_WAARDEN, OVERNEEM, _vrijDeck, een read die zelf knippert). Wie iets aan een track toevoegt, moet die plekken allemaal raken.",
+      "waarom": "Het trackmodel (een deck met een nummer) en de bus zijn vóór produceren ontworpen; instrumenten, sampler en patronen kwamen er per spoor bij. De meta-vlaggen op actions (S0, 14 okt) waren de eerste stap om dat op te ruimen.",
+      "bron": [
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.1, §6.4"
+        },
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§7.1 tabel, §7.6"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Werkruimte: aanhaakpunten (meta-vlaggen)"
+        }
+      ],
+      "code": [
+        "src/control/handelingen.js",
+        "src/control/terugspelen.js",
+        "src/auto/automaat.js",
+        "src/control/lagen.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "In v2 de track als drager (nummer, instrument, sampler) met één set eigenschappen, en uitzonderingen als meta op de action in plaats van lijsten; één bedienpaneel per track dat zich aanpast aan wat hij draagt."
+    },
+    {
+      "id": "produceren-069",
+      "titel": "Wie is in v2 de baas van de klok?",
+      "soort": "open",
+      "wat": "In v1 is de DJ-maatgever de baas: de hardst klinkende track met een grid. Patronen volgen hem, sampler en bussen ook; een instrumenttrack geeft nooit de maat, en een nummer synct niet naar de patronenklok. Begin je een set met een drumpatroon op 120 en laad je dan een nummer, dan glijden de patronen naar het nummer, niet andersom. Alternatief: één transport (zoals in een DAW) dat de maatgever volgt óf zelf leidt.",
+      "waarom": "ONTBREEKT vraag 4 (\"Is VARVE altijd de baas, of mogen Logic en TD het tempo zetten?\") en de rol van een eigen tempo bij produceren zijn nooit beslist.",
+      "bron": [
+        {
+          "pad": "docs/PATRONEN.md",
+          "waar": "§3, §7.2"
+        },
+        {
+          "pad": "docs/INSTRUMENTEN.md",
+          "waar": "§6.1"
+        },
+        {
+          "pad": "docs/ONTBREEKT.md",
+          "waar": "vragen 4"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (maatgever, syncMaster)",
+        "src/engine/patronen/klok.js"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Voor dj'en is \"het nummer is de baas\" goed; voor produceren vanaf nul niet. Clay moet kiezen of een patroon of instrument de maat mag geven; het bepaalt de vorm van de klok in v2."
+    }
+  ],
+  "onderdelen": [
+    {
+      "pad": "src/engine/patronen/venster.js",
+      "regels": 89,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/patronen.test.mjs",
+        "test/patronen-engine.test.mjs",
+        "test/patronen-midi.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "PPQN, swing, micro en halfopen vensters; puur en door speler én export gedeeld."
+    },
+    {
+      "pad": "src/engine/patronen/klok.js",
+      "regels": 128,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/patronen.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "De gebroken lijn met richt(): het bewezen hart van de sequencer."
+    },
+    {
+      "pad": "src/engine/patronen/model.js",
+      "regels": 226,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/patronen.test.mjs",
+        "test/patronen-midi.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "normaliseerPatroon en de bewerkingen zo mee; het set-deel (8 tracks × 5 plekken, instrumenten) aanpassen aan het v2-trackmodel."
+    },
+    {
+      "pad": "src/engine/patronen/speler.js",
+      "regels": 626,
+      "puur": false,
+      "imports": [
+        "../../lib/emitter.js",
+        "../overgang.js",
+        "../hoorbaar.js",
+        "./klok.js",
+        "./venster.js",
+        "./model.js"
+      ],
+      "tests": [
+        "test/patronen.test.mjs",
+        "test/patronen-engine.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Het planmechanisme (geplandTot, vensters, overslaan bij opnemen) meenemen; gebonden aan instrument(id), deck-ids en het peilen van knoppen, dus opnieuw op het v2-trackmodel."
+    },
+    {
+      "pad": "src/lib/smf.js",
+      "regels": 200,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/smf.test.mjs",
+        "test/patronen-midi.test.mjs",
+        "test/regels.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Bytes van een MIDI-bestand, zonder imports, getest met gouden bestanden."
+    },
+    {
+      "pad": "src/export/patronen-smf.js",
+      "regels": 239,
+      "puur": true,
+      "imports": [
+        "../engine/patronen/venster.js",
+        "../engine/patronen/model.js",
+        "../lib/smf.js"
+      ],
+      "tests": [
+        "test/patronen-midi.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Regels S1–S13/L1–L3 vastgelegd en bytegewijs getest; alleen de set-vorm volgen als model.js verandert."
+    },
+    {
+      "pad": "tools/patronen/midi.mjs",
+      "regels": 53,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "../../src/export/patronen-smf.js",
+        "../../src/engine/patronen/model.js"
+      ],
+      "tests": [
+        "test/patronen-midi.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Kleine CLI op een kopie; de weg naar de eerste Logic-proef."
+    },
+    {
+      "pad": "src/engine/instrumenten/index.js",
+      "regels": 18,
+      "puur": false,
+      "imports": [
+        "./poly.js",
+        "./fm.js",
+        "./schaal.js",
+        "./drums.js"
+      ],
+      "tests": [
+        "test/instrumenten.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Expliciete lijst; blijft het patroon."
+    },
+    {
+      "pad": "src/engine/instrumenten/poly.js",
+      "regels": 417,
+      "puur": false,
+      "imports": [
+        "../../lib/emitter.js",
+        "../overgang.js",
+        "../audio-graph.js"
+      ],
+      "tests": [
+        "test/instrumenten.test.mjs",
+        "test/maschine.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Volgt het contract, gemeten (toonhoogte, LUFS, stemroof, _envOp); geen koppeling aan de engine buiten overgang en faderGain."
+    },
+    {
+      "pad": "src/engine/instrumenten/fm.js",
+      "regels": 434,
+      "puur": false,
+      "imports": [
+        "../../lib/emitter.js",
+        "../../lib/notatie.js",
+        "../overgang.js"
+      ],
+      "tests": [
+        "test/instrumenten-fm-schaal.test.mjs",
+        "test/maschine.test.mjs",
+        "test/notatie.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Alleen native nodes, gemeten; zo mee."
+    },
+    {
+      "pad": "src/engine/instrumenten/schaal.js",
+      "regels": 406,
+      "puur": false,
+      "imports": [
+        "../worklet-fout.js",
+        "../../lib/emitter.js",
+        "../../lib/notatie.js",
+        "../overgang.js",
+        "../klankschaal.js",
+        "../klankschaal-kern.js",
+        "./schaal-kern.js"
+      ],
+      "tests": [
+        "test/instrumenten-fm-schaal.test.mjs",
+        "test/notatie.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Het toekomstige enige schaalinstrument; importeert stemming() uit klankschaal.js: die functie verhuist mee."
+    },
+    {
+      "pad": "src/engine/instrumenten/schaal-kern.js",
+      "regels": 302,
+      "puur": true,
+      "imports": [
+        "../klankschaal-kern.js"
+      ],
+      "tests": [
+        "test/instrumenten-fm-schaal.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Tien velden, berichten op hun sample, omstemmen met behoud van amplitude; afvalvrij gemeten."
+    },
+    {
+      "pad": "src/engine/instrumenten/schaal-worklet.js",
+      "regels": 37,
+      "puur": false,
+      "imports": [
+        "./schaal-kern.js"
+      ],
+      "tests": [
+        "test/instrumenten-fm-schaal.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Dunne worklet om de kern; met stop-bericht."
+    },
+    {
+      "pad": "src/engine/klankschaal-kern.js",
+      "regels": 269,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/klankschaal.test.mjs",
+        "test/instrumenten-fm-schaal.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Het modale model van de Waterschaal; basis van schaal-kern."
+    },
+    {
+      "pad": "src/engine/klankschaal.js",
+      "regels": 412,
+      "puur": false,
+      "imports": [
+        "./worklet-fout.js",
+        "../lib/emitter.js",
+        "./audio-graph.js",
+        "./toonsoort.js",
+        "./klankschaal-kern.js"
+      ],
+      "tests": [
+        "test/klankschaal.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "stemming() en TOONLADDERS (puur) overnemen; de globale Klankschaal-klasse op de master gaat op in de Schaal op een track."
+    },
+    {
+      "pad": "src/engine/klankschaal-worklet.js",
+      "regels": 34,
+      "puur": false,
+      "imports": [
+        "./klankschaal-kern.js"
+      ],
+      "tests": [
+        "test/klankschaal.test.mjs"
+      ],
+      "voorstel": "weg",
+      "reden": "Overbodig als de globale klankschaal opgaat in de Schaal (eigen worklet)."
+    },
+    {
+      "pad": "src/engine/instrumenten/drums.js",
+      "regels": 611,
+      "puur": false,
+      "imports": [
+        "../../lib/emitter.js",
+        "../../lib/notatie.js",
+        "../audio-graph.js",
+        "../overgang.js"
+      ],
+      "tests": [
+        "test/instrumenten-drums.test.mjs",
+        "test/sampler-drums.test.mjs",
+        "test/maschine.test.mjs",
+        "test/notatie.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "De kit (formules, zaad, choke, _kap) overnemen; pads 9–16 met laadPad gaan op in een sampler-instrument."
+    },
+    {
+      "pad": "src/engine/sampler.js",
+      "regels": 464,
+      "puur": false,
+      "imports": [
+        "../lib/emitter.js",
+        "./fx.js",
+        "./secties.js"
+      ],
+      "tests": [
+        "test/engine.test.mjs",
+        "test/sec-sampler.test.mjs",
+        "test/sampler-drums.test.mjs",
+        "test/maschine-sampler.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "knipBereik, knipSectie, naadloos en _rate/heranker (puur rekenwerk) overnemen; de klasse wordt een instrument op een track in plaats van een globale bron op master.input."
+    },
+    {
+      "pad": "src/control/drumpads.js",
+      "regels": 17,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/sampler-drums.test.mjs",
+        "test/regels.test.mjs"
+      ],
+      "voorstel": "weg",
+      "reden": "De brug sampler-pad → drumpad vervalt met één sampler-instrument."
+    },
+    {
+      "pad": "src/control/noten.js",
+      "regels": 308,
+      "puur": false,
+      "imports": [
+        "../lib/emitter.js",
+        "./midi.js",
+        "./mapping.js",
+        "./actions.js"
+      ],
+      "tests": [
+        "test/instrumenten.test.mjs",
+        "test/maschine.test.mjs",
+        "test/patronen-engine.test.mjs",
+        "test/mapping-opslag.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "De vertaling en de vast-tabel (noot-uit naar waar noot-aan ging) zijn goed; erbij: een notenstroom naar het log, en minder afhankelijk van actions.js (trackVanDeck)."
+    },
+    {
+      "pad": "src/opname/opnemer.js",
+      "regels": 382,
+      "puur": false,
+      "imports": [
+        "../lib/antwoord.js",
+        "../lib/herhaal.js"
+      ],
+      "tests": [
+        "test/opnemer.test.mjs",
+        "test/master.test.mjs",
+        "test/uitzend.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Robuust (frame-plek, herhalen, rij, één melding); kent de engine niet."
+    },
+    {
+      "pad": "src/opname/opnemer-worklet.js",
+      "regels": 54,
+      "puur": false,
+      "imports": [],
+      "tests": [
+        "test/opnemer.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Klein en afvalvrij."
+    },
+    {
+      "pad": "server/opname.js",
+      "regels": 264,
+      "puur": false,
+      "imports": [
+        "node:fs/promises",
+        "node:path"
+      ],
+      "tests": [
+        "test/opname.test.mjs",
+        "test/opnemer.test.mjs",
+        "test/handelingenlog.test.mjs",
+        "test/uitzend.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Schrijven op ?frame=N, kop herstellen, RF64; getest."
+    },
+    {
+      "pad": "server/patronen.js",
+      "regels": 92,
+      "puur": false,
+      "imports": [
+        "node:fs/promises",
+        "node:path",
+        "node:crypto",
+        "../src/engine/patronen/model.js"
+      ],
+      "tests": [
+        "test/patronen.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Gedrag (versie, 409, .versies) mee, maar als één gedeelde versie-opslag samen met plannen, standen, werkruimtes, sets en sjablonen."
+    },
+    {
+      "pad": "src/ui/patronen-opslag.js",
+      "regels": 130,
+      "puur": false,
+      "imports": [],
+      "tests": [
+        "test/patronen.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Peilen elke 3 s en botsingen: idee mee, vorm samen met de andere opslagen."
+    },
+    {
+      "pad": "src/ui/patronen-paneel.js",
+      "regels": 181,
+      "puur": false,
+      "imports": [
+        "../control/actions.js",
+        "./controls.js",
+        "./meldingen.js",
+        "./patronen-opslag.js",
+        "../engine/patronen/model.js",
+        "../engine/instrumenten/index.js",
+        "./dom.js",
+        "./rijen.js"
+      ],
+      "tests": [
+        "tools/headless/patronen.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Eigen rij naast de mixer; in v2 een deel van het trackpaneel."
+    },
+    {
+      "pad": "src/ui/instrument-paneel.js",
+      "regels": 235,
+      "puur": false,
+      "imports": [
+        "../control/actions.js",
+        "../control/noten.js",
+        "../control/midi-learn.js",
+        "./mapping-opslag.js",
+        "./controls.js",
+        "./meldingen.js",
+        "./dom.js",
+        "./rijen.js"
+      ],
+      "tests": [
+        "tools/headless/instrument.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Idem: het schermklavier en de knoppen horen bij het trackpaneel."
+    }
+  ]
+}
