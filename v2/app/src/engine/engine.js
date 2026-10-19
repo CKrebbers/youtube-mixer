@@ -8,7 +8,7 @@
  *   audio.speler(ctx)           -> Promise<speler>
  *
  * Tijd: `nu()` is ctx.currentTime. Een handeling gaat in op `straks()` (net na
- * wat de audiothread al rekent: startDrempel), zodat wat klinkt nooit verspringt.
+ * wat de audiothread al rekent: VOORUIT_BLOKKEN), zodat wat klinkt nooit verspringt.
  * Een timer zegt alleen WANNEER er vooruit gepland wordt (`tik`), nooit wat de
  * tijd is.
  */
@@ -24,7 +24,19 @@ export const TIK_MS = 250;
 /** Onder deze versterking telt een track als niet hoorbaar (−60 dB). */
 export const HOORBAAR = 0.001;
 
-const startDrempelVan = (ctx) => Math.max(ctx.baseLatency ?? 0, 128 / ctx.sampleRate) + 0.003;
+/**
+ * Hoe ver vooruit een handeling op de klok en de afspeelmotor ingaat: twee audioblokken.
+ * Genoeg om het bericht in de worklet te hebben vóór het moment (dan sample-exact), en
+ * niet afhankelijk van het apparaat. Komt een bericht toch later, dan rekent de motor
+ * op de lijn verder (een segment in het verleden geldt meteen), dus er springt niets.
+ * NIET de startDrempel van v1 (baseLatency + 3 ms): die is voor hellingen op een
+ * AudioParam, en de strip past die zelf toe. Gemeten (M3): met de startDrempel duurde
+ * play 13 ms in headless Chrome (baseLatency 10 ms), met twee blokken mediaan 5,4 ms. Drie
+ * of vier blokken gaven daar hetzelfde maximum (10,7 ms): de nep-geluidskaart rekent per 10 ms,
+ * dus het maximum is daar van het apparaat. Op de Mac (128 frames per callback) opnieuw meten.
+ */
+export const VOORUIT_BLOKKEN = 2;
+const voorUit = (ctx) => (VOORUIT_BLOKKEN * 128) / ctx.sampleRate;
 
 export class Engine extends Emitter {
   /**
@@ -67,7 +79,7 @@ export class Engine extends Emitter {
   // ---- tijd -----------------------------------------------------------------
 
   nu() { return this.ctx.currentTime; }
-  straks() { return this.ctx.currentTime + startDrempelVan(this.ctx); }
+  straks() { return this.ctx.currentTime + voorUit(this.ctx); }
   /** Wat je hoort loopt zoveel achter op wat de engine plant. */
   vertraging() { return (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0) + (this.mixer.vertraging || 0); }
   /** De klok zoals je hem hoort (klok-B10). Null als hij niet loopt. */

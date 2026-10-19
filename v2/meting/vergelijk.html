@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sync tegen djay</title>
+<style>
+  :root { color-scheme: dark; --bg: #0d0e10; --vlak: #16181b; --lijn: #2a2e34; --tekst: #e8eaed; --dim: #8a9099; --ok: #31c46f; --fout: #ef4b4f; }
+  body { margin: 0; padding: 24px max(16px, env(safe-area-inset-left)); background: var(--bg); color: var(--tekst); font: 15px/1.5 -apple-system, system-ui, sans-serif; max-width: 900px; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 24px 0 6px; }
+  p, li { color: var(--dim); max-width: 72ch; }
+  button { font: 600 15px inherit; padding: 10px 16px; background: var(--vlak); color: var(--tekst); border: 1px solid var(--lijn); border-radius: 4px; cursor: pointer; margin: 4px 6px 4px 0; }
+  select, input { font: 15px inherit; background: var(--vlak); color: var(--tekst); border: 1px solid var(--lijn); padding: 6px; border-radius: 4px; }
+  pre { background: var(--vlak); border: 1px solid var(--lijn); padding: 12px; border-radius: 4px; white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<h1>Sync: djay tegen VarveDJ v2</h1>
+<p>Meetpunt M13. Twee kliksporen: A laag (124 bpm), B hoog (128 bpm), of C hoog en zwervend (± 0,4%, zoals een live opname). Gesynct op A. We meten per klik van B hoe ver hij van A ligt: spreiding en drift.</p>
+<ol>
+  <li>Loopback zoals bij <code>loopback.html</code>: kabel uitgang 1 → ingang 1, gain laag, direct monitor uit.</li>
+  <li><b>djay</b>: laad <code>v2/meting/djay/a-124.wav</code> op deck 1 en <code>b-128.wav</code> (of <code>c-zwerft.wav</code>) op deck 2. Beide grids controleren (moet 124 / 128 zijn, eerste tel op het eerste klikje). Deck 1 play, deck 2 Sync aan, play, crossfader in het midden. Druk hier op <b>Neem djay op</b>.</li>
+  <li><b>v2</b>: druk op <b>Speel en neem v2 op</b>: deze pagina laadt dezelfde sporen in de echte engine, synct en neemt op via dezelfde kabel.</li>
+  <li>Doe beide ook met C. Kopieer de uitslagen naar <code>v2/meting/uitslag/vergelijk.json</code>.</li>
+</ol>
+<p><label>Ingang <select id="in"></select></label> <label>Uitgang (v2) <select id="uit"></select></label>
+  <label>Spoor B <select id="spoor"><option value="b-128">b-128 (vast)</option><option value="c-zwerft">c-zwerft (zwervend)</option></select></label>
+  <label>Seconden <input id="sec" type="number" value="120" min="30" max="600" style="width:5em"></label>
+  <label><input type="checkbox" id="intern"> intern (zonder kabel: de master van v2 zelf)</label></p>
+<p><button id="djay">Neem djay op</button><button id="v2">Speel en neem v2 op</button></p>
+<pre id="uitslag">—</pre>
+<script type="module">
+import { meetSync, maakWav } from './sync-analyse.js';
+const $ = (s) => document.querySelector(s);
+const toon = (o) => { $('#uitslag').textContent = JSON.stringify(o, null, 2); window.__uitslag = o; };
+async function apparaten() {
+  try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop()); } catch {}
+  const l = await navigator.mediaDevices.enumerateDevices();
+  for (const [sel, soort] of [[$('#in'), 'audioinput'], [$('#uit'), 'audiooutput']]) {
+    sel.replaceChildren(...l.filter((d) => d.kind === soort).map((d) => Object.assign(document.createElement('option'), { value: d.deviceId, textContent: d.label || d.deviceId })));
+    const sc = [...sel.options].find((o) => /scarlett|focusrite/i.test(o.textContent)); if (sc) sel.value = sc.value;
+  }
+}
+apparaten();
+
+const OPNEMER = `registerProcessor('neemop2', class extends AudioWorkletProcessor {
+  constructor(o) { super(); this.n = o.processorOptions.n; this.x = new Float32Array(this.n); this.i = 0; }
+  process(ins) { const x = ins[0][0]; if (this.i >= this.n) return false;
+    for (let k = 0; k < 128 && this.i < this.n; k++) this.x[this.i++] = x ? x[k] : 0;
+    if (this.i >= this.n) this.port.postMessage({ x: this.x }); return true; } });`;
+async function neemOp(ctx, bron, sec) {
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([OPNEMER], { type: 'text/javascript' })));
+  const node = new AudioWorkletNode(ctx, 'neemop2', { numberOfOutputs: 0, processorOptions: { n: Math.round(sec * ctx.sampleRate) } });
+  bron.connect(node);
+  const { x } = await new Promise((r) => { node.port.onmessage = (m) => r(m.data); });
+  bron.disconnect(node);
+  return x;
+}
+async function ingang(ctx) {
+  const s = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: $('#in').value ? { exact: $('#in').value } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  return { bron: ctx.createMediaStreamSource(s), stop: () => s.getTracks().forEach((t) => t.stop()) };
+}
+function bewaar(x, sr, naam) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([maakWav(x, sr)], { type: 'audio/wav' }));
+  a.download = naam; a.textContent = `opname bewaren (${naam})`; a.style.display = 'block';
+  $('#uitslag').after(a);
+}
+
+$('#djay').onclick = async () => {
+  toon({ bezig: 'djay opnemen…' });
+  const ctx = new AudioContext({ sampleRate: 48000 });
+  const i = await ingang(ctx);
+  const sec = Number($('#sec').value);
+  const x = await neemOp(ctx, i.bron, sec);
+  i.stop(); await ctx.close();
+  toon({ app: 'djay', spoor: $('#spoor').value, seconden: sec, ...meetSync(x, 48000) });
+  bewaar(x, 48000, `djay-${$('#spoor').value}.wav`);
+};
+
+$('#v2').onclick = async () => {
+  toon({ bezig: 'v2 laden…' });
+  const intern = $('#intern').checked, sec = Number($('#sec').value), spoor = $('#spoor').value;
+  const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
+  if (!intern && ctx.setSinkId && $('#uit').value) await ctx.setSinkId($('#uit').value);
+  await ctx.resume();
+  const { Engine } = await import('/src/engine/engine.js');
+  const { maakAudio } = await import('/src/audio/index.js');
+  const { wavNaarPcm } = await import('/src/ui/bronnen.js');
+  const grids = await (await fetch('/meting/djay/grids.json')).json();
+  const engine = new Engine({ ctx, audio: maakAudio() });
+  window.__engine = engine;
+  await engine.klaar; await engine.mixer.klaar;
+  const laad = async (n, id) => {
+    const pcm = wavNaarPcm(await (await fetch(`/meting/djay/${id}.wav`)).arrayBuffer());
+    return engine.laad(n, { id, titel: id, duur: pcm.frames / pcm.sr, grid: grids[id], haal: async () => pcm });
+  };
+  await laad(1, 'a-124'); await laad(2, spoor);
+  engine.bus.doe('track.1.play', true);
+  await new Promise((r) => setTimeout(r, 400));
+  engine.bus.doe('track.2.play', true);
+  engine.bus.doe('track.2.sync', true);
+  const i = intern ? null : await ingang(ctx);
+  // Intern: de master na de limiter (wat de zaal zou horen), zonder kabel.
+  const bron = intern ? engine.mixer.analyser ?? engine.mixer.in : i.bron;
+  toon({ bezig: `v2 speelt en neemt ${sec} s op…` });
+  const x = await neemOp(ctx, bron, sec);
+  i?.stop();
+  const res = { app: 'v2', spoor, seconden: sec, intern, klokBpm: engine.klok.bpm(ctx.currentTime), ...meetSync(x, 48000) };
+  engine.vernietig(); await ctx.close();
+  toon(res);
+  if (!intern) bewaar(x, 48000, `v2-${spoor}.wav`);
+};
+</script>
+</body>
+</html>
