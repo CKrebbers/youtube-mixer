@@ -63,6 +63,18 @@ const wensen = existsSync(wensenPad)
   }).filter(Boolean)
   : [];
 
+// Het ontwerp: v2/ontwerp/*.json, één per onderdeel, op volgorde van `nr`.
+const ontwerpMap = join(hier, 'ontwerp');
+const ontwerp = existsSync(ontwerpMap)
+  ? readdirSync(ontwerpMap).filter((n) => n.endsWith('.json')).map((n) => JSON.parse(readFileSync(join(ontwerpMap, n), 'utf8'))).sort((a, b) => a.nr - b.nr)
+  : [];
+for (const o of ontwerp) {
+  for (const x of [...o.besluiten, ...o.scenarios, ...o.open]) {
+    if (ids.has(x.id)) throw new Error(`dubbel id ${x.id} in ontwerp ${o.id}`);
+    ids.add(x.id);
+  }
+}
+
 mkdirSync(dirname(uit), { recursive: true });
-writeFileSync(uit, JSON.stringify({ gemaakt: new Date().toISOString(), wensen, onderwerpen, telling }));
+writeFileSync(uit, JSON.stringify({ gemaakt: new Date().toISOString(), wensen, ontwerp, onderwerpen, telling }));
 console.log(`${onderwerpen.length} onderwerpen, ${ids.size} kaartjes -> ${uit}`);

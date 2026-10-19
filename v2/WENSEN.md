@@ -22,6 +22,8 @@ Dit bestand gaat voor de oogst: een kaartje dat hiermee botst, verliest.
   jog van een gesyncte track aan, dan schuift die track t.o.v. de klok, of schuift de klok mee?)
   Ook: dat sync weinig in de telling staat zegt niets: sync is één druk, het effect loopt de hele
   avond door (zoals de automaat: weinig knoppen, veel effect).
+- **19 okt 2026** — op de vraag of bij een jog-aanraking de track of de klok schuift: "de track
+  schuift t.o.v. de klok". De klok is dus nooit van een track; een track verschuift erop.
 - **19 okt 2026** — "ik wil dat je kijkt naar wat djay doet maar dan wil ik het beter doen met alle
   bevindingen die we hebben." djay (Algoriddim) is de referentie; v2 moet het beter doen met wat v1
   heeft geleerd.
