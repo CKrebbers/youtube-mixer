@@ -92,7 +92,10 @@ zetStart();
 // ---- de library -------------------------------------------------------------------------
 
 const nummers = new Map();
-for (const d of DEMOS) nummers.set(d.id, { ...d, titel: d.titel, artiest: 'demo', demo: true, duur: d.duur ?? 120 });
+for (const d of DEMOS) {
+  // Het grid van een demo staat pas vast als hij gemaakt is; voor de lijst volstaat het tempo.
+  nummers.set(d.id, { ...d, titel: d.titel, artiest: 'demo', demo: true, duur: d.duur ?? 120, gridLijst: d.pad ? null : { slot: true, stukken: [{ bpm: d.bpm }] } });
+}
 
 async function haalLibrary() {
   try {
@@ -107,9 +110,10 @@ async function haalLibrary() {
 }
 
 function gridTekst(x) {
-  const s = x.grid?.stukken?.[0];
+  const g = x.grid ?? x.gridLijst;
+  const s = g?.stukken?.[0];
   if (!s) return { bpm: '—', onzeker: true };
-  const z = x.grid.slot || s.zekerheid === undefined || s.zekerheid >= 0.65;
+  const z = g.slot || s.zekerheid === undefined || s.zekerheid >= 0.65;
   return { bpm: s.bpm.toFixed(1).replace('.', ','), onzeker: !z };
 }
 
@@ -238,7 +242,8 @@ function teken() {
     const t = v.t;
     for (const k of v.knoppen) k.teken();
     const r = t.geladen ? t.pitchRate : null;
-    v.pitch.teken(t.gekoppeld ? `${((t.snelheid(nu) - 1) * 100).toFixed(1)}%` : r !== null ? `${((r - 1) * 100).toFixed(1)}%` : '');
+    const pct = (x) => `${x >= 1 ? '+' : '−'}${Math.abs((x - 1) * 100).toFixed(1).replace('.', ',')}%`;
+    v.pitch.teken(t.gekoppeld ? pct(t.snelheid(nu)) : r !== null ? pct(r) : '');
     v.vol.teken();
     const titel = t.nummer?.titel ?? '—', sub = t.nummer ? (t.nummer.artiest || (t.grid ? '' : 'geen grid: speelt vrij')) : 'leeg';
     if (v.titel.textContent !== titel) v.titel.textContent = titel;

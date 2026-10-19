@@ -66,8 +66,8 @@ export function eqDb(v) {
   return EQ_MAX_DB * ((t - 0.5) / 0.5);
 }
 
-/** Staat de filterknop in het midden (de dode zone)? */
-export const filterOpen = (v) => Math.abs(clamp(v) - 0.5) <= FILTER_MIDDEN + 1e-12;   // + 1e-12: 0,5 + 0,004 is in floating point net iets meer
+/** Staat de filterknop in het midden (de dode zone)? + 1e-12: 0,5 + 0,004 − 0,5 is in floating point net iets meer dan 0,004. */
+export const filterOpen = (v) => Math.abs(clamp(v) - 0.5) <= FILTER_MIDDEN + 1e-12;
 
 /**
  * Wat de bipolaire filterknop op de twee filters zet (v1 filterDoelen), plus

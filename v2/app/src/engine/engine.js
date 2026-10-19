@@ -47,11 +47,15 @@ export class Engine extends Emitter {
       for (const t of this.tracks) t.klokVerandert();
       this.emit('klok');
     });
-    for (const t of this.tracks) t.on('verander', () => this.emit('track', t.n));
+    for (const t of this.tracks) {
+      t.strip.kant?.(t.kant);
+      t.on('verander', () => this.emit('track', t.n));
+    }
     this.bus.on('geweigerd', ({ id, reden }) => this.meld(`${id}: ${reden}`, 'fout', `geweigerd:${id}`));
     definieerActies(this);
     this.klaar = Promise.all(this.tracks.map(async (t) => {
       t.speler = await audio.speler(ctx);
+      t.speler.onfout = (bericht) => this.meld(`track ${t.n}: de afspeelmotor gaf een fout (${bericht}); hij speelt stil tot je opnieuw laadt`, 'fout', `speler:${t.n}`);
       t.speler.node?.connect?.(t.strip.in);
       t.plan();
     }));
@@ -65,7 +69,7 @@ export class Engine extends Emitter {
   nu() { return this.ctx.currentTime; }
   straks() { return this.ctx.currentTime + startDrempelVan(this.ctx); }
   /** Wat je hoort loopt zoveel achter op wat de engine plant. */
-  vertraging() { return (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0) + (this.ctx.graafVertraging || 0); }
+  vertraging() { return (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0) + (this.mixer.vertraging || 0); }
   /** De klok zoals je hem hoort (klok-B10). Null als hij niet loopt. */
   hoorbareTel() { return this.klok.loopt ? this.klok.tel(this.nu() - this.vertraging()) : null; }
 

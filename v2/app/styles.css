@@ -102,17 +102,17 @@ button[disabled] { opacity: .35; cursor: default; }
 
 .t-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; flex: 1; min-height: 0; }
 .knoppen { display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 4px; min-height: 0; }
-.knop { position: relative; display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 6px; cursor: ns-resize; touch-action: none; min-height: 30px; }
-.knop canvas { width: 30px; height: 30px; }
+.knop { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 5px; cursor: ns-resize; touch-action: none; min-height: 28px; min-width: 0; }
+.knop canvas { width: 26px; height: 26px; }
 .knop .naam { font: 600 9px var(--f-tekst); letter-spacing: .08em; color: var(--dim); }
 .knop .waarde { font: 11px var(--f-cijfer); color: var(--tekst); display: block; }
-.knop .kill { font-size: 9px; padding: 2px 4px; min-height: 20px; }
+.knop .kill { font-size: 8px; padding: 1px 3px; min-height: 18px; letter-spacing: .02em; }
 .knop .kill.aan { background: var(--kill); border-color: var(--kill); color: #fff; }
-.faders { display: grid; grid-template-columns: 26px 34px; gap: 6px; min-height: 0; }
+.faders { display: grid; grid-template-columns: 24px 30px; gap: 4px; min-height: 0; padding-left: 2px; border-left: 1px solid var(--lijn); }
 .fader { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: ns-resize; touch-action: none; min-height: 0; }
 .fader .baan { position: relative; flex: 1; width: 6px; background: var(--bg); border: 1px solid var(--lijn); border-radius: 3px; min-height: 60px; }
-.fader .duim { position: absolute; left: 50%; width: 26px; height: 12px; margin: -6px 0 0 -13px; background: var(--tekst); border-radius: 2px; box-shadow: 0 1px 0 #000; }
-.fader.vol .duim { width: 32px; margin-left: -16px; }
+.fader .duim { position: absolute; left: 50%; width: 20px; height: 10px; margin: -5px 0 0 -10px; background: var(--tekst); border-radius: 2px; box-shadow: 0 1px 0 #000; }
+.fader.vol .duim { width: 26px; margin-left: -13px; }
 .fader.pitch .midden { position: absolute; left: -4px; right: -4px; top: 50%; height: 1px; background: var(--zwak); }
 .fader .naam { font: 600 9px var(--f-tekst); letter-spacing: .08em; color: var(--dim); }
 .fader .waarde { font: 10px var(--f-cijfer); }
@@ -148,6 +148,6 @@ button[disabled] { opacity: .35; cursor: default; }
 
 @media (max-height: 860px) {
   .bieb { height: 150px; }
-  .knop { min-height: 26px; }
-  .knop canvas { width: 26px; height: 26px; }
+  .knop { min-height: 24px; }
+  .knop canvas { width: 22px; height: 22px; }
 }
