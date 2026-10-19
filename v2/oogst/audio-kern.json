@@ -51,10 +51,10 @@
     },
     {
       "id": "audio-kern-003",
-      "titel": "Segment heeft een vaste vorm: optionele velden als object, vaste volgorde",
+      "titel": "Vaste segmentvorm, geen double over grenzen (ook niet naar de WASM)",
       "soort": "valkuil",
-      "wat": "rem is { a } en geen getal dat soms ontbreekt; een segment heeft zeven velden in vaste volgorde (StreamBron._maak, met rek). Een getal-veld dat soms undefined is laat V8 bij elk lezen een getal-object maken; een segment in een andere vorm maakt renderBlok polymorf.",
-      "waarom": "Gemeten: 260 bytes afval per blok met rem als losse a; met keylock maakte een andere segmentvorm in de test weer afval.",
+      "wat": "rem is { a } en geen getal dat soms ontbreekt; een segment heeft zeven velden in vaste volgorde (StreamBron._maak, met rek). Een getal-veld dat soms undefined is laat V8 bij elk lezen een getal-object maken; een segment in een andere vorm maakt renderBlok polymorf. In het hete pad van de worklet geen double als argument, ook niet naar de WASM: _mengB leest de klok uit this.t0. Een WASM-aanroep met een niet-geheel getal kost ~48 bytes; alleen per sprong of toonwissel. Segmenten zonder rek komen nooit bij het rekpad, zodat de gouden hash niet verandert.",
+      "waarom": "Gemeten: 260 bytes afval per blok met rem als losse a; met keylock maakte een andere segmentvorm in de test weer afval. Gemeten bij de bouw van keylock (5 okt): 0,02 bytes per blok.",
       "bron": [
         {
           "pad": "CLAUDE.md",
@@ -67,11 +67,17 @@
         {
           "pad": "src/engine/stream-kern.js",
           "waar": "r17-22"
+        },
+        {
+          "pad": "docs/KEYLOCK.md",
+          "waar": "§9.3"
         }
       ],
       "code": [
         "src/engine/bron.js",
-        "src/engine/stream-kern.js"
+        "src/engine/stream-kern.js",
+        "src/engine/stream-lezer.js",
+        "src/engine/rek-kern.js"
       ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
@@ -129,10 +135,10 @@
     },
     {
       "id": "audio-kern-006",
-      "titel": "renderblok.test: gouden hash plus 0 GC per venster, geen tijdmeting",
+      "titel": "renderblok.test bewaakt 0 GC en de gouden hash; berichten en opwarmen niet",
       "soort": "regel",
-      "wat": "De echte worklet in een nagebouwde AudioWorkletGlobalScope, acht decks die elk pad raken: eerst een gouden hash (9dfaeb73) over 3 000 blokken, dan na opwarmen een venster van 12 000 blokken met v8.GCProfiler: geen GC en < 1 kB groei. Hooguit 30 vensters voor V8 klaar is met optimaliseren.",
-      "waarom": "Geen tijdmeting, dus niet wankel onder belasting; één array per blok (40 B/blok) haalt in geen venster de drempel. De hash hangt van V8's sin/cos af: na een Node-update opnieuw meten op de oude kern, niet blind overnemen.",
+      "wat": "De echte worklet in een nagebouwde AudioWorkletGlobalScope, acht decks die elk pad raken: eerst een gouden hash (9dfaeb73) over 3 000 blokken, dan na opwarmen een venster van 12 000 blokken met v8.GCProfiler: geen GC en < 1 kB groei. Hooguit 30 vensters voor V8 klaar is met optimaliseren. Een binnenkomend bericht maakt de browser zelf aan (~4 B gemeten, 16 B toegestaan), en einde-meldingen gaan terug als object. De eerste honderden blokken na het laden draaien in de interpreter en maken wel afval. Framenummers boven 2^30 (tracks > 6,2 uur) passen niet in een klein geheel getal.",
+      "waarom": "Geen tijdmeting, dus niet wankel onder belasting; één array per blok (40 B/blok) haalt in geen venster de drempel. De hash hangt van V8's sin/cos af: na een Node-update opnieuw meten op de oude kern, niet blind overnemen. Echt nul vraagt SharedArrayBuffer voor de segmenten; de server stuurt daarom al COOP/COEP-headers (kost niets, er zijn geen cross-origin verwijzingen).",
       "bron": [
         {
           "pad": "docs/AUDIOPAD.md",
@@ -141,24 +147,7 @@
         {
           "pad": "CLAUDE.md",
           "waar": "Bekende grenzen \"renderblok.test.mjs eist 0 GC's\""
-        }
-      ],
-      "code": [
-        "test/renderblok.test.mjs",
-        "tools/bench/renderblok.mjs"
-      ],
-      "pijler": "systeem",
-      "gewicht": "kern",
-      "voorstel": "houden",
-      "reden": "De goedkoopste bewaking die een tik op het podium voorkomt; elke nieuwe kern in v2 krijgt dezelfde vorm van test."
-    },
-    {
-      "id": "audio-kern-007",
-      "titel": "Wat niet afvalvrij is: berichten, opwarmen, tracks boven 6,2 uur",
-      "soort": "grens",
-      "wat": "Een binnenkomend bericht maakt de browser zelf aan (~4 B gemeten, 16 B toegestaan), en einde-meldingen gaan terug als object. De eerste honderden blokken na het laden draaien in de interpreter en maken wel afval. Framenummers boven 2^30 (tracks > 6,2 uur) passen niet in een klein geheel getal.",
-      "waarom": "Echt nul vraagt SharedArrayBuffer voor de segmenten; de server stuurt daarom al COOP/COEP-headers (kost niets, er zijn geen cross-origin verwijzingen).",
-      "bron": [
+        },
         {
           "pad": "docs/AUDIOPAD.md",
           "waar": "\"Wat blijft\""
@@ -169,16 +158,18 @@
         }
       ],
       "code": [
+        "test/renderblok.test.mjs",
+        "tools/bench/renderblok.mjs",
         "server/index.js",
         "src/engine/stream-lezer.js"
       ],
       "pijler": "systeem",
-      "gewicht": "detail",
+      "gewicht": "kern",
       "voorstel": "houden",
-      "reden": "Bewuste rest; in v2 pas SharedArrayBuffer als een meting erom vraagt."
+      "reden": "De goedkoopste bewaking die een tik op het podium voorkomt; elke nieuwe kern in v2 krijgt dezelfde vorm van test."
     },
     {
-      "id": "audio-kern-008",
+      "id": "audio-kern-007",
       "titel": "Streamen met een pagina-cache op samplepositie, niet met een ringbuffer",
       "soort": "besluit",
       "wat": "Een track staat niet in het geheugen: alleen pagina's van 65 536 frames (~1,37 s) rond de positie, plus vastgepinde pagina's rond hotcues, cuepunt en loop. De worklet leest de pagina's; de hoofdthread haalt ze met Range-verzoeken.",
@@ -207,7 +198,7 @@
       "reden": "Werkt, is gemeten en laat keylock vooruitlezen; geen reden om het model te heropenen."
     },
     {
-      "id": "audio-kern-009",
+      "id": "audio-kern-008",
       "titel": "Geheugen per track: 4-6 MB streamend, 12,8 MB als je hem hoort",
       "soort": "meting",
       "wat": "Wat uit de library komt kost ~4-6 MB per track, hoe lang hij ook is: acht keer een album van 31 minuten ~30 MB, waar het uitgepakt 5,7 GB was. Een hoorbare track houdt sinds 15 okt 60 s vooruit: ~12,8 MB stereo, ~46 MB met vier stems.",
@@ -228,7 +219,7 @@
       "reden": "Maakt acht decks met lange albums op een MacBook Air mogelijk; de getallen zijn de maatstaf voor v2."
     },
     {
-      "id": "audio-kern-010",
+      "id": "audio-kern-009",
       "titel": "Eén afspeelmotor: ook losse bestanden en de demo gaan door de StreamBron",
       "soort": "besluit",
       "wat": "deck.laadGeheugen(buffer) zet een AudioBuffer om naar het formaat van de ingest (maakWav, 16-bit stereo) en geeft de StreamBron een geheugenHaal die Range-verzoeken uit dat geheugen beantwoordt. Kost ~11 MB per minuut (de helft van een AudioBuffer).",
@@ -249,7 +240,7 @@
       "reden": "Eén pad om te testen en te meten; geheugenHaal maakt ook de tests netwerkvrij."
     },
     {
-      "id": "audio-kern-011",
+      "id": "audio-kern-010",
       "titel": "BufferBron leeft nog als reserve: tweede pad dat tikt en geen keylock kent",
       "soort": "pijn",
       "wat": "Naast de StreamBron bestaat de BufferBron (AudioBufferSourceNode) nog, \"voor de engine-tests en straks keylock\". Keylock kwam in de StreamBron; de BufferBron loopt via de native loop en tikt nog bij de naad, heeft een eigen declick (4 ms, nog op nu) en `get keylock() { return false; }`.",
@@ -273,11 +264,11 @@
       "reden": "De StreamBron met geheugenHaal dekt tests en losse bestanden; een tweede motor is alleen onderhoud."
     },
     {
-      "id": "audio-kern-012",
+      "id": "audio-kern-011",
       "titel": "Streambestand: alleen 16-bit PCM met 2, 4 of 8 kanalen, anders weigeren",
       "soort": "contract",
-      "wat": "Streamen leest audio.wav of stems.wav rechtstreeks met Range-verzoeken, dus alleen 16-bit PCM, 48 kHz, 2/4/8 kanalen interleaved (controleerWav). Een ander formaat weigert de StreamBron met een reden. Verandert het Content-Range-totaal tijdens het spelen (bestand vervangen), dan haalt hij niets meer op: wat er is speelt uit, daarna stilte en één melding, nooit ruis.",
-      "waarom": "Opnieuw splitsen (2 naar 4 stems) of opnieuw binnenhalen vervangt het bestand onder een spelend deck.",
+      "wat": "Streamen leest audio.wav of stems.wav rechtstreeks met Range-verzoeken, dus alleen 16-bit PCM, 48 kHz, 2/4/8 kanalen interleaved (controleerWav). Een ander formaat weigert de StreamBron met een reden. Verandert het Content-Range-totaal tijdens het spelen (bestand vervangen), dan haalt hij niets meer op: wat er is speelt uit, daarna stilte en één melding, nooit ruis. Opnieuw splitsen vervangt stems.wav. De ui weigert het zolang een track dat nummer met stems speelt; gebeurt het toch, dan ziet de StreamBron een ander Content-Range-totaal en speelt uit wat er is, daarna stilte met één melding. Een spelend deck wisselt nooit vanzelf naar nieuwe stems (gestippeld S2/S4 = herlaad om ze te horen).",
+      "waarom": "Opnieuw splitsen (2 naar 4 stems) of opnieuw binnenhalen vervangt het bestand onder een spelend deck. Twee lagen: de ui voorkomt, de engine is er robuust tegen.",
       "bron": [
         {
           "pad": "CLAUDE.md",
@@ -286,11 +277,16 @@
         {
           "pad": "docs/STEMS.md",
           "waar": "§3 StreamBron"
+        },
+        {
+          "pad": "docs/STEMS.md",
+          "waar": "§3, §4, \"Gebruiken\""
         }
       ],
       "code": [
         "src/engine/stream-kern.js (controleerWav, leesWavKop)",
-        "src/engine/bron.js"
+        "src/engine/bron.js",
+        "src/ui/stems-paneel.js"
       ],
       "pijler": "dj",
       "gewicht": "kern",
@@ -298,7 +294,7 @@
       "reden": "Simpel formaat zonder decoder op de audiothread; het weigeren met reden voorkwam ruis."
     },
     {
-      "id": "audio-kern-013",
+      "id": "audio-kern-012",
       "titel": "AudioContext vast op 48 kHz, gelijk aan wat de ingest levert",
       "soort": "besluit",
       "wat": "De AudioContext wordt expliciet op 48 kHz gezet. De ingest normaliseert alles naar 48 kHz; peaks, grid en streamen rekenen daarmee.",
@@ -318,19 +314,24 @@
       "reden": "Eén samplerate van ingest tot uitgang houdt alle rekenwerk exact."
     },
     {
-      "id": "audio-kern-014",
-      "titel": "Een gat is stilte, nooit herhaling; overgangen van 3-5 ms rond elke naad",
+      "id": "audio-kern-013",
+      "titel": "Gat = stilte, nooit herhaling; overgangen van 3-5 ms en de loop-naad",
       "soort": "regel",
-      "wat": "Springen naar een plek die nog niet binnen is geeft een paar tientallen ms stilte. De streamkern ziet een gat 3 ms vooruit aankomen (GAT_FADE, staat.env), vloeit bij elke segmentwissel 4 ms over (SEGMENT_FADE, vorig/wisselT) en de loop-naad 5 ms (LOOP_NAAD). Hotcues en cuepunt zijn vastgepind en klinken direct.",
-      "waarom": "Een herhaling klinkt als een fout, stilte als een haper; transport is zo klikvrij (verbeterronde 23 sep).",
+      "wat": "Springen naar een plek die nog niet binnen is geeft een paar tientallen ms stilte. De streamkern ziet een gat 3 ms vooruit aankomen (GAT_FADE, staat.env), vloeit bij elke segmentwissel 4 ms over (SEGMENT_FADE, vorig/wisselT) en de loop-naad 5 ms (LOOP_NAAD). Hotcues en cuepunt zijn vastgepind en klinken direct. Einde en begin van een loop liggen bijna nooit op dezelfde hoogte: een tik. De streamkern vloeit de laatste 5 ms (LOOP_NAAD) equal-power over naar de samples vlak vóór het loop-begin. Een loop vanaf 0 s vloeit niet naar stilte (er staat niets vóór 0).",
+      "waarom": "Een herhaling klinkt als een fout, stilte als een haper; transport is zo klikvrij (verbeterronde 23 sep). Gemeten op het ADRIANA-album: sprongen tot 0,147 werden niet groter dan een gewone stap in de muziek. De BufferBron (native loop) tikt nog.",
       "bron": [
         {
           "pad": "CLAUDE.md",
           "waar": "Bekende grenzen \"Springen naar een plek\", \"Verbeterronde 23 september\""
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen \"Een loop springt van einde naar begin\""
         }
       ],
       "code": [
-        "src/engine/stream-kern.js"
+        "src/engine/stream-kern.js",
+        "src/engine/stream-kern.js (LOOP_NAAD)"
       ],
       "pijler": "dj",
       "gewicht": "kern",
@@ -338,27 +339,7 @@
       "reden": "Klikvrij transport is een eis, de constanten zijn gemeten."
     },
     {
-      "id": "audio-kern-015",
-      "titel": "Loop-naad: laatste 5 ms equal-power naar wat vóór het loopbegin staat",
-      "soort": "meting",
-      "wat": "Einde en begin van een loop liggen bijna nooit op dezelfde hoogte: een tik. De streamkern vloeit de laatste 5 ms (LOOP_NAAD) equal-power over naar de samples vlak vóór het loop-begin. Een loop vanaf 0 s vloeit niet naar stilte (er staat niets vóór 0).",
-      "waarom": "Gemeten op het ADRIANA-album: sprongen tot 0,147 werden niet groter dan een gewone stap in de muziek. De BufferBron (native loop) tikt nog.",
-      "bron": [
-        {
-          "pad": "CLAUDE.md",
-          "waar": "Bekende grenzen \"Een loop springt van einde naar begin\""
-        }
-      ],
-      "code": [
-        "src/engine/stream-kern.js (LOOP_NAAD)"
-      ],
-      "pijler": "dj",
-      "gewicht": "belangrijk",
-      "voorstel": "houden",
-      "reden": "Goedkoop en gemeten; ook de keylock-invoer gebruikt dezelfde naad."
-    },
-    {
-      "id": "audio-kern-016",
+      "id": "audio-kern-014",
       "titel": "Vooruit 20 s, 60 s voor een track die je hoort, met 30 s hysterese",
       "soort": "besluit",
       "wat": "Een track die je HOORT (speelt, fader x crossfader > -60 dB) houdt 60 s pagina's vooruit (VOORUIT_HOORBAAR), de rest 20 s. Pas na 30 s audioklok niet-hoorbaar terug naar 20 s (VOORUIT_NA), per nummer, met een eigen timer op die grens. De engine beslist, het deck geeft een getal door, alleen bijvullen leest het.",
@@ -383,7 +364,7 @@
       "reden": "Robuustheid voor een draagbare set waar de server even kan haperen."
     },
     {
-      "id": "audio-kern-017",
+      "id": "audio-kern-015",
       "titel": "Gepland starten: de bron speelt al, maar klinkt sample-exact pas vanaf T",
       "soort": "contract",
       "wat": "bron.start(p, { op }): de bron loopt al (deck.wacht) maar klinkt pas vanaf op, sample-exact; de worklet krijgt gepland: true (zonder klinkt vóór T wat er vóór het startpunt staat). ctxTijdVan rekent vanaf max(nu, T).",
@@ -408,7 +389,7 @@
       "reden": "Eén mechanisme voor op-de-maat-starten en keylock-sprongen."
     },
     {
-      "id": "audio-kern-018",
+      "id": "audio-kern-016",
       "titel": "Rem (vinylstop) zit in positieOp en nergens anders",
       "soort": "contract",
       "wat": "Segment rem { a }: positie = P + R·dt + a·dt²/2 tot stilstand, dezelfde formule in hoofdthread en worklet; 0,1-5 s, standaard 1 s, lineair. Onder 25% van de beginsnelheid (REM_UIT) dooft de worklet uit. speelt en remt komen van de audioklok (remVoorbij). Ook met keylock gaat een rem via renderBlok: de toon zakt, zoals vinyl.",
@@ -437,7 +418,7 @@
       "reden": "Netjes ingepast in het segmentmodel zonder extra klok."
     },
     {
-      "id": "audio-kern-019",
+      "id": "audio-kern-017",
       "titel": "Wat je HOORT staat op één plek: hoorbaar.js",
       "soort": "regel",
       "wat": "Hoorbaar = positie - (outputLatency + baseLatency + graafVertraging) x rate tijdens spelen; stilstaand of wachtend de positie zelf; tijdens een rem de snelheid van nu (rate 0 is echt). Bend telt niet mee (< 1 ms). LED-fase, \"tel 1 hier\", toonsoort, video, puls, vormen en de beeldzender gebruiken het.",
@@ -461,7 +442,7 @@
       "reden": "57 regels, puur, door zes tests gedekt; precies het soort plek dat v2 nodig heeft."
     },
     {
-      "id": "audio-kern-020",
+      "id": "audio-kern-018",
       "titel": "graafVertraging als veld op de AudioContext; rack-latentie telt niet mee",
       "soort": "pijn",
       "wat": "De vertraging in de graaf (limiter 1,5 ms, compressor 6 ms) staat als eigen veld op de AudioContext (zetGraafVertraging), omdat video.html een eigen kopie van hoorbaar.js laadt. Effecten met eigen latentie in een rack (compressor 6 ms, pitch ~45 ms, band) zitten er niet in, ook niet in de cue-compensatie.",
@@ -487,7 +468,7 @@
       "reden": "In v2 één latentiemodel in de engine (som van bekende vertragingen per pad: master, track, effect) dat ook de vensters krijgen."
     },
     {
-      "id": "audio-kern-021",
+      "id": "audio-kern-019",
       "titel": "Overgangen nooit met setValueCurveAtTime: beginpunt plus lineaire hellingen",
       "soort": "valkuil",
       "wat": "Bovenop een lopende curve gooit setTargetAtTime NotSupportedError; afbreken met cancelAndHoldAtTime gooit niet, maar Chrome speelt het afgekapte stuk opnieuw af vanaf het begin (sprong 0,15-0,6). zetHellingen: vasthouden, beginpunt vastleggen, lineaire hellingen (zelfde vorm als een curve).",
@@ -511,7 +492,7 @@
       "reden": "Elke kruisfade, kill en glijbeurt rust hierop; de regel is browsergedrag, niet ontwerp."
     },
     {
-      "id": "audio-kern-022",
+      "id": "audio-kern-020",
       "titel": "startDrempel: een helling pas beginnen na baseLatency of één blok plus 3 ms",
       "soort": "meting",
       "wat": "De renderthread loopt tot ~7,5 ms vóór ctx.currentTime; een punt dat voor hem al voorbij is zet Chrome op zijn eigen nu, en korte hellingen vallen dan samen tot één stap (de kill van 5 ms in één sample). startDrempel = max(baseLatency, 128/sampleRate) + 0,003.",
@@ -535,7 +516,7 @@
       "reden": "Eén functie, gemeten, overal hergebruikt (ook starten op de tel)."
     },
     {
-      "id": "audio-kern-023",
+      "id": "audio-kern-021",
       "titel": "Drie soorten zetten: doel (setTarget), overgang (hellingen), vervolg (glijden)",
       "soort": "contract",
       "wat": "Een doelwaarde (mix, EQ-knop) gaat via houdVast + setTargetAtTime (zetDoel, setEqBand). Een overgang (kruisfade, kill) via zetHellingen. Een helling die steeds opnieuw gericht wordt (Deck.glide, auto-DJ) via zetVervolg: cancelAndHold in de TOEKOMST op lineaire hellingen, zodat de oude doorloopt tot t0 (geen plateau). Zonder cancelAndHoldAtTime: zelf een punt op de huidige waarde.",
@@ -561,7 +542,7 @@
       "reden": "Drie kleine functies dekken alle automatisering; test/nep-tijdlijn.mjs rekent ze na."
     },
     {
-      "id": "audio-kern-024",
+      "id": "audio-kern-022",
       "titel": "Chrome: lineaire helling na cancelAndHold midden in setTargetAtTime begint op 0",
       "soort": "valkuil",
       "wat": "In Chrome begon een lineaire helling na cancelAndHoldAtTime midden in een setTargetAtTime op 0: een tik bij een geplande stemroof van de polysynth. De Poly plant zijn envelopes op de audioklok en kent zelf zijn stand (_envOp), zodat hij elk beginpunt expliciet zet.",
@@ -581,7 +562,7 @@
       "reden": "Envelopes als data met een uit te rekenen stand zijn ook in v2 de veilige vorm."
     },
     {
-      "id": "audio-kern-025",
+      "id": "audio-kern-023",
       "titel": "Een mock die makkelijker is dan Chrome verbergt bugs",
       "soort": "regel",
       "wat": "De Web Audio-mock vuurt onended asynchroon (zoals de browser), gooit bij overlappende curves zoals Chrome, en telt afgebroken curves. Daarnaast meet een headless Chrome op een OfflineAudioContext (tools/headless/*.mjs) wat de mock niet kan (splitter/merger, worklets, latentie).",
@@ -603,7 +584,7 @@
       "reden": "Twee lagen bewijs (strenge mock in Node, echte Chrome offline) is in v2 de standaard."
     },
     {
-      "id": "audio-kern-026",
+      "id": "audio-kern-024",
       "titel": "Chrome offline is niet bit-deterministisch bij twee klinkende verbindingen",
       "soort": "valkuil",
       "wat": "Een ingang met twee of meer klinkende verbindingen telt in Chrome in een willekeurige volgorde op (1 ULP), en timers die in het renderen vallen veranderen de uitkomst. De natte kant van een insert op mix 0 is cos(pi/2) = 6e-17, niet 0.",
@@ -627,7 +608,7 @@
       "reden": "Wie in v2 \"bit voor bit\" als acceptatie gebruikt, moet de scène zo bouwen."
     },
     {
-      "id": "audio-kern-027",
+      "id": "audio-kern-025",
       "titel": "Effect wisselen: twee complete ketens kruisfaden, nooit bedrading onder signaal",
       "soort": "regel",
       "wat": "Een nieuw effect of rack is een tweede complete keten; daartussen een equal-power kruisfade van 40 ms (FADE). De oude keten pas opruimen na fade plus staarttijd. Geen nodes hergebruiken (\"zelfde delay, andere parameters\").",
@@ -651,7 +632,7 @@
       "reden": "Werkt al voor zeventien plus zeven effecten en de master; ook de limiterwissel volgt het."
     },
     {
-      "id": "audio-kern-028",
+      "id": "audio-kern-026",
       "titel": "Rack-MIX equal-power, droog/nat per effect lineair: twee regels door elkaar",
       "soort": "pijn",
       "wat": "De MIX van een insert en de kruisfade van ketens zijn equal-power; droog/nat per effect (S10, zetNat) en de twee-koppen-wissel zijn lineair. Reden lineair: equal-power gaf halverwege tot +4 dB bij een effect dat op zijn ingang lijkt (crush, filter). Bij de rack-MIX met zo'n effect speelt hetzelfde, maar die is equal-power gebleven.",
@@ -679,7 +660,7 @@
       "reden": "In v2 één beschreven regel per soort menging (gecorreleerd = lineair, ongecorreleerd = equal-power) en een luidheidstoets per effect."
     },
     {
-      "id": "audio-kern-029",
+      "id": "audio-kern-027",
       "titel": "Effectcontract: 0..1, eenheid = formule van zet(), staart, vernietig",
       "soort": "contract",
       "wat": "Elk effect: parameters 0..1, de schaling in zet(); een `eenheid` per parameter met precies dezelfde formule (wijkt die af, dan liegt het scherm); een staarttijd; vernietig() stopt oscillatoren en bronnen; bypass is bit voor bit de invoer. Een rack slaat delingen op, nooit seconden.",
@@ -706,32 +687,16 @@
       "reden": "Dit contract maakte 24 effecten inwisselbaar en de editor eerlijk."
     },
     {
-      "id": "audio-kern-030",
-      "titel": "Inloop van 30 ms: een nieuwe keten begint met lege vertragingslijnen",
+      "id": "audio-kern-028",
+      "titel": "Nieuwe keten: 30 ms inloop, en tijdens het bouwen direct zetten",
       "soort": "valkuil",
-      "wat": "Alles met geheugen (vertraging, compressor) zit achter een gain die in 30 ms opengaat (inloop). Een nieuwe keten heeft lege vertragingslijnen en de vertraagde kopie begon anders abrupt midden in een golf.",
-      "waarom": "Gemeten boven de gewone tweede afgeleide: chorus x21, compressor x23; de delay van fx.js gewisseld vanaf het filter x46, met inloop x1,61.",
+      "wat": "Alles met geheugen (vertraging, compressor) zit achter een gain die in 30 ms opengaat (inloop). Een nieuwe keten heeft lege vertragingslijnen en de vertraagde kopie begon anders abrupt midden in een golf. Zolang de klok niet verder is dan bij het bouwen zet zet() de waarde direct (zetter) en elk effect zet zich bij het bouwen op zijn standaard (opStandaard). Daarna glijdt hij (setTargetAtTime, tau 20 ms).",
+      "waarom": "Gemeten boven de gewone tweede afgeleide: chorus x21, compressor x23; de delay van fx.js gewisseld vanaf het filter x46, met inloop x1,61. Anders klinkt een effect een tiende seconde op de beginwaarden van Web Audio (gain 1, een lowpass op 350 Hz).",
       "bron": [
         {
           "pad": "docs/EFFECTEN.md",
           "waar": "\"Inloop\", \"Wat gemeten is\""
-        }
-      ],
-      "code": [
-        "src/engine/fx-meer.js (inloop)"
-      ],
-      "pijler": "programmeren",
-      "gewicht": "belangrijk",
-      "voorstel": "houden",
-      "reden": "Gemeten en goedkoop; hoort standaard in elke keten met geheugen."
-    },
-    {
-      "id": "audio-kern-031",
-      "titel": "Tijdens het bouwen direct zetten, daarna glijden",
-      "soort": "valkuil",
-      "wat": "Zolang de klok niet verder is dan bij het bouwen zet zet() de waarde direct (zetter) en elk effect zet zich bij het bouwen op zijn standaard (opStandaard). Daarna glijdt hij (setTargetAtTime, tau 20 ms).",
-      "waarom": "Anders klinkt een effect een tiende seconde op de beginwaarden van Web Audio (gain 1, een lowpass op 350 Hz).",
-      "bron": [
+        },
         {
           "pad": "docs/EFFECTEN.md",
           "waar": "\"Tijdens het bouwen meteen\""
@@ -742,15 +707,16 @@
         }
       ],
       "code": [
+        "src/engine/fx-meer.js (inloop)",
         "src/engine/fx-meer.js (zetter, opStandaard)"
       ],
       "pijler": "programmeren",
-      "gewicht": "detail",
+      "gewicht": "belangrijk",
       "voorstel": "houden",
-      "reden": "Klein, maar zonder dit is elke ketenwissel hoorbaar."
+      "reden": "Gemeten en goedkoop; hoort standaard in elke keten met geheugen."
     },
     {
-      "id": "audio-kern-032",
+      "id": "audio-kern-029",
       "titel": "Vertraging verzetten met twee leeskoppen, nooit één DelayNode laten glijden",
       "soort": "valkuil",
       "wat": "Een nieuwe delaytijd gaat op de stille kop en daar wordt 80 ms naartoe gefaded; snel draaien wacht tot de fade klaar is en pakt de laatste stand; een stand die wacht wordt niet alsnog gezet als er een nieuwere kwam; loopt de audio niet, dan direct. Hetzelfde patroon (wisselaar) voor chorus, flanger, vibrato, haas, de vorm van de distortion en drempel/ratio van de compressor.",
@@ -775,7 +741,7 @@
       "reden": "Algemeen patroon voor alles met een vertraging of een andere vorm."
     },
     {
-      "id": "audio-kern-033",
+      "id": "audio-kern-030",
       "titel": "Q van een Web Audio-filter is een piek in dB: in een lus negatief",
       "soort": "valkuil",
       "wat": "De standaard Q van een lowpass (1 dB) is al 12% boven 1 bij de afsnijfrequentie. In een feedbacklus groeit dat: de galm zwol aan, de delay op volle feedback had lusversterking 1,03. Elk filter in een lus krijgt een negatieve Q; engine.test controleert het, en de effectentest loopt elke lus na (vertraging erin, geen bult > -3 dB).",
@@ -801,7 +767,7 @@
       "reden": "Browsergedrag dat elke lus in v2 weer raakt."
     },
     {
-      "id": "audio-kern-034",
+      "id": "audio-kern-031",
       "titel": "Chrome klemt een vertraging in een lus op één render quantum (2,67 ms)",
       "soort": "valkuil",
       "wat": "Een DelayNode in een feedbacklus kan niet korter dan 128 samples. De flanger blijft daarom boven 2,8 ms (de \"jet\" door nul kan niet), en de kam is een worklet (anders kon hij niet boven 375 Hz).",
@@ -826,7 +792,7 @@
       "reden": "Bepaalt wanneer een effect een worklet moet zijn."
     },
     {
-      "id": "audio-kern-035",
+      "id": "audio-kern-032",
       "titel": "Galm als FDN (acht lijnen), geen ConvolverNode: alleen zo kan freeze",
       "soort": "besluit",
       "wat": "De reverb is een feedback delay network met acht lijnen en een Householder-matrix. Freeze = invoer dicht, lus verliesloos. Galmtijd meet je aan de helling van het uitsterven, niet aan de eerste -60 dB na de piek.",
@@ -854,11 +820,11 @@
       "reden": "Freeze is een speelfunctie; de galm is wel het duurste effect, dus meten bij acht decks."
     },
     {
-      "id": "audio-kern-036",
-      "titel": "Chrome-nodes meten: WaveShaper-oversampling, compressor-vooruitblik en make-up",
+      "id": "audio-kern-033",
+      "titel": "Chrome-nodes gemeten; distortion zonder oversampling, vaste vorm per soort",
       "soort": "meting",
-      "wat": "WaveShaper 2x/4x = 128/192 samples later (daarom geen oversampling: met de mix-knop is dat een kam). DynamicsCompressor kijkt 288 samples (6 ms) vooruit en doet zelf make-up (1/curve(1))^0,6 (+8,21 dB bij -24 dB/4:1; chromeMakeup deelt het eruit). Een DelayNode op 0 is bit voor bit door.",
-      "waarom": "Gemeten in Chrome (5 okt). Zonder dit gaf de compressor ~12 dB extra en een kam van 7,0 dB met meng 1/2.",
+      "wat": "WaveShaper 2x/4x = 128/192 samples later (daarom geen oversampling: met de mix-knop is dat een kam). DynamicsCompressor kijkt 288 samples (6 ms) vooruit en doet zelf make-up (1/curve(1))^0,6 (+8,21 dB bij -24 dB/4:1; chromeMakeup deelt het eruit). Een DelayNode op 0 is bit voor bit door. De vorm ligt vast per soort (16 385 punten); drive is een gain ervóór, dus draaien glijdt in plaats van bij elke stap een nieuwe curve (een sprong). Een andere soort gaat op een tweede vormer. Gelijke luidheid: een sinus met piek 0,3 komt bij elke drive even luid uit (binnen 0,001 dB). Geen oversampling.",
+      "waarom": "Gemeten in Chrome (5 okt). Zonder dit gaf de compressor ~12 dB extra en een kam van 7,0 dB met meng 1/2. In de filter app werd elke draai tot ~13 dB harder. Prijs van geen oversampling: aliasing 14,8 dB onder de harmonischen (hard, drive 1, 3150 Hz). Open vraag 2 in EFFECTEN.md.",
       "bron": [
         {
           "pad": "docs/EFFECTEN.md",
@@ -867,10 +833,15 @@
         {
           "pad": "CLAUDE.md",
           "waar": "Effecten \"Chrome-feiten (gemeten)\""
+        },
+        {
+          "pad": "docs/EFFECTEN.md",
+          "waar": "Distortion, \"Open vragen\" 2"
         }
       ],
       "code": [
-        "src/engine/fx-meer.js (chromeMakeup)"
+        "src/engine/fx-meer.js (chromeMakeup)",
+        "src/engine/fx-meer.js"
       ],
       "pijler": "programmeren",
       "gewicht": "belangrijk",
@@ -878,27 +849,7 @@
       "reden": "Browserfeiten die niemand in v2 opnieuw hoeft te ontdekken."
     },
     {
-      "id": "audio-kern-037",
-      "titel": "Distortion: vaste vorm per soort, drive als gain ervoor, gelijke luidheid",
-      "soort": "besluit",
-      "wat": "De vorm ligt vast per soort (16 385 punten); drive is een gain ervóór, dus draaien glijdt in plaats van bij elke stap een nieuwe curve (een sprong). Een andere soort gaat op een tweede vormer. Gelijke luidheid: een sinus met piek 0,3 komt bij elke drive even luid uit (binnen 0,001 dB). Geen oversampling.",
-      "waarom": "In de filter app werd elke draai tot ~13 dB harder. Prijs van geen oversampling: aliasing 14,8 dB onder de harmonischen (hard, drive 1, 3150 Hz). Open vraag 2 in EFFECTEN.md.",
-      "bron": [
-        {
-          "pad": "docs/EFFECTEN.md",
-          "waar": "Distortion, \"Open vragen\" 2"
-        }
-      ],
-      "code": [
-        "src/engine/fx-meer.js"
-      ],
-      "pijler": "programmeren",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Goed patroon voor elke vormer; de oversampling-afweging blijft Clay's oor."
-    },
-    {
-      "id": "audio-kern-038",
+      "id": "audio-kern-034",
       "titel": "Effecten met eigen latentie in een insert zonder compensatie",
       "soort": "open",
       "wat": "De compressor schuift de hele track 6 ms (Chromes vooruitblik), pitch met meng 1 ~45 ms (een halve korrel), band een paar ms. Half nat via de rack-MIX of droog/nat per effect is dan een kam; alleen de eigen meng van de compressor wacht met het droge pad.",
@@ -923,7 +874,7 @@
       "reden": "Clay kiest: latentiecompensatie in de keten bouwen, of zulke effecten alleen op bussen/master toelaten."
     },
     {
-      "id": "audio-kern-039",
+      "id": "audio-kern-035",
       "titel": "Effect-worklets lui laden, één keer per context, droog tot ze er zijn",
       "soort": "contract",
       "wat": "laadFxWorklet(ctx): addModule één keer per AudioContext, pas bij het eerste effect dat hem nodig heeft. Tot hij er is klinkt pitch droog en staat de auto-wah stil; daarna vloeien ze in (50 ms). Is de module er al, dan komt de node meteen. Mislukt laden: droog, geen fout, het volgende effect probeert opnieuw. Een context zonder audioWorklet (de mock) bouwt gewoon.",
@@ -944,7 +895,7 @@
       "reden": "Het idee blijft; in v2 de modules bij het opstarten laden (zie de master), dan vervallen de droge tussentoestand en het invloeien."
     },
     {
-      "id": "audio-kern-040",
+      "id": "audio-kern-036",
       "titel": "Een worklet die weg moet: eerst stop, process() geeft false, dan los en dicht",
       "soort": "valkuil",
       "wat": "Een AudioWorkletNode waarvan process() true blijft geven ruimt de browser nooit op, ook als niets er meer aan hangt. Dus: 'stop' sturen, process() geeft daarna false, dan losmaken, onprocessorerror en port.onmessage op null, port.close(). Nooit op het herlaadpad van de StreamBron (laad() hergebruikt de node).",
@@ -970,7 +921,7 @@
       "reden": "Een lek dat pas na een lange avond opvalt; in v2 één basisklasse voor elke worklet die dit afdwingt."
     },
     {
-      "id": "audio-kern-041",
+      "id": "audio-kern-037",
       "titel": "Een fout in een worklet melden via de AudioContext, en per soort herstellen",
       "soort": "contract",
       "wat": "Elke AudioWorkletNode krijgt onprocessorerror en meldt via meldWorkletFout(ctx, wat, { reden, hint }): een event varve-workletfout op de context (regel 1: de engine kent geen DOM). De engine maakt er een melding met sleutel worklet:<wat> van. Herstel: StreamBron één keer per laad een nieuwe node met hetzelfde segment; limiter terug naar de compressor; klankschaal en schaal bij de volgende aanslag; een effect één keer herbouwen (HERBOUW_MAX = 1); de opnemer meldt alleen.",
@@ -999,7 +950,7 @@
       "reden": "Stilte zonder melding is op een avond het ergste; het segmentmodel maakt herstel goedkoop."
     },
     {
-      "id": "audio-kern-042",
+      "id": "audio-kern-038",
       "titel": "De AudioContext bewaken: suspend melden, hervatten bij de eerste druk",
       "soort": "regel",
       "wat": "gezondheid.js: niet-running = melding (sleutel audio); de eerste druk op controller, hub of toetsenbord doet ctx.resume(); zelf proberen bij de statechange hooguit eens per 10 s (geen lus van stil-aan-stil); klok twee keer > 0,5 s achter terwijl running = \"audio-uitgang staat stil\". Vóór de eerste start meldt hij niets.",
@@ -1024,7 +975,7 @@
       "reden": "Klein en nodig voor een draagbare set met wisselende uitgangen."
     },
     {
-      "id": "audio-kern-043",
+      "id": "audio-kern-039",
       "titel": "Op de maat via playbackRate, nooit via de bufferlengte",
       "soort": "besluit",
       "wat": "Gate, sampler en de LFO van tremolo/autopan/duiker lopen exact op de maat via playbackRate: de buffer heeft hele samples, de rate maakt de periode exact. Gate: buffer hergebruikt bij kleine tempowissels; sampler: rate = duur / (tellen x tellengte); LFO: één cyclus als buffer, start METEEN op de fase waar hij hoort te zijn en vloeit 20 ms over.",
@@ -1050,11 +1001,11 @@
       "reden": "Gemeten drift na 26 minuten; een set duurt langer."
     },
     {
-      "id": "audio-kern-044",
+      "id": "audio-kern-040",
       "titel": "fxKlok: hoorbare tellengte en moment van de volgende tel; herankeren verplicht",
       "soort": "contract",
-      "wat": "Een tempo-effect krijgt zijn klok van het deck (fxKlok), niet van een grid dat het zelf opzoekt: beatLengte (hoorbaar, grid / rate) en ankerCtx (volgende tel op de audioklok), sinds S10 ook tellenTotEen. Herankeren bij seek, hotcue, tempo en gridbewerking; bussen horen bij geen deck en worden bij elke 'change' herankerd. Zonder klok de laatst bekende tel houden, niet terug naar 120 bpm.",
-      "waarom": "Vergeet je één herankering, dan loopt de gate na twintig minuten een zestiende naast. Tremolo op de \"1\" van de maat kon in eerste instantie niet omdat fxKlok alleen de tel kende (open vraag 4, EFFECTEN.md).",
+      "wat": "Een tempo-effect krijgt zijn klok van het deck (fxKlok), niet van een grid dat het zelf opzoekt: beatLengte (hoorbaar, grid / rate) en ankerCtx (volgende tel op de audioklok), sinds S10 ook tellenTotEen. Herankeren bij seek, hotcue, tempo en gridbewerking; bussen horen bij geen deck en worden bij elke 'change' herankerd. Zonder klok de laatst bekende tel houden, niet terug naar 120 bpm. startOpDeTel() (fx.js): ligt de volgende tel binnen startDrempel, dan start het effect op de tel daarna.",
+      "waarom": "Vergeet je één herankering, dan loopt de gate na twintig minuten een zestiende naast. Tremolo op de \"1\" van de maat kon in eerste instantie niet omdat fxKlok alleen de tel kende (open vraag 4, EFFECTEN.md). Web Audio start een bron in het verleden gewoon nu: het effect start dan blijvend een paar ms te laat en hoort naast de tel.",
       "bron": [
         {
           "pad": "CLAUDE.md",
@@ -1067,12 +1018,17 @@
         {
           "pad": "docs/EFFECTEN-MEER.md",
           "waar": "§4 op de maat"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen \"Starten op de tel\""
         }
       ],
       "code": [
         "src/engine/deck.js (fxKlok)",
         "src/engine/fx.js",
-        "src/engine/engine.js"
+        "src/engine/engine.js",
+        "src/engine/fx.js (startOpDeTel, startOpDeEen)"
       ],
       "pijler": "programmeren",
       "gewicht": "kern",
@@ -1080,27 +1036,7 @@
       "reden": "In v2 de klok vanaf het begin met tel, maat-anker en maatfase, en één plek die herankert in plaats van een lijst gebeurtenissen."
     },
     {
-      "id": "audio-kern-045",
-      "titel": "Starten op de tel: valt de tel binnen de uitgangsbuffer, neem de tel erna",
-      "soort": "valkuil",
-      "wat": "startOpDeTel() (fx.js): ligt de volgende tel binnen startDrempel, dan start het effect op de tel daarna.",
-      "waarom": "Web Audio start een bron in het verleden gewoon nu: het effect start dan blijvend een paar ms te laat en hoort naast de tel.",
-      "bron": [
-        {
-          "pad": "CLAUDE.md",
-          "waar": "Bekende grenzen \"Starten op de tel\""
-        }
-      ],
-      "code": [
-        "src/engine/fx.js (startOpDeTel, startOpDeEen)"
-      ],
-      "pijler": "programmeren",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Kleine helper, hoort bij de klok van v2."
-    },
-    {
-      "id": "audio-kern-046",
+      "id": "audio-kern-041",
       "titel": "Drie deling-lijsten met tegengestelde richting",
       "soort": "pijn",
       "wat": "DELINGEN (gate, lang naar kort, fx.js), ECHO_DELINGEN (kort naar lang, fx.js) en LFO_DELINGEN (langzaam naar snel met trioolen, fx-lfo.js). modulatie.js, puur, importeert LFO_DELINGEN uit fx-lfo.js, dat Web Audio gebruikt.",
@@ -1126,7 +1062,7 @@
       "reden": "In v2 één pure module met muzikale delingen; de richting is een eigenschap van de knop."
     },
     {
-      "id": "audio-kern-047",
+      "id": "audio-kern-042",
       "titel": "Racks zijn data: knop wijst naar een plek, het rack zegt wat de plek doet",
       "soort": "contract",
       "wat": "track.N.fx.knob.K wijst naar een PLEK, niet naar een parameter: een ander effect geeft plek 1 een andere betekenis zonder opnieuw te koppelen. Een rack (schema 1, JSON) heeft chain en macros; een macro bewaart alleen zijn default (live stand = sessietoestand). Botsen twee macro's op een parameter: de hoogste plek wint. Een rack hangt aan een LINK (nummer), meerdere per nummer, één actief.",
@@ -1147,7 +1083,7 @@
       "reden": "Scheidt mapping (controller) van klank (rack): precies pijler 3 en 4."
     },
     {
-      "id": "audio-kern-048",
+      "id": "audio-kern-043",
       "titel": "Onbekend in een rack blijft bewaard: effecttype, velden, bypass",
       "soort": "regel",
       "wat": "Een onbekend effecttype wordt niet weggegooid: ruwe JSON, staat uit, komt er bij opslaan ongeschonden weer uit. schrijfRack bewaart onbekende velden op het hoogste niveau (behalve _...), een onbekende modulator blijft als ruwe JSON, en een effect dat een oudere versie niet kent bewaart zijn eigen bypass (_bypass).",
@@ -1176,7 +1112,7 @@
       "reden": "Voorwaartse compatibiliteit voor Clay's eigen racks; ook nodig als v1-racks in v2 geladen worden."
     },
     {
-      "id": "audio-kern-049",
+      "id": "audio-kern-044",
       "titel": "Knop instellen op het gehoor, glijden per knop, drukvariant",
       "soort": "contract",
       "wat": "Instellen: DICHT zet de knop op 0, OPEN op 1, elke draai aan een effect wordt die kant (neemOp). Glijden per knop (macro.glide, hooguit 600 s): de knop staat meteen waar je hem zet, het geluid glijdt (plekEffectief van de audioklok); een timer van 33 ms geeft alleen tussenstanden door en alleen wat echt veranderde. Elke plek heeft een .hold: indrukken = vol open (direct), loslaten = terug.",
@@ -1197,7 +1133,7 @@
       "reden": "Zelf instellen zonder code (VISIE §5.3); het glijden scheidt knop en klank netjes."
     },
     {
-      "id": "audio-kern-050",
+      "id": "audio-kern-045",
       "titel": "Modulators als offset op de hoofdthread, gerekend op de audioklok",
       "soort": "besluit",
       "wat": "LFO, stappen, volger en toeval (modulatie.js, puur) rekenen elke 33 ms (8 ms met een snelle op de maat) de waarde op ctx.currentTime en de klok van het deck uit, als OFFSET op de basis: leesPlek, soft-takeover en LED-ring bewegen niet mee. Alleen wat veranderde gaat door; het effect glijdt zelf (tau 20 ms). Vrij hooguit 8 Hz; doelen: parameter, plek.K of mod.N.diepte.",
@@ -1222,7 +1158,7 @@
       "reden": "De offset-gedachte houden; de hoofdthread-timer is kwetsbaar (verborgen tabblad), in v2 overwegen om de schaling als pure functie in de worklet te laten rekenen."
     },
     {
-      "id": "audio-kern-051",
+      "id": "audio-kern-046",
       "titel": "Rackformaat is aangegroeid: curve en kromme, doelen als string-voorvoegsels",
       "soort": "pijn",
       "wat": "Bovenop schema 1 kwamen zonder versiesprong: kromme (gaat voor curve), doelen plek.K, mod.N.diepte en <slot>._nat in één string, meng per effect, mods, xy, uitleg, alleenNat. Een nieuw _nat-doel vraagt een nieuwe keten (natOntbreekt, bewerkMods().opnieuw); weghalen vraagt _herstelLos; resolveMacros moet plek.* en mod.* buiten de keten laten.",
@@ -1247,7 +1183,7 @@
       "reden": "In v2 een rackschema 2 met gestructureerde doelen ({ soort, slot, param }) en één migratie van schema 1."
     },
     {
-      "id": "audio-kern-052",
+      "id": "audio-kern-047",
       "titel": "Toeval nooit uit Math.random: altijd uit een zaad",
       "soort": "regel",
       "wat": "Muteren en willekeurig (muteer, reeksVan), de toeval-modulator (zaad), de klankschaal (eigen LCG) en de vormen gebruiken een zaad; hetzelfde zaad geeft hetzelfde resultaat. Nooit Math.random op de audiothread.",
@@ -1277,7 +1213,7 @@
       "reden": "Determinisme maakt terugspelen en testen mogelijk."
     },
     {
-      "id": "audio-kern-053",
+      "id": "audio-kern-048",
       "titel": "Wat niet in een rack kwam: Geheugen, parallelle ketens, stutter, audiosnelheid",
       "soort": "open",
       "wat": "Geheugen (90 s ringbuffer) niet: in een insert-rack begint het bij elke ketenwissel leeg, 17 MB per exemplaar, Math.random. Volledig parallelle ketens niet (droog/nat per effect dekt het meeste; vraagt andere bedrading en editor). Stutter/grain binnen het rack niet (zit tegen beat repeat aan). Modulatie op audiosnelheid niet.",
@@ -1301,7 +1237,7 @@
       "reden": "Clay kiest of v2 parallelle ketens en een geheugen-instrument vanaf het begin in het rackmodel opneemt."
     },
     {
-      "id": "audio-kern-054",
+      "id": "audio-kern-049",
       "titel": "Afval in effectkernen: keyed store van een double en constanten in de lus",
       "soort": "valkuil",
       "wat": "In de S10-kernen maakten `this.kern[naam] = …` (een keyed store van een double) en een module-constante in de lus (de grens van de aanslag) per blok afval. Oplossing: de processor krijgt een zet(kern, p) met namen, de grens staat in een veld. Parameters die per blok binnenkomen en een lus versterken (feedback van de kam) glijden per SAMPLE in de kern.",
@@ -1326,7 +1262,7 @@
       "reden": "Twee nieuwe V8-valkuilen bovenop AUDIOPAD.md; horen in dezelfde checklist."
     },
     {
-      "id": "audio-kern-055",
+      "id": "audio-kern-050",
       "titel": "CPU per effect, acht tegelijk: galm 19%, de rest 1-7% van een kern",
       "soort": "meting",
       "wat": "Offline in headless Chrome (container, niet de M1), acht tegelijk: kam 2,4% · klinker 3,3 · frequentieschuif 4,3 · band 6,7 · kanteling 1,7 · aanslag 3,4 · duiker 1,0 · filter 2,7 · delay 3,3 · galm 19. Toonhoogte + omhullende in de fx-worklet samen 11 µs per blok.",
@@ -1350,33 +1286,7 @@
       "reden": "Budget-referentie voor v2; opnieuw meten op de M1."
     },
     {
-      "id": "audio-kern-056",
-      "titel": "Effecten verdeeld per herkomst, niet per functie; grote bestanden",
-      "soort": "pijn",
-      "wat": "fx.js (1390 regels) bevat effectcontract, delingen, eenheden, de zeven eerste effecten, bouwKeten en InsertSlot; fx-meer.js (1063) de tien uit de filter app; fx-s10.js (441) de zeven van spoor S10. De volgorde in EFFECTEN is fx, dan meer, dan S10; afspraak: een effect toetsen op id, nooit op zijn plek.",
-      "waarom": "Elk spoor kreeg zijn eigen bestand om botsingen te vermijden; het resultaat is ordening naar geschiedenis.",
-      "bron": [
-        {
-          "pad": "CLAUDE.md",
-          "waar": "Structuur src/engine; \"Werkruimte: aanhaakpunten\" (effect toetsen op id)"
-        },
-        {
-          "pad": "docs/EFFECTEN.md",
-          "waar": "inleiding"
-        }
-      ],
-      "code": [
-        "src/engine/fx.js",
-        "src/engine/fx-meer.js",
-        "src/engine/fx-s10.js"
-      ],
-      "pijler": "programmeren",
-      "gewicht": "belangrijk",
-      "voorstel": "anders",
-      "reden": "In v2 één bestand per effect plus een register; InsertSlot en bouwKeten los van de effecten."
-    },
-    {
-      "id": "audio-kern-057",
+      "id": "audio-kern-051",
       "titel": "Sends: echo en galm na de fader en vóór de crossfader, bussen helemaal nat",
       "soort": "besluit",
       "wat": "Per track send A (echo) en B (galm), getapt NA de fader en vóór de crossfader, naar twee gedeelde bussen (engine.sends). Een bus is een gewone InsertSlot met een rack, helemaal nat. Sendknop kwadratisch. Echo-bus standaard op de maat (1/4 tel); zonder klok de laatst bekende tel. Het insert-effect zit vóór de fader.",
@@ -1397,7 +1307,7 @@
       "reden": "DJ-gedrag dat Clay koos; de bussen hergebruiken de InsertSlot."
     },
     {
-      "id": "audio-kern-058",
+      "id": "audio-kern-052",
       "titel": "Fadercurve en kill: -70 dB als \"weg\", maar stem-kill is precies 0",
       "soort": "contract",
       "wat": "faderGain: onder 0,001 -70 dB, anders (1 - n) x -45 dB. EQ: onder -30 dB snapt de knop naar kill, kill = -70 dB; de EQ-kill-schakelaar (track.N.kill.*) vloeit 5 ms als zachte S in amplitude na startDrempel, de knopstand blijft staan (ook bij een nieuw nummer). Stem-kill is 0 in amplitude met dezelfde S (killVersterking).",
@@ -1425,7 +1335,7 @@
       "reden": "In v2 één definitie van weg (0 in amplitude, met de zachte S) en de fadercurve als pure functie met test."
     },
     {
-      "id": "audio-kern-059",
+      "id": "audio-kern-053",
       "titel": "Keylock: Signalsmith Stretch 1.3.2 binnen de eigen stream-worklet (optie A)",
       "soort": "besluit",
       "wat": "De stretcher draait IN stream-lezer.js en wordt gevoed met hele frames uit de pagina's, met dezelfde segmenten {T, P, R}; hij kan vooruitlezen, dus alleen zijn uitvoerlatentie blijft. Niet SoundTouch (WSOLA warbelt op aangehouden polyfone klanken), niet Rubber Band (GPL; een browser-app serveren is distributie).",
@@ -1450,7 +1360,7 @@
       "reden": "Past op streamen, hotcues en regel 3; gemeten en beluisterd."
     },
     {
-      "id": "audio-kern-060",
+      "id": "audio-kern-054",
       "titel": "Signalsmith vendoren: fabriek los knippen, LICENSE erbij, in een submap",
       "soort": "valkuil",
       "wat": "Het .mjs importeren in een worklet registreert hun eigen processor en exporteert {}: de WASM-fabriek moet er los uit (tools/keylock/vendor.mjs, controleert de tarball tegen de npm-integriteit). Het npm-pakket heeft geen LICENSE-bestand: de MIT-tekst uit de bronrepo bovenin. De glue noemt document.currentScript (regels.test vlagt dat): daarom src/engine/vendor/. Eén stretcher per WASM-instantie (de glue heeft één globaal object).",
@@ -1475,7 +1385,7 @@
       "reden": "Het script maakt het herhaalbaar bij een nieuwe versie."
     },
     {
-      "id": "audio-kern-061",
+      "id": "audio-kern-055",
       "titel": "Keylock gemeten: toon exact, 1,3% van een kern per track, pieken tot +3,6 dB",
       "soort": "meting",
       "wat": "Toon bij keylock 0,92 / 1,00 / 1,08: 440,00 Hz (Node en Chrome); transponeren zonder keylock binnen 2 cent (Chrome +2 = 494,48 tegen 493,88 Hz); hoorbare positie +-0,7 ms; Chrome-WASM offline 1,3% van een kern per track (acht ~10%); 1,7 MB per stretcher; afval 0,02 bytes per blok; pieken tot 3,6 dB hoger (zang).",
@@ -1496,7 +1406,7 @@
       "reden": "Maatstaf voor v2; acht decks met keylock passen."
     },
     {
-      "id": "audio-kern-062",
+      "id": "audio-kern-056",
       "titel": "Vooruitblik van de stretcher = uitvoerlatentie plus één blok van 128",
       "soort": "valkuil",
       "wat": "Met vooruitblik = uitLat klonk alles 2,6 ms te laat (één quantum): wat process() teruggeeft hoort bij invoer die één blok later klaar is. Doorlopen: doel op t0 + uitLat + 128 frames. Na een _seek juist met doel op t0 + uitLat, anders klinkt de nieuwe plek één blok te vroeg (gemeten 0,00 ms na de correctie).",
@@ -1517,7 +1427,7 @@
       "reden": "Precies het soort detail dat bij een herbouw opnieuw misgaat."
     },
     {
-      "id": "audio-kern-063",
+      "id": "audio-kern-057",
       "titel": "Gespreid rekenen is verplicht: anders 170% van het budget in één quantum",
       "soort": "meting",
       "wat": "Zonder splitComputation vallen de STFT-blokken van acht decks samen: zwaarste quantum 4,5 ms (170% van 2,67 ms), 8,9% van de quanta boven budget. Gespreid: hooguit 0,85 ms (standaard) of 0,45 ms (goedkoper), gemiddeld gelijk. Kost +30 ms uitvoerlatentie. Opwarmen in één quantum (2,5 ms) past ook niet.",
@@ -1537,7 +1447,7 @@
       "reden": "Pieken, niet het gemiddelde, beslissen over tikken."
     },
     {
-      "id": "audio-kern-064",
+      "id": "audio-kern-058",
       "titel": "Springen met keylock = geplande sprong op het zoekrooster, ~98 ms",
       "soort": "besluit",
       "wat": "Een sprong met keylock is een gepland segment (rekPlanT: T - uitLat op een blokgrens), tot T speelt het vorige (positieIn). Tempo, toon en loop gaan zonder zoeken (T = nu, verschoven telling). Fasebehoudende sprongen (sync, nudge, beatjump, gequantiseerde hotcue) landen op P + (T - nu)·R; hotcue zonder quantize, cue, play en klik in de golfvorm exact op P. Zonder keylock blijft springen direct.",
@@ -1558,7 +1468,7 @@
       "reden": "Exact en zonder extra rekenwerk; het segmentmodel draagt het."
     },
     {
-      "id": "audio-kern-065",
+      "id": "audio-kern-059",
       "titel": "Voelt 98 ms bij een hotcue met keylock traag in een set?",
       "soort": "open",
       "wat": "S2 (een tweede, verse stretcher die één blok opwarmt, verspreid over ~20 ms, 4 ms kruisfade) is ontworpen, niet gebouwd: +1 sessie, 2 stretchers per deck (8 x 2 x 1,7 MB = 27 MB). Keylock in een set, hotcues met keylock en Shift + Tap / Nudge op de APC zijn nog niet op Clay's oren en hardware getest.",
@@ -1578,7 +1488,7 @@
       "reden": "Alleen een proefavond beslist; v2 moet een tweede stretcher per deck niet onmogelijk maken."
     },
     {
-      "id": "audio-kern-066",
+      "id": "audio-kern-060",
       "titel": "Polariteit: keylock aan/uit op tempo 1 kan een dip tot -15 dB geven",
       "soort": "valkuil",
       "wat": "Op 1,00 trekt Signalsmith naar bijna-identiek, maar soms met de golf omgekeerd (correlatie -0,85 tot -0,95), en dat kan onderweg omslaan. Kruisfaden tussen de gewone weg en keylock gaf dan een dip tot -15,5 dB. De worklet kiest daarom bij de wissel de polariteit (teken van de som a·b over de eerste ms).",
@@ -1598,32 +1508,7 @@
       "reden": "Niet te verzinnen zonder de meting; hoort bij elke wissel tussen twee paden die op elkaar lijken."
     },
     {
-      "id": "audio-kern-067",
-      "titel": "Geen double naar de WASM per blok; segment zonder rek blijft op renderBlok",
-      "soort": "regel",
-      "wat": "In het hete pad van de worklet geen double als argument, ook niet naar de WASM: _mengB leest de klok uit this.t0. Een WASM-aanroep met een niet-geheel getal kost ~48 bytes; alleen per sprong of toonwissel. Segmenten zonder rek komen nooit bij het rekpad, zodat de gouden hash niet verandert.",
-      "waarom": "Gemeten bij de bouw van keylock (5 okt): 0,02 bytes per blok.",
-      "bron": [
-        {
-          "pad": "CLAUDE.md",
-          "waar": "Keylock \"Gebouwd (5 okt)\""
-        },
-        {
-          "pad": "docs/KEYLOCK.md",
-          "waar": "§9.3"
-        }
-      ],
-      "code": [
-        "src/engine/stream-lezer.js",
-        "src/engine/rek-kern.js"
-      ],
-      "pijler": "systeem",
-      "gewicht": "belangrijk",
-      "voorstel": "houden",
-      "reden": "Zelfde regel als AUDIOPAD, nu over de JS/WASM-grens."
-    },
-    {
-      "id": "audio-kern-068",
+      "id": "audio-kern-061",
       "titel": "Toon per stem: één stretcher per stem-paar, dezelfde invoer en latentie",
       "soort": "besluit",
       "wat": "Elke stem kan een eigen toon (-12..+12) bovenop die van de track: één Signalsmith-instantie per stem-paar, zelfde invoer op hetzelfde moment, zelfde instellingen en dus latentie. Rekenwerk is per kanaal: vier stereostretchers kosten wat één met acht kanalen kostte; 1,7 MB per paar. Een stem met eigen toon zet het rekpad aan, ook zonder keylock op tempo 1.",
@@ -1647,7 +1532,7 @@
       "reden": "Goedkoop omdat het binnen hetzelfde rekpad blijft."
     },
     {
-      "id": "audio-kern-069",
+      "id": "audio-kern-062",
       "titel": "Sampler en herankeren volgen keylock niet (pads, anker bij drukken)",
       "soort": "grens",
       "wat": "Een sampler-pad speelt op playbackRate op de maat: zijn toon schuift mee met het tempo en volgt keylock en toon niet (K7a; deck op keylock 0,92 = pad 1,4 halve toon lager). _heranker (gate, echo, sampler) haakt bij een sprong met keylock aan bij het drukken, niet op T: tot 98 ms te vroeg (niet gemerkt).",
@@ -1668,7 +1553,7 @@
       "reden": "In v2 herankeren altijd op de T van het segment; of pads de toon volgen blijft Clay's keuze (K7 b/c)."
     },
     {
-      "id": "audio-kern-070",
+      "id": "audio-kern-063",
       "titel": "Master-keten: gain, insert-rack, limiter, analyser; de analyser is het eind",
       "soort": "contract",
       "wat": "input (masterfader) -> fx (InsertSlot, rack) -> limiter -> analyser -> uitgang. Opname, de zaal in de koptelefoon, de vormen en de luisteraar tappen master.analyser, dus na de limiter: wat de zaal hoort. Het master-rack loopt op de klok van de maatgever en wordt bij elke 'change' herankerd; MIX start altijd op 0.",
@@ -1692,7 +1577,7 @@
       "reden": "Simpel en juist; v2 kan dit zo nemen."
     },
     {
-      "id": "audio-kern-071",
+      "id": "audio-kern-064",
       "titel": "De limiter: true peak 4x, 1,5 ms vooruit, onder het plafond precies niets",
       "soort": "contract",
       "wat": "Per sample: piek van |x| en drie tussenwaarden (windowed sinc Blackman, 24 tikken per fase; K = 12 vooruit), \"nodig\" = gain voor doel 0,1 dB onder -1 dBTP, minimum over 61 samples (deque), envelop meteen omlaag en terug met 80 ms (één-polig), dan gemiddelde over 61 samples: het plafond is gegarandeerd. N = 72 samples (1,5 ms) vertraging, L/R gekoppeld, NaN/inf wordt 0. Onder het plafond is de gain exact 1; als geen piek het doel kan halen (-8,5 dBFS) wordt niet eens geïnterpoleerd.",
@@ -1713,7 +1598,7 @@
       "reden": "Pure kern zonder imports, volledig getest; ongewijzigd mee te nemen."
     },
     {
-      "id": "audio-kern-072",
+      "id": "audio-kern-065",
       "titel": "Limiter gemeten: -1,04 dBTP op pieken van +6,2 dB, stationair bit voor bit",
       "soort": "meting",
       "wat": "Muziek-achtig (kick tot +6,2 dB, akkoord, hihat): true peak (16x) -1,04 dBTP; tonen 1-15 kHz op +6 dB <= -1,06; gain reduction -5,6 dB; stationair 10 s onder het plafond: elke sample gain 1, uitvoer = invoer 72 samples later; aanval binnen 60 samples vóór de piek. Grens: breedbandig tot Nyquist (gealiaste ruis) tot ~0,25 dB over het plafond.",
@@ -1734,7 +1619,7 @@
       "reden": "Het bewijs dat de master veilig is voor de zaal."
     },
     {
-      "id": "audio-kern-073",
+      "id": "audio-kern-066",
       "titel": "Limiter laadt async: compressor eerst, kruisfade, twee masterpaden",
       "soort": "pijn",
       "wat": "De master begint met de oude DynamicsCompressor en wisselt naar de worklet zodra addModule klaar is: context stil = herbedraden, audio loopt = equal-power kruisfade van 40 ms (4,5 ms uit elkaar). Bij een fout terug naar de compressor (6 ms, +0,85 dB make-up). master.klaar is een belofte waar headless tools op wachten. De master klinkt ~0,8 dB zachter dan met de compressor.",
@@ -1758,7 +1643,7 @@
       "reden": "In v2 alle worklet-modules laden vóór de graaf gebouwd wordt (één pad); de compressor alleen als noodpad bij een fout."
     },
     {
-      "id": "audio-kern-074",
+      "id": "audio-kern-067",
       "titel": "Release van 80 ms niet gehoord op een master die hard in de limiter staat",
       "soort": "open",
       "wat": "Bij een korte release gaat de gain mee met de bas (vervorming). Programma-afhankelijke release is niet gebouwd; de release is een optie van de kern (release), dus proberen kost één getal.",
@@ -1778,7 +1663,7 @@
       "reden": "Clay's oor beslist; v2 neemt de kern over en laat de release instelbaar."
     },
     {
-      "id": "audio-kern-075",
+      "id": "audio-kern-068",
       "titel": "Master-rack in localStorage, niet in de editor, niet in het log",
       "soort": "pijn",
       "wat": "Welk master-rack er in zit bewaart de schermlaag per browser (varve.master.rack, sjabloon op naam); de rack-editor bewerkt de master niet en bewaren als eigen rack kan niet; in het handelingenlog staat het master-rack niet als gebeurtenis (bij tracks wel), dus master.rack.next/prev wordt teruggespeeld vanaf wat er dan in zit.",
@@ -1799,7 +1684,7 @@
       "reden": "In v2 is de master een strip als elke andere: rack bewaard met de stand of set, bewerkbaar en in het log."
     },
     {
-      "id": "audio-kern-076",
+      "id": "audio-kern-069",
       "titel": "Koptelefoon: één AudioContext met vier kanalen, geen tweede context",
       "soort": "besluit",
       "wat": "Eén uitgang met vier kanalen via een samengesteld apparaat op de Mac: Scarlett 2i2 = 1/2 (zaal), koptelefoonuitgang van de Mac = 3/4; klokbron Scarlett, driftcorrectie op de Mac-uitgang; kiezen vóór VARVE opent (Chrome kiest bij het maken van de context). Zaal en koptelefoon omwisselen is bedrading, alleen bij het maken (Engine({ koptelefoon: { omgewisseld } })).",
@@ -1823,7 +1708,7 @@
       "reden": "Eén klok is niet onderhandelbaar; de draagbare set (VISIE §3) rust erop."
     },
     {
-      "id": "audio-kern-077",
+      "id": "audio-kern-070",
       "titel": "Cue vóór de fader, zaal na de limiter, MIX en VOL; zonder vier kanalen niets",
       "soort": "contract",
       "wat": "De cue tapt chain.lpf (na trim, EQ, effect, filter; vóór de fader), aan/uit met killVersterking; de zaal in de koptelefoon tapt master.analyser. MIX: links alleen cue, rechts alleen zaal; VOL met de fadercurve. Staat er geen cue aan, dan hoort de koptelefoon de zaal. Zonder vier kanalen (kanApart false) bestaat de koptelefoon niet: geen node, de master gaat bit voor bit naar de uitgang, reads null.",
@@ -1848,7 +1733,7 @@
       "reden": "Klein (179 regels), gemeten, en zonder vier kanalen onzichtbaar."
     },
     {
-      "id": "audio-kern-078",
+      "id": "audio-kern-071",
       "titel": "Cue liep 1,5 ms vóór de zaal: vertraging op de cue-som",
       "soort": "valkuil",
       "wat": "De limiter-vooruitblik (1,5 ms) zat wel in de zaal maar niet in de cue; met MIX in het midden gaf dat een kamfilter. Opgelost met een DelayNode van master.vertraging op de cue-som (zetVertraging, ook na de wissel compressor naar worklet).",
@@ -1872,7 +1757,7 @@
       "reden": "Elk parallel pad naar dezelfde oren moet dezelfde vertraging hebben; in v2 via het latentiemodel."
     },
     {
-      "id": "audio-kern-079",
+      "id": "audio-kern-072",
       "titel": "Uitzonderingslijsten met de hand: OVERSLAAN, NIET_IN_WAARDEN, OVERNEEM",
       "soort": "pijn",
       "wat": "headphone.*, track.N.pfl en track.N.stem.<s>.pfl moeten in OVERSLAAN (terugspelen), NIET_IN_WAARDEN (log) en juist NIET in OVERNEEM (auto-DJ); elke nieuwe knop die de mix raakt moet wel in OVERNEEM; stem-kill moet in de beginstand (stemKill). Pas met S0 (14 okt) kwamen meta-vlaggen op de action (log: 'overslaan', beginstand: false, overneem: true).",
@@ -1894,20 +1779,25 @@
       "reden": "In v2 alleen meta op de action-definitie (hoort bij de zaal, bij het nummer, in de beginstand), nooit losse lijsten."
     },
     {
-      "id": "audio-kern-080",
-      "titel": "Stems vooraf splitsen bij de ingest met Demucs, nooit realtime",
+      "id": "audio-kern-073",
+      "titel": "Stems vooraf met Demucs (~3x realtime op de M1), nooit realtime",
       "soort": "besluit",
-      "wat": "Demucs htdemucs (4.1.0, MIT) splitst bij de ingest of met een knop in de library; de engine speelt alleen stems.wav. Standaard twee (zang, rest), vier (drums, bas, overig, zang) als je dat vraagt (H2, kiesbaar per nummer). De stem-fader zit vóór de EQ.",
-      "waarom": "Advies 24 sep, zoals Serato/rekordbox/djay: vooraf rekenen, live bedienen. H1: de stems klinken goed genoeg om live mee te spelen.",
+      "wat": "Demucs htdemucs (4.1.0, MIT) splitst bij de ingest of met een knop in de library; de engine speelt alleen stems.wav. Standaard twee (zang, rest), vier (drums, bas, overig, zang) als je dat vraagt (H2, kiesbaar per nummer). De stem-fader zit vóór de EQ. Rustig 2,6-3,2x realtime (één minuut in 19,2 s), 1-1,8x met gedeelde GPU (video, WebGL). ~1 GB RSS hoe lang ook, in stukken van 46,8 s met 4 s overlap (zonder stukken 640 s al 3,5 GB). Opslag 22 / 44 MB per minuut. fp16 via autocast x1,09 maar de bas verandert (25,8 dB SDR); overlap 0,10 x1,22 maar hoorbaar anders. Wel: volgorde (vooraan, dan kortste eerst).",
+      "waarom": "Advies 24 sep, zoals Serato/rekordbox/djay: vooraf rekenen, live bedienen. H1: de stems klinken goed genoeg om live mee te spelen. STEMS.md §6 (5 okt); een vergeten headless Chrome en het eigen VARVE-tabblad lieten het zakken tot 1,1-1,4x.",
       "bron": [
         {
           "pad": "docs/STEMS.md",
           "waar": "\"Wat Clay besliste\", \"Model en meting\""
+        },
+        {
+          "pad": "docs/STEMS.md",
+          "waar": "\"Model en meting\", §6"
         }
       ],
       "code": [
         "server/stems.js",
-        "server/stems/splits.py"
+        "server/stems/splits.py",
+        "tools/stems/snelheid.py"
       ],
       "pijler": "dj",
       "gewicht": "kern",
@@ -1915,7 +1805,7 @@
       "reden": "Realtime splitsen kan niet op de M1 naast acht decks; vooraf is beproefd."
     },
     {
-      "id": "audio-kern-081",
+      "id": "audio-kern-074",
       "titel": "stems.wav: 16-bit 48 kHz interleaved, som = audio.wav, evenveel frames",
       "soort": "contract",
       "wat": "stems.wav: PCM 16-bit, 48 000 Hz, 2 x aantal stems kanalen (4 of 8), kanaalpaar k = stem k uit stems.json.namen, precies evenveel frames als audio.wav, hooguit 4 GB. De som van de stems is audio.wav (op 16-bit afronding na, -111 dB): wat het model mist gaat naar inst of other. `schaal` (<= 1) tegen clippen, de engine zet 1/schaal erop. audio.wav blijft de bron van golfvorm, grid, toonsoort, onsets.",
@@ -1936,28 +1826,7 @@
       "reden": "Het contract tussen server en engine; de som-regel maakt stems onschadelijk."
     },
     {
-      "id": "audio-kern-082",
-      "titel": "Demucs op de M1: ~3x realtime, ~1 GB in stukken; fp16 en minder overlap niet",
-      "soort": "meting",
-      "wat": "Rustig 2,6-3,2x realtime (één minuut in 19,2 s), 1-1,8x met gedeelde GPU (video, WebGL). ~1 GB RSS hoe lang ook, in stukken van 46,8 s met 4 s overlap (zonder stukken 640 s al 3,5 GB). Opslag 22 / 44 MB per minuut. fp16 via autocast x1,09 maar de bas verandert (25,8 dB SDR); overlap 0,10 x1,22 maar hoorbaar anders. Wel: volgorde (vooraan, dan kortste eerst).",
-      "waarom": "STEMS.md §6 (5 okt); een vergeten headless Chrome en het eigen VARVE-tabblad lieten het zakken tot 1,1-1,4x.",
-      "bron": [
-        {
-          "pad": "docs/STEMS.md",
-          "waar": "\"Model en meting\", §6"
-        }
-      ],
-      "code": [
-        "server/stems.js",
-        "tools/stems/snelheid.py"
-      ],
-      "pijler": "dj",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Bepaalt dat splitsen een wachtrij is, geen knop die meteen werkt."
-    },
-    {
-      "id": "audio-kern-083",
+      "id": "audio-kern-075",
       "titel": "Eén worklet per deck, altijd vier stereo-uitgangen naar vóór trim en EQ",
       "soort": "contract",
       "wat": "De worklet heeft altijd vier uitgangen van twee kanalen, ook voor stereo (de node hoeft nooit opnieuw gebouwd te worden); ongebruikte uitgangen elk blok op nul (fill). Uitgang k gaat naar chain.stemIn[k] vóór trim. renderBlok leest één stereopaar per aanroep (stride, paar als hele getallen op klad); hergebruik laat paar 1-3 posities, soort en naad van paar 0 overnemen. Geen tweede afspeelmotor per stem.",
@@ -1983,7 +1852,7 @@
       "reden": "Eén motor voor stereo en stems; vaste bedrading."
     },
     {
-      "id": "audio-kern-084",
+      "id": "audio-kern-076",
       "titel": "Stems horen bij het nummer: bij elke laad alles open",
       "soort": "regel",
       "wat": "Niveau, kill, filter, sends, cue en toon van de stems gaan bij elke laad terug naar open/0 (_zetStems); de nodes blijven. Afwijkend van de EQ-knoppen en de EQ-kill, die bij een nieuw nummer blijven staan.",
@@ -2007,7 +1876,7 @@
       "reden": "Duidelijke regel; in v2 als eigenschap \"hoort bij het nummer\" op de parameter zelf."
     },
     {
-      "id": "audio-kern-085",
+      "id": "audio-kern-077",
       "titel": "Stemkanalen op aanvraag: elk deel komt erbij als het iets doet, stil",
       "soort": "besluit",
       "wat": "De droge weg stemIn[k] -> trim is niet veranderd. Het stemfilter is een correctie ernaast: x + H(g·x) - g·x (g van 0 naar 1 in 5 ms = kruisfade droog/gefilterd; terug na 50 ms). Filter, send of cue van een stem ontstaat pas als hij voor het eerst iets doet, met versterking 0 en dan een overgang; er gaat nooit iets los. Zonder stems of met alles open: bit voor bit en dezelfde CPU.",
@@ -2028,7 +1897,7 @@
       "reden": "Het principe \"op aanvraag, stil erbij\" houden; de correctie ernaast is een omweg om het oude pad bit voor bit te houden en kan in v2 een gewoon filterpad zijn."
     },
     {
-      "id": "audio-kern-086",
+      "id": "audio-kern-078",
       "titel": "CPU stemkanalen: filter 2,5 ms, insert-slot per stem 5,5 ms per s audio",
       "soort": "meting",
       "wat": "Acht tracks x vier stems, ms CPU per s audio: niets speelt 132/129 (oud/nu); alle stems spelen 164/170; alle 32 stemfilters aan 246 (~2,5 ms per filter); alle 64 stem-sends open 171; een insert-slot per stem (delay, mix 0) 345 (~5,5 ms per slot, ook stil: +110%). Daarom is een insert-effect per stem NIET gebouwd.",
@@ -2052,7 +1921,7 @@
       "reden": "Grens voor v2: een insert per stem alleen op aanvraag en met budget."
     },
     {
-      "id": "audio-kern-087",
+      "id": "audio-kern-079",
       "titel": "Stem-sends door een spiegel van de fader die met de hand mee moet",
       "soort": "pijn",
       "wat": "Een stem heeft geen eigen fader; zijn sends gaan door een spiegel (deck.stemSends[A|B].fader) die in applyUi, _glijParams en _glijDoelen dezelfde automatisering moet krijgen als chain.fader.gain. Elke nieuwe code die de fader raakt moet de spiegels meenemen, anders blijft de echo van een stem open bij een dichte fader.",
@@ -2076,7 +1945,7 @@
       "reden": "In v2 één bron voor de fadergain (bijv. ConstantSource) die alle afnemers voedt: zonder oud pad vervalt het bezwaar."
     },
     {
-      "id": "audio-kern-088",
+      "id": "audio-kern-080",
       "titel": "Groepsknop inst bij vier stems: vermenigvuldigen, serie, grootste, \"of\"",
       "soort": "contract",
       "wat": "Bij vier stems werkt inst op drums, bas en overig samen: niveau en kill vermenigvuldigen met de eigen knop; filter in serie (per kant het sterkste: hoogste highpass, laagste lowpass); sends de grootste van de twee; cue aan als eigen OF groep aan staat. Bij twee stems is inst een gewone stem.",
@@ -2097,32 +1966,11 @@
       "reden": "Doordachte regels die bij een herbouw weer nodig zijn."
     },
     {
-      "id": "audio-kern-089",
-      "titel": "Opnieuw splitsen onder een spelend deck: ui weigert, StreamBron vangt af",
-      "soort": "grens",
-      "wat": "Opnieuw splitsen vervangt stems.wav. De ui weigert het zolang een track dat nummer met stems speelt; gebeurt het toch, dan ziet de StreamBron een ander Content-Range-totaal en speelt uit wat er is, daarna stilte met één melding. Een spelend deck wisselt nooit vanzelf naar nieuwe stems (gestippeld S2/S4 = herlaad om ze te horen).",
-      "waarom": "Twee lagen: de ui voorkomt, de engine is er robuust tegen.",
-      "bron": [
-        {
-          "pad": "docs/STEMS.md",
-          "waar": "§3, §4, \"Gebruiken\""
-        }
-      ],
-      "code": [
-        "src/engine/bron.js",
-        "src/ui/stems-paneel.js"
-      ],
-      "pijler": "dj",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Correcte verdeling tussen ui en engine."
-    },
-    {
-      "id": "audio-kern-090",
+      "id": "audio-kern-081",
       "titel": "Klankschaal volgt wat je hoort, inclusief de stemming in cent",
       "soort": "besluit",
-      "wat": "De klankschaal (het modale model van de Waterschaal) stemt op deck.toonsoort van de maatgever of de focus-track: toonsoort van het stuk + pitch (zonder keylock) + stemming in cent (43 cent hoge plaat = 43 cent hoge schaal). Past de ladder niet bij majeur/mineur: de relatieve toonsoort. Zonder toonsoort de laatste toon houden, nooit terug naar D. Omstemmen tijdens de klank houdt de uitwijking.",
-      "waarom": "Clay 29 sep: \"spelen op de juiste tuning gebaseerd op audio van andere tracks, maar wel de mogelijkheid houden om te veranderen\". De test controleert alle 24 toonsoorten x diatonische ladders.",
+      "wat": "De klankschaal (het modale model van de Waterschaal) stemt op deck.toonsoort van de maatgever of de focus-track: toonsoort van het stuk + pitch (zonder keylock) + stemming in cent (43 cent hoge plaat = 43 cent hoge schaal). Past de ladder niet bij majeur/mineur: de relatieve toonsoort. Zonder toonsoort de laatste toon houden, nooit terug naar D. Omstemmen tijdens de klank houdt de uitwijking. Geen afval (0 GC over 3000 blokken), toeval uit een eigen LCG, de kern slaapt als er niets klinkt (dan kost hij niets), ruis alleen tijdens wrijven. 0,13 ms per blok van 128 op de M1 (0,08 op de Ryzen 5800X) met alles aan. Ophoging gemeten tegen -14 LUFS (UIT_OPHOGING, VELD_OPHOGING): zonder piekte een veld op -28..-33 dBFS. Toonhoogte A3 +43 ct gemeten +43,0 ct. Niet beluisterd.",
+      "waarom": "Clay 29 sep: \"spelen op de juiste tuning gebaseerd op audio van andere tracks, maar wel de mogelijkheid houden om te veranderen\". De test controleert alle 24 toonsoorten x diatonische ladders. KLANKSCHAAL.md §3 en §5 (29 sep).",
       "bron": [
         {
           "pad": "docs/KLANKSCHAAL.md",
@@ -2131,11 +1979,16 @@
         {
           "pad": "CLAUDE.md",
           "waar": "\"Klankschaal (gebouwd 29 sep)\""
+        },
+        {
+          "pad": "docs/KLANKSCHAAL.md",
+          "waar": "§3, §5"
         }
       ],
       "code": [
         "src/engine/klankschaal.js (stemming)",
-        "src/engine/klankschaal-kern.js"
+        "src/engine/klankschaal-kern.js",
+        "test/klankschaal.test.mjs"
       ],
       "pijler": "produceren",
       "gewicht": "belangrijk",
@@ -2143,28 +1996,7 @@
       "reden": "De crossover van VISIE §2: een instrument dat de plaat volgt."
     },
     {
-      "id": "audio-kern-091",
-      "titel": "Klankschaal gemeten: slaapt bij stilte, 0,13 ms per blok, -14 LUFS",
-      "soort": "meting",
-      "wat": "Geen afval (0 GC over 3000 blokken), toeval uit een eigen LCG, de kern slaapt als er niets klinkt (dan kost hij niets), ruis alleen tijdens wrijven. 0,13 ms per blok van 128 op de M1 (0,08 op de Ryzen 5800X) met alles aan. Ophoging gemeten tegen -14 LUFS (UIT_OPHOGING, VELD_OPHOGING): zonder piekte een veld op -28..-33 dBFS. Toonhoogte A3 +43 ct gemeten +43,0 ct. Niet beluisterd.",
-      "waarom": "KLANKSCHAAL.md §3 en §5 (29 sep).",
-      "bron": [
-        {
-          "pad": "docs/KLANKSCHAAL.md",
-          "waar": "§3, §5"
-        }
-      ],
-      "code": [
-        "src/engine/klankschaal-kern.js",
-        "test/klankschaal.test.mjs"
-      ],
-      "pijler": "produceren",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "De kern is puur en getest; slapen bij stilte is een goed patroon voor elk instrument."
-    },
-    {
-      "id": "audio-kern-092",
+      "id": "audio-kern-082",
       "titel": "Klankschaal bestaat twee keer: engine-lid én track-instrument",
       "soort": "pijn",
       "wat": "engine.klankschaal (klankschaal.js) zit naast de sampler op de master-ingang en send A/B met eigen actions klankschaal.* en een eigen rij; instrumenten/schaal.js is dezelfde kern als instrument op een track (met strip, fader, cue). Twee bedieningen, twee stemmingspaden, één SchaalKern.",
@@ -2193,7 +2025,7 @@
       "reden": "In v2 alleen als track-instrument (ST7), met \"volg de toon van wat je hoort\" als eigenschap van het instrument."
     },
     {
-      "id": "audio-kern-093",
+      "id": "audio-kern-083",
       "titel": "Klankschaal: APC-plek, omstemmen tijdens de klank en luidheid zijn niet gehoord",
       "soort": "open",
       "wat": "KS1: een eigen mapje \"klankschaal\" als fragment (advies) of niets. KS2: een ringende schaal glijdt nu direct mee naar een nieuwe toonsoort; alternatief pas bij de volgende aanslag (een echte schaal kan niet van toon wisselen). KS3: is VOL 0,8 de goede standaard naast de tracks? KS4/KS5 (op de maat aanslaan, eigen gemeten schaal) niet gebouwd.",
@@ -2213,7 +2045,7 @@
       "reden": "Clay's oor en hand beslissen voordat v2 de bediening vastlegt."
     },
     {
-      "id": "audio-kern-094",
+      "id": "audio-kern-084",
       "titel": "Een instrument op een track gaat via een GainNode naar chain.input",
       "soort": "contract",
       "wat": "engine.zetInstrument(id, soort|null): het instrument sluit via een eigen GainNode aan op chain.input, dus EQ, effect, filter, fader, sends en cue werken vanzelf. Een instrument erop = deck.leeg() (het nummer eraf); weghalen: aansluiting klikvrij dicht, dan pas vernietig() en losmaken. Een instrumenttrack heeft geen buffer: geen maatgever, geen sync. Noten gaan niet over de bus.",
@@ -2238,7 +2070,7 @@
       "reden": "Dé crossover-regel van VISIE §2; de strip is van iedereen."
     },
     {
-      "id": "audio-kern-095",
+      "id": "audio-kern-085",
       "titel": "Wat uit staat kost niets en verandert niets: bit voor bit als acceptatie",
       "soort": "regel",
       "wat": "Steeds dezelfde eis: zonder vier kanalen geen koptelefoon-node; stemkanalen pas bij gebruik; het rekpad alleen met rek; droog/nat-pad alleen als het rack erom vraagt; worklets pas bij gebruik; modulatietimer alleen met modulators. Bewijs: dezelfde gouden hash of hash van de scène als vóór de wijziging.",
@@ -2270,11 +2102,11 @@
       "reden": "Het principe houden (kosten alleen bij gebruik); \"bit voor bit het oude pad\" leidde in v1 tot omwegen (fadespiegel, correctiefilter, fallback-compressor) die v2 zonder oud pad niet nodig heeft."
     },
     {
-      "id": "audio-kern-096",
-      "titel": "Grote god-objecten: deck.js 1909, fx.js 1390, bron.js 982 regels",
+      "id": "audio-kern-086",
+      "titel": "God-objecten en ordening naar geschiedenis: deck.js, fx*.js, bron.js",
       "soort": "pijn",
-      "wat": "deck.js bundelt transport, cues, loops, beatjump, quantize, rem, beatgrid, stems, stemkanalen, keylock, glide en de spiegels; bron.js twee bronnen; audio-graph.js mengt strip, EQ-formules, stemfilter en een her-export van de master. Regels als \"wie chain.fader.gain raakt moet de spiegels meenemen\" bestaan omdat alles in één klasse zit.",
-      "waarom": "Elke studiofase (stems, keylock, stemkanalen, instrumenten) voegde aan dezelfde bestanden toe.",
+      "wat": "deck.js bundelt transport, cues, loops, beatjump, quantize, rem, beatgrid, stems, stemkanalen, keylock, glide en de spiegels; bron.js twee bronnen; audio-graph.js mengt strip, EQ-formules, stemfilter en een her-export van de master. Regels als \"wie chain.fader.gain raakt moet de spiegels meenemen\" bestaan omdat alles in één klasse zit. fx.js (1390 regels) bevat effectcontract, delingen, eenheden, de zeven eerste effecten, bouwKeten en InsertSlot; fx-meer.js (1063) de tien uit de filter app; fx-s10.js (441) de zeven van spoor S10. De volgorde in EFFECTEN is fx, dan meer, dan S10; afspraak: een effect toetsen op id, nooit op zijn plek.",
+      "waarom": "Elke studiofase (stems, keylock, stemkanalen, instrumenten) voegde aan dezelfde bestanden toe. Elk spoor kreeg zijn eigen bestand om botsingen te vermijden; het resultaat is ordening naar geschiedenis.",
       "bron": [
         {
           "pad": "CLAUDE.md",
@@ -2283,13 +2115,23 @@
         {
           "pad": "docs/STEMS.md",
           "waar": "§5"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Structuur src/engine; \"Werkruimte: aanhaakpunten\" (effect toetsen op id)"
+        },
+        {
+          "pad": "docs/EFFECTEN.md",
+          "waar": "inleiding"
         }
       ],
       "code": [
         "src/engine/deck.js",
         "src/engine/fx.js",
         "src/engine/bron.js",
-        "src/engine/audio-graph.js"
+        "src/engine/audio-graph.js",
+        "src/engine/fx-meer.js",
+        "src/engine/fx-s10.js"
       ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
@@ -2297,7 +2139,7 @@
       "reden": "In v2 de strip (gain-keten), de bron (geluid), het transport (muzikaal) en de stemkanalen als losse delen met een kleine interface."
     },
     {
-      "id": "audio-kern-097",
+      "id": "audio-kern-087",
       "titel": "Insert per stem, sampler-toon en stemfilter in de knip: keuzes die openstaan",
       "soort": "open",
       "wat": "Een insert-effect per stem is gemeten en niet gebouwd (5,5 ms per slot); de sampler knipt met niveau en kill per stem, niet met het stemfilter; stem-sends gaan niet door EQ, insert en trackfilter (een stem-echo blijft helder als je het trackfilter dichtdraait).",
