@@ -261,7 +261,7 @@ function hulpInPagina() {
    * 124: R = 1), dan op Tw (blokrooster) de klok naar `bpm2` met engine.zetKlokTempo. De speler
    * gaat los van zijn strip, rechtstreeks naar de uitgang. Geeft de render en het startmoment A.
    */
-  M.nullEngine = async ({ sec = 8, tPlay = 0.5, Tw = M.blok(4), bpm2 = 128, viaBus = false }) => {
+  M.nullEngine = async ({ sec = 8, tPlay = 0.5, Tw = M.blok(4), bpm2 = 128, viaBus = false, scheef = 0 }) => {
     const { ctx, engine } = await M.nieuweEngine(sec);
     await engine.laad(1, M.demo('demo-124'));
     const t = engine.track(1);
@@ -272,7 +272,7 @@ function hulpInPagina() {
       { t: tPlay, doe: (e) => { e.bus.doe('track.1.play', true); uit.A = e.klok.seg[0].T; uit.P0 = t.plek(uit.A); uit.R1 = t.snelheid(uit.A + 0.01); } },
       viaBus
         ? { t: Tw, doe: (e) => { e.bus.doe('klok.tempo', (bpm2 - 40) / 260); uit.Tw = e.klok.seg.at(-1).T; uit.R2 = t.snelheid(uit.Tw + 0.01); } }
-        : { t: Tw - 0.05, doe: (e) => { e.zetKlokTempo(bpm2, Tw); uit.Tw = Tw; uit.R2 = t.snelheid(Tw + 0.01); } },
+        : { t: Tw - 0.05, doe: (e) => { const T = Tw + scheef / SR; e.zetKlokTempo(bpm2, T); uit.Tw = T; uit.R2 = t.snelheid(T + 0.01); } },
     ];
     const buf = await M.draai(ctx, engine, stappen);
     return { ...uit, L: M.naarB64(buf.getChannelData(0)), R: M.naarB64(buf.getChannelData(1)) };
@@ -293,17 +293,22 @@ export function verschilDb(a, b, van, tot) {
 }
 
 /**
- * Tijdsverschuiving van a t.o.v. b (in samples, + = a ligt later) via kruiscorrelatie over
- * ±maxLag, met parabolische interpolatie rond de piek (sub-sample).
+ * Tijdsverschuiving van a t.o.v. b in samples (+ = a ligt later): eerst de hele lag met de
+ * grootste kruiscorrelatie (±maxLag), dan de fijne rest met kleinste kwadraten op de afgeleide
+ * (a(t) ≈ b(t − δ) ≈ b(t) − δ·b'(t)). Parabolisch interpoleren rond de piek is op laag, traag
+ * veranderend materiaal (de pad) een paar honderdste sample scheef; deze schatting niet.
  */
 export function verschuiving(a, b, van, tot, maxLag = 64) {
   const c = (L) => { let s = 0; for (let i = van; i < tot; i++) s += a[i] * b[i - L]; return s; };
   let best = -Infinity, bL = 0;
-  const w = new Map();
-  for (let L = -maxLag; L <= maxLag; L++) { const v = c(L); w.set(L, v); if (v > best) { best = v; bL = L; } }
-  const y0 = w.get(bL - 1) ?? best, y1 = best, y2 = w.get(bL + 1) ?? best;
-  const noem = y0 - 2 * y1 + y2;
-  return bL + (noem !== 0 ? 0.5 * (y0 - y2) / noem : 0);
+  for (let L = -maxLag; L <= maxLag; L++) { const v = c(L); if (v > best) { best = v; bL = L; } }
+  let teller = 0, noemer = 0;
+  for (let i = van + 1; i < tot - 1; i++) {
+    const db1 = (b[i - bL + 1] - b[i - bL - 1]) / 2;
+    teller += (a[i] - b[i - bL]) * db1;
+    noemer += db1 * db1;
+  }
+  return bL - (noemer > 0 ? teller / noemer : 0);
 }
 
 /** Bessel I0 voor het Kaiser-venster. */
@@ -403,26 +408,36 @@ function vergelijk(sp, ab, { van, tot, ref = null }) {
     r.spelerTegenSinc = verschilDb(L1, ref, van, tot);
     r.absnTegenSinc = verschilDb(L2, ref, van, tot);
     r.spelerTegenSincVerschuiving = verschuiving(L1, ref, van, tot);
+    const r4 = lowpass(ref.subarray(0, tot + 200), 4000);
+    r.spelerTegenSincOnder4k = verschilDb(a4, r4, van, tot);
+    r.absnTegenSincOnder4k = verschilDb(b4, r4, van, tot);
   }
   return r;
 }
 
-async function meetNull(o) {
-  const uit = {};
-  // De bron als float64 (precies wat beide lezen) voor de sinc-referentie.
-  const bron = await o.page.evaluate(() => {
-    const pcm = window.M.demo('demo-124').maakPcm();
+async function bronVan(o, nummer) {
+  const b64 = await o.page.evaluate((nummer) => {
+    const pcm = window.M.demo(nummer).maakPcm();
     const { L } = window.M.pcmNaarFloat(pcm);
     return window.M.naarB64(L.subarray(0, 48000 * 30));
-  });
-  const x = Float64Array.from(uitB64(bron));
+  }, nummer);
+  return Float64Array.from(uitB64(b64));
+}
+
+async function meetNull(o) {
+  const uit = {};
+  const bronnen = { 'demo-124': await bronVan(o, 'demo-124'), 'demo-pad': await bronVan(o, 'demo-pad') };
   const sec = 8, n = sec * SR;
   const T0 = Math.round(0.5 * SR / 128) * 128 / SR, P0 = 10;
   const van = Math.round((T0 + 0.02) * SR), tot = n - 2000;        // na de inloop van 4 ms van de speler
-  for (const [naam, R1] of [['R 124/128', 124 / 128], ['R 1,0', 1], ['R 0,97', 0.97], ['R 1,03', 1.03]]) {
-    const sp = await o.page.evaluate((a) => window.M.nullRender({ ...a, soort: 'speler' }), { sec, T0, P0, R1 });
-    const ab = await o.page.evaluate((a) => window.M.nullRender({ ...a, soort: 'absn' }), { sec, T0, P0, R1 });
-    const ref = sincResample(x, n, (i) => (i / SR < T0 ? NaN : (P0 + (i / SR - T0) * R1) * SR));
+  const gevallen = [
+    ['R 124/128', 124 / 128, 'demo-124'], ['R 1,0', 1, 'demo-124'], ['R 0,97', 0.97, 'demo-124'], ['R 1,03', 1.03, 'demo-124'],
+    ['R 124/128, demo-pad (geen hihat)', 124 / 128, 'demo-pad'], ['R 0,97, demo-pad (geen hihat)', 0.97, 'demo-pad'],
+  ];
+  for (const [naam, R1, nummer] of gevallen) {
+    const sp = await o.page.evaluate((a) => window.M.nullRender({ ...a, soort: 'speler' }), { sec, T0, P0, R1, nummer });
+    const ab = await o.page.evaluate((a) => window.M.nullRender({ ...a, soort: 'absn' }), { sec, T0, P0, R1, nummer });
+    const ref = sincResample(bronnen[nummer], n, (i) => (i / SR < T0 ? NaN : (P0 + (i / SR - T0) * R1) * SR));
     uit[naam] = vergelijk(sp, ab, { van, tot, ref });
   }
   // Tempowissel halverwege, met de hand gepland (speler-segmenten) tegen setValueAtTime.
@@ -431,22 +446,28 @@ async function meetNull(o) {
     const sp = await o.page.evaluate((a) => window.M.nullRender({ ...a, soort: 'speler' }), { sec, T0, P0, R1, wissel: { T: Tw, R2 } });
     const ab = await o.page.evaluate((a) => window.M.nullRender({ ...a, soort: 'absn' }), { sec, T0, P0, R1, wissel: { T: Tw, R2 } });
     const pos = (i) => { const t = i / SR; if (t < T0) return NaN; return (t < Tw ? P0 + (t - T0) * R1 : P0 + (Tw - T0) * R1 + (t - Tw) * R2) * SR; };
-    const ref = sincResample(x, n, pos);
-    uit['wissel 1 → 128/124 (segmenten)'] = vergelijk(sp, ab, { van, tot, ref });
-    uit['wissel 1 → 128/124 (segmenten)'].naDeWissel = verschilDb(uitB64(sp.L), uitB64(ab.L), Math.round((Tw + 0.02) * SR), tot);
+    const ref = sincResample(bronnen['demo-124'], n, pos);
+    const naam = 'wissel R 1 → 128/124 (segmenten met de hand)';
+    uit[naam] = vergelijk(sp, ab, { van, tot, ref });
+    uit[naam].naDeWissel = verschilDb(uitB64(sp.L), uitB64(ab.L), Math.round((Tw + 0.02) * SR), tot);
   }
-  // Tempowissel van de KLOK via de engine (gekoppelde track), op het blokrooster: Chrome's
-  // playbackRate is k-rate, dus alleen op een blokgrens is "hetzelfde moment" voor beide waar.
-  for (const viaBus of [false, true]) {
-    const e = await o.page.evaluate((a) => window.M.nullEngine(a), { sec, viaBus });
+  // Tempowissel van de KLOK via de engine (gekoppelde track). Chromes playbackRate is k-rate:
+  // alleen op een blokgrens is "hetzelfde moment" voor beide waar. straks() = twee blokken na
+  // currentTime, dus via de bus valt hij op een blokgrens; de derde zet hem er 16 samples naast.
+  for (const [naam, opties] of [
+    ['klok 124 → 128, engine.zetKlokTempo op een blokgrens', {}],
+    ['klok 124 → 128 via de bus (klok.tempo)', { viaBus: true }],
+    ['klok 124 → 128, 16 samples naast een blokgrens', { scheef: 16 }],
+  ]) {
+    const e = await o.page.evaluate((a) => window.M.nullEngine(a), { sec, ...opties });
     const ab = await o.page.evaluate((a) => window.M.nullRender({ ...a, soort: 'absn' }), { sec, T0: e.A, P0: e.P0, R1: e.R1, wissel: { T: e.Tw, R2: e.R2 } });
     const pos = (i) => { const t = i / SR; if (t < e.A) return NaN; return (t < e.Tw ? e.P0 + (t - e.A) * e.R1 : e.P0 + (e.Tw - e.A) * e.R1 + (t - e.Tw) * e.R2) * SR; };
-    const ref = sincResample(x, n, pos);
-    const naam = viaBus ? 'klok 124 → 128 via de bus (A niet op een blokgrens)' : 'klok 124 → 128 via de engine (A op een blokgrens)';
+    const ref = sincResample(bronnen['demo-124'], n, pos);
     const vanE = Math.round((e.A + 0.02) * SR);
     uit[naam] = vergelijk({ L: e.L }, ab, { van: vanE, tot, ref });
     uit[naam].naDeWissel = verschilDb(uitB64(e.L), uitB64(ab.L), Math.round((e.Tw + 0.02) * SR), tot);
-    uit[naam].momenten = { A: e.A, Tw: e.Tw, TwFrames: e.Tw * SR, TwOpBlok: (e.Tw * SR) % 128 === 0, R1: e.R1, R2: e.R2 };
+    uit[naam].naDeWisselVerschuiving = verschuiving(uitB64(e.L), uitB64(ab.L), Math.round((e.Tw + 0.02) * SR), tot);
+    uit[naam].momenten = { A: e.A, Tw: e.Tw, TwFrames: e.Tw * SR, TwOpBlok: Math.abs((e.Tw * SR) % 128) < 1e-6, R1: e.R1, R2: e.R2 };
   }
   return uit;
 }
@@ -457,6 +478,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const bewaar = process.argv.includes('--bewaar');
   const o = await opzetOffline({ poort: 8811 });
   try {
+    if (process.argv.includes('--alleen-null')) {
+      const b = await meetNull(o);
+      for (const [naam, r] of Object.entries(b)) console.log(naam, JSON.stringify(r));
+      process.exit(0);
+    }
     const t0 = Date.now();
     const naief = await meetHerhaalbaar(o, 0);
     console.log(`(a0) zonder wachten vóór resume: herhaalbaar ${naief.gelijk ? 'JA' : 'NEE'}  (${naief.hashes.length} renders)`);
@@ -473,9 +499,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
     const b = await meetNull(o);
     console.log('\n(b) null-test tegen Chromes AudioBufferSourceNode (grens ≤ −50 dB)');
-    console.log('    geval                                              | ons−Chrome | <4 kHz  | verschuiving | ons−sinc | Chrome−sinc');
+    console.log('    geval                                                  | ons−Chrome |  <4 kHz  | verschuiving  | ons−sinc (<4k)     | Chrome−sinc (<4k)');
     for (const [naam, r] of Object.entries(b)) {
-      console.log(`    ${naam.padEnd(50)} | ${fmt(r.db).padStart(7)} dB | ${fmt(r.dbOnder4k).padStart(5)} dB | ${fmt(r.verschuivingSamples, 3).padStart(7)} smp | ${fmt(r.spelerTegenSinc).padStart(6)} dB | ${fmt(r.absnTegenSinc).padStart(6)} dB`);
+      console.log(`    ${naam.padEnd(54)} | ${fmt(r.db).padStart(7)} dB | ${fmt(r.dbOnder4k).padStart(6)} dB | ${fmt(r.verschuivingSamples, 4).padStart(8)} smp | ${fmt(r.spelerTegenSinc).padStart(6)} (${fmt(r.spelerTegenSincOnder4k).padStart(6)}) dB | ${fmt(r.absnTegenSinc).padStart(6)} (${fmt(r.absnTegenSincOnder4k).padStart(6)}) dB${r.naDeWissel !== undefined ? `  na de wissel ${fmt(r.naDeWissel)} dB` : ''}${r.momenten ? `  [Tw ${r.momenten.TwOpBlok ? 'op' : 'naast'} een blokgrens]` : ''}`);
     }
     if (!oud || bewaar) {
       writeFileSync(pad, JSON.stringify({
@@ -486,7 +512,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       console.log(`\ngolden.json ${oud ? 'bijgewerkt' : 'geschreven'}`);
     }
     if (o.fouten.length) console.log('FOUTEN in de pagina:\n' + o.fouten.join('\n'));
-    const nullOk = ['R 124/128', 'R 1,0', 'R 0,97'].every((k) => b[k].db <= -50);
+    const nullOk = ['R 124/128', 'R 1,0', 'R 0,97', 'R 1,03'].every((k) => b[k].db <= -50);
     console.log(`\nM10: herhaalbaar ${a.gelijk ? 'ja' : 'NEE'}; null-test vaste snelheid ${nullOk ? 'binnen de grens' : 'BUITEN de grens (zie hierboven: wie wijkt af van de sinc-referentie?)'}`);
     process.exitCode = a.gelijk && !o.fouten.length ? 0 : 1;
   } finally {

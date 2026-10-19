@@ -1,0 +1,172 @@
+{
+  "hash": "b156e674708e2b68319af55213575f512573e7570b428c62ddefe1dade218ca7",
+  "datum": "2026-10-19",
+  "chromium": "141.0.7390.37",
+  "sr": 48000,
+  "seconden": 30,
+  "script": "demo-124 op 1, demo-128 op 2; 0,5 A play · 2 B play · 5 B sync · 8 klok 126 · 11 B jog 1/16 · 14–14,5 B nudge · 17 A filter 0,2 · 19 B kill laag · 22 B seek 0,5 · 26 A en B pauze · 26,5 klok stop; elke 0,25 s tik",
+  "wachtVoorResumeMs": 10,
+  "herhaalbaar": true,
+  "zonderWachten": {
+    "herhaalbaar": false,
+    "verschil": [
+      "gelijk",
+      "gelijk",
+      {
+        "L": {
+          "samples": 3940,
+          "eersteS": 8.262104166666667,
+          "maxDb": -144.49439791871097
+        },
+        "R": {
+          "samples": 3979,
+          "eersteS": 8.262208333333334,
+          "maxDb": -144.49439791871097
+        }
+      }
+    ],
+    "perStrip": {
+      "1": {
+        "gelijk": false,
+        "verschillend": 2
+      },
+      "2": {
+        "gelijk": false,
+        "verschillend": 3
+      }
+    }
+  },
+  "nullTest": {
+    "R 124/128": {
+      "db": -37.4871175376425,
+      "verschuivingSamples": 0.00014235810747252695,
+      "dbOnder4k": -63.992103323469024,
+      "spelerTegenSinc": -31.050287970900577,
+      "absnTegenSinc": -28.928640101848476,
+      "spelerTegenSincVerschuiving": -0.0003434641782958553,
+      "spelerTegenSincOnder4k": -87.50819487318677,
+      "absnTegenSincOnder4k": -64.13103701719372
+    },
+    "R 1,0": {
+      "db": -266.2324545130445,
+      "verschuivingSamples": -2.1622857461370245e-15,
+      "dbOnder4k": -274.072843439964,
+      "spelerTegenSinc": -134.51042293233482,
+      "absnTegenSinc": -134.5104229323333,
+      "spelerTegenSincVerschuiving": -1.4758132711841373e-8,
+      "spelerTegenSincOnder4k": -141.61372171442528,
+      "absnTegenSincOnder4k": -141.61372172648646
+    },
+    "R 0,97": {
+      "db": -37.49386261099882,
+      "verschuivingSamples": 0.008974775764031299,
+      "dbOnder4k": -64.35561581712707,
+      "spelerTegenSinc": -30.95843469029605,
+      "absnTegenSinc": -28.858598993191368,
+      "spelerTegenSincVerschuiving": -0.000586202542561375,
+      "spelerTegenSincOnder4k": -87.7707500561499,
+      "absnTegenSincOnder4k": -64.47719553094488
+    },
+    "R 1,03": {
+      "db": -37.178308890519524,
+      "verschuivingSamples": -0.008532160477761041,
+      "dbOnder4k": -65.31199308158719,
+      "spelerTegenSinc": -30.702407414464197,
+      "absnTegenSinc": -28.586314492777518,
+      "spelerTegenSincVerschuiving": 0.00042946915927192077,
+      "spelerTegenSincOnder4k": -82.3759401364232,
+      "absnTegenSincOnder4k": -64.54853452057756
+    },
+    "R 124/128, demo-pad (geen hihat)": {
+      "db": -88.19551474361448,
+      "verschuivingSamples": -1.244763994803561e-7,
+      "dbOnder4k": -88.94060963679107,
+      "spelerTegenSinc": -89.71215396191724,
+      "absnTegenSinc": -85.63439246038249,
+      "spelerTegenSincVerschuiving": 1.7870238612692252e-7,
+      "spelerTegenSincOnder4k": -106.07152470578296,
+      "absnTegenSincOnder4k": -89.89061830960586
+    },
+    "R 0,97, demo-pad (geen hihat)": {
+      "db": -81.17750483219616,
+      "verschuivingSamples": 0.003572635700490244,
+      "dbOnder4k": -81.31664138615909,
+      "spelerTegenSinc": -89.69379042616454,
+      "absnTegenSinc": -80.53107397890957,
+      "spelerTegenSincVerschuiving": 1.917425190051208e-7,
+      "spelerTegenSincOnder4k": -106.0699357788122,
+      "absnTegenSincOnder4k": -81.46698770504483
+    },
+    "wissel R 1 → 128/124 (segmenten met de hand)": {
+      "db": -39.324047300815906,
+      "verschuivingSamples": -0.002201946377456497,
+      "dbOnder4k": -66.82654918865197,
+      "spelerTegenSinc": -32.835492712840235,
+      "absnTegenSinc": -30.71075241320714,
+      "spelerTegenSincVerschuiving": -0.00046800925602132894,
+      "spelerTegenSincOnder4k": -83.85223371538103,
+      "absnTegenSincOnder4k": -66.02699918238126,
+      "naDeWissel": -36.63945706405523
+    },
+    "klok 124 → 128, engine.zetKlokTempo op een blokgrens": {
+      "db": -39.873482582698436,
+      "verschuivingSamples": -0.00198074804623603,
+      "dbOnder4k": -67.83696065869069,
+      "spelerTegenSinc": -33.64235990286336,
+      "absnTegenSinc": -31.437356701595256,
+      "spelerTegenSincVerschuiving": -0.0009875929388103546,
+      "spelerTegenSincOnder4k": -84.79378423278757,
+      "absnTegenSincOnder4k": -67.11236657794632,
+      "naDeWissel": -37.118633577398,
+      "naDeWisselVerschuiving": -0.004291482195733486,
+      "momenten": {
+        "A": 0.5066666666666666,
+        "Tw": 4,
+        "TwFrames": 192000,
+        "TwOpBlok": true,
+        "R1": 0.9999999999998938,
+        "R2": 1.0322580645166113
+      }
+    },
+    "klok 124 → 128 via de bus (klok.tempo)": {
+      "db": -39.87367259009742,
+      "verschuivingSamples": -0.0019749039187126017,
+      "dbOnder4k": -67.83690294640532,
+      "spelerTegenSinc": -33.64251999516774,
+      "absnTegenSinc": -31.437520097792593,
+      "spelerTegenSincVerschuiving": -0.0009876382785434367,
+      "spelerTegenSincOnder4k": -84.79401716777936,
+      "absnTegenSincOnder4k": -67.11234240270686,
+      "naDeWissel": -37.11389277989527,
+      "naDeWisselVerschuiving": -0.004278844454019236,
+      "momenten": {
+        "A": 0.5066666666666666,
+        "Tw": 4.005333333333334,
+        "TwFrames": 192256,
+        "TwOpBlok": true,
+        "R1": 0.9999999999998938,
+        "R2": 1.0322580645166113
+      }
+    },
+    "klok 124 → 128, 16 samples naast een blokgrens": {
+      "db": -19.615201989686387,
+      "verschuivingSamples": -0.053400487688379544,
+      "dbOnder4k": -27.46180712297386,
+      "spelerTegenSinc": -33.44169368673248,
+      "absnTegenSinc": -19.000249383709434,
+      "spelerTegenSincVerschuiving": 0.0009472208419791194,
+      "spelerTegenSincOnder4k": -84.35813111825864,
+      "absnTegenSincOnder4k": -27.46075384066281,
+      "naDeWissel": -16.860602466920305,
+      "naDeWisselVerschuiving": -3.2103053119238254,
+      "momenten": {
+        "A": 0.5066666666666666,
+        "Tw": 4.000333333333334,
+        "TwFrames": 192016.00000000003,
+        "TwOpBlok": false,
+        "R1": 0.9999999999998938,
+        "R2": 1.0322580645166113
+      }
+    }
+  }
+}
