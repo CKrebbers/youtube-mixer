@@ -175,7 +175,7 @@ export class Engine extends Emitter {
   meld(tekst, soort = 'info', sleutel = null) { this.emit('melding', { tekst, soort, sleutel }); }
 
   /**
-   * De AudioContext bewaken (M8, v1 gezondheid.js): staat hij stil terwijl hij liep (slaap, de
+   * De audiocontext (ctx) bewaken (M8, v1 gezondheid.js): staat hij stil terwijl hij liep (slaap, de
    * geluidskaart eruit, Chrome), dan een melding die blijft tot hij weer loopt; de eerste
    * handeling daarna probeert hem weer aan te zetten, hooguit eens per seconde. Vóór de eerste
    * start meldt hij niets: Chrome start een context pas na een klik, dat is geen storing.
@@ -190,7 +190,7 @@ export class Engine extends Emitter {
         stand = 'loopt';
       } else if (stand === 'loopt' && ctx.state !== 'closed') {
         stand = 'stil';
-        this.meld(`het geluid staat stil (AudioContext ${ctx.state}): de klok en de tracks staan ook stil; druk op een knop om hem weer aan te zetten`, 'fout', 'audio');
+        this.meld(`het geluid staat stil (${ctx.state}): de klok en de tracks staan ook stil; druk op een knop om hem weer aan te zetten`, 'fout', 'audio');
       }
     });
     this.bus.on('actie', () => {
