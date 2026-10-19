@@ -6,7 +6,7 @@
 import { Engine } from '../engine/engine.js';
 import { maakAudio } from '../audio/index.js';
 import { maakKnop, maakFader, maakJog, bindKnoppen, bindSchuiven } from './bediening.js';
-import { wavNaarPcm, overzicht, maakDemo, DEMOS } from './bronnen.js';
+import { overzicht, overzichtUitPeaks, maakDemo, DEMOS, stroomVanWav } from './bronnen.js';
 
 const $ = (s, w = document) => w.querySelector(s);
 const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; };
@@ -157,12 +157,17 @@ function laadOp(n, id) {
       let pcm, grid = x.grid ?? null;
       if (x.demo) { const d = maakDemo(x); pcm = d.maakPcm(); grid = d.grid; }
       else {
-        const r = await fetch(`/api/library/${encodeURIComponent(x.id)}/audio`);
-        if (!r.ok) throw new Error(`audio ${r.status}`);
-        pcm = wavNaarPcm(await r.arrayBuffer());
+        // Uit de library: streamen (M7), niet het hele bestand in het geheugen.
+        pcm = await stroomVanWav(`/api/library/${encodeURIComponent(x.id)}/audio`);
       }
       nummer.grid = grid;
-      overzichten.set(n, overzicht(pcm));
+      overzichten.set(n, pcm.paginas ? overzicht(pcm) : null);
+      if (!pcm.paginas) {
+        fetch(`/api/library/${encodeURIComponent(x.id)}/peaks`)
+          .then((r) => (r.ok ? r.arrayBuffer() : null))
+          .then((b) => { if (b && engine.track(n).nummer?.id === x.id) overzichten.set(n, overzichtUitPeaks(b)); })
+          .catch(() => { /* geen overzicht: niet erg */ });
+      }
       return pcm;
     },
   };
@@ -192,7 +197,7 @@ function tekenOverzicht(v, nu) {
   const duur = t.nummer.duur;
   const plek = t.plek(nu - engine.vertraging() * (t.speelt ? 1 : 0));
   const x = Math.round((plek / duur) * w);
-  const sleutel = `${t.nummer.id}|${w}|${x}|${Math.round((t.cue / duur) * w)}`;
+  const sleutel = `${t.nummer.id}|${w}|${x}|${Math.round((t.cue / duur) * w)}|${overzichten.get(v.n) ? 1 : 0}`;   // het overzicht kan later komen (peaks)
   if (sleutel === v.sleutel) return;
   v.sleutel = sleutel;
   if (cv.width !== w) { cv.width = w; cv.height = h; }

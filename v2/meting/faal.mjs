@@ -13,8 +13,38 @@
  * Niet hier: de Scarlett eruit trekken (alleen op de Mac, zie MAC.md).
  */
 import { opzet, LAAD_IN_PAGINA, procesGeheugenMB } from './gemeen.mjs';
+import { mkdtempSync, mkdirSync, openSync, writeSync, closeSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-const o = await opzet({ poort: 8803 });
+// M7 op de echte weg: een v1-library in een tijdelijke map met één nummer van 31 minuten
+// (audio.wav, 16-bit stereo 48 kHz, 357 MB), dat de app STREAMT via /api/library/<id>/audio.
+const MIN = 31, SRW = 48000, FRAMES = MIN * 60 * SRW;
+const media = mkdtempSync(join(tmpdir(), 'varve-m7-'));
+{
+  mkdirSync(join(media, 'album'));
+  const fd = openSync(join(media, 'album', 'audio.wav'), 'w');
+  const kop = Buffer.alloc(44);
+  kop.write('RIFF', 0); kop.writeUInt32LE(36 + FRAMES * 4, 4); kop.write('WAVE', 8);
+  kop.write('fmt ', 12); kop.writeUInt32LE(16, 16); kop.writeUInt16LE(1, 20); kop.writeUInt16LE(2, 22);
+  kop.writeUInt32LE(SRW, 24); kop.writeUInt32LE(SRW * 4, 28); kop.writeUInt16LE(4, 32); kop.writeUInt16LE(16, 34);
+  kop.write('data', 36); kop.writeUInt32LE(FRAMES * 4, 40);
+  writeSync(fd, kop);
+  const stuk = Buffer.alloc(SRW * 4 * 10);
+  for (let van = 0; van < FRAMES; van += SRW * 10) {
+    const n = Math.min(SRW * 10, FRAMES - van);
+    for (let i = 0; i < n; i++) { const v = Math.round(0.4 * 32767 * Math.sin(2 * Math.PI * 220 * (van + i) / SRW)); stuk.writeInt16LE(v, 4 * i); stuk.writeInt16LE(v, 4 * i + 2); }
+    writeSync(fd, stuk, 0, n * 4);
+  }
+  closeSync(fd);
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(join(media, 'library.db'));
+  db.exec('CREATE TABLE tracks (id TEXT PRIMARY KEY, titel TEXT, uploader TEXT, duur REAL, audio TEXT, grid_json TEXT, toegevoegd INTEGER)');
+  db.prepare('INSERT INTO tracks VALUES (?, ?, ?, ?, ?, ?, ?)').run('album', 'album van 31 min', 'proef', MIN * 60, 'media/album/audio.wav', JSON.stringify({ stukken: [{ van: 0, bpm: 120, anker: 0 }], slot: true }), 1);
+  db.close();
+}
+
+const o = await opzet({ poort: 8803, media });
 const r = {};
 try {
   await o.page.evaluate(LAAD_IN_PAGINA);
@@ -32,12 +62,32 @@ try {
 
   // ---- M7 ------------------------------------------------------------------------
   const voor = await geheugen(), voorProces = await procesGeheugenMB();
-  await o.page.evaluate(() => window.__laad(1, { toon: 220, duur: 31 * 60 }));
-  await o.page.waitForTimeout(1500);
+  const m7 = await o.page.evaluate(async () => {
+    const e = window.varve, slaap = (ms) => new Promise((r) => setTimeout(r, ms));
+    const { stroomVanWav } = await import('/src/ui/bronnen.js');
+    const ok = await e.laad(1, { id: 'album', titel: 'album', duur: 31 * 60, grid: { stukken: [{ van: 0, bpm: 120, anker: 0 }], slot: true }, haal: () => stroomVanWav('/api/library/album/audio') });
+    // Spelen, een sprong naar 25 min, nog even spelen: klinkt het (de master-analyser), en wat staat er?
+    const an = e.mixer.analyser, buf = new Float32Array(an.fftSize);
+    const piek = () => { an.getFloatTimeDomainData(buf); let m = 0; for (const x of buf) m = Math.max(m, Math.abs(x)); return m; };
+    e.bus.doe('track.1.play', true);
+    await slaap(3000);
+    const klonk1 = piek();
+    e.bus.doe('track.1.seek', 25 / 31);
+    await slaap(3000);
+    const klonk2 = piek();
+    return { ok, klonk1, klonk2, plek: e.track(1).plek(e.nu()), gestreamdMB: e.track(1).speler.gestreamd / 1e6 };
+  });
+  await o.page.waitForTimeout(3000);           // LOS: wat niet meer nodig is gaat weg
   const na = await geheugen(), naProces = await procesGeheugenMB();
+  const gestreamdMB = await o.page.evaluate(() => window.varve.track(1).speler.gestreamd / 1e6);
   // De JS-heap van de pagina ziet de pagina's niet (die gaan naar de audiothread): het proces wel.
   const extra = naProces - voorProces;
-  r.M7 = { nummerMinuten: 31, extraMB: +extra.toFixed(1), extraHeapPaginaMB: +(na - voor).toFixed(1), verwachtZonderStreamenMB: +(31 * 60 * 48000 * 4 / 1e6).toFixed(0), grens: 50, geslaagd: extra <= 50 };
+  r.M7 = {
+    nummerMinuten: MIN, geladen: m7.ok, extraMB: +extra.toFixed(1), inDeAudiothreadMB: +gestreamdMB.toFixed(1), extraHeapPaginaMB: +(na - voor).toFixed(1),
+    verwachtZonderStreamenMB: +(FRAMES * 4 / 1e6).toFixed(0), klinktNaStart: m7.klonk1 > 0.1, klinktNaSprong: m7.klonk2 > 0.1, plekNaSprong: +m7.plek.toFixed(1),
+    grens: 50, geslaagd: m7.ok && extra <= 50 && m7.klonk1 > 0.1 && m7.klonk2 > 0.1,
+  };
+  await o.page.evaluate(() => { window.varve.bus.doe('track.1.play', true); });   // pauze
 
   // ---- M8a -------------------------------------------------------------------------
   await o.page.evaluate(async () => {
@@ -110,6 +160,6 @@ try {
     return { knopGeluidAanZichtbaar: zichtbaar, meldingVanDeEngine: engineMeldt, naEenHandeling: naHandeling, naDeKnop: e.ctx.state,
       geslaagd: zichtbaar && engineMeldt && naHandeling === 'running' };
   });
-} finally { await o.sluit(); }
+} finally { await o.sluit(); rmSync(media, { recursive: true, force: true }); }
 r.fouten = o.fouten.filter((f) => !/afspeelmotor|varve-speler|fout/i.test(f)).slice(0, 10);
 console.log(JSON.stringify(r, null, 2));

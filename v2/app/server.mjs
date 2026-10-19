@@ -8,7 +8,8 @@
  * Wat hij doet:
  *   /                    index.html en de modules (no-store: Chrome houdt ES-modules anders vast)
  *   /api/library         de nummers van v1 met grid (alleen lezen, de database gaat nooit open om te schrijven)
- *   /api/library/<id>/audio   audio.wav van dat nummer, met Range
+ *   /api/library/<id>/audio   audio.wav van dat nummer, met Range (de app streamt hem per pagina)
+ *   /api/library/<id>/peaks   peaks.bin naast audio.wav (v1: per vakje min en max als float32), voor het overzicht
  * Alleen van deze machine (Host en Origin), zoals v1. COOP/COEP staan aan voor
  * SharedArrayBuffer later.
  */
@@ -106,11 +107,12 @@ export function maakServer({ media = kiesMedia() } = {}) {
         kop(res, 200, SOORTEN['.json']);
         return res.end(JSON.stringify({ bron: l.bron, nummers: l.nummers() }));
       }
-      const a = /^\/api\/library\/([\w.:-]+)\/audio$/.exec(pad);
+      const a = /^\/api\/library\/([\w.:-]+)\/(audio|peaks)$/.exec(pad);
       if (a) {
-        const bestand = (await library(media)).audio(a[1]);
-        if (!bestand || !existsSync(bestand)) { kop(res, 404, 'text/plain'); return res.end('geen audio'); }
-        return stuurBestand(req, res, bestand, 'audio/wav');
+        const audio = (await library(media)).audio(a[1]);
+        const bestand = audio && (a[2] === 'audio' ? audio : join(dirname(audio), 'peaks.bin'));
+        if (!bestand || !existsSync(bestand)) { kop(res, 404, 'text/plain'); return res.end(`geen ${a[2]}`); }
+        return stuurBestand(req, res, bestand, a[2] === 'audio' ? 'audio/wav' : 'application/octet-stream');
       }
       if (!WITTE_LIJST.some((r) => r.test(pad))) { kop(res, 404, 'text/plain'); return res.end(); }
       const bestand = join(HIER, pad === '/' ? 'index.html' : pad);

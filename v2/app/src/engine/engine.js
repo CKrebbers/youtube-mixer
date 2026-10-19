@@ -99,6 +99,9 @@ export class Engine extends Emitter {
     const nu = this.nu();
     this.klok.ruim(nu - 1);
     for (const t of this.tracks) if (t.gekoppeldOp(nu) || t.wacht !== null) t.plan();
+    // Streamen (M7): de pagina's volgen het plan, ook van een track die vrij speelt; het cuepunt
+    // staat er altijd (cue moet direct klinken).
+    for (const t of this.tracks) t.speler?.bijvullen?.(t.geladen ? [t.cue] : []);
   }
 
   // ---- de klok ----------------------------------------------------------------

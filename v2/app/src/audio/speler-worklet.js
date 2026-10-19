@@ -21,7 +21,7 @@
  *   { type: 'fout', bericht }               één keer per fout; daarna stilte
  *                                           tot een nieuwe 'laad' of 'leeg'.
  */
-import { maakKern, laadBron, planSegmenten, leegBron, renderBlok } from './speler-kern.js';
+import { maakKern, laadBron, planSegmenten, leegBron, renderBlok, zetPagina, wisPagina } from './speler-kern.js';
 
 class VarveSpeler extends AudioWorkletProcessor {
   constructor() {
@@ -47,7 +47,11 @@ class VarveSpeler extends AudioWorkletProcessor {
       }
       else if (m.type === 'laad') {
         this.kapot = false;
-        laadBron(this.kern, m.sr, m.frames, m.paginas);
+        laadBron(this.kern, m.sr, m.frames, m.paginas, m.id ?? 0);
+      } else if (m.type === 'pagina') {
+        if (!this.kapot) zetPagina(this.kern, m.id, m.i, m.data);
+      } else if (m.type === 'weg') {
+        if (!this.kapot) wisPagina(this.kern, m.id, m.i);
       } else if (m.type === 'leeg') {
         this.kapot = false;
         leegBron(this.kern);

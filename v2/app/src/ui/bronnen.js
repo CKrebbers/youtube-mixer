@@ -30,6 +30,50 @@ export function wavNaarPcm(buf) {
   throw new Error('WAV: geen data-chunk');
 }
 
+/**
+ * Een WAV op de server STREAMEN (budget M7): de kop met één Range-verzoek, daarna per pagina een
+ * Range-verzoek (stroom.js beslist welke). Alleen 16-bit PCM, mono of stereo (meer kanalen: de
+ * eerste twee). Geeft { sr, kanalen: 2, frames, stroom: { lees(i, signaal) } }.
+ */
+export async function stroomVanWav(url) {
+  const kop = await fetch(url, { headers: { range: 'bytes=0-65535' } });
+  if (!kop.ok) throw new Error(`audio ${kop.status}`);
+  const buf = await kop.arrayBuffer();
+  const totaal = Number(/\/(\d+)$/.exec(kop.headers.get('content-range') || '')?.[1] ?? buf.byteLength);
+  const v = new DataView(buf);
+  const tekst = (o) => String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3));
+  if (buf.byteLength < 12 || tekst(0) !== 'RIFF' || tekst(8) !== 'WAVE') throw new Error('geen WAV-bestand');
+  let o = 12, fmt = null;
+  while (o + 8 <= buf.byteLength) {
+    const id = tekst(o), len = v.getUint32(o + 4, true);
+    if (id === 'fmt ') fmt = { formaat: v.getUint16(o + 8, true), kanalen: v.getUint16(o + 10, true), sr: v.getUint32(o + 12, true), bits: v.getUint16(o + 22, true) };
+    else if (id === 'data') {
+      if (!fmt) throw new Error('WAV: data vóór fmt');
+      if (fmt.bits !== 16 || (fmt.formaat !== 1 && fmt.formaat !== 0xfffe)) throw new Error(`WAV: alleen 16-bit PCM (dit is ${fmt.bits}-bit)`);
+      const k = fmt.kanalen, blok = 2 * k, begin = o + 8;
+      const lengte = Math.min(len === 0xffffffff || len === 0 ? totaal - begin : len, totaal - begin);
+      const frames = Math.floor(lengte / blok);
+      const lees = async (i, signal) => {
+        const van = begin + i * PAGINA * blok;
+        const n = Math.min(PAGINA, frames - i * PAGINA);
+        if (n <= 0) throw new RangeError(`pagina ${i} ligt na het einde`);
+        const r = await fetch(url, { headers: { range: `bytes=${van}-${van + n * blok - 1}` }, signal, priority: 'high' });
+        if (r.status !== 206) { await r.arrayBuffer().catch(() => {}); throw new Error(`audio ${r.status} op pagina ${i}`); }
+        const ruw = await r.arrayBuffer();
+        if (ruw.byteLength !== n * blok) throw new Error(`pagina ${i}: ${ruw.byteLength} bytes, verwacht ${n * blok}`);
+        const bron = new Int16Array(ruw);
+        if (k === 2) return bron;
+        const uit = new Int16Array(n * 2);
+        for (let j = 0; j < n; j++) { uit[2 * j] = bron[j * k]; uit[2 * j + 1] = k > 1 ? bron[j * k + 1] : bron[j * k]; }
+        return uit;
+      };
+      return { sr: fmt.sr, kanalen: 2, frames, stroom: { lees } };
+    }
+    o += 8 + len + (len & 1);
+  }
+  throw new Error('WAV: geen data-chunk in de eerste 64 kB');
+}
+
 /** Interleaved Int16 met k kanalen -> stereo-pagina's van PAGINA frames (eigen buffers, dus over te dragen). */
 function naarPaginas(bron, k, frames) {
   const paginas = [];
@@ -44,6 +88,23 @@ function naarPaginas(bron, k, frames) {
     paginas.push(uit);
   }
   return paginas;
+}
+
+/**
+ * Het overzicht uit v1's peaks.bin (per vakje een min en een max als float32, over het hele
+ * nummer): de grootste |waarde| per vakje, in `n` vakjes. Voor een nummer dat streamt.
+ */
+export function overzichtUitPeaks(buf, n = 400) {
+  const f = new Float32Array(buf, 0, Math.floor(buf.byteLength / 8) * 2);
+  const vakjes = f.length / 2;
+  const uit = new Float32Array(n);
+  if (vakjes === 0) return uit;
+  for (let i = 0; i < vakjes; i++) {
+    const j = Math.min(n - 1, Math.floor((i / vakjes) * n));
+    const a = Math.max(Math.abs(f[2 * i]), Math.abs(f[2 * i + 1]));
+    if (a > uit[j]) uit[j] = Math.min(1, a);
+  }
+  return uit;
 }
 
 /** Piekwaarden (0..1) in `n` vakjes, voor het overzicht. Vóór het overdragen van de pagina's. */

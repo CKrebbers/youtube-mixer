@@ -102,6 +102,7 @@ export function maakKern(ctxSr, { overvloei = OVERVLOEI, sprong = OVERVLOEI_SPRO
     bronPag: [null, null],                   // array van Int16Array|undefined, of null
     bronSr: new Float64Array(2),
     bronFrames: new Float64Array(2),
+    bronId: new Float64Array(2),             // het laadnummer van de speler (streamen: een pagina hoort bij één laad)
     bron: 0,
     // De stemmen.
     vAan: new Uint8Array(STEMMEN),
@@ -147,7 +148,7 @@ function laatUitvloeien(k) {
  * `paginas`: array van Int16Array (PAGINA frames, interleaved stereo) of
  * undefined/null voor een pagina die (nog) ontbreekt.
  */
-export function laadBron(k, sr, frames, paginas) {
+export function laadBron(k, sr, frames, paginas, id = 0) {
   const nieuw = k.bron ^ 1;
   kapBron(k, nieuw);                      // laad twee keer binnen 4 ms: die stemmen houden op
   laatUitvloeien(k);
@@ -160,7 +161,31 @@ export function laadBron(k, sr, frames, paginas) {
   k.bronPag[nieuw] = pag;
   k.bronSr[nieuw] = sr;
   k.bronFrames[nieuw] = frames;
+  k.bronId[nieuw] = id;
   k.bron = nieuw;
+}
+
+/**
+ * Streamen (stroom.js): een pagina erbij of weg, voor de bron met laadnummer `id`. Is die bron er
+ * niet meer (een late pagina van een vorig nummer), dan gebeurt er niets. Niet op het hete pad:
+ * alleen vanuit een bericht.
+ */
+export function zetPagina(k, id, i, data) {
+  for (let b = 0; b < 2; b++) {
+    const pag = k.bronPag[b];
+    if (pag === null || k.bronId[b] !== id || !(i >= 0 && i < pag.length)) continue;
+    if (!(data instanceof Int16Array) || data.length > PAGINA * 2 || data.length % 2 !== 0) return false;
+    pag[i] = data;
+    return true;
+  }
+  return false;
+}
+
+export function wisPagina(k, id, i) {
+  for (let b = 0; b < 2; b++) {
+    const pag = k.bronPag[b];
+    if (pag !== null && k.bronId[b] === id && i >= 0 && i < pag.length) pag[i] = undefined;
+  }
 }
 
 /** Geen bron meer: wat klinkt vloeit uit, daarna mogen de pagina's weg. */

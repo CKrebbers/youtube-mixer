@@ -7,6 +7,7 @@
  * laatst geplande segmenten: hoofdthread en worklet delen geen teller.
  */
 import { PAGINA, MAX_SEGMENTEN } from './speler-kern.js';
+import { Stroom, paginasNodig } from './stroom.js';
 
 export { PAGINA };
 
@@ -92,6 +93,9 @@ export class Speler {
     this.onfout = null;                      // (bericht: string, kapot: boolean) => void; kapot = hij speelt stil
     this._lijn = [];                         // de geplande segmenten, voor positie()
     this._weg = false;
+    this._laadNr = 0;                        // elke laad een eigen nummer (een late pagina hoort bij één laad)
+    this._stroom = null;                     // streamt dit nummer? (stroom.js)
+    this._pins = [];
     this.node.port.onmessage = (e) => {
       const m = e.data;
       if (m && m.type === 'fout') this._meld(`afspeler: ${m.bericht}`, m.kapot !== false);
@@ -110,8 +114,9 @@ export class Speler {
    * Een nummer laden. De pagina's worden OVERGEDRAGEN: daarna zijn ze hier
    * leeg (detached). Wat speelde vloeit uit; daarna plan().
    */
-  laad({ sr, kanalen = 2, frames, paginas }) {
+  laad({ sr, kanalen = 2, frames, paginas, stroom = null }) {
     this._levend();
+    if (stroom) return this._laadStroom({ sr, kanalen, frames, stroom });
     if (kanalen !== 2) throw new RangeError(`laad: alleen stereo (kanalen 2), niet ${kanalen}`);
     if (!(sr > 0) || !Number.isFinite(sr)) throw new RangeError(`laad: samplerate ${sr} klopt niet`);
     if (!Number.isInteger(frames) || frames < 0 || frames > 2 ** 30) throw new RangeError(`laad: frames ${frames} klopt niet`);
@@ -129,8 +134,46 @@ export class Speler {
       buffers.add(p.buffer);                 // gedeelde buffer: één keer in de transferlijst
     }
     this._lijn = [];
-    this.node.port.postMessage({ type: 'laad', sr, frames, paginas: lijst }, [...buffers]);
+    this._sluitStroom();
+    this.node.port.postMessage({ type: 'laad', id: ++this._laadNr, sr, frames, paginas: lijst }, [...buffers]);
   }
+
+  /**
+   * Een nummer dat STREAMT (budget M7): de worklet krijgt een lege bron, en `stroom.lees(i, signaal)`
+   * haalt pagina i op zodra het plan hem nodig heeft (stroom.js). Wat er niet is, is stilte.
+   */
+  _laadStroom({ sr, kanalen, frames, stroom }) {
+    if (kanalen !== 2) throw new RangeError(`laad: alleen stereo (kanalen 2), niet ${kanalen}`);
+    if (!(sr > 0) || !Number.isFinite(sr)) throw new RangeError(`laad: samplerate ${sr} klopt niet`);
+    if (!Number.isInteger(frames) || frames < 0 || frames > 2 ** 30) throw new RangeError(`laad: frames ${frames} klopt niet`);
+    if (typeof stroom.lees !== 'function') throw new TypeError('laad: stroom.lees moet een functie zijn');
+    this._lijn = [];
+    this._sluitStroom();
+    const id = ++this._laadNr;
+    this.node.port.postMessage({ type: 'laad', id, sr, frames, paginas: [] });
+    this._stroom = new Stroom({
+      id, sr, frames, lees: stroom.lees,
+      stuur: (m, transfer) => { if (!this._weg) this.node.port.postMessage(m, transfer ?? []); },
+      onfout: (bericht) => this._meld(`streamen: ${bericht}`, false),
+    });
+  }
+
+  _sluitStroom() { if (this._stroom) { this._stroom.sluit(); this._stroom = null; } }
+
+  /**
+   * Streamen bijhouden: welke pagina's het plan vanaf nu nodig heeft, plus `pins` (plekken in het
+   * nummer die direct moeten klinken: het cuepunt). Roep dit geregeld aan (de engine doet het
+   * bij elke tik en na elk plan); zonder stroom doet het niets.
+   */
+  bijvullen(pins = this._pins) {
+    this._pins = pins;
+    const st = this._stroom;
+    if (!st || this._weg) return;
+    st.bij(paginasNodig(this._lijn, this.ctx.currentTime, { sr: st.sr, frames: st.frames, pins }));
+  }
+
+  /** Wat er van dit nummer in de audiothread staat (bytes); null als het niet streamt. */
+  get gestreamd() { return this._stroom ? this._stroom.bytes : null; }
 
   /** Segmenten plannen: vervangt alles vanaf segmenten[0].T. */
   plan(segmenten) {
@@ -144,6 +187,7 @@ export class Speler {
     const rest = n > 0 ? [this._lijn[n - 1]] : [];
     this._lijn = rest.concat(s);
     this.node.port.postMessage({ type: 'plan', segmenten: s });
+    this.bijvullen();
   }
 
   /**
@@ -165,6 +209,7 @@ export class Speler {
   leeg() {
     this._levend();
     this._lijn = [];
+    this._sluitStroom();
     this.node.port.postMessage({ type: 'leeg' });
   }
 
@@ -173,6 +218,7 @@ export class Speler {
     if (this._weg) return;
     this._weg = true;
     this._lijn = [];
+    this._sluitStroom();
     try { this.node.port.postMessage({ type: 'stop' }); } catch { /* al dicht */ }
     try { this.node.disconnect(); } catch { /* niet verbonden */ }
     this.node.port.onmessage = null;
