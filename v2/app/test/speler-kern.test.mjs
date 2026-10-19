@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import v8 from 'node:v8';
 import vm from 'node:vm';
 import {
-  PAGINA, OVERVLOEI, GAT_FADE, MAX_SEGMENTEN,
+  PAGINA, OVERVLOEI, OVERVLOEI_SPRONG, OVERVLOEI_WET, GAT_FADE, MAX_SEGMENTEN,
   maakKern, laadBron, planSegmenten, leegBron, renderBlok,
 } from '../src/audio/speler-kern.js';
 
@@ -17,7 +17,8 @@ if (typeof globalThis.gc !== 'function') {
 }
 
 const SR = 48000, Q = 128;
-const FADE_N = Math.round(OVERVLOEI * SR);            // 192 samples
+const FADE_N = Math.round(OVERVLOEI * SR);            // 192 samples (start, stop)
+const SPRONG_N = Math.round(OVERVLOEI_SPRONG * SR);   // 480 samples (sprong)
 const TAU = 2 * Math.PI;
 
 // ---- hulp --------------------------------------------------------------------
@@ -62,7 +63,13 @@ function render(k, blokken, { start = 0, voor = null } = {}) {
 
 /** Eerste sample i (vanaf 0) met i / SR ≥ T: daar gaat een segment in. */
 const sampleVan = (T) => { let i = Math.floor(T * SR) - 2; while (i / SR < T) i++; return i; };
-const wFade = (j) => Math.sin(Math.min(1, j / FADE_N) * Math.PI / 2);     // j samples na het ingaan
+// De wet van de overvloei (OVERVLOEI_WET): j samples na het ingaan, aan = de nieuwe, uit = de oude.
+const wet = (w) => (OVERVLOEI_WET === 'gelijk' ? w : Math.sin(w * Math.PI / 2));
+const aan = (j) => wet(Math.min(1, j / FADE_N));
+const uit = (j) => wet(1 - Math.min(1, j / FADE_N));
+const wFade = aan;
+const aanS = (j) => wet(Math.min(1, j / SPRONG_N));
+const uitS = (j) => wet(1 - Math.min(1, j / SPRONG_N));
 
 function grootsteStap(y, van, tot) {
   let m = 0;
@@ -133,12 +140,12 @@ test('2. segmentwissel sample-exact midden in een blok (naadloos én met overvlo
   // De sprong: op sample 34 klinkt nog alleen het oude, daarna de overvloei.
   assert.ok(Math.abs(L[i3 - 1] - waarde(lijn2(i3 - 1))) < 1e-6, 'sample 33: alleen oud');
   assert.ok(Math.abs(L[i3] - waarde(lijn2(i3))) < 1e-6, 'sample 34: oud × 1, nieuw × 0');
-  for (const j of [1, 2, 50, 96, 191]) {
-    const a = Math.cos(j / FADE_N * Math.PI / 2), b = Math.sin(j / FADE_N * Math.PI / 2);
+  for (const j of [1, 2, 50, 96, 191, 300, 479]) {
+    const a = uitS(j), b = aanS(j);
     const v = a * waarde(lijn2(i3 + j)) + b * waarde(lijn3(i3 + j));
     assert.ok(Math.abs(L[i3 + j] - v) < 1e-6, `overvloei op ${j}: ${L[i3 + j]} ≠ ${v}`);
   }
-  for (let i = i3 + FADE_N; i < 60 * Q; i++) assert.ok(Math.abs(L[i] - waarde(lijn3(i))) < 1e-6, `lijn 3 op ${i}`);
+  for (let i = i3 + SPRONG_N; i < 60 * Q; i++) assert.ok(Math.abs(L[i] - waarde(lijn3(i))) < 1e-6, `lijn 3 op ${i}`);
 });
 
 // ---- 3. tempowissel ----------------------------------------------------------
@@ -159,7 +166,7 @@ test('3. aansluitende tempowissel (R 1 → 1,05): geen overvloei, geen sprong in
 
 // ---- 4. sprong ---------------------------------------------------------------
 
-test('4. sprong in P: 4 ms equal-power overvloeien, geen stap groter dan bij gewoon spelen', () => {
+test('4. sprong in P: 10 ms equal-gain overvloeien, geen stap groter dan bij gewoon spelen', () => {
   const s = sinus(440, SR, 3);
   const k = kernMet(s);
   const P = 0.2, T2 = (120 * Q + 5) / SR;
@@ -169,14 +176,14 @@ test('4. sprong in P: 4 ms equal-power overvloeien, geen stap groter dan bij gew
   const i2 = 120 * Q + 5;
   const oud = (i) => s.L(P + i / SR), nieuw = (i) => s.L(P2 + (i / SR - T2));
   assert.ok(Math.abs(oud(i2) - nieuw(i2)) > 0.3, 'zonder overvloei zou dit een tik zijn');
-  const f = grootsteFout(L, i2, i2 + FADE_N, (i) => {
+  const f = grootsteFout(L, i2, i2 + SPRONG_N, (i) => {
     const j = i - i2;
-    return Math.cos(j / FADE_N * Math.PI / 2) * oud(i) + Math.sin(j / FADE_N * Math.PI / 2) * nieuw(i);
+    return uitS(j) * oud(i) + aanS(j) * nieuw(i);
   });
   assert.ok(f < 2e-4, `overvloei: oud leest door (${f.toExponential(2)})`);
-  assert.ok(grootsteFout(L, i2 + FADE_N, L.length, nieuw) < 2e-4, 'na 4 ms alleen nieuw');
+  assert.ok(grootsteFout(L, i2 + SPRONG_N, L.length, nieuw) < 2e-4, 'na 10 ms alleen nieuw');
   const gewoon = grootsteStap(L, 1000, i2 - 10);
-  const rond = grootsteStap(L, i2 - 10, i2 + FADE_N + 10);
+  const rond = grootsteStap(L, i2 - 10, i2 + SPRONG_N + 10);
   assert.ok(rond <= gewoon * 1.25, `stap in de overvloei ${rond.toFixed(4)} ≤ 1,25 × gewoon ${gewoon.toFixed(4)}`);
 });
 
@@ -193,7 +200,7 @@ test('5. start en stop klikvrij: via 4 ms in en uit, daarna precies stil', () =>
   const lijn = (i) => s.L(P + (i / SR - T1));
   assert.equal(grootsteFout(L, 0, i1 + 1, () => 0), 0, 'stil vóór de start');
   assert.ok(grootsteFout(L, i1, i1 + FADE_N, (i) => wFade(i - i1) * lijn(i)) < 2e-4, 'inloop');
-  assert.ok(grootsteFout(L, i2, i2 + FADE_N, (i) => Math.cos((i - i2) / FADE_N * Math.PI / 2) * lijn(i)) < 2e-4, 'uitloop: leest door');
+  assert.ok(grootsteFout(L, i2, i2 + FADE_N, (i) => uit(i - i2) * lijn(i)) < 2e-4, 'uitloop: leest door');
   assert.equal(grootsteFout(L, i2 + FADE_N, L.length, () => 0), 0, 'daarna precies 0');
   const gewoon = grootsteStap(L, i1 + 1000, i2 - 10);
   assert.ok(grootsteStap(L, i1 - 5, i1 + FADE_N + 5) <= gewoon * 1.1, 'start zonder tik');
@@ -303,9 +310,9 @@ test('10. T in het verleden: het segment geldt meteen, op de lijn (niet vanaf P)
   planSegmenten(k, [{ T: T2, P: P2, R: 1.1, speelt: true }]);
   const { L: M } = render(k, 100, { start: f2 });
   const lijn2 = (i) => s.L(P2 + ((f2 + i) / SR - T2) * 1.1);
-  const fv = grootsteFout(M, 0, FADE_N, (i) => Math.cos(i / FADE_N * Math.PI / 2) * lijn1(200 * Q + i) + Math.sin(i / FADE_N * Math.PI / 2) * lijn2(i));
+  const fv = grootsteFout(M, 0, SPRONG_N, (i) => uitS(i) * lijn1(200 * Q + i) + aanS(i) * lijn2(i));
   assert.ok(fv < 2e-4, `overvloei van de oude lijn naar de nieuwe (${fv.toExponential(2)})`);
-  assert.ok(grootsteFout(M, FADE_N, M.length, lijn2) < 2e-4, 'daarna op de nieuwe lijn');
+  assert.ok(grootsteFout(M, SPRONG_N, M.length, lijn2) < 2e-4, 'daarna op de nieuwe lijn');
   // Twee segmenten tegelijk in het verleden: alleen het laatste telt (geen sprong heen en terug).
   const f3 = f2 + 100 * Q, nu = f3 / SR;
   const op = (t) => P2 + (t - T2) * 1.1;

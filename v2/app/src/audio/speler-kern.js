@@ -20,16 +20,25 @@
  *
  * STEMMEN EN OVERVLOEIEN
  *   Wat klinkt is een STEM: een eigen kopie van de lijn {T, P, R} met een
- *   versterking w (0..1, klinkt als sin(w·π/2): equal-power). Een nieuw
- *   segment dat op de plek van de leidende stem aansluit (≤ SPRONG_FRAMES)
- *   neemt alleen zijn lijn over: geen overvloei, naadloos (tempowissel van de
- *   klok). Is het dezelfde lijn (zelfde R, plek binnen ZELFDE_LIJN), dan
- *   verandert er NIETS, bit voor bit: de engine stuurt dezelfde lijn geregeld
- *   opnieuw, in stukken. Een sprong, een start of een stop: de oude stem leest
- *   door langs zijn oude lijn en zakt in OVERVLOEI naar 0, de nieuwe komt in
- *   dezelfde tijd op. Een overvloei die onderbroken wordt, gaat verder vanaf
- *   waar w is: zo geven ook drie sprongen in 4 ms geen tik (tot STEMMEN
- *   tegelijk; daarna wordt de zachtste afgekapt).
+ *   versterking w (0..1). Een nieuw segment dat op de plek van de leidende
+ *   stem aansluit (≤ SPRONG_FRAMES) neemt alleen zijn lijn over: geen
+ *   overvloei, naadloos (tempowissel van de klok). Is het dezelfde lijn (zelfde
+ *   R, plek binnen ZELFDE_LIJN), dan verandert er NIETS, bit voor bit: de engine
+ *   stuurt dezelfde lijn geregeld opnieuw, in stukken. Een start of stop vloeit
+ *   in OVERVLOEI in of uit; bij een sprong leest de oude stem door langs zijn
+ *   oude lijn en zakt in OVERVLOEI_SPRONG naar 0 terwijl de nieuwe opkomt. Een
+ *   overvloei die onderbroken wordt, gaat verder vanaf waar w is: zo geven ook
+ *   drie sprongen kort na elkaar geen tik (tot STEMMEN tegelijk; daarna wordt
+ *   de zachtste afgekapt).
+ *
+ *   EQUAL-GAIN, niet equal-power (gemeten 19 okt, meting/klik.mjs): een sprong
+ *   over hele tellen landt op hetzelfde soort geluid (kick op kick), en dan geeft
+ *   equal-power +3 dB midden in de overvloei: 1,41× de grootste gewone stap. Lineair
+ *   is oud + nieuw precies 1 en de steilste helling 1/N in plaats van π/(2N). Op
+ *   ongelijk materiaal is het een dip van −3 dB van een paar ms, die je niet hoort.
+ *   De sprong duurt 10 ms en niet 4: op een bas van 80 Hz in tegenfase is de
+ *   helling van de overvloei zelf anders zo groot als die van de toon (1,59× bij
+ *   4 ms). Start en stop blijven 4 ms: daar staat er maar één stem.
  *
  * INTERPOLATIE: 4-punts Hermite van de derde orde (Catmull-Rom-raaklijnen),
  *   in de x-vorm van Niemitalo ("Polynomial interpolators for high-quality
@@ -58,7 +67,9 @@
 export const PAGINA = 65536;            // frames per pagina, ~1,37 s op 48 kHz
 const PAGINA_SHIFT = 16;
 const PAGINA_MASK = PAGINA - 1;
-export const OVERVLOEI = 0.004;         // sprong, start, stop: zo lang vloeit oud in nieuw over
+export const OVERVLOEI = 0.004;         // start en stop: zo lang vloeit hij in of uit
+export const OVERVLOEI_SPRONG = 0.010;  // sprong: zo lang vloeit oud in nieuw over (zie onder)
+export const OVERVLOEI_WET = 'gelijk';  // 'gelijk' (equal-gain, lineair) of 'vermogen' (equal-power, sin)
 export const GAT_FADE = 0.003;          // zo ver kijken we vooruit naar een gat, en zo lang duurt het uitvloeien
 export const SPRONG_FRAMES = 2;         // verder dan dit van de klinkende plek = een sprong (met overvloei)
 export const ZELFDE_LIJN = 1e-9;        // seconden: zo dicht en hetzelfde tempo = dezelfde lijn, niets doen
@@ -72,11 +83,13 @@ const SCHAAL = 1 / 32768;
  * Een kern voor één speler. Alles wat hij ooit nodig heeft wordt hier gemaakt;
  * renderBlok maakt niets meer aan.
  */
-export function maakKern(ctxSr) {
+export function maakKern(ctxSr, { overvloei = OVERVLOEI, sprong = OVERVLOEI_SPRONG, wet = OVERVLOEI_WET } = {}) {
   return {
     ctxSr,                                   // samplerate van de AudioContext (vast)
     klok: new Float64Array(1),               // [0] = frame van de eerste sample van dit blok (currentFrame)
-    dw: 1 / (OVERVLOEI * ctxSr),             // stap van w per sample
+    dw: 1 / (overvloei * ctxSr),             // stap van w per sample (start, stop)
+    dwSprong: 1 / (sprong * ctxSr),          // stap van w per sample (sprong)
+    lin: wet === 'gelijk' ? 1 : 0,           // 1: versterking = w (equal-gain); 0: sin(w·π/2) (equal-power)
     de: 1 / (GAT_FADE * ctxSr),              // stap van de gat-envelop per sample
     // De wachtrij: gesorteerd op T, [0] is de volgende. Index = plek, geen objecten.
     sT: new Float64Array(MAX_SEGMENTEN),
@@ -97,6 +110,7 @@ export function maakKern(ctxSr) {
     vR: new Float64Array(STEMMEN),
     vW: new Float64Array(STEMMEN),           // versterking 0..1 (klinkt als sin(w·π/2))
     vRicht: new Int8Array(STEMMEN),          // +1 komt op, 0 staat, −1 zakt weg
+    vDw: new Float64Array(STEMMEN),          // de stap van w van deze stem (start/stop of sprong)
     vEnv: new Float64Array(STEMMEN),         // gat-envelop 0..1
     lead: -1,                                // de stem die het laatste segment speelt, of −1
     // Kladblok voor de vier buren van een sample (ruwe Int16-waarden).
@@ -121,7 +135,7 @@ function kapBron(k, b) {
 
 /** Alles wat klinkt zakt weg; de wachtrij is leeg. */
 function laatUitvloeien(k) {
-  for (let v = 0; v < STEMMEN; v++) if (k.vAan[v] === 1) k.vRicht[v] = -1;
+  for (let v = 0; v < STEMMEN; v++) if (k.vAan[v] === 1) { k.vRicht[v] = -1; k.vDw[v] = k.dw; }
   k.lead = -1;
   k.sN = 0;
 }
@@ -221,16 +235,17 @@ function stemBlok(k, v, L, R, van, tot) {
   const sr = k.bronSr[b], frames = k.bronFrames[b];
   const f0 = k.klok[0], csr = k.ctxSr;
   const T = k.vT[v], P = k.vP[v], Rr = k.vR[v];
-  const dw = k.dw, de = k.de;
+  const dw = k.vDw[v], de = k.de;
   const bl = k.bl, br = k.br;
   let w = k.vW[v], richt = k.vRicht[v], env = k.vEnv[v];
+  const lin = k.lin === 1;
   // Zo ver vooruit (frames) zien we een gat aankomen; minstens het halve tempo.
   const vooruit = Math.ceil(GAT_FADE * sr * (Rr > 0.5 ? Rr : 0.5)) + 2;
   let klaar = false;
   for (let i = van; i < tot && !klaar; i++) {
     // Versterking van DEZE sample, dan pas een stap verder: de eerste sample
     // van een nieuwe stem is 0, de laatste van een wegzakkende de kleinste > 0.
-    const g = w >= 1 ? 1 : Math.sin(w * HALF_PI);
+    const g = w >= 1 ? 1 : lin ? w : Math.sin(w * HALF_PI);
     if (richt !== 0) {
       w += richt * dw;
       if (w >= 1) { w = 1; richt = 0; }
@@ -328,7 +343,9 @@ export function renderBlok(k, L, R, frames) {
         continue;
       }
     }
-    if (lead >= 0) { k.vRicht[lead] = -1; k.lead = -1; }          // sprong of stop: oud zakt weg
+    // Sprong of stop: oud zakt weg. Bij een sprong in OVERVLOEI_SPRONG, oud en nieuw samen.
+    const sprong = lead >= 0 && speelt;
+    if (lead >= 0) { k.vRicht[lead] = -1; k.vDw[lead] = sprong ? k.dwSprong : k.dw; k.lead = -1; }
     if (!speelt) continue;
     // Een vrije stem, of anders de zachtste (die wordt afgekapt).
     let v = -1, zachtst = 2;
@@ -338,7 +355,7 @@ export function renderBlok(k, L, R, frames) {
     }
     k.vAan[v] = 1; k.vBron[v] = b;
     k.vT[v] = T; k.vP[v] = P; k.vR[v] = Rs;
-    k.vW[v] = 0; k.vRicht[v] = 1; k.vEnv[v] = 1;
+    k.vW[v] = 0; k.vRicht[v] = 1; k.vEnv[v] = 1; k.vDw[v] = sprong ? k.dwSprong : k.dw;
     k.lead = v;
   }
   // Een oude bron waar niemand meer uit leest: los, zodat het geheugen weg mag.

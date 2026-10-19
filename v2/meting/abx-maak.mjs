@@ -18,7 +18,7 @@
  *   3 start/stop   start midden in het nummer (0,6 s), pauze (2,0 s), weer verder (2,8 s). B = hetzelfde
  *                  met een zachte overvloei van 20 ms (verhoogde cosinus) bij elk van de drie.
  *   4 laad         een ander nummer laden over een spelende track (2,0 s), op 2,8 s play. B = het oude
- *                  vloeit uit in 4 ms met de vorm van de speler (kwart sinus) en verder niets; vanaf
+ *                  vloeit uit in 4 ms met de vorm van de speler (lineair, equal-gain) en verder niets; vanaf
  *                  2,5 s is B gelijk aan A (het nieuwe nummer start bij beide hetzelfde).
  * WAV: 16-bit, 48 kHz, stereo, 4 s. Schrijft alleen in v2/meting/abx/.
  */
@@ -79,7 +79,7 @@ async function maakParen(o) {
     const [oud, nieuw] = referenties('sprong', extra, r);
     const ro = await render({ bron: BRON, ts, ...oud }), rn = await render({ bron: BRON, ts, ...nieuw });
     const [oL, oR] = kanalen(ro), [nL, nR] = kanalen(rn);
-    const a = Math.round((ts + r.D) * SR) + VOORUIT + 2 * 48 - 480;     // 20 ms, gecentreerd op het midden van onze 4 ms
+    const a = Math.round((ts + r.D) * SR) + VOORUIT + 5 * 48 - 480;     // 20 ms, gecentreerd op het midden van onze 10 ms (OVERVLOEI_SPRONG)
     const B = meng(n, (i) => { const c = opRC(i, a, 960); return [oL[i] * (1 - c) + nL[i] * c, oR[i] * (1 - c) + nR[i] * c]; });
     bewaar('sprong', 'Sprong', 'Gekoppeld 16 tellen verder op 2,0 s (dezelfde muziek). B: oud naar nieuw met 20 ms equal-gain, zo goed als geen sprong.', kanalen(r), B, { sprongS: r.plekNa - (r.A - r.Aplay) });
   }
@@ -131,7 +131,7 @@ async function maakParen(o) {
     const a = Math.round((t1 + r.D) * SR), d = 192, wissel = Math.round(2.5 * SR);
     const B = meng(n, (i) => {
       if (i >= wissel) return [xL[i], xR[i]];
-      const g = i < a ? 1 : i >= a + d ? 0 : Math.cos(Math.PI / 2 * (i - a) / d);
+      const g = i < a ? 1 : i >= a + d ? 0 : 1 - (i - a) / d;
       return [oL[i] * g, oR[i] * g];
     });
     bewaar('laad', 'Laden over spelend', 'Een ander nummer laden op 2,0 s terwijl dit speelt, op 2,8 s play. B: het oude vloeit uit in 4 ms en verder niets.', kanalen(r), B, {});

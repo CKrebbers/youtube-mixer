@@ -1,5 +1,5 @@
 {
-  "hash": "b156e674708e2b68319af55213575f512573e7570b428c62ddefe1dade218ca7",
+  "hash": "8a53b2a7ac27f9bb7e8e2bc6f17f6fbae177db1b8cb502f06fa793689a8b8233",
   "datum": "2026-10-19",
   "chromium": "141.0.7390.37",
   "sr": 48000,
@@ -8,33 +8,9 @@
   "wachtVoorResumeMs": 10,
   "herhaalbaar": true,
   "zonderWachten": {
-    "herhaalbaar": false,
-    "verschil": [
-      "gelijk",
-      "gelijk",
-      {
-        "L": {
-          "samples": 3940,
-          "eersteS": 8.262104166666667,
-          "maxDb": -144.49439791871097
-        },
-        "R": {
-          "samples": 3979,
-          "eersteS": 8.262208333333334,
-          "maxDb": -144.49439791871097
-        }
-      }
-    ],
-    "perStrip": {
-      "1": {
-        "gelijk": false,
-        "verschillend": 2
-      },
-      "2": {
-        "gelijk": false,
-        "verschillend": 3
-      }
-    }
+    "herhaalbaar": true,
+    "verschil": null,
+    "perStrip": null
   },
   "nullTest": {
     "R 124/128": {
@@ -109,63 +85,63 @@
       "naDeWissel": -36.63945706405523
     },
     "klok 124 → 128, engine.zetKlokTempo op een blokgrens": {
-      "db": -39.873482582698436,
-      "verschuivingSamples": -0.00198074804623603,
-      "dbOnder4k": -67.83696065869069,
-      "spelerTegenSinc": -33.64235990286336,
-      "absnTegenSinc": -31.437356701595256,
-      "spelerTegenSincVerschuiving": -0.0009875929388103546,
-      "spelerTegenSincOnder4k": -84.79378423278757,
-      "absnTegenSincOnder4k": -67.11236657794632,
-      "naDeWissel": -37.118633577398,
-      "naDeWisselVerschuiving": -0.004291482195733486,
+      "db": -39.873482131801985,
+      "verschuivingSamples": -0.0019807902409492264,
+      "dbOnder4k": -67.83696086115884,
+      "spelerTegenSinc": -33.64235981743676,
+      "absnTegenSinc": -31.437356683733174,
+      "spelerTegenSincVerschuiving": -0.0009876574113310975,
+      "spelerTegenSincOnder4k": -84.79380258919463,
+      "absnTegenSincOnder4k": -67.11236736315898,
+      "naDeWissel": -37.11863312650155,
+      "naDeWisselVerschuiving": -0.004291573738536645,
       "momenten": {
         "A": 0.5066666666666666,
         "Tw": 4,
         "TwFrames": 192000,
         "TwOpBlok": true,
-        "R1": 0.9999999999998938,
-        "R2": 1.0322580645166113
+        "R1": 1.0000000000000002,
+        "R2": 1.032258064516129
       }
     },
     "klok 124 → 128 via de bus (klok.tempo)": {
-      "db": -39.87367259009742,
-      "verschuivingSamples": -0.0019749039187126017,
-      "dbOnder4k": -67.83690294640532,
-      "spelerTegenSinc": -33.64251999516774,
-      "absnTegenSinc": -31.437520097792593,
-      "spelerTegenSincVerschuiving": -0.0009876382785434367,
-      "spelerTegenSincOnder4k": -84.79401716777936,
-      "absnTegenSincOnder4k": -67.11234240270686,
-      "naDeWissel": -37.11389277989527,
-      "naDeWisselVerschuiving": -0.004278844454019236,
+      "db": -39.87367259800459,
+      "verschuivingSamples": -0.0019749105521269647,
+      "dbOnder4k": -67.83690310566733,
+      "spelerTegenSinc": -33.642519937339095,
+      "absnTegenSinc": -31.437520079864658,
+      "spelerTegenSincVerschuiving": -0.000987659966988932,
+      "spelerTegenSincOnder4k": -84.7940186347372,
+      "absnTegenSincOnder4k": -67.11234316320281,
+      "naDeWissel": -37.113892787802435,
+      "naDeWisselVerschuiving": -0.004278858949957521,
       "momenten": {
         "A": 0.5066666666666666,
         "Tw": 4.005333333333334,
         "TwFrames": 192256,
         "TwOpBlok": true,
-        "R1": 0.9999999999998938,
-        "R2": 1.0322580645166113
+        "R1": 1.0000000000000002,
+        "R2": 1.032258064516129
       }
     },
     "klok 124 → 128, 16 samples naast een blokgrens": {
-      "db": -19.615201989686387,
-      "verschuivingSamples": -0.053400487688379544,
-      "dbOnder4k": -27.46180712297386,
-      "spelerTegenSinc": -33.44169368673248,
-      "absnTegenSinc": -19.000249383709434,
-      "spelerTegenSincVerschuiving": 0.0009472208419791194,
-      "spelerTegenSincOnder4k": -84.35813111825864,
-      "absnTegenSincOnder4k": -27.46075384066281,
-      "naDeWissel": -16.860602466920305,
-      "naDeWisselVerschuiving": -3.2103053119238254,
+      "db": -19.615201989809016,
+      "verschuivingSamples": -0.053400489335905375,
+      "dbOnder4k": -27.461807079504762,
+      "spelerTegenSinc": -33.44169370874069,
+      "absnTegenSinc": -19.000249366073557,
+      "spelerTegenSincVerschuiving": 0.0009471792498597927,
+      "spelerTegenSincOnder4k": -84.35811273430618,
+      "absnTegenSincOnder4k": -27.46075387506961,
+      "naDeWissel": -16.86060246704294,
+      "naDeWisselVerschuiving": -3.210305350499136,
       "momenten": {
         "A": 0.5066666666666666,
         "Tw": 4.000333333333334,
         "TwFrames": 192016.00000000003,
         "TwOpBlok": false,
-        "R1": 0.9999999999998938,
-        "R2": 1.0322580645166113
+        "R1": 1.0000000000000002,
+        "R2": 1.032258064516129
       }
     }
   }

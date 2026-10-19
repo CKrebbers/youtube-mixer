@@ -18,7 +18,14 @@ try {
   await o.page.evaluate(LAAD_IN_PAGINA);
   const geheugen = async () => {
     await o.cdp.send('HeapProfiler.collectGarbage');
-    return o.page.evaluate(async () => (await performance.measureUserAgentSpecificMemory()).bytes / 1e6);
+    // measureUserAgentSpecificMemory telt ook de ArrayBuffers (de pagina's van een nummer); valt
+    // hij weg (headless zonder isolatie), dan de heap plus de backing stores via DevTools.
+    const mb = await o.page.evaluate(async () => {
+      try { return (await performance.measureUserAgentSpecificMemory()).bytes / 1e6; } catch { return null; }
+    });
+    if (mb !== null) return mb;
+    const h = await o.cdp.send('Runtime.getHeapUsage');
+    return (h.usedSize + (h.backingStorageSize ?? 0) + (h.embedderHeapUsedSize ?? 0)) / 1e6;
   };
 
   // ---- M7 ------------------------------------------------------------------------

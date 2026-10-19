@@ -24,6 +24,7 @@
  */
 import { fileURLToPath } from 'node:url';
 import { opzetOffline, uitB64, SR } from './golden.mjs';
+import { OVERVLOEI, OVERVLOEI_SPRONG } from '../app/src/audio/speler-kern.js';
 
 /** Draait IN de pagina: zet M.overgang (bovenop window.M uit golden.mjs). */
 function installeer() {
@@ -86,15 +87,16 @@ export async function installeerKlik(page) { await page.evaluate(installeer); }
 const MS = SR / 1000;
 const VOORUIT = 256;              // engine.straks(): twee blokken
 const DREMPEL = 128 + 144;        // strip: startDrempel = 128/sr + 3 ms
+const IN = OVERVLOEI * 1000, SPR = OVERVLOEI_SPRONG * 1000;   // ms: start/stop, sprong (speler-kern.js)
 /**
  * Waar de overgang in het geluid zit, t.o.v. het moment van de handeling (frames, vóór de
  * limiter): [begin, eind]. `nazwaai` = hoe lang de nieuwe toestand nodig heeft om stil te staan
  * (setTargetAtTime: 5τ) voordat "erna" begint.
  */
 export const OVERGANGEN = {
-  start: { span: [VOORUIT, VOORUIT + 4 * MS], nazwaai: 5 * MS },
-  stop: { span: [VOORUIT, VOORUIT + 4 * MS], nazwaai: 5 * MS },
-  sprong: { span: [VOORUIT, VOORUIT + 4 * MS], nazwaai: 5 * MS },
+  start: { span: [VOORUIT, VOORUIT + IN * MS], nazwaai: 5 * MS },
+  stop: { span: [VOORUIT, VOORUIT + IN * MS], nazwaai: 5 * MS },
+  sprong: { span: [VOORUIT, VOORUIT + SPR * MS], nazwaai: 5 * MS },
   'kill aan': { span: [DREMPEL, DREMPEL + 5 * MS], nazwaai: 5 * MS },
   'kill uit': { span: [DREMPEL, DREMPEL + 5 * MS], nazwaai: 5 * MS },
   // De filterfrequenties glijden meteen (setTargetAtTime vanaf nu, τ 10 ms); droog/nat in 5 ms na de drempel.
@@ -105,9 +107,9 @@ export const OVERGANGEN = {
   'crossfader dicht': { span: [0, 40 * MS], nazwaai: 20 * MS },
   'nudge aan': { span: [VOORUIT, VOORUIT + 4 * MS], nazwaai: 5 * MS },
   'nudge los': { span: [VOORUIT, VOORUIT + 4 * MS], nazwaai: 5 * MS },
-  jog: { span: [VOORUIT, VOORUIT + 4 * MS], nazwaai: 5 * MS },
+  jog: { span: [VOORUIT, VOORUIT + SPR * MS], nazwaai: 5 * MS },
   // De speler vloeit uit zodra het laadbericht aankomt (bij de resume), dan nog een stil segment op straks.
-  'laad over spelend': { span: [0, VOORUIT + 4 * MS], nazwaai: 5 * MS },
+  'laad over spelend': { span: [0, VOORUIT + IN * MS], nazwaai: 5 * MS },
   'tempo klok': { span: [VOORUIT, VOORUIT + 4 * MS], nazwaai: 5 * MS },
 };
 

@@ -1,0 +1,66 @@
+M9 render: grootste sample-stap in het venster / grootste stap in gewone muziek (grens ≤ 1,25 op "÷ ref")
+
+bron          | overgang                         | venster | stap     | ÷ ervoor | ÷ ref  | oordeel
+sinus 80 Hz   | start (midden in het nummer)     | 10.0 ms | 1.32e-3 |        ∞ |   1,00 | ok
+sinus 80 Hz   | stop (pauze)                     | 10.0 ms | 1.44e-3 |     1,09 |   1,09 | ok
+sinus 80 Hz   | sprong gekoppeld (hele tellen)   | 16.0 ms | 1.32e-3 |     1,00 |   1,00 | ok
+sinus 80 Hz   | kill laag aan                    | 11.0 ms | 1.31e-3 |     0,99 |   0,99 | ok
+sinus 80 Hz   | kill laag uit                    | 11.0 ms | 1.32e-3 |   124,98 |   1,00 | ok
+sinus 80 Hz   | filter 0,5 → 0,2                 | 16.7 ms | 1.45e-3 |     1,10 |   1,06 | ok
+sinus 80 Hz   | filter 0,2 → 0,5                 | 66.7 ms | 1.48e-3 |     1,08 |   1,08 | ok
+sinus 80 Hz   | filter 0,3 → 0,7                 | 56.0 ms | 1.47e-3 |     1,08 |   1,08 | ok
+sinus 80 Hz   | crossfader 0,5 → 0 (A open)      | 46.0 ms | 1.86e-3 |     1,41 |   1,00 | ok
+sinus 80 Hz   | crossfader 0,5 → 1 (A dicht)     | 46.0 ms | 1.35e-3 |     1,03 |   1,03 | ok
+sinus 80 Hz   | nudge aan                        | 10.0 ms | 1.37e-3 |     1,04 |   1,04 | ok
+sinus 80 Hz   | nudge los                        | 10.0 ms | 1.32e-3 |     0,96 |   1,00 | ok
+sinus 80 Hz   | jog 1/16 tel                     | 16.0 ms | 1.36e-3 |     1,03 |   1,03 | ok
+sinus 80 Hz   | laad over een spelende track     | 15.3 ms | 1.42e-3 |     1,07 |   1,07 | ok
+sinus 80 Hz   | klok-tempo 120/124 → 126         | 10.0 ms | 1.38e-3 |     1,05 |   1,05 | ok
+sinus 80 Hz   | sprong vrij, fase +0/8           | 16.0 ms | 1.32e-3 |     1,00 |   1,00 | ok
+sinus 80 Hz   | sprong vrij, fase +1/8           | 16.0 ms | 1.47e-3 |     1,12 |   1,12 | ok
+sinus 80 Hz   | sprong vrij, fase +2/8           | 16.0 ms | 1.52e-3 |     1,16 |   1,16 | ok
+sinus 80 Hz   | sprong vrij, fase +3/8           | 16.0 ms | 1.55e-3 |     1,17 |   1,17 | ok
+sinus 80 Hz   | sprong vrij, fase +4/8           | 16.0 ms | 1.36e-3 |     1,03 |   1,03 | ok
+sinus 80 Hz   | sprong vrij, fase +5/8           | 16.0 ms | 1.32e-3 |     1,00 |   1,00 | ok
+sinus 80 Hz   | sprong vrij, fase +6/8           | 16.0 ms | 1.32e-3 |     1,00 |   1,00 | ok
+sinus 80 Hz   | sprong vrij, fase +7/8           | 16.0 ms | 1.19e-3 |     0,91 |   0,91 | ok
+sinus 1 kHz   | start (midden in het nummer)     | 10.0 ms | 1.64e-2 |        ∞ |   1,00 | ok
+sinus 1 kHz   | stop (pauze)                     | 10.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | sprong gekoppeld (hele tellen)   | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | kill hoog aan                    | 11.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | kill hoog uit                    | 11.0 ms | 1.73e-2 |     3,70 |   1,06 | ok
+sinus 1 kHz   | filter 0,5 → 0,2                 | 16.7 ms | 1.72e-2 |     1,05 |   0,72 | ok
+sinus 1 kHz   | filter 0,2 → 0,5                 | 66.7 ms | 2.66e-2 |     1,12 |   1,12 | ok
+sinus 1 kHz   | filter 0,3 → 0,7                 | 56.0 ms | 2.13e-2 |     1,23 |   1,23 | ok
+sinus 1 kHz   | crossfader 0,5 → 0 (A open)      | 46.0 ms | 2.31e-2 |     1,41 |   1,00 | ok
+sinus 1 kHz   | crossfader 0,5 → 1 (A dicht)     | 46.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | nudge aan                        | 10.0 ms | 1.71e-2 |     1,04 |   1,04 | ok
+sinus 1 kHz   | nudge los                        | 10.0 ms | 1.71e-2 |     1,00 |   1,04 | ok
+sinus 1 kHz   | jog 1/16 tel                     | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | laad over een spelende track     | 15.3 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | klok-tempo 120/124 → 126         | 10.0 ms | 1.72e-2 |     1,05 |   1,05 | ok
+sinus 1 kHz   | sprong vrij, fase +0/8           | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | sprong vrij, fase +1/8           | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | sprong vrij, fase +2/8           | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | sprong vrij, fase +3/8           | 16.0 ms | 1.65e-2 |     1,01 |   1,01 | ok
+sinus 1 kHz   | sprong vrij, fase +4/8           | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | sprong vrij, fase +5/8           | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | sprong vrij, fase +6/8           | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+sinus 1 kHz   | sprong vrij, fase +7/8           | 16.0 ms | 1.64e-2 |     1,00 |   1,00 | ok
+Klokwerk 124  | start (midden in het nummer)     | 10.0 ms | 7.36e-2 |        ∞ |   0,85 | ok
+Klokwerk 124  | stop (pauze)                     | 10.0 ms | 2.48e-4 |     0,92 |   1,01 | ok
+Klokwerk 124  | sprong gekoppeld (hele tellen)   | 16.0 ms | 2.45e-4 |     0,87 |   1,00 | ok
+Klokwerk 124  | kill laag aan                    | 11.0 ms | 2.61e-4 |     0,97 |   1,07 | ok
+Klokwerk 124  | kill laag uit                    | 11.0 ms | 2.15e-4 |    30,25 |   0,88 | ok
+Klokwerk 124  | filter 0,5 → 0,2                 | 16.7 ms | 2.82e-4 |     1,00 |   1,04 | ok
+Klokwerk 124  | filter 0,2 → 0,5                 | 66.7 ms | 2.51e-2 |    52,04 |   0,87 | ok
+Klokwerk 124  | filter 0,3 → 0,7                 | 56.0 ms | 2.54e-2 |    56,72 |   1,00 | ok
+Klokwerk 124  | crossfader 0,5 → 0 (A open)      | 46.0 ms | 3.02e-4 |     0,84 |   0,87 | ok
+Klokwerk 124  | crossfader 0,5 → 1 (A dicht)     | 46.0 ms | 2.14e-4 |     0,60 |   0,88 | ok
+Klokwerk 124  | nudge aan                        | 10.0 ms | 2.55e-4 |     0,95 |   1,04 | ok
+Klokwerk 124  | nudge los                        | 10.0 ms | 2.32e-4 |     0,91 |   0,95 | ok
+Klokwerk 124  | jog 1/16 tel                     | 16.0 ms | 1.03e-3 |     3,64 |   1,00 | ok
+Klokwerk 124  | laad over een spelende track     | 15.3 ms | 2.54e-4 |     0,89 |   1,03 | ok
+Klokwerk 124  | klok-tempo 120/124 → 126         | 10.0 ms | 2.49e-4 |     0,93 |   1,02 | ok
+
+61 overgangen, 0 boven 1,25

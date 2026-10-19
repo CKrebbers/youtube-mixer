@@ -1,0 +1,939 @@
+{
+ "rapport": {
+  "minuten": 10,
+  "metingen": 61,
+  "handelingen": 168,
+  "gemisteBlokken": 153,
+  "perUur": 918,
+  "grootsteAchterstandMs": 59.964833333594925,
+  "renderCapacity": {
+   "gem": 0.1390246424426466,
+   "max": 0.3359608860506885
+  },
+  "geheugenMB": {
+   "begin": 1.96816,
+   "eind": 2.131844,
+   "groeiPerUur": 0.9916554697184656
+  },
+  "teTraagMetingen": 0,
+  "geheugenBron": "JS-heap via DevTools (SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true))",
+  "fouten": []
+ },
+ "reeks": [
+  {
+   "t": 1792445956201,
+   "lag": 0,
+   "geheugen": 1968160,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 1,
+   "klok": 124.00000000000001,
+   "js": 1968160,
+   "rt": {
+    "currentTime": 20.664,
+    "renderCapacity": 0.10522112408904863,
+    "callbackIntervalMean": 0.01002003479935124,
+    "callbackIntervalVariance": 2.171064846546572e-8
+   }
+  },
+  {
+   "t": 1792445966242,
+   "lag": -0.0000018333335773945691,
+   "geheugen": 1928064,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 3,
+   "klok": 124.00000000000001,
+   "js": 1928064,
+   "rt": {
+    "currentTime": 30.704,
+    "renderCapacity": 0.11073692551505547,
+    "callbackIntervalMean": 0.01001909287759186,
+    "callbackIntervalVariance": 2.8424398757223933e-7
+   }
+  },
+  {
+   "t": 1792445976285,
+   "lag": -0.00000883333331103131,
+   "geheugen": 1977324,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 6,
+   "klok": 118.67839041166008,
+   "js": 1977324,
+   "rt": {
+    "currentTime": 40.74666666666667,
+    "renderCapacity": 0.1301822551572201,
+    "callbackIntervalMean": 0.010019356616539896,
+    "callbackIntervalVariance": 1.1435620287406326e-7
+   }
+  },
+  {
+   "t": 1792445986345,
+   "lag": -0.000017500000183190423,
+   "geheugen": 1980424,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 9,
+   "klok": 118.67839041166008,
+   "js": 1980424,
+   "rt": {
+    "currentTime": 50.808,
+    "renderCapacity": 0.09906411788132218,
+    "callbackIntervalMean": 0.010019420700579325,
+    "callbackIntervalVariance": 3.807656641551464e-7
+   }
+  },
+  {
+   "t": 1792445996391,
+   "lag": 0.010014333333394632,
+   "geheugen": 1976024,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 12,
+   "klok": 118.67839041166008,
+   "js": 1976024,
+   "rt": {
+    "currentTime": 60.848,
+    "renderCapacity": 0.13999401734968592,
+    "callbackIntervalMean": 0.010067945845589451,
+    "callbackIntervalVariance": 7.92675129626501e-7
+   }
+  },
+  {
+   "t": 1792446006437,
+   "lag": 0.030058166666456998,
+   "geheugen": 2020488,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 14,
+   "klok": 118.67839041166008,
+   "js": 2020488,
+   "rt": {
+    "currentTime": 70.86933333333333,
+    "renderCapacity": 0.1018232539603467,
+    "callbackIntervalMean": 0.010019736597912459,
+    "callbackIntervalVariance": 3.293052908958931e-8
+   }
+  },
+  {
+   "t": 1792446016484,
+   "lag": 0.030037333333147842,
+   "geheugen": 2030692,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 17,
+   "klok": 118.67839041166008,
+   "js": 2030692,
+   "rt": {
+    "currentTime": 80.92,
+    "renderCapacity": 0.2998587000403714,
+    "callbackIntervalMean": 0.010019197624970213,
+    "callbackIntervalVariance": 4.207906958390169e-8
+   }
+  },
+  {
+   "t": 1792446026531,
+   "lag": 0.03005133333336829,
+   "geheugen": 2032632,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 20,
+   "klok": 126.7135041775182,
+   "js": 2032632,
+   "rt": {
+    "currentTime": 90.96,
+    "renderCapacity": 0.13928856914468427,
+    "callbackIntervalMean": 0.010018730602354664,
+    "callbackIntervalVariance": 5.019431697527686e-7
+   }
+  },
+  {
+   "t": 1792446036571,
+   "lag": 0.030036333333406162,
+   "geheugen": 2053856,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 23,
+   "klok": 123.39233730826527,
+   "js": 2053856,
+   "rt": {
+    "currentTime": 101,
+    "renderCapacity": 0.09794388736959384,
+    "callbackIntervalMean": 0.010019752583749956,
+    "callbackIntervalVariance": 1.8859518824005513e-8
+   }
+  },
+  {
+   "t": 1792446046620,
+   "lag": 0.030060500000068657,
+   "geheugen": 2045744,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 27,
+   "klok": 123.39233730826527,
+   "js": 2045744,
+   "rt": {
+    "currentTime": 111.05333333333333,
+    "renderCapacity": 0.15823164632926587,
+    "callbackIntervalMean": 0.010020313249718249,
+    "callbackIntervalVariance": 1.266003681943602e-7
+   }
+  },
+  {
+   "t": 1792446056658,
+   "lag": 0.030039333333526486,
+   "geheugen": 2048888,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 30,
+   "klok": 123.39233730826527,
+   "js": 2048888,
+   "rt": {
+    "currentTime": 121.09333333333333,
+    "renderCapacity": 0.2858864892014063,
+    "callbackIntervalMean": 0.010019620286292477,
+    "callbackIntervalVariance": 5.7193795883149195e-8
+   }
+  },
+  {
+   "t": 1792446066696,
+   "lag": 0.030054333333303873,
+   "geheugen": 2060632,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 32,
+   "klok": 123.39233730826527,
+   "js": 2060632,
+   "rt": {
+    "currentTime": 131.13333333333333,
+    "renderCapacity": 0.08009291990708009,
+    "callbackIntervalMean": 0.010020150914091334,
+    "callbackIntervalVariance": 1.5218326989543116e-8
+   }
+  },
+  {
+   "t": 1792446076765,
+   "lag": 0.060127166666568144,
+   "geheugen": 2061116,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 34,
+   "klok": 126.45171246677637,
+   "js": 2061116,
+   "rt": {
+    "currentTime": 141.16533333333334,
+    "renderCapacity": 0.17084779375309864,
+    "callbackIntervalMean": 0.01023507123784882,
+    "callbackIntervalVariance": 0.000008211825333678928
+   }
+  },
+  {
+   "t": 1792446086809,
+   "lag": 0.06011833333351291,
+   "geheugen": 2067048,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 37,
+   "klok": 126.45171246677637,
+   "js": 2067048,
+   "rt": {
+    "currentTime": 151.216,
+    "renderCapacity": 0.14757013038324776,
+    "callbackIntervalMean": 0.01002090849601466,
+    "callbackIntervalVariance": 2.399716831858395e-8
+   }
+  },
+  {
+   "t": 1792446096856,
+   "lag": 0.06014950000018615,
+   "geheugen": 2075720,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 40,
+   "klok": 126.45171246677637,
+   "js": 2075720,
+   "rt": {
+    "currentTime": 161.256,
+    "renderCapacity": 0.08513823734903683,
+    "callbackIntervalMean": 0.010019878627602426,
+    "callbackIntervalVariance": 7.6015101148772e-8
+   }
+  },
+  {
+   "t": 1792446106906,
+   "lag": 0.06013966666647974,
+   "geheugen": 2058924,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 43,
+   "klok": 126.45171246677637,
+   "js": 2058924,
+   "rt": {
+    "currentTime": 171.30666666666667,
+    "renderCapacity": 0.1034034034034034,
+    "callbackIntervalMean": 0.010019503614676146,
+    "callbackIntervalVariance": 1.3457363316156388e-7
+   }
+  },
+  {
+   "t": 1792446116946,
+   "lag": 0.09020916666667489,
+   "geheugen": 2003196,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 46,
+   "klok": 126.45171246677637,
+   "js": 2003196,
+   "rt": {
+    "currentTime": 181.31733333333332,
+    "renderCapacity": 0.2886027562619455,
+    "callbackIntervalMean": 0.010108904619717666,
+    "callbackIntervalVariance": 0.0000050469987553770135
+   }
+  },
+  {
+   "t": 1792446126986,
+   "lag": 0.09017016666671651,
+   "geheugen": 2012064,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 49,
+   "klok": 126.45171246677637,
+   "js": 2012064,
+   "rt": {
+    "currentTime": 191.36,
+    "renderCapacity": 0.09965156794425087,
+    "callbackIntervalMean": 0.01001975919819724,
+    "callbackIntervalVariance": 7.209992622512766e-8
+   }
+  },
+  {
+   "t": 1792446137027,
+   "lag": 0.09017099999996248,
+   "geheugen": 2005072,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 51,
+   "klok": 126.45171246677637,
+   "js": 2005072,
+   "rt": {
+    "currentTime": 201.4,
+    "renderCapacity": 0.14327018943170486,
+    "callbackIntervalMean": 0.010019995428090473,
+    "callbackIntervalVariance": 5.0081181630432863e-8
+   }
+  },
+  {
+   "t": 1792446147069,
+   "lag": 0.09019016666683655,
+   "geheugen": 2004880,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 55,
+   "klok": 124.94912101142108,
+   "js": 2004880,
+   "rt": {
+    "currentTime": 211.44,
+    "renderCapacity": 0.10009970089730806,
+    "callbackIntervalMean": 0.010020515931408472,
+    "callbackIntervalVariance": 7.530085176503073e-8
+   }
+  },
+  {
+   "t": 1792446157114,
+   "lag": 0.09019016666672286,
+   "geheugen": 1999308,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 58,
+   "klok": 125.45058492012322,
+   "js": 1999308,
+   "rt": {
+    "currentTime": 221.49066666666667,
+    "renderCapacity": 0.16473294658931786,
+    "callbackIntervalMean": 0.010020002747945572,
+    "callbackIntervalVariance": 2.4682518683092558e-8
+   }
+  },
+  {
+   "t": 1792446167152,
+   "lag": 0.0901921666668315,
+   "geheugen": 2000660,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 60,
+   "klok": 120.15477277338503,
+   "js": 2000660,
+   "rt": {
+    "currentTime": 231.52266666666668,
+    "renderCapacity": 0.10402989597010404,
+    "callbackIntervalMean": 0.010019459267394113,
+    "callbackIntervalVariance": 9.977968509106396e-8
+   }
+  },
+  {
+   "t": 1792446177215,
+   "lag": 0.09032849999993431,
+   "geheugen": 2058564,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 63,
+   "klok": 128.51925356127322,
+   "js": 2058564,
+   "rt": {
+    "currentTime": 241.58933333333334,
+    "renderCapacity": 0.11246265471617585,
+    "callbackIntervalMean": 0.010020151266640603,
+    "callbackIntervalVariance": 3.3197970731913325e-7
+   }
+  },
+  {
+   "t": 1792446187247,
+   "lag": 0.15029333333352923,
+   "geheugen": 2063212,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 66,
+   "klok": 128.51925356127322,
+   "js": 2063212,
+   "rt": {
+    "currentTime": 251.56533333333334,
+    "renderCapacity": 0.08939439289633841,
+    "callbackIntervalMean": 0.010019419175221037,
+    "callbackIntervalVariance": 6.590395997993075e-8
+   }
+  },
+  {
+   "t": 1792446197281,
+   "lag": 0.15029416666643414,
+   "geheugen": 2063452,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 68,
+   "klok": 128.51925356127322,
+   "js": 2063452,
+   "rt": {
+    "currentTime": 261.5946666666667,
+    "renderCapacity": 0.07670878519550293,
+    "callbackIntervalMean": 0.010019997362655988,
+    "callbackIntervalVariance": 2.1573793601136353e-8
+   }
+  },
+  {
+   "t": 1792446207312,
+   "lag": 0.16032399999991043,
+   "geheugen": 2071024,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 72,
+   "klok": 128.51925356127322,
+   "js": 2071024,
+   "rt": {
+    "currentTime": 271.616,
+    "renderCapacity": 0.12102351313969571,
+    "callbackIntervalMean": 0.010041084178229267,
+    "callbackIntervalVariance": 0.0000012936002805169863
+   }
+  },
+  {
+   "t": 1792446217343,
+   "lag": 0.1703456666665133,
+   "geheugen": 2064952,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 74,
+   "klok": 128.51925356127322,
+   "js": 2064952,
+   "rt": {
+    "currentTime": 281.63733333333334,
+    "renderCapacity": 0.10854503464203231,
+    "callbackIntervalMean": 0.01002035788202236,
+    "callbackIntervalVariance": 6.054636539447069e-8
+   }
+  },
+  {
+   "t": 1792446227376,
+   "lag": 0.1703494999998938,
+   "geheugen": 2056172,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 77,
+   "klok": 124.23095845244826,
+   "js": 2056172,
+   "rt": {
+    "currentTime": 291.6666666666667,
+    "renderCapacity": 0.24519087012857568,
+    "callbackIntervalMean": 0.01002031659067337,
+    "callbackIntervalVariance": 4.725693502291405e-8
+   }
+  },
+  {
+   "t": 1792446237409,
+   "lag": 0.1703343333330949,
+   "geheugen": 2060780,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 79,
+   "klok": 124.23095845244826,
+   "js": 2060780,
+   "rt": {
+    "currentTime": 301.7013333333333,
+    "renderCapacity": 0.10344827586206895,
+    "callbackIntervalMean": 0.010019370438528312,
+    "callbackIntervalVariance": 3.093121817252815e-7
+   }
+  },
+  {
+   "t": 1792446247441,
+   "lag": 0.17037516666677988,
+   "geheugen": 2065500,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 82,
+   "klok": 121.9845658056438,
+   "js": 2065500,
+   "rt": {
+    "currentTime": 311.7386666666667,
+    "renderCapacity": 0.10060180541624875,
+    "callbackIntervalMean": 0.01002011650607817,
+    "callbackIntervalVariance": 1.4645538518031324e-8
+   }
+  },
+  {
+   "t": 1792446257476,
+   "lag": 0.17035316666649436,
+   "geheugen": 2064620,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 84,
+   "klok": 121.9845658056438,
+   "js": 2064620,
+   "rt": {
+    "currentTime": 321.77066666666667,
+    "renderCapacity": 0.13518334985133795,
+    "callbackIntervalMean": 0.010020230331136566,
+    "callbackIntervalVariance": 2.3958512831789762e-8
+   }
+  },
+  {
+   "t": 1792446267526,
+   "lag": 0.21043650000014935,
+   "geheugen": 2062888,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 87,
+   "klok": 126.72960517369211,
+   "js": 2062888,
+   "rt": {
+    "currentTime": 331.78133333333335,
+    "renderCapacity": 0.1025079617834395,
+    "callbackIntervalMean": 0.010097264904996846,
+    "callbackIntervalVariance": 0.00000246596272557944
+   }
+  },
+  {
+   "t": 1792446277588,
+   "lag": 0.21283683333333414,
+   "geheugen": 2077616,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 90,
+   "klok": 126.72960517369211,
+   "js": 2077616,
+   "rt": {
+    "currentTime": 341.8426666666667,
+    "renderCapacity": 0.23479170298065194,
+    "callbackIntervalMean": 0.010019173476552503,
+    "callbackIntervalVariance": 4.1371155732328426e-7
+   }
+  },
+  {
+   "t": 1792446287629,
+   "lag": 0.24051649999986324,
+   "geheugen": 2076900,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 93,
+   "klok": 121.89209148939699,
+   "js": 2076900,
+   "rt": {
+    "currentTime": 351.85333333333335,
+    "renderCapacity": 0.10374149659863946,
+    "callbackIntervalMean": 0.010028238435672942,
+    "callbackIntervalVariance": 3.640392677271947e-7
+   }
+  },
+  {
+   "t": 1792446297676,
+   "lag": 0.2806218333335764,
+   "geheugen": 2081456,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 96,
+   "klok": 128.5623005516827,
+   "js": 2081456,
+   "rt": {
+    "currentTime": 361.864,
+    "renderCapacity": 0.11408521303258146,
+    "callbackIntervalMean": 0.010125261918336442,
+    "callbackIntervalVariance": 0.000015211680400486087
+   }
+  },
+  {
+   "t": 1792446307711,
+   "lag": 0.280575833333522,
+   "geheugen": 2090464,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 99,
+   "klok": 128.5623005516827,
+   "js": 2090464,
+   "rt": {
+    "currentTime": 371.8933333333333,
+    "renderCapacity": 0.10817915276514002,
+    "callbackIntervalMean": 0.010019322720942381,
+    "callbackIntervalVariance": 2.4149676923628055e-7
+   }
+  },
+  {
+   "t": 1792446317747,
+   "lag": 0.28058966666664986,
+   "geheugen": 2084016,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 101,
+   "klok": 128.5623005516827,
+   "js": 2084016,
+   "rt": {
+    "currentTime": 381.93066666666664,
+    "renderCapacity": 0.12383341695935776,
+    "callbackIntervalMean": 0.010019306545689739,
+    "callbackIntervalVariance": 4.126220535024416e-8
+   }
+  },
+  {
+   "t": 1792446327786,
+   "lag": 0.2906405000000163,
+   "geheugen": 2086904,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 104,
+   "klok": 124.78151863254607,
+   "js": 2086904,
+   "rt": {
+    "currentTime": 391.95733333333334,
+    "renderCapacity": 0.3359608860506885,
+    "callbackIntervalMean": 0.010031671229484508,
+    "callbackIntervalVariance": 7.331941963536377e-7
+   }
+  },
+  {
+   "t": 1792446337829,
+   "lag": 0.29058449999975977,
+   "geheugen": 2091176,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 107,
+   "klok": 124.78151863254607,
+   "js": 2091176,
+   "rt": {
+    "currentTime": 402.008,
+    "renderCapacity": 0.12582648767782006,
+    "callbackIntervalMean": 0.01002035969173376,
+    "callbackIntervalVariance": 5.459003823341194e-8
+   }
+  },
+  {
+   "t": 1792446347885,
+   "lag": 0.29059266666646266,
+   "geheugen": 2088548,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 109,
+   "klok": 124.78151863254607,
+   "js": 2088548,
+   "rt": {
+    "currentTime": 412.0586666666667,
+    "renderCapacity": 0.10566753143085213,
+    "callbackIntervalMean": 0.010020466918975108,
+    "callbackIntervalVariance": 5.086607050344938e-8
+   }
+  },
+  {
+   "t": 1792446357921,
+   "lag": 0.2905926666665195,
+   "geheugen": 2087756,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 112,
+   "klok": 127.92830353509635,
+   "js": 2087756,
+   "rt": {
+    "currentTime": 422.09866666666665,
+    "renderCapacity": 0.0735995232419547,
+    "callbackIntervalMean": 0.01002002971673864,
+    "callbackIntervalVariance": 1.2258665532247368e-7
+   }
+  },
+  {
+   "t": 1792446367960,
+   "lag": 0.29066366666662447,
+   "geheugen": 2068304,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 115,
+   "klok": 127.92830353509635,
+   "js": 2068304,
+   "rt": {
+    "currentTime": 432.1306666666667,
+    "renderCapacity": 0.10089285714285713,
+    "callbackIntervalMean": 0.010021238598245654,
+    "callbackIntervalVariance": 2.199893951549305e-8
+   }
+  },
+  {
+   "t": 1792446377998,
+   "lag": 0.2905796666665523,
+   "geheugen": 2064764,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 118,
+   "klok": 120.90735820215197,
+   "js": 2064764,
+   "rt": {
+    "currentTime": 442.17066666666665,
+    "renderCapacity": 0.14798607657881652,
+    "callbackIntervalMean": 0.01002021406562973,
+    "callbackIntervalVariance": 1.8476890406341556e-7
+   }
+  },
+  {
+   "t": 1792446388041,
+   "lag": 0.3207071666664305,
+   "geheugen": 2069812,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 122,
+   "klok": 120.90735820215197,
+   "js": 2069812,
+   "rt": {
+    "currentTime": 452.1813333333333,
+    "renderCapacity": 0.10734182252288103,
+    "callbackIntervalMean": 0.01005832315941446,
+    "callbackIntervalVariance": 0.000003416347018929515
+   }
+  },
+  {
+   "t": 1792446398089,
+   "lag": 0.3207673333335137,
+   "geheugen": 2135296,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 124,
+   "klok": 120.90735820215197,
+   "js": 2135296,
+   "rt": {
+    "currentTime": 462.232,
+    "renderCapacity": 0.30080176942217307,
+    "callbackIntervalMean": 0.0100285145271208,
+    "callbackIntervalVariance": 4.929056365633489e-7
+   }
+  },
+  {
+   "t": 1792446408147,
+   "lag": 0.3207725000001673,
+   "geheugen": 2131076,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 126,
+   "klok": 120.90735820215197,
+   "js": 2131076,
+   "rt": {
+    "currentTime": 472.28266666666667,
+    "renderCapacity": 0.06885278383197939,
+    "callbackIntervalMean": 0.010020915699098515,
+    "callbackIntervalVariance": 9.331068812117806e-8
+   }
+  },
+  {
+   "t": 1792446418199,
+   "lag": 0.37080683333302744,
+   "geheugen": 2131064,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 128,
+   "klok": 121.46174505911769,
+   "js": 2131064,
+   "rt": {
+    "currentTime": 482.29333333333335,
+    "renderCapacity": 0.1621837019326559,
+    "callbackIntervalMean": 0.010054925814494962,
+    "callbackIntervalVariance": 0.0000017664047229144537
+   }
+  },
+  {
+   "t": 1792446428239,
+   "lag": 0.3707808333332636,
+   "geheugen": 2133108,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 131,
+   "klok": 119.93780764564872,
+   "js": 2133108,
+   "rt": {
+    "currentTime": 492.336,
+    "renderCapacity": 0.09548489983055915,
+    "callbackIntervalMean": 0.010020012909778431,
+    "callbackIntervalVariance": 8.678863800950456e-8
+   }
+  },
+  {
+   "t": 1792446438283,
+   "lag": 0.3707648333334177,
+   "geheugen": 2147220,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 133,
+   "klok": 119.93780764564872,
+   "js": 2147220,
+   "rt": {
+    "currentTime": 502.376,
+    "renderCapacity": 0.1346938775510204,
+    "callbackIntervalMean": 0.01001967310174248,
+    "callbackIntervalVariance": 2.684137807622677e-7
+   }
+  },
+  {
+   "t": 1792446448322,
+   "lag": 0.3707598333333735,
+   "geheugen": 2152612,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 135,
+   "klok": 125.70965170767158,
+   "js": 2152612,
+   "rt": {
+    "currentTime": 512.416,
+    "renderCapacity": 0.14031560960900594,
+    "callbackIntervalMean": 0.01001926383765321,
+    "callbackIntervalVariance": 1.3853557520695054e-7
+   }
+  },
+  {
+   "t": 1792446458369,
+   "lag": 0.370784000000036,
+   "geheugen": 2149852,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 139,
+   "klok": 125.70965170767158,
+   "js": 2149852,
+   "rt": {
+    "currentTime": 522.4666666666667,
+    "renderCapacity": 0.10892189552389613,
+    "callbackIntervalMean": 0.01001867751228484,
+    "callbackIntervalVariance": 0.0000013334692494926405
+   }
+  },
+  {
+   "t": 1792446468409,
+   "lag": 0.37083700000001585,
+   "geheugen": 2153004,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 142,
+   "klok": 125.70965170767158,
+   "js": 2153004,
+   "rt": {
+    "currentTime": 532.4986666666666,
+    "renderCapacity": 0.18739249215825154,
+    "callbackIntervalMean": 0.010019157565786366,
+    "callbackIntervalVariance": 2.2128411673043143e-7
+   }
+  },
+  {
+   "t": 1792446478449,
+   "lag": 0.4008204999998597,
+   "geheugen": 2152448,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 144,
+   "klok": 125.70965170767158,
+   "js": 2152448,
+   "rt": {
+    "currentTime": 542.5093333333333,
+    "renderCapacity": 0.23691047162270185,
+    "callbackIntervalMean": 0.010039984712932382,
+    "callbackIntervalVariance": 0.0000013950716976556142
+   }
+  },
+  {
+   "t": 1792446488502,
+   "lag": 0.4008256666669112,
+   "geheugen": 2152120,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 148,
+   "klok": 125.70965170767158,
+   "js": 2152120,
+   "rt": {
+    "currentTime": 552.5706666666666,
+    "renderCapacity": 0.10379441879140734,
+    "callbackIntervalMean": 0.010019557355689514,
+    "callbackIntervalVariance": 1.6967706845551248e-7
+   }
+  },
+  {
+   "t": 1792446498541,
+   "lag": 0.40082966666656006,
+   "geheugen": 2150888,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 150,
+   "klok": 125.70965170767158,
+   "js": 2150888,
+   "rt": {
+    "currentTime": 562.6,
+    "renderCapacity": 0.13273542600896862,
+    "callbackIntervalMean": 0.010020111454550422,
+    "callbackIntervalVariance": 3.195138557044738e-8
+   }
+  },
+  {
+   "t": 1792446508582,
+   "lag": 0.4108415000002523,
+   "geheugen": 2153796,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 153,
+   "klok": 121.09148937836291,
+   "js": 2153796,
+   "rt": {
+    "currentTime": 572.632,
+    "renderCapacity": 0.21259526674689128,
+    "callbackIntervalMean": 0.010026242565415473,
+    "callbackIntervalVariance": 5.9434697380519e-7
+   }
+  },
+  {
+   "t": 1792446518614,
+   "lag": 0.4108393333334206,
+   "geheugen": 2151472,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 156,
+   "klok": 121.09148937836291,
+   "js": 2151472,
+   "rt": {
+    "currentTime": 582.672,
+    "renderCapacity": 0.10911987256073276,
+    "callbackIntervalMean": 0.010018958913827753,
+    "callbackIntervalVariance": 6.474479558303365e-7
+   }
+  },
+  {
+   "t": 1792446528651,
+   "lag": 0.410844333333408,
+   "geheugen": 2152360,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 159,
+   "klok": 127.73054567258806,
+   "js": 2152360,
+   "rt": {
+    "currentTime": 592.704,
+    "renderCapacity": 0.10940940940940941,
+    "callbackIntervalMean": 0.010020012207296891,
+    "callbackIntervalVariance": 1.2803986704246958e-8
+   }
+  },
+  {
+   "t": 1792446538694,
+   "lag": 0.4108523333331604,
+   "geheugen": 2154564,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 163,
+   "klok": 127.73054567258806,
+   "js": 2154564,
+   "rt": {
+    "currentTime": 602.744,
+    "renderCapacity": 0.06783719074221868,
+    "callbackIntervalMean": 0.010019696068691903,
+    "callbackIntervalVariance": 5.191052086032918e-7
+   }
+  },
+  {
+   "t": 1792446548726,
+   "lag": 0.4108201666665181,
+   "geheugen": 2066284,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 165,
+   "klok": 122.28224478289486,
+   "js": 2066284,
+   "rt": {
+    "currentTime": 612.776,
+    "renderCapacity": 0.1728220176059901,
+    "callbackIntervalMean": 0.010019446846328581,
+    "callbackIntervalVariance": 3.2504927277775765e-8
+   }
+  },
+  {
+   "t": 1792446558772,
+   "lag": 0.4108413333331882,
+   "geheugen": 2131844,
+   "waarom": "SecurityError: Failed to execute 'measureUserAgentSpecificMemory' on 'Performance': performance.measureUserAgentSpecificMemory is not available. (crossOriginIsolated true)",
+   "acties": 168,
+   "klok": 122.28224478289486,
+   "js": 2131844,
+   "rt": {
+    "currentTime": 622.8266666666667,
+    "renderCapacity": 0.10398874711142368,
+    "callbackIntervalMean": 0.010020014810441975,
+    "callbackIntervalVariance": 9.394900792435321e-9
+   }
+  }
+ ]
+}
