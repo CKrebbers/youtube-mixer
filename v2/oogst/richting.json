@@ -1,0 +1,2068 @@
+{
+  "onderwerp": "richting",
+  "samenvatting": "Clay wil één instrument waarin dj'en, produceren, audio programmeren en het systeem zelf instellen samenvallen, met beeld en controllers als gelijkwaardige dragers, als draagbare set (laptop, iPad, iPhone, controllers, koptelefoon, speaker) die overal kan spelen en uitzenden; de crossover is de kern, geen optelsom (VISIE, 10 okt). v1 heeft in ruim drie weken (490 commits sinds 25 sep, 66.700 regels in src/) bewezen dat de lokale cache plus Web Audio en de drie regels (engine zonder MIDI/DOM, alles 0..1, positie van ctx.currentTime) een stabiele kern geven waar acht tracks, streamen, keylock, stems, secties, instrumenten, patronen, auto-DJ, beeld en een werkruimte op passen, met 137 testbestanden en 11.778 checks groen op een schone Mac. Wat Clay echt deed staat in 27 handelingenlogs (30 sep–10 okt, 62.282 handelingen): vooral faders, filters, effectknoppen, sends en beeld; sync, patronen en instrumenten nauwelijks. v1 heeft nooit bewezen dat een hele avond op de echte hardware werkt: de speellijst van 325 punten heeft 0 vinkjes, of proefavond 1 doorging is niet uit de bestanden op te maken (HA1), en de hub-lease, de Maschine, de Scarlett met koptelefoon, de iPad/iPhone, de beamerlatentie, de M1-totaalmeting en het uitzenden zijn nooit op de apparaten geproefd. Het grootste deel van de geluidskeuzes (33 sjablonen, glides, isolator, loudnorm) is gemeten maar niet beluisterd. De les voor v2: de bouwsnelheid van agenten liep steeds voor op de proef, en vroege keuzes (twee decks, de APC-indeling, het beatgrid, waar beeld en controllers wonen) zijn telkens later omgegooid; v2 moet klein beginnen bij wat Clay aantoonbaar gebruikt en elke stap eerst op de hardware laten slagen.",
+  "tijdlijn": [
+    {
+      "datum": "2026-09-22",
+      "wat": "(uit ROADMAP, vóór de git-geschiedenis) acht tracks i.p.v. twee decks; onderzoek keylock, streamen, beatdetectie, racks; fase 1, 2 en 0 klaar"
+    },
+    {
+      "datum": "2026-09-25",
+      "wat": "eerste commit in deze geschiedenis: ~20 sporen parallel (toonsoort, mapping als verschil, library, ingest-wachtrij, beamer mengt zelf, handelingenlog, audiopad zonder afval, transport, APC voorstel A), integratie r1–r5"
+    },
+    {
+      "datum": "2026-10-02",
+      "wat": "werk van 26–30 sep gecommit (klankschaal, auto-DJ, planvenster); laptopmaat 1440×790, Controlekamer, Tailscale, ONTBREEKT.md, de kleine veilige punten A4–A9"
+    },
+    {
+      "datum": "2026-10-03",
+      "wat": "stems (Demucs bij de ingest) in drie sporen; AV-app-hub-koppeling als lease-app"
+    },
+    {
+      "datum": "2026-10-05",
+      "wat": "STUDIO: VARVE groeit uit; koptelefoon, master-limiter, effecten, stemkanalen, instrumenten op een track, patronen, Xboard/Maschine via de hub; keylock na Clay's luistertest"
+    },
+    {
+      "datum": "2026-10-06",
+      "wat": "secties gebouwd en in één dag verweven (toetsenbord, sampler, plan, log, auto-DJ, beeld, hub); beeld: VARVE stuurt de Stroommachine"
+    },
+    {
+      "datum": "2026-10-07",
+      "wat": "Maschine-pagina's en Maschine-kaart; integratie naar main (PR #5, #7); 38 worktrees en alle takken opgeruimd"
+    },
+    {
+      "datum": "2026-10-09",
+      "wat": "APC-kaart: negen grid-modi; speellijst begint met een kern van ~45 min"
+    },
+    {
+      "datum": "2026-10-10",
+      "wat": "docs/VISIE.md (Clay's beeld); zeven visie-sporen als estafette (uitzenden, companion, standen, avondpakket, crossover, beeld op één machine, produceren-uit) en de muziekkaart"
+    },
+    {
+      "datum": "2026-10-11",
+      "wat": "VI1 uitgangen-zin, VI2 media buiten iCloud, backup-gereedschap, instellingen op de server, handenkaart; acht '[na de proefavond]'-PR's in studio/integratie"
+    },
+    {
+      "datum": "2026-10-13",
+      "wat": "lag van de controllers gemeten en gerepareerd, beatgrid-benchmark, WERKRUIMTE.md-ontwerp, VARVE.app start de hub"
+    },
+    {
+      "datum": "2026-10-14",
+      "wat": "WINST-snelle winst (opnamelek, videoknip, draadpool, vertrek, testpool); werkruimte S0–S11 gebouwd"
+    },
+    {
+      "datum": "2026-10-15",
+      "wat": "werkruimte naar main (#42), architectuurronde (#45), blok AR; de suite voor het eerst groen in CI op macos-14"
+    },
+    {
+      "datum": "2026-10-16",
+      "wat": "(in de commits van 15 okt) rest van blok AR, herstartlus met hang-wachter, één Controlekamer met tegel Versie"
+    },
+    {
+      "datum": "2026-10-17",
+      "wat": "droogloop zonder Mac: 66 headless proeven, 19 niet groen door verouderde proeven, DL1"
+    },
+    {
+      "datum": "2026-10-19",
+      "wat": "PR #54 (paden met spaties); start van de oogst voor v2"
+    }
+  ],
+  "kaartjes": [
+    {
+      "id": "richting-001",
+      "titel": "Het geheel: dj'en, produceren, programmeren en zelf instellen in één",
+      "soort": "besluit",
+      "wat": "Varve is één programma dat kan dj'en, muziek produceren en audio programmeren, waarbij het bouwen aan het systeem zelf deel van het instrument is, in combinatie met visuals en controllers. Vier pijlers (dj, produceren, programmeren, instellen) en twee dragers (beeld, controllers).",
+      "waarom": "Clay, 10 okt, letterlijk: “Een programma dat dus kan dj'en, maar ook produceren en muziek en audio kan programmeren. Juist die crossover geeft mij precies de tool … hoe ik die het liefst heb.” Alternatief (los DJ-programma plus losse studio-apps) is daarmee afgewezen.",
+      "bron": [
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§1, §2"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Dit is het toetsbeeld voor v2; de herbouw verandert de structuur, niet het doel."
+    },
+    {
+      "id": "richting-002",
+      "titel": "De crossover is de kern: een track draagt een nummer óf een instrument",
+      "soort": "besluit",
+      "wat": "Eén nummer moet tegelijk gemixt, geknipt, als patroon geprogrammeerd en bespeeld kunnen worden, met dezelfde strip, fader, sends en cue. Een feature die één pijler dient en een andere in de weg zit is een ontwerpfout.",
+      "waarom": "Clay, 5 okt (STUDIO ST7): een instrument woont op een van de acht tracks; VISIE §2 (10 okt): “De crossover is de kern, niet een optelsom.”",
+      "bron": [
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§0 ST7"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js",
+        "src/engine/instrumenten/"
+      ],
+      "pijler": "produceren",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het datamodel van v2 (track = strip + bron) moet dit vanaf het begin dragen in plaats van het later erbij te zetten."
+    },
+    {
+      "id": "richting-003",
+      "titel": "Het doel is de draagbare set die overal kan spelen en uitzenden",
+      "soort": "besluit",
+      "wat": "Laptop, iPad, iPhone, controllers, koptelefoon en speaker meenemen en vanaf daar met audio en beeld spelen en streamen. Elk idee wordt getoetst op: maakt het de set draagbaarder of zwaarder (tweede machine, cloud, driver weegt zwaar).",
+      "waarom": "Clay, 10 okt: “Eigenlijk is het idee dat ik ergens heen kan met mijn laptop, iPad, iPhone, controllers, headphone en speaker, en vanaf daar zou kunnen streamen … dit is de kern, dit is de basis.”",
+      "bron": [
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§1, §3, §5.2"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Draagbaarheid is een harde eis op architectuur (één machine, geen cloud) en moet in v2 vanaf dag één gelden."
+    },
+    {
+      "id": "richting-004",
+      "titel": "Vier toetsvragen bij elk idee (VISIE §5)",
+      "soort": "regel",
+      "wat": "1) Welke pijler dient het, zonder de andere te breken; 2) draagbaarder of zwaarder; 3) kan Clay het zelf instellen zonder code (data, geen code); 4) is het op de hardware geproefd.",
+      "waarom": "Vastgelegd 10 okt omdat er sinds 23 sep ruim 500 commits waren zonder proef op de APC.",
+      "bron": [
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§5"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De vierde vraag is in v1 het vaakst overgeslagen; in v2 moet hij een poort zijn, geen wens."
+    },
+    {
+      "id": "richting-005",
+      "titel": "Lokale cache, persoonlijk instrument, geen distributie; een uitgang mag",
+      "soort": "besluit",
+      "wat": "yt-dlp + ffmpeg halen media binnen, alles draait op Web Audio en WebGL. Geen deelfuncties, geen publieke bron, geen upload van de cache. Een uitgang (bestand, poort op 127.0.0.1, export naar eigen schijf) en eigen opnames naar de eigen library mogen.",
+      "waarom": "De IFrame Player geeft geen toegang tot de audiobuffer (geen EQ, waveform, beatgrid, keylock). VI1 (11 okt) verduidelijkte op Clay's beeld van uitzenden: uitgang is geen distributie.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Gekozen aanpak"
+        },
+        {
+          "pad": "docs/ONTBREEKT.md",
+          "waar": "D1 verduidelijkt"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§4"
+        }
+      ],
+      "code": [
+        "server/ingest.js",
+        "server/uitzend.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De grondkeuze is in v1 nooit gewankeld; alleen de grens naar buiten (U1b) is nog open."
+    },
+    {
+      "id": "richting-006",
+      "titel": "Acht tracks, één kolom = één track, racks bij het nummer, mapping naar een plek",
+      "soort": "besluit",
+      "wat": "Elke APC-fader is een track (acht plus master); de crossfader wordt minder belangrijk, de faders zijn de mix. Effect-racks horen bij een link, niet bij een fader. Een control wijst naar een plek (track.N.fx.knob.K), het rack bepaalt wat die plek doet. Let op: de engine kent intern nog decks A/B achter een vertaallaag (TRACKS); v2 hoeft die niet.",
+      "waarom": "Clay scherpte het einddoel aan op 22 sep (ROADMAP “Waar dit heen gaat”): “Acht tracks, geen twee decks.” De plek-keuze maakt dat nieuwe racks nooit opnieuw gekoppeld hoeven.",
+      "bron": [
+        {
+          "pad": "ROADMAP.md",
+          "waar": "Waar dit heen gaat (22 sep)"
+        }
+      ],
+      "code": [
+        "src/control/actions.js",
+        "src/engine/rack.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Alle drie bleken goed; v2 moet ze vanaf het begin hebben."
+    },
+    {
+      "id": "richting-007",
+      "titel": "Eén afspeelmotor voor alles wat klinkt",
+      "soort": "besluit",
+      "wat": "Losgesleepte bestanden en de demotrack gaan ook door de StreamBron (geheugen als 16-bit WAV met een eigen haal-functie). Er is geen tweede motor per stem of per bron.",
+      "waarom": "Clay, 23 sep (D4: “Losse bestanden ook via de streamkern, geen tik bij loops, één afspeelmotor”).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen, ÉÉN afspeelmotor"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "D4"
+        }
+      ],
+      "code": [
+        "src/engine/bron.js",
+        "src/engine/stream-kern.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Keylock en stems pasten later in dezelfde worklet zonder het deck te veranderen; dat bewijst de keuze."
+    },
+    {
+      "id": "richting-008",
+      "titel": "Sampler-pads en hotcues horen bij het nummer en lopen mee met de maat",
+      "soort": "besluit",
+      "wat": "Pads bewaren alleen waar het stuk zit (van/tot, tellen, bpm) en knippen opnieuw van schijf; hotcues staan per nummer. Spelende pads volgen tempo en tel van de maatgever.",
+      "waarom": "Clay, 23 sep (D1 samples bewaren bij een nummer, D2 pads die meelopen met de maat).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Sampler-pads horen bij het NUMMER"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "D1, D2"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js",
+        "src/ui/hotcue-opslag.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Past bij “alles hoort bij het nummer” (grid, toon, secties, racks); in v2 één regel voor alle nummer-data."
+    },
+    {
+      "id": "richting-009",
+      "titel": "Klankkeuzes 23 sep: sends vóór de crossfader, echo op de maat, drukvariant",
+      "soort": "besluit",
+      "wat": "Sends zijn getapt na de fader en vóór de crossfader (echo-out werkt ook met de crossfader). De delay kan op de maat “met een schakelaar”. Elke knopplek heeft een drukvariant (vol open, loslaten = terug). Pitchbereik kiesbaar, standaard ±16%; een nieuw nummer begint op 0% pitch.",
+      "waarom": "Clay 23 sep (C1, C2, C5, C6, D3), letterlijk “met een schakelaar” voor de echo.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Sends; De delay kan op de maat; DRUKvariant"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "C1–C6, D3"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js",
+        "src/engine/fx.js",
+        "src/engine/deck.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Expliciet door Clay gekozen; niets in de logs spreekt het tegen (send.a is de vijfde meest gebruikte actie)."
+    },
+    {
+      "id": "richting-010",
+      "titel": "Controller eerst: APC in 0x42, filter boven elke kolom, alle lampjes van ons",
+      "soort": "besluit",
+      "wat": "De APC draait in Alternate Ableton Live (0x42): alles momentary, alle LED's en ringen gestuurd door Varve, device knobs niet gebankt. De kern (filter boven, fader onder, play/sync/A-B, cue) zit nooit in een mapje; voorstel A (25 sep) zette beatjump, loops, quantize en rem rechts.",
+      "waarom": "Clay koos 0x42 op 23 sep (B1); de indeling herzien na het APC-onderzoek (B3: “filter boven elke kolom (Clay)”); voorstel A Clay 25 sep.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "B1, B3"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Voorstel A"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De APC draait in mode 0x42"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js",
+        "mappings/apc40mk2.json"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De protocolkeuze en de onveranderlijke kern zijn goed; de rest van de indeling is in v1 vier keer verschoven (richting-112)."
+    },
+    {
+      "id": "richting-011",
+      "titel": "Stems vooraf rekenen, live bedienen; kiesbaar per nummer",
+      "soort": "besluit",
+      "wat": "“Live” stems betekent: Demucs bij de ingest of op verzoek, `stems.wav` naast audio.wav, per stem bedienen vóór de EQ. Twee of vier stems, per nummer te kiezen.",
+      "waarom": "Clay vroeg 24 sep om een “live stem splitter”; na de proef: H1 (klinken goed genoeg) ja, H2 “kiesbaar per nummer” (advies was twee). Echt realtime splitsen voor acht decks is afgeraden.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "Stems splitsen — proef (24 sep)"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "H1, H2"
+        }
+      ],
+      "code": [
+        "server/stems.js",
+        "server/stems/splits.py"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Klopt met DJ-software en met de M1-meting (~2× realtime); in v2 hetzelfde model."
+    },
+    {
+      "id": "richting-012",
+      "titel": "Keylock met Signalsmith na Clay's luistertest",
+      "soort": "besluit",
+      "wat": "Keylock en toon verschuiven met Signalsmith Stretch (MIT) binnen de streamworklet; niet SoundTouch (warbelt op aangehouden polyfone klanken, precies dit repertoire), niet Rubber Band (GPL).",
+      "waarom": "Clay, 5 okt na de luistertest: “klinkt goed” (A3).",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "A3"
+        },
+        {
+          "pad": "ROADMAP.md",
+          "waar": "Keylock — Signalsmith Stretch"
+        }
+      ],
+      "code": [
+        "src/engine/stream-lezer.js",
+        "src/engine/vendor/"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Op het gehoor gekozen; op de APC (I4) nog niet nagelopen."
+    },
+    {
+      "id": "richting-013",
+      "titel": "Auto-DJ als basis: samenwerking tussen Clay, het programma en Claude",
+      "soort": "besluit",
+      "wat": "De app kiest en mixt zelf en klinkt altijd; Clay stuurt bij en wat hij aanraakt is van hem; Claude levert alleen het setplan, nooit iets in het audiopad. Bewakers (grid, tempo, toon) gaan boven het plan.",
+      "waarom": "Clay, 30 sep: “ik wil een soort auto dj modus bouwen, en dit zien als de basis voor het programma; juist de samenwerking tussen jou en het programma maakt het interessant … de app altijd goed laten klinken.” Daarna: “laten we het gewoon gaan proberen.”",
+      "bron": [
+        {
+          "pad": "docs/AUTO-DJ.md",
+          "waar": "kop, §1"
+        }
+      ],
+      "code": [
+        "src/auto/planner.js",
+        "src/auto/automaat.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Clay noemt het de basis; de rolverdeling (Claude buiten het audiopad) is een goede grens. Wel: zie het incident van 6 okt (richting-072)."
+    },
+    {
+      "id": "richting-014",
+      "titel": "Een set klaarzetten en er live bij mixen; sets opslaan en terugladen",
+      "soort": "besluit",
+      "wat": "Het planvenster toont de hele programmering die je inricht en live volgt (30 sep). Een set wordt in een paar handelingen klaargezet; de automaat speelt op zijn eigen tracks terwijl Clay op de zijne bijmixt (14 okt).",
+      "waarom": "Clay 30 sep: “een nieuwe pagina in de app waar je de totale huidige programmering ziet … en dan live mee spelen”; koos “fase 1, apart venster”. Clay 14 okt: “makkelijk en snel een hele set klaar kunnen zetten waar je dan zelf nog onderdelen live moet bij kunnen mixen” en “Voeg ook toe dat ik sets kan opslaan en terugladen.”",
+      "bron": [
+        {
+          "pad": "docs/PLAN.md",
+          "waar": "kop"
+        },
+        {
+          "pad": "docs/PLAN-SET.md",
+          "waar": "kop, §1"
+        }
+      ],
+      "code": [
+        "src/plan/",
+        "src/sets/model.js",
+        "src/ui/aanhakers/set.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "De wens blijft; in v1 is het in lagen bovenop de auto-DJ gegroeid (venster, secties, S9) en nooit met echte nummers geproefd (S9-8). In v2 één model voor plan, set en automaat."
+    },
+    {
+      "id": "richting-015",
+      "titel": "STUDIO: “VARVE groeit uit” in plaats van een nieuw programma",
+      "soort": "besluit",
+      "wat": "Op 5 okt koos Clay om Varve DJ uit te breiden tot muziekprogramma (stems als kanalen, effecten overal, synths spelen en programmeren, alles voorbeluisteren) met vier controllers, met hergebruik van alles wat er was.",
+      "waarom": "Clay, 5 okt: “een soort dj programma waar je stems kunt mixen en effecten kunt toepassen op het geheel maar ook op aparte stems … En er zitten synthesizers in … En je kunt alle onderdelen ook voorbeluisteren met de koptelefoon.” ST1: VARVE groeit uit; ROADMAP 27 “grow Varve DJ”.",
+      "bron": [
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§0"
+        },
+        {
+          "pad": "ROADMAP.md",
+          "waar": "punt 27"
+        }
+      ],
+      "code": [],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "De wens houden, de vorm niet: v2 is het moment om de uitgegroeide structuur opnieuw te ordenen zonder de kennis te verliezen."
+    },
+    {
+      "id": "richting-017",
+      "titel": "Secties: nummers bespelen “precies zoals ik wil”",
+      "soort": "besluit",
+      "wat": "Een nummer in secties (intro, opbouw, drop, break, outro) die je op de maat lanceert en loopt: naast stems (welk instrument) en tracks (welk nummer) de derde as om een nummer te herschikken (welk stuk).",
+      "waarom": "Clay, 6 okt (ROADMAP 28): “nummers bespelen precies zoals ik wil”. Geen DJ-app doet dit per nummer zoals clips in Ableton's Session view.",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "kop"
+        },
+        {
+          "pad": "ROADMAP.md",
+          "waar": "punt 28"
+        }
+      ],
+      "code": [
+        "src/engine/secties.js",
+        "server/secties.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Kern van de crossover-belofte; maar alleen gemeten op synthetisch materiaal (SE2) en afhankelijk van een zeker grid, wat in Clay's library zeldzaam is (richting-074)."
+    },
+    {
+      "id": "richting-018",
+      "titel": "Beeld: Varve stuurt de Stroommachine; Mac + APC is genoeg",
+      "soort": "besluit",
+      "wat": "Varve stuurt klok, kenmerken, track per crossfaderkant en crossfader naar de Stroommachine via een relay. Ontwerpregel: zonder pc, adres of relay verandert er niets in Varve.",
+      "waarom": "Clay, 6 okt (ROADMAP 29): “Varve DJ stuurt de Stroommachine aan.”",
+      "bron": [
+        {
+          "pad": "docs/BEELD.md",
+          "waar": "kop"
+        },
+        {
+          "pad": "ROADMAP.md",
+          "waar": "punt 29"
+        }
+      ],
+      "code": [
+        "src/koppel/"
+      ],
+      "pijler": "beeld",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "De koppeling als losse laag die de engine alleen leest is goed; waar het beeld rekent is open (richting-033)."
+    },
+    {
+      "id": "richting-019",
+      "titel": "Werkruimte: “echt complete vrijheid”, maar Clay richt zelf in",
+      "soort": "besluit",
+      "wat": "Clay vroeg 13 okt zes dingen: knoppen logischer over twee controllers, meerdere schermen met de iPad, precisie, alle tracks tegelijk zien, meer effecten met combinatieknoppen, en vrijheid over UI en knoppen per onderdeel van de mix. Afspraak 14 okt: agenten bouwen het mechaniek als data, de indeling maakt Clay zelf; hooguit één voorbeeld per soort.",
+      "waarom": "Clay, 13 okt (WERKRUIMTE.md kop); afspraak met Clay 14 okt (VRAGEN, HANDOFF 15 okt).",
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "kop, A1"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "15 OKT: DE WERKRUIMTE IS AF"
+        }
+      ],
+      "code": [
+        "src/werk/",
+        "src/paneel/"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Het principe “mechaniek als data, Clay richt in” is pijler 4; maar acht delen, panelen, stukken, houd-mapjes en superknoppen zijn nooit gebruikt (zie richting-038)."
+    },
+    {
+      "id": "richting-020",
+      "titel": "iPad en iPhone mogen bedienen, per onderdeel anders, standaard uit",
+      "soort": "besluit",
+      "wat": "De iPad bedient de mixer “per onderdeel van een mix anders”, de iPhone krijgt een xy-pad. Standaard uit, aanzetten in de Controlekamer, koppelcode, alleen via Tailscale; tijdkritische acties en opnemen, log, mappings, library en laden nooit.",
+      "waarom": "Clay, 14 okt, W1: ja.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "W1"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Werkruimte S8"
+        }
+      ],
+      "code": [
+        "src/paneel/uitvoer.js",
+        "server/paneel.js",
+        "src/werk/model.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Duidelijke keuze met veilige grenzen; de vorm (twee systemen naast elkaar) is open in richting-035."
+    },
+    {
+      "id": "richting-021",
+      "titel": "Overal openen via Tailscale, nooit een openbare server",
+      "soort": "besluit",
+      "wat": "De server blijft op 127.0.0.1; `tailscale serve` zet HTTPS en `VARVE_HOSTS` laat de ts.net-naam door. Nooit Funnel. Op de Mac zelf altijd localhost (de Web Lock beschermt niet tussen twee oorsprongen).",
+      "waarom": "Clay wilde Varve 2 okt “overal altijd” kunnen openen; na uitleg (distributie, geen login, yt-dlp geblokkeerd op datacenters) koos hij Tailscale.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "2 OKT (avond): OVERAL OPENEN VIA TAILSCALE"
+        },
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": ""
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Past bij “persoonlijk instrument”; nooit met een echte Tailscale getest (richting-064)."
+    },
+    {
+      "id": "richting-022",
+      "titel": "Clay koos breedte via agenten: “zoveel mogelijk sub agents”, “bouw alle andere”",
+      "soort": "besluit",
+      "wat": "Clay vroeg herhaaldelijk om zoveel mogelijk tegelijk te laten bouwen, ook tegen het advies “zo laten” in. Dat leverde de snelheid van v1, en ook het gat met de proef.",
+      "waarom": "Clay 24 sep avond: “voer met zoveel mogelijk sub agents zoveel mogelijk taken uit”; 16 okt: “bouw AR1, 2, 4, 8, 12 en alle andere die nog in het plan staan” (AR3, AR6, AR10, AR13 tegen het advies in); 17 okt: “ga je verder met wat je nu zelf kunt uitvoeren”.",
+      "bron": [
+        {
+          "pad": "ROADMAP.md",
+          "waar": "Afwijking op 25 sep"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "16 OKT: DE REST VAN BLOK AR; 17 OKT"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Voor v2 moet Clay kiezen of breedte weer mag vóór de proef, of dat elke golf pas start na een geslaagde avond (richting-046)."
+    },
+    {
+      "id": "richting-023",
+      "titel": "Controllers zonder lag en een beter beatgrid gaan voor alles",
+      "soort": "besluit",
+      "wat": "Na echt spelen meldde Clay dat het “op veel punten erg laggy” was en dat het beatgrid beter moest; hij vroeg bewijs. Daarop volgden de nulmetingen en reparaties van 14 okt.",
+      "waarom": "Clay, 13/14 okt: “Alles eerst is het belangrijk dat het op de juiste manier met de controllers werkt. Ik merkte dat het op veel punten erg laggy was. Verder moet de beatgrid ook beter. Probeer hem volledig af te maken en geef opties voor een volgende versie. Laat me het bewijs zien.”",
+      "bron": [
+        {
+          "pad": "docs/verslagen/2026-10-14/beatgrid-bediening.md",
+          "waar": "kop"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-14/controller-invoer.md",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "src/control/",
+        "src/ui/renderloop.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De enige prioriteit die Clay uit eigen speelervaring noemde; in v2 hoort latentie een gemeten eis van dag één te zijn."
+    },
+    {
+      "id": "richting-024",
+      "titel": "Eén Controlekamer en zien dat je de juiste versie draait",
+      "soort": "besluit",
+      "wat": "Het artifact “Varve Controlekamer” en `/controle` zijn samengevoegd; de tegel Versie zegt of de server draait wat op schijf staat, wat main is en wat op GitHub staat.",
+      "waarom": "Clay, 16 okt: “waarom zijn er twee controle kamers? laten we die zo goed mogelijk samenvoegen” en “hoe kan ik snel en makkelijk zien dat ik in de juist laatste versie zit?”",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "16 OKT (avond): ÉÉN CONTROLEKAMER"
+        }
+      ],
+      "code": [
+        "src/controle/versie-tegel.js",
+        "server/versie.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Clay raakte de weg kwijt tussen kopieën en versies; v2 moet één plek en één zichtbare versie hebben."
+    },
+    {
+      "id": "richting-025",
+      "titel": "Het handelingenlog staat altijd aan",
+      "soort": "besluit",
+      "wat": "Elke action op de bus gaat met zijn tijd op de audioklok naar een log naast de opname; het begint vanzelf zodra de AudioContext loopt.",
+      "waarom": "Clay 26 sep (J18): vinkje “log altijd aan”. Het log is sindsdien de enige harde bron van wat Clay echt deed (richting-062); op 10 okt stond het kennelijk uit, en daardoor is proefavond 1 niet na te gaan.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "HANDELINGENLOG, ALTIJD AAN"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§0 punt 4, §4b.0"
+        }
+      ],
+      "code": [
+        "src/control/handelingen.js",
+        "src/ui/logboek.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "In v2 standaard aan zonder vinkje (en met de bron: MIDI, muis, iPad, automaat), want zonder log weet niemand wat er gebruikt wordt."
+    },
+    {
+      "id": "richting-030",
+      "titel": "Open: eerst een echte avond op v1, of meteen v2 bouwen?",
+      "soort": "open",
+      "wat": "Er is geen bestand dat een DJ-proef op de APC laat zien (HA1/VI13). Kiezen: (a) eerst de kern van avond 1 (~45 min, APC + koptelefoon) op v1 spelen met het log aan, en die uitkomst als eis voor v2 gebruiken; (b) v2 bouwen en de eerste proefavond op v2 doen; (c) v1 en v2 naast elkaar, v1 voor avonden tot v2 de kern haalt.",
+      "waarom": "Speellijst 325 punten met 0 vinkjes; het enige log van 10 okt is 7 minuten beeld zonder muziek; VISIE §5.4.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "HA1"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§4b.0"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Bepaalt of v2 op gemeten gebruik of op aannames wordt ontworpen."
+    },
+    {
+      "id": "richting-031",
+      "titel": "Open: hoe gaat de set naar buiten (uitzenden)?",
+      "soort": "open",
+      "wat": "Gebouwd is alleen stap 1 (`server/uitzend.js` naar een lokaal doel), niets roept hem aan. Kiezen: (a) Varve → lokaal → OBS → dienst (OBS doet de buitenkant); (b) in-app naar een dienst die Clay zelf in `doelen.json` zet met een veld `rechten` (U1b); (c) eerst alleen opnemen en achteraf publiceren. Met beeld gaan YouTube-clips nooit naar buiten, alleen eigen vormen (I78).",
+      "waarom": "Clay's beeld noemt streamen als kern (VISIE §3), maar het raakt rechten (Twitch DJ Program, Mixcloud-regels, Content ID) en U1a/U1b/U2/U3 zijn open.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "U1a–U3"
+        },
+        {
+          "pad": "docs/UITZENDEN.md",
+          "waar": "kop"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§4"
+        }
+      ],
+      "code": [
+        "server/uitzend.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Het enige deel van de draagbare set waar v1 bewust niets voor de gebruiker heeft."
+    },
+    {
+      "id": "richting-032",
+      "titel": "Open: hoe verhoudt v2 zich tot av-kern en de andere projecten?",
+      "soort": "open",
+      "wat": "Afspraak 24 sep: tot 25 okt gaat av-kern voor; feitelijk is av-kern sinds ~7 okt geparkeerd (VI14: A volledig plan, B “lelijk mag” met 5 scènes, C parkeren). Daarnaast: waar woont de modale klankmodule (VI15: Varve bron, av-kern vendort) en de vormen (Varve bron). Kiezen of v2 de gedeelde bron wordt voor vormen en klankmodules, of dat av-kern zelfstandig blijft. De afspraak van 24 sep (tot 25 okt gaat av-kern voor) is feitelijk niet gehouden.",
+      "waarom": "H5 en VI14/VI15 open; “0 uur hardwaretijd voor av-kern sinds 23 sep”.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "H5, H6"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§5 VI14, VI15"
+        },
+        {
+          "pad": "ROADMAP.md",
+          "waar": "DE TAKENLIJST, AV-kern"
+        }
+      ],
+      "code": [
+        "src/vormen/",
+        "src/engine/klankschaal-kern.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Bepaalt welke delen van v2 als losse, herbruikbare bibliotheek moeten worden ontworpen."
+    },
+    {
+      "id": "richting-033",
+      "titel": "Open: waar rekent het beeld onderweg?",
+      "soort": "open",
+      "wat": "Nu: Stroommachine op de Omarchy-pc met beamer, of “zaalbeeld” (vormen zonder clips) op de Mac. Kiezen: (a) alles op de Mac (Stroommachine in een eigen Chrome-bundel, BE11: p50 ≥ 55 fps op 1080p Licht); (b) de pc blijft de beeldmachine als hij er is; (c) beeld op de iPad. VISIE: zonder tweede machine geen beeld is een gat.",
+      "waarom": "BE11–BE14 en VI7/VI12 open; gemeten: Stroommachine op de Mac in Normaal/Auto op 1080p zit op de rand.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "BE11–BE14"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§3 tabel, Beeld onderweg"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§6"
+        }
+      ],
+      "code": [
+        "src/koppel/beeld.js",
+        "tools/beeld-lokaal.sh"
+      ],
+      "pijler": "beeld",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Draagbaarheid (één machine) botst met beeldkwaliteit; Clay moet de weging maken."
+    },
+    {
+      "id": "richting-034",
+      "titel": "Open: horen de YouTube-clips per deck nog bij de kern?",
+      "soort": "open",
+      "wat": "v1 mengt per track de video met WebGL, met een los beamervenster dat zelf mengt. Maar clips mogen nooit mee naar buiten, het zaalbeeld zet ze uit, en de Stroommachine en vormen nemen de beeldrol over. Kiezen: (a) clips als vaste laag in v2; (b) clips als optie naast vormen/Stroommachine; (c) clips weg, beeld = eigen generatief beeld.",
+      "waarom": "video.clips (10 okt) en U/I78; in de logs zijn video/vormen 10.619 handelingen, waarvan de meeste vormen en video-effecten, niet clip-specifiek.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "U, BE12"
+        },
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "top-40"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "ZAALBEELD"
+        }
+      ],
+      "code": [
+        "src/video/"
+      ],
+      "pijler": "beeld",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "De videolaag kost veel (zes verbindingen per host, decoderen, inloop) en is in v1 vaak de oorzaak van gedoe."
+    },
+    {
+      "id": "richting-035",
+      "titel": "Open: één rol voor iPad en iPhone, of twee systemen?",
+      "soort": "open",
+      "wat": "v1 heeft er twee naast elkaar: de companion (`/companion`: kaart, wenslijst, nu speelt, geen bediening) en de paneelpagina (`werk.html`: panelen, xy-pad, bedienen na koppelen). Kiezen: (a) één pagina met rollen per apparaat; (b) companion voor tussen-avonden, paneel voor tijdens; (c) alleen bedienen.",
+      "waarom": "Companion (10 okt) en S7/S8 (14 okt) zijn los van elkaar ontworpen; geen van beide is op een echt apparaat geproefd (W10, W12).",
+      "bron": [
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "kop"
+        },
+        {
+          "pad": "docs/werkruimte/S8.md",
+          "waar": ""
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "W5–W13"
+        }
+      ],
+      "code": [
+        "src/companion/",
+        "src/paneel/"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Twee ingangen voor hetzelfde apparaat is precies het soort dubbeling dat Clay bij de Controlekamer al opviel."
+    },
+    {
+      "id": "richting-036",
+      "titel": "Open: de hub als enige eigenaar van de controllers, of Varve direct?",
+      "soort": "open",
+      "wat": "v1 kent twee wegen: Varve praat zelf Web MIDI met de APC (Web Lock, wachtrij), of is lease-app van AV-app-hub (`?hub=`), en de Maschine kan alleen via de hub. Kiezen: (a) v2 alleen via de hub; (b) direct Web MIDI met de hub als optie; (c) per opstelling. Daarbij O2: Bank voor keylock of als hubtoets. Gevolg van twee wegen: VARVE.app startte sinds 13 okt altijd de hub, en op een avond zonder hub pakte die de APC terwijl de mixer hem ook had (AR21, 16 okt).",
+      "waarom": "AR21: VARVE.app startte altijd de hub, waardoor hub en mixer tegelijk de APC pakten; de hub-lease is nooit op de hardware geproefd.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "O1, O2, AR21"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "16 OKT (later)"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "AV-APP-HUB"
+        }
+      ],
+      "code": [
+        "src/control/hub.js",
+        "src/control/midi.js",
+        "src/ui/tabblad.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Twee paden voor dezelfde hardware gaven al een echt conflict; v2 moet één weg kiezen."
+    },
+    {
+      "id": "richting-037",
+      "titel": "Open: welke controllers gaan mee (kernset)?",
+      "soort": "open",
+      "wat": "Advies: K1 = APC alleen nu, K2 = APC + Maschine via de hub als doel; LPD8 alleen als av-kern in de set zit, Xboard49 thuis. Kiezen of v2 voor K1 ontworpen wordt en de Maschine pas daarna, of meteen voor “APC breed, Maschine diep”.",
+      "waarom": "HA3, HA6, HA7, VI17 open; de Maschine is nooit met de echte hardware op Varve getest (poort M, ijkproef).",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "HA3, HA6, HA7"
+        },
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "§3"
+        }
+      ],
+      "code": [
+        "mappings/",
+        "src/control/maschine.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Bepaalt de omvang van de eerste versie van v2."
+    },
+    {
+      "id": "richting-038",
+      "titel": "Open: de werkruimte als basis van v2, of een vaste indeling eerst?",
+      "soort": "open",
+      "wat": "v1 heeft acht delen op F1–F8, panelen per scherm, stukken, houd-mapjes, superknoppen, worpen en ✎ inrichten, alle als data; van elk staat hooguit één voorbeeld en er is geen eigen werkruimte van Clay bekend. Kiezen: (a) het werkruimtemodel als fundament van v2; (b) eerst één vaste indeling die werkt, inrichten later; (c) inrichten alleen voor mapping en racks.",
+      "waarom": "40 open W-vragen; de werkruimte is gebouwd op 14 okt en nooit geproefd (blokken E0–D in de speellijst).",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "W2–W40"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "15 OKT, Hoe je zelf begint"
+        }
+      ],
+      "code": [
+        "src/werk/",
+        "src/paneel/",
+        "src/control/lagen.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Pijler 4 vraagt het, maar de complexiteit kwam vóór enig gebruik; v2 moet kiezen hoeveel daarvan fundament is."
+    },
+    {
+      "id": "richting-039",
+      "titel": "Open: produceren (instrumenten, patronen) in de eerste v2 of later?",
+      "soort": "open",
+      "wat": "Gebouwd: Poly, FM, Drums, Schaal, klankschaal, patronen-sequencer, crossover, MIDI naar Logic. In 62.282 handelingen staat geen patroonactie in de top 40; instrumentknoppen 616, klankschaal ~860. Kiezen: (a) produceren hoort in de eerste versie omdat de crossover de kern is; (b) eerst de DJ-kern stevig, produceren als tweede golf op hetzelfde trackmodel.",
+      "waarom": "Telling uit de handelingenlogs (HANDEN.md); produceren-uit: “geen patroonactie in de top 40 van 56.743 handelingen”.",
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "Wat de handen doen"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§2.7"
+        }
+      ],
+      "code": [
+        "src/engine/patronen/",
+        "src/engine/instrumenten/"
+      ],
+      "pijler": "produceren",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "VISIE zegt crossover is de kern, het gebruik zegt DJ en beeld; alleen Clay kan dit wegen."
+    },
+    {
+      "id": "richting-040",
+      "titel": "Open: sync eenmalig of blijvend volgen (sync-lock)?",
+      "soort": "open",
+      "wat": "Sync zet het tempo nu één keer gelijk op de maatgever; wisselt die van tempo (een nieuw stuk in zijn tempokaart), dan loopt elke gesyncte track weg. Sync-lock is in elke lijst genoemd (ONTBREEKT A3, VERBETERINGEN ronde 3, WINST) en nooit gebouwd. Kiezen: (a) sync-lock als standaard in v2; (b) eenmalig zoals nu; (c) per track.",
+      "waarom": "WINST: winst groot, 3–4 dagen; de werkruimte zette hem in “volgende versie”. Sync zelf staat niet in de top 40 van wat Clay deed.",
+      "bron": [
+        {
+          "pad": "docs/ONTBREEKT.md",
+          "waar": "A3"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "Wat afviel"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Een fundamentele keuze over de klok die in v2 niet later moet worden ingebouwd."
+    },
+    {
+      "id": "richting-041",
+      "titel": "Open: herstel na herladen of crash als eis in v2",
+      "soort": "open",
+      "wat": "Na Cmd+R of een crash zijn alle decks leeg; alleen de vraag “Site verlaten?” is gebouwd (WINST 6 stap 1), het herstel zelf niet. Kiezen: (a) de stand elke ~5 s naar localStorage en “herstel de set van 21:43”; (b) de stand op de server; (c) herstel uit het handelingenlog.",
+      "waarom": "ONTBREEKT A5, WINST 6: ~1 dag met wat er al is (`leesStand`, terugspelen); Chrome crashte al eens in de MIDI-dienst.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§6"
+        },
+        {
+          "pad": "docs/ONTBREEKT.md",
+          "waar": "A5"
+        }
+      ],
+      "code": [
+        "src/ui/vertrek.js",
+        "src/control/handelingen.js",
+        "src/control/terugspelen.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "In v2 is dit goedkoop als de toestand vanaf het begin één serialiseerbaar object is."
+    },
+    {
+      "id": "richting-042",
+      "titel": "Open: klankkeuzes die op het oor wachten (isolator, loudnorm, limiter)",
+      "soort": "open",
+      "wat": "(1) De kill snijdt breed: een bass-kill haalt ook 600 Hz met 16 dB weg; een LR4-isolator niet (WINST 10). (2) loudnorm valt bij LRA > 11 stil terug op een AGC van 3 s en drukt albums en ambient plat; lineair normaliseren houdt de dynamiek (WINST 9). (3) De master klinkt met de limiter ~0,8 dB zachter dan met de compressor. Kiezen per punt: oud, nieuw, of A/B achter een schakelaar.",
+      "waarom": "Gemeten (getFrequencyResponse, ffmpeg 6.1.1), niet beluisterd; WINST: “Jij beslist op het oor (VISIE §5.4).”",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§9, §10"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Master en limiter, Open"
+        }
+      ],
+      "code": [
+        "src/engine/audio-graph.js",
+        "server/ingest.js",
+        "src/engine/master.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Loudnorm raakt de ingest en dus elk nummer in de library: vóór v2 de library opnieuw verwerkt, moet dit beslist zijn."
+    },
+    {
+      "id": "richting-043",
+      "titel": "Open: welk beatgrid voor v2, en wanneer is het goed genoeg?",
+      "soort": "open",
+      "wat": "v1 heeft twee analyses (Beat This!-tellen als hoofdroute, de oude analyse als tweede mening en terugval), DJ-tempo ×2 onder 88 bpm, twijfel ‘maat’/‘tel’/‘drift’, en het echte Beat This! is nooit op de benchmark gedraaid (AR2/GA3). DL1: de oude analyse zet een intro zonder kick op de offbeat. Kiezen: (a) alleen Beat This! + handmatig slot; (b) twee meningen zoals nu; (c) eerst op de avond kijken (advies DL1).",
+      "waarom": "GA1–GA5, AR1–AR4, DL1 open; synthetische benchmark: vals zeker 0, DJ-tempo 95%, echt octaaf 85%.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "DL1, GA1–GA5, AR2, AR4"
+        },
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11–§14"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js",
+        "src/engine/beatgrid.js",
+        "server/detect.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Sync, loops, secties, sampler en auto-DJ hangen allemaal aan “zeker grid”; v2 moet weten welke zekerheid het belooft."
+    },
+    {
+      "id": "richting-044",
+      "titel": "Open: hoe groot mag een proef zijn?",
+      "soort": "open",
+      "wat": "De speellijst groeide van 33 punten (2 okt) naar 325 punten in 61 blokken (16 okt); avond 1 alleen al 76 punten en ~2,5 uur. Kiezen: (a) per v2-stap één korte proef (≤ 30 min) met een vaste kern; (b) proefavonden zoals nu; (c) gewoon spelen met het log aan, en Claude leest daarna wat schuurde.",
+      "waarom": "Geen enkel punt is afgevinkt; de lijst werd langer dan wat Clay op een avond kan doen.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "2 OKT; 16 OKT (later)"
+        },
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "De speellijst"
+        }
+      ],
+      "code": [
+        "src/controle/speellijst.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Zonder een proef die echt gedaan wordt, faalt regel VISIE §5.4 opnieuw."
+    },
+    {
+      "id": "richting-045",
+      "titel": "Open: hoe gaan we om met de stapel van 213 open vragen?",
+      "soort": "open",
+      "wat": "VRAGEN.md heeft 213 open en 84 beantwoorde vragen; de regel was “waar je niets zegt, geldt het advies”. Kiezen voor v2: (a) een vraag bestaat alleen als hij het ontwerp blokkeert, de rest beslist de bouwer en logt het; (b) hooguit N open vragen tegelijk; (c) vragen alleen na een proef, nooit vooraf.",
+      "waarom": "De synthese van 10 okt waarschuwde al: “geen nieuwe VRAGEN-blokken per spoor bovenop de ~100 open vragen zonder dat er eerst beslist is”; daarna kwamen W (39), AR (21), GA (18), S9–S11 (26) erbij. Elk spoor voegde een blok toe; zonder antwoord wordt het advies stilzwijgend het ontwerp.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "geheel"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§6"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Een vraag die nooit beantwoord wordt is ontwerpwerk dat Clay niet kan overzien."
+    },
+    {
+      "id": "richting-046",
+      "titel": "Open: wanneer mag iets naar main (de poort “na de proefavond”)?",
+      "soort": "open",
+      "wat": "Alle visie-PR's van 10 okt droegen “[na de proefavond]” maar gingen op 11 okt in studio/integratie; de werkruimte ging op 15 okt naar main (#42) terwijl de proefavonden A–C nog moesten. Kiezen voor v2: (a) main = alleen wat op de hardware geproefd is, de rest achter een vlag; (b) main = groene CI, proef apart bijhouden; (c) een speeltak die Clay's Dock-app draait en een bouwtak.",
+      "waarom": "VI3 en CX4 open; HANDOFF 15 okt: “naar main pas na A–C”.",
+      "bron": [
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§1, §5 VI3"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "CX4"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "De git-stand (15 okt)"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "De poort is in v1 nooit gehouden; in v2 moet hij of echt zijn of niet bestaan."
+    },
+    {
+      "id": "richting-047",
+      "titel": "Open: wat moet de koppeling met Logic en TouchDesigner doen?",
+      "soort": "open",
+      "wat": "Opties uit ONTBREEKT C: set naar Logic als bestanden (multitrack + MIDI-tempokaart, C8), live meespelen via Ableton Link/Carabiner (C6), OSC naar TouchDesigner (C5), beeld laten vangen (C9). Gebouwd: patronen als MIDI-bestand (CLI). De Logic-proef van 10 min (K-A) is nooit gedaan. Vragen: wat moet Logic doen, wie is de baas over het tempo, draaien ze op dezelfde Mac.",
+      "waarom": "ONTBREEKT “Vragen die de keuze bepalen” 1–7 zijn nooit beantwoord; de uitwerking koos de goedkoopste route: bestanden.",
+      "bron": [
+        {
+          "pad": "docs/ONTBREEKT.md",
+          "waar": "C, Vragen 1–7"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§2.7"
+        }
+      ],
+      "code": [
+        "src/export/patronen-smf.js",
+        "tools/patronen/midi.mjs"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "Raakt de grens van het instrument; zolang onbeantwoord hoort het niet in de eerste v2."
+    },
+    {
+      "id": "richting-048",
+      "titel": "Open: welke rol krijgt Claude tijdens een set?",
+      "soort": "open",
+      "wat": "Nu schrijft Claude alleen het setplan (bestand met versie, 409 bij botsing) en zit nooit in het audiopad. AUTO-DJ.md noemt “later Claude live en leren uit het log”. Kiezen: (a) alleen plannen vooraf; (b) tussen nummers bijsturen via het plan; (c) live meedenken (suggesties, geen bediening).",
+      "waarom": "Clay 30 sep: “juist de samenwerking tussen jou en het programma maakt het interessant”; VISIE §1: “de samenwerking die ik zie die echt wat zou kunnen toevoegen”.",
+      "bron": [
+        {
+          "pad": "docs/AUTO-DJ.md",
+          "waar": "kop, §7–8"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§1"
+        },
+        {
+          "pad": "docs/PLAN.md",
+          "waar": "samenwerken met Claude"
+        }
+      ],
+      "code": [
+        "src/plan/plan-model.js",
+        "server/plannen.js"
+      ],
+      "pijler": "programmeren",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Clay noemt de samenwerking zelf de toegevoegde waarde; v2 moet de plek ervan in de architectuur kennen."
+    },
+    {
+      "id": "richting-049",
+      "titel": "Open: de APC-indeling in v2 opnieuw afleiden uit wat Clay doet?",
+      "soort": "open",
+      "wat": "De standaardmapping groeide van 374 regels (25 sep) via 480 (5 okt) naar 710 (8 okt) met negen grid-modi op shift + scene; 3251 actions in het register. Kiezen: (a) v1-indeling overnemen; (b) opnieuw ontwerpen vanuit de top-40 van de logs (fader, filter, fx-knoppen, sends, vormen bovenaan); (c) een kleine standaard plus learn voor de rest.",
+      "waarom": "Clay vroeg 13 okt “de knoppen logischer verdelen over de twee controllers”; J30/I4/voorstel A-kleuren nooit op het apparaat nagelopen.",
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "Bronnen, top-40"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "kop punt 1"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": ""
+        }
+      ],
+      "code": [
+        "mappings/apc40mk2.json",
+        "src/control/lagen.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Een indeling met negen modi op shift is moeilijk te onthouden; de logs geven nu een basis om te kiezen."
+    },
+    {
+      "id": "richting-050",
+      "titel": "Open: waar woont v2 en waar staat de data, met een kopie buiten de laptop?",
+      "soort": "open",
+      "wat": "ST5 (5 okt) zei: repo uit iCloud; de code staat nog op het iCloud-Bureaublad (conflictkopieën “ 2”), media kan sinds VI2 buiten iCloud, en een backup buiten de laptop is nooit gedraaid (geen doel gekozen). Kiezen: v2-checkout in `~/Projects/…` buiten iCloud vanaf dag één; data (media, opnames, sets, werkruimtes) in één map met één omgevingsvariabele; welk backupdoel (USB-stick, SSD, de pc).",
+      "waarom": "WINST 4 en 7; BACKUP.md §6; Claude's auto-modus weigerde de verhuizing als onomkeerbaar, dus bleef het bij Clay liggen.",
+      "bron": [
+        {
+          "pad": "docs/STUDIO.md",
+          "waar": "§0 ST5"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§4, §7"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "5 OKT, 11 OKT"
+        }
+      ],
+      "code": [
+        "server/media-plek.js",
+        "tools/backup/"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Een nieuwe repo is het goedkoopste moment om dit goed te zetten."
+    },
+    {
+      "id": "richting-060",
+      "titel": "Nooit een systematische proefavond op de hardware",
+      "soort": "pijn",
+      "wat": "De speellijst van de Controlekamer (325 punten, drie avonden plus Vooraf en Na afloop) heeft 0 afgevinkte punten. Of proefavond 1 (10 okt) als DJ-proef doorging is uit de bestanden niet op te maken; library.db was die dag niet gewijzigd en er is geen WAV.",
+      "waarom": "Twee mini-sporen keken onafhankelijk in de bestanden (11 okt); HA1/VI13 staan nog open.",
+      "bron": [
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§4b.0"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "HA1"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "v2 moet de proef klein en onvermijdelijk maken (richting-044), anders herhaalt dit zich."
+    },
+    {
+      "id": "richting-061",
+      "titel": "Wat Clay wél echt gespeeld heeft",
+      "soort": "meting",
+      "wat": "27 handelingenlogs van 30 sep tot 10 okt (62.282 handelingen); 6 okt een sessie met 21.916 acties, 57 laads en 70 actieve minuten; 13 okt een avond met de pc en Stroommachine (146 BPM); 23 sep spelen met de APC (Chrome-crashes); 24 sep vormlagen (“het werkt”); 26 sep in eigen tabblad zonder APC (“tot nu toe werkt alles”); 5 okt keylock-luistertest en de eerste studio-test.",
+      "waarom": "Telling van de handelingenlogs (HANDEN.md), setboek op 18 echte logs, BEELD.md §2a, HANDOFF.",
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "Wat de handen doen"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§2.7"
+        },
+        {
+          "pad": "docs/BEELD.md",
+          "waar": "§2a"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "26 sep; 5 OKT"
+        }
+      ],
+      "code": [
+        "tools/setboek/",
+        "src/handen/telling.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Echt gebruik bestaat, alleen niet volgens de proeflijst; dit is het eerlijke vertrekpunt voor v2."
+    },
+    {
+      "id": "richting-062",
+      "titel": "Wat de handen doen: faders, filters, effecten, sends en beeld",
+      "soort": "meting",
+      "wat": "Top van 62.282 handelingen: fader 11.796, filter 6.452, video.layer.knob 5.799, fx.knob 5.064, send.a 4.765, fx.mix 3.717, send.b 2.280; hotcue 876, play 166, tempo 152. Per groep: track 28.089, effecten/sends 17.359, video/vormen 10.619, klankschaal 860, sampler 838, instrument 629, stems 597. Sync en patronen staan niet in de top 40.",
+      "waarom": "De handenkaart telde de logs (11 okt). Kanttekening: het log kent geen bron, en de `.glide`-acties komen van de auto-DJ.",
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "Wat de handen doen (top-40)"
+        }
+      ],
+      "code": [
+        "src/handen/telling.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het beste bewijs van wat v2 als eerste goed moet hebben: een textuur- en effectenmixer met beeld, minder een beatmatch-DJ."
+    },
+    {
+      "id": "richting-063",
+      "titel": "Nooit op de hardware: hub-lease, Maschine, Scarlett + koptelefoon, APC-details",
+      "soort": "pijn",
+      "wat": "Niet geproefd: Varve als lease-app van de hub met de echte APC/LPD8; de Maschine (poort M, F1–F8, schermtempo); het samengestelde apparaat Scarlett 2i2 + Mac-koptelefoon; keylock en toon op de APC (I4); de kleuren van voorstel A (J30); `midi.status().echoes` (of het echofilter uit mag); de hub-proef V1 (ring-overname).",
+      "waarom": "HANDOFF “Alleen op de M1 en de echte apparaten te testen”; VISIE §3 tabel; GA13–GA17.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "15 OKT, Alleen op de M1 en de echte apparaten"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§3"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "GA13–GA17, I4, J30"
+        }
+      ],
+      "code": [
+        "src/control/hub.js",
+        "src/engine/koptelefoon.js",
+        "src/control/maschine.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "Deze kennis bestaat alleen als aanname; v2 moet ze niet overnemen als feit maar eerst meten."
+    },
+    {
+      "id": "richting-064",
+      "titel": "Nooit op de apparaten: iPad/iPhone, beamer, M1-totaal, Demucs tijdens een set",
+      "soort": "pijn",
+      "wat": "Niet geproefd: Safari via een echte `tailscale serve` en het cookie op de ts.net-naam; xy-pad met een vinger op wifi (W10, headless p50 13 ms); positie binnen 5 ms (W12); de vertraging canvas → beamer (J16, BE6); de totaalmeting C6 (≤ +2 ms per beeld) op de M1; of stems (Demucs) meer dan 10% zakt naast de mixer. Bijna alle cijfers komen uit headless Chrome (software-GL) in een container: op de M1 zijn de getallen anders, de richting niet.",
+      "waarom": "HANDOFF 15 okt; VRAGEN W10, W12, BE6, J16.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "Alleen op de M1 …"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "W10, W12, BE6, J16"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-17/droogloop.md",
+          "waar": "§3, §5"
+        }
+      ],
+      "code": [
+        "tools/headless/werk-alles.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Draagbare-set-onderdelen zijn alleen headless gemeten; in v2 zijn dit de eerste metingen, niet de laatste."
+    },
+    {
+      "id": "richting-065",
+      "titel": "Gemeten maar nooit beluisterd",
+      "soort": "pijn",
+      "wat": "Nooit met de oren beoordeeld: de 33 sjablonen en zeven nieuwe effecten (S10), de vloeiende fades van de auto-DJ (A7), de niveaus van een laag (S9-2), de klankschaal naast tracks (KS3), drums op −14 LUFS (S4), toon per stem (S24), de duoklik (W16), streamen/loops/seek (A2).",
+      "waarom": "HANDOFF: “Alles is gemeten, niets beluisterd” (S10); VRAGEN 🎧/👂-punten.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "Stand 14 okt (nacht): S10; Met de oren"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "A2, KS3, S4, S24, S9-2, S10-1"
+        }
+      ],
+      "code": [
+        "racks/sjablonen.json",
+        "src/engine/fx-s10.js"
+      ],
+      "pijler": "programmeren",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Een bit-exacte meting zegt niet of het goed klinkt; v2 moet klankwerk pas als af zien na Clay's oor."
+    },
+    {
+      "id": "richting-066",
+      "titel": "Gebouwd, nooit echt gedraaid",
+      "soort": "pijn",
+      "wat": "Niets roept `server/uitzend.js` aan; de backup buiten de laptop heeft geen doel; de Logic-proef (K-A) is niet gedaan; de nachtwachtrij en de lokale import zijn alleen droog of met de nep-yt-dlp getoetst; het echte Beat This! niet op de benchmark (AR2); de herstartlus niet onder macOS `/bin/sh`; een opname van een uur met de server weg niet.",
+      "waarom": "HANDOFF 15 okt “Niet getest”; UITZENDEN.md Stand; BACKUP.md §6; KAART.md §10.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "15 OKT (avond), Niet getest; 11 OKT; 10 OKT"
+        },
+        {
+          "pad": "docs/UITZENDEN.md",
+          "waar": "Stand"
+        }
+      ],
+      "code": [
+        "server/uitzend.js",
+        "tools/backup/",
+        "server/nacht.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Code zonder gebruiker is geen bewezen kennis; in v2 alleen meenemen wat een eerste echte run heeft gehad, of expliciet als ontwerp."
+    },
+    {
+      "id": "richting-070",
+      "titel": "Lag: het invoerpad wachtte op het restylen van het scherm",
+      "soort": "valkuil",
+      "wat": "Brede `:has()`-regels lieten elk beeld ~256 elementen restylen en MIDI-berichten wachtten daarop; het echofilter slikte 13% van de drukken op een knipperende knop. Na de reparatie: stijlwerk in rust 180 → 33 ms/s, fader → geluid p50 4,2 → 0,8 ms, druk → lampje via de hub ~51 → ~6 ms.",
+      "waarom": "Clay merkte de lag (13 okt); gemeten met `tools/headless/latentie.mjs` en `led-vertraging.mjs`.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "14 OKT: CONTROLLERS ZONDER LAG"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-14/controller-invoer.md",
+          "waar": ""
+        },
+        {
+          "pad": "docs/verslagen/2026-10-14/controller-uitvoer.md",
+          "waar": ""
+        }
+      ],
+      "code": [
+        "src/ui/rij-klassen.js",
+        "src/control/feedback.js",
+        "styles.css"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Les voor v2: geluid meteen, scherm bij het volgende beeld, en een latentiemeting in de suite vanaf het begin."
+    },
+    {
+      "id": "richting-071",
+      "titel": "Chrome's MIDI-dienst crashte bij meerdere tabbladen en LED-bursts",
+      "soort": "valkuil",
+      "wat": "Vier crashes op 22 sep en meer op 23 sep in `MidiService_TaskService_Thread` met vier Varve-tabbladen die tegelijk init en lampjes stuurden. Oplossing: één tabblad via een Web Lock, en alles naar buiten door een wachtrij van 16 berichten per 4 ms.",
+      "waarom": "Echte incidenten op Clay's Mac; AV-kern kreeg dezelfde regel; een Web Lock geldt per origin, dus Varve en AV-kern beschermen elkaar niet.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Alles wat naar buiten gaat loopt door een wachtrij; ÉÉN VARVE-tabblad"
+        }
+      ],
+      "code": [
+        "src/ui/tabblad.js",
+        "src/control/midi.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Hardwarewaarheid die v2 vanaf de eerste regel MIDI-code moet hebben."
+    },
+    {
+      "id": "richting-072",
+      "titel": "Auto-DJ liep 36 minuten door met de master dicht",
+      "soort": "valkuil",
+      "wat": "Op 6 okt koos de automaat drie keer hetzelfde fragment en liep 36 minuten door met de master dicht; 12 auto-DJ-nummers klonken met de master op 0,02. Het setboek zag het achteraf, de app meldde niets.",
+      "waarom": "Gevonden door het setboek op 18 echte logs (10 okt).",
+      "bron": [
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§2.7, §6"
+        }
+      ],
+      "code": [
+        "src/auto/automaat.js",
+        "tools/setboek/"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "“Nooit stilte” gold voor de engine, niet voor wat de zaal hoort; v2's automaat moet kijken naar wat er hoorbaar is en geen herhaling kiezen."
+    },
+    {
+      "id": "richting-073",
+      "titel": "Beeld reageerde vlak op een luide master: ijk relatief",
+      "soort": "valkuil",
+      "wat": "Op de eerste avond met de pc stonden `mix.laag` en `mix.luid` continu op 1,00 omdat de banden op vaste dB-grenzen geijkt waren (masterfader 0,8); “de master zachter zetten hielp meteen (Clay)”. Nu legt de zender per kenmerk de laatste 8 s op 0..1.",
+      "waarom": "BEELD.md §2a, gemeten op de relay op 13 okt.",
+      "bron": [
+        {
+          "pad": "docs/BEELD.md",
+          "waar": "§2a"
+        }
+      ],
+      "code": [
+        "src/koppel/niveau.js",
+        "src/analysis/features.js"
+      ],
+      "pijler": "beeld",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Een van de weinige lessen uit een echte avond; in v2 relatief ijken als standaard voor alles wat op geluid reageert."
+    },
+    {
+      "id": "richting-074",
+      "titel": "Clay's repertoire past slecht op DJ-aannames",
+      "soort": "meting",
+      "wat": "Grids zijn bijna overal onzeker (Bay Ledges 6 stukken 0 zeker, zoned out geen puls; lange mixen en albums van 53–60 min met tempowissels); in de auto-DJ is beatloos overvloeien de hoofdroute. Bij stems zit 82–100% in “other” (Sakamoto, zoned out, het album); alleen zang ↔ rest werkt.",
+      "waarom": "Heranalyse van Clay's nummers (26 sep), de stemsproef op de M1 (24 sep), AUTO-DJ.md §2.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "26 sep heranalyse; Stems splitsen — proef"
+        },
+        {
+          "pad": "docs/AUTO-DJ.md",
+          "waar": "overvloeien, hoofdroute"
+        }
+      ],
+      "code": [
+        "src/auto/planner.js",
+        "server/detect.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "v2 moet ontworpen worden voor ambient, albums en lange mixen eerst; functies die een zeker 4/4-grid eisen zijn bij Clay de uitzondering."
+    },
+    {
+      "id": "richting-075",
+      "titel": "De laptop zelf: klep dicht, Bluetooth, lader, iCloud",
+      "soort": "valkuil",
+      "wat": "Met de klep dicht rendert de audio-uitgang 0 samples en staat de audioklok stil; AirPods die verbinden wisselen de standaarduitgang (Chrome kiest bij het openen); een 8 W-lader en `fileproviderd` op 241% CPU op een speelavond.",
+      "waarom": "Gezien door de sporen op 10 okt vóór proefavond 1 (§0 van de synthese).",
+      "bron": [
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§0"
+        }
+      ],
+      "code": [
+        "server/avondpakket.js",
+        "src/ui/gezondheid.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "De draagbare set faalt op dit soort dingen eerder dan op code; het avondpakket als idee mee naar v2."
+    },
+    {
+      "id": "richting-076",
+      "titel": "Lekken en verdringen die pas laat gezien werden",
+      "soort": "valkuil",
+      "wat": "De opname lekte 26,6 MB per minuut omdat Chrome ongelezen fetch-antwoorden vasthoudt; open Range-verzoeken op video.mp4 bezetten de zes verbindingen per host en lieten audiopagina's tot 10 s wachten. Beide pas op 14 okt gevonden.",
+      "waarom": "WINST 1 en 2 (13–14 okt), `tools/headless/lek.mjs`, `acht.mjs`.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§1, §2"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "ELKE fetch leest zijn antwoord; VIDEO_KNIP"
+        }
+      ],
+      "code": [
+        "src/lib/antwoord.js",
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "In v2 vanaf het begin: elke fetch leest zijn antwoord, en een lange-set-proef op geheugen in de suite."
+    },
+    {
+      "id": "richting-077",
+      "titel": "De server even weg betekende stilte en gaten",
+      "soort": "pijn",
+      "wat": "Tot 15 okt gaf een server die 30 s wegviel 10 s stilte, 20 s nullen in de opname en 20 meldingen. Daarna: herhalen met een begrensde rij, 60 s vooruit voor wat je hoort, een herstartlus met een hang-wachter.",
+      "waarom": "WINST 3; `tools/headless/server-weg.mjs` vóór en na.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§3"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn"
+        }
+      ],
+      "code": [
+        "src/lib/herhaal.js",
+        "tools/varve-app/server-lus.sh"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v1 achteraf aangebouwd; in v2 hoort de verhouding browser ↔ server vanaf het begin te verdragen dat de server even weg is."
+    },
+    {
+      "id": "richting-078",
+      "titel": "iCloud als werkplek: conflictkopieën, hangende bestanden, upload tijdens spelen",
+      "soort": "pijn",
+      "wat": "iCloud maakt bij schrijfacties kopieën met “ 2” in de naam (meestal een oude versie); een uitgeplaatst codebestand kan de libuv-draadpool vullen zodat geen deck nog pagina's krijgt (vangnet: UV_THREADPOOL_SIZE=16); tijdens uitzenden wil iCloud de opname uploaden over dezelfde verbinding.",
+      "waarom": "HANDOFF 2 okt; WINST 4 (draadpool-meting); VRAGEN U3.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "2 OKT: ALLES GETEST"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§4"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "U3"
+        }
+      ],
+      "code": [
+        "server/standen.js",
+        "server/media-plek.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "weg",
+      "reden": "v2 begint buiten iCloud; de vangnetten (MAX_DRADEN, `beperkt`) zijn dan grotendeels overbodig."
+    },
+    {
+      "id": "richting-079",
+      "titel": "Laptopmaat: elke nieuwe rij of knop kost ruimte die er niet is",
+      "soort": "pijn",
+      "wat": "Op 1440×790 vielen de faders weg (2 okt), de bovenbalk was tijdens het spelen 1534–1585 px breed (nu scrolt hij), en met een rij open krimpt het werkvak tot 9 px (W4). Er zijn tien html-pagina's (mixer, plan, uitlijn, werk, apc, maschine, spiekbrief, companion, controle, video).",
+      "waarom": "HANDOFF 2, 6 en 7 okt; VRAGEN W4; `tools/headless/rijen.mjs`.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "2 OKT laptopmaat; 6 OKT rijen; 7 OKT bovenbalk"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "W4"
+        }
+      ],
+      "code": [
+        "styles.css",
+        "src/ui/bovenbalk.js",
+        "index.html"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2 heeft een ruimtebudget voor 1440×790 nodig en een plan voor wat naar een tweede scherm of de iPad gaat."
+    },
+    {
+      "id": "richting-081",
+      "titel": "Dubbelingen ontstaan als sporen los ontwerpen",
+      "soort": "pijn",
+      "wat": "Twee Controlekamers (het artifact met 236 punten en `/controle`), twee iPad-pagina's (companion en werk.html), opstelling en werkruimte en set als drie soorten “beginstand”, avondpakket en opstelling als twee tegels (VI9).",
+      "waarom": "Clay zag de dubbele Controlekamer zelf (16 okt); de synthese van 10 okt noemde VI9.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "16 OKT (avond)"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§5 VI9"
+        }
+      ],
+      "code": [
+        "src/standen/",
+        "src/werk/",
+        "src/sets/"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2 moet één begrip “wat staat er klaar” hebben in plaats van drie die elk een spoor dienden."
+    },
+    {
+      "id": "richting-090",
+      "titel": "Agenten per spoor: veel functie in weinig dagen",
+      "soort": "meting",
+      "wat": "25 sep: ~20 sporen parallel (bouwer → controleur → integratierondes r1–r5); 3 okt stems in drie sporen op een gedeeld contract; 10 okt zeven sporen als estafette (verkenner → twee ontwerpers → jury → critici → bouwer → reviewer → herstel → spoorleider); 14 okt S0–S11; 15 okt vijf architectuursporen. Opbrengst: 490 commits sinds 25 sep, 66.700 regels in src/, 17.000 in server/.",
+      "waarom": "Verslagen per dag, git log.",
+      "bron": [
+        {
+          "pad": "docs/verslagen/2026-09-25/README.md",
+          "waar": ""
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§1"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "3 OKT; 15 OKT"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "De bouwkracht is bewezen; in v2 moet ze gekoppeld worden aan het tempo van de proef in plaats van eraan voorbij te lopen."
+    },
+    {
+      "id": "richting-091",
+      "titel": "Review die herstelt met een test die eerst faalt",
+      "soort": "regel",
+      "wat": "Per spoor: nulmeting, reparatie, nameting met hetzelfde commando; twee reviewers (regels en bewijs) die zelf opnieuw meten; elke bevinding krijgt een check die op de oude code rood is; herstelrondes tot niets blokkerends.",
+      "waarom": "Werkwijze van 25 sep (controleurs), 6 okt (“bouwer → reviewer → verwerker”) en 14 okt (afmaken). Vond echte fouten: een sectiebegin een maat te laat, de StreamBron die als “door Clay geladen” telde (S9), een eerste sectie uit de tel.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "6–7 OKT Werkwijze; 14 OKT"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-14/werk-S9.md",
+          "waar": ""
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "De meest betrouwbare kwaliteitsbron van v1; goedkoop mee te nemen."
+    },
+    {
+      "id": "richting-092",
+      "titel": "Fouten die alleen in de samenvoeging bestaan",
+      "soort": "valkuil",
+      "wat": "Kaart (10 okt): zes punten waar UI en server elkaar niet zagen plus twee echte bugs die alleen in de samenvoeging bestonden. Golf 2 (14 okt): drie botsingen zonder git-conflict. Reparaties achteraf na samenvoegen (339310b, b61d8e3, 03275d3): proefservers die een nieuwe omgevingsvariabele misten.",
+      "waarom": "HANDOFF 10 okt (kaart), werk-golf2.md, WINST §8.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "10 OKT: DE MUZIEKKAART"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-14/werk-golf2.md",
+          "waar": "Kort"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§8"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Les: een contract vooraf, een integrator die sporen naast elkaar legt, en CI op elke PR."
+    },
+    {
+      "id": "richting-093",
+      "titel": "CLAUDE.md werd te groot om te lezen en het grootste conflictbestand",
+      "soort": "pijn",
+      "wat": "CLAUDE.md telt 2298 regels; bij 1880 regels kostte hij ~45k tokens per agent en was hij het grootste conflictbestand. WINST stelde een kern van ~250 regels voor met per laag een eigen CLAUDE.md.",
+      "waarom": "WINST §8 stap 5; werk-golf2: een van twee echte git-conflicten zat in CLAUDE.md.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§8"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-14/werk-golf2.md",
+          "waar": "Kort"
+        }
+      ],
+      "code": [
+        "CLAUDE.md"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2 begint met een korte kern-CLAUDE.md en kennis per laag; de oogst is daar de bron voor."
+    },
+    {
+      "id": "richting-094",
+      "titel": "Worktrees en proefservers schreven in echte data",
+      "soort": "valkuil",
+      "wat": "Een server in een worktree schrijft patronen, speellijst, standen, sets en sjablonen in die worktree; headless-proeven met de echte hub namen op in `~/Movies/varve-avonden`; een testserver ruimde `.bezig-*` op in de echte media/. Elke nieuwe datamap vroeg een nieuwe `VARVE_*` in elke proefserver.",
+      "waarom": "CLAUDE.md Git-regel; HANDOFF 6–7 okt (avondmapjes); VI2 (VARVE_TESTSERVER los van VARVE_MEDIA).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies, Git"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "6–7 OKT Gerepareerd onderweg"
+        }
+      ],
+      "code": [
+        "server/media-plek.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: één datamap-wortel met één variabele, en testmodus die alles daaronder tijdelijk maakt."
+    },
+    {
+      "id": "richting-095",
+      "titel": "Headless proeven verouderen ongemerkt",
+      "soort": "pijn",
+      "wat": "Op 17 okt waren 19 van 66 headless proeven niet groen, en geen daarvan door een fout in de mixer: ze lazen oude selectors, wachtten op een vaste tijd, misten een nieuwe dialoog (“Site verlaten?”) of verwachtten een oud aantal regels.",
+      "waarom": "Droogloop 17 okt; eerder ook apc-klank.mjs (8 okt: verwachtte nog 374 regels).",
+      "bron": [
+        {
+          "pad": "docs/verslagen/2026-10-17/droogloop.md",
+          "waar": "§3"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "7 OKT (middag), apc-klank.mjs"
+        }
+      ],
+      "code": [
+        "tools/headless/"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "80 losse proeven buiten de suite rotten; in v2 minder, en wat blijft draait in CI."
+    },
+    {
+      "id": "richting-096",
+      "titel": "De suite: groot en grondig, CI pas laat",
+      "soort": "meting",
+      "wat": "137 bestanden, 11.778 checks, groen op een schone macos-14 met Node 26.8.2 (15 okt); van 533 s naar ~250 s met een pool. De eerste CI-runs (15 okt) vonden wat op een runner anders is (geen yt-dlp, videotoolbox die niet codeert, afvalmeting in de pool). Afval- en hashmetingen zijn V8-gevoelig.",
+      "waarom": "HANDOFF 15 okt (De suite), WINST §8.",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "15 OKT (avond), De suite"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§8"
+        }
+      ],
+      "code": [
+        "test/alles.mjs",
+        ".node-version"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 CI op elke PR vanaf de eerste commit en een vaste Node-versie."
+    },
+    {
+      "id": "richting-097",
+      "titel": "De bouw liep steeds voor op de proef",
+      "soort": "pijn",
+      "wat": "Sinds 23 sep ruim 500 commits zonder proef op de APC (VISIE §5.4); acht PR's “[na de proefavond]” op 11 okt samengevoegd in studio/integratie; S0–S11 op 15 okt naar main (#42) terwijl de proefavonden A–C nog moesten; elke HANDOFF-stand eindigt met “NIET getest: op de APC …”.",
+      "waarom": "VISIE §5.4, UITWERKING §1, git log (#42), HANDOFF.",
+      "bron": [
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§5.4"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§1, §3.3"
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "15 OKT, De git-stand"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "De belangrijkste werkwijze-les: v2 bouwt in kleine golven die elk op een avond eindigen."
+    },
+    {
+      "id": "richting-100",
+      "titel": "Wat alleen Clay kan, blijft liggen als het niet klein is",
+      "soort": "valkuil",
+      "wat": "Elke HANDOFF eindigt met een lijst “Eerst doen (Clay)” (PR's mergen, repo verhuizen, VARVE.app herbouwen, LaunchAgent vervangen, Beat This! meten, het avondpakket op de pc). Claude's auto-modus weigerde de repo-verhuizing als onomkeerbaar; veel van die stappen zijn niet aantoonbaar gedaan.",
+      "waarom": "HANDOFF 5 okt (verhuizen), 15 okt (“Wat jij moet doen na de merge”), 16 okt (“Wat alleen jij kunt”).",
+      "bron": [
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "5 OKT; 15 OKT (avond); 16 OKT"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2 houdt handwerk voor Clay tot één korte, geordende lijst per stap, of maakt het overbodig (geen herbouw van de Dock-app per wijziging)."
+    },
+    {
+      "id": "richting-101",
+      "titel": "Niets verwijderen; ordenen door verplaatsen",
+      "soort": "regel",
+      "wat": "Geen data, takken of bestanden van een ander weggooien; backups nooit met `--delete`; een agent stopt nooit een proces van een ander (geen pkill).",
+      "waarom": "Clay's huisregel (CLAUDE.md Werkwijze; de niet-lijst van 10 okt).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Werkwijze die hier werkt"
+        },
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§6"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Geldt ook voor de overgang naar v2: v1 blijft staan tot Clay anders zegt."
+    },
+    {
+      "id": "richting-112",
+      "titel": "De APC-indeling werd vier keer herzien",
+      "soort": "pijn",
+      "wat": "23 sep: generic → 0x42 en een herziening na het onderzoek; 25 sep voorstel A (374 regels); daarna grid-modi erbij (auto 2 okt, stems en patronen 5 okt, secties 6 okt: negen modi, 710 regels op 8 okt); 13 okt de vraag “knoppen logischer verdelen” en de werkruimte met een mapping per apparaat (S5).",
+      "waarom": "VRAGEN B3, APC40.md, HANDOFF 7–9 okt (apc-klank.mjs 374 → 702), WERKRUIMTE.md.",
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": ""
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "7 OKT (middag)"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "mappings/apc40mk2.json",
+        "tools/mapping/eerder.mjs"
+      ],
+      "pijler": "controllers",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Elke nieuwe functie kreeg een modus op de APC; v2 moet een indeling uit gebruik afleiden en nieuwe functies eerst via learn laten landen (zoals HANDEN.md al voorstelt)."
+    },
+    {
+      "id": "richting-113",
+      "titel": "Het beatgrid werd vijf keer omgebouwd en de library telkens herrekend",
+      "soort": "pijn",
+      "wat": "Tempokaart (23 sep) → tweede kans en “elk stuk moet passen” (25 sep) → grid uit de tellen van Beat This! (6 okt) → DJ-tempo ×2 en kaart-VERSIE 2 (14 okt) → tweede mening uit de lage band en VERSIE 3 (15–16 okt). Elke versie rekent alle automatische grids opnieuw (4–20 min); AR1 + AR3 samen laten sync weer vaker weigeren.",
+      "waarom": "BEATGRID.md §1–§14; HANDOFF 14–16 okt.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": ""
+        },
+        {
+          "pad": "docs/HANDOFF.md",
+          "waar": "16 OKT: DE REST VAN BLOK AR"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js",
+        "server/detect.js",
+        "server/analyze.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2 neemt de eindstand en de benchmark mee, niet de vijf tussenvormen; de analyse als vervangbare module met een versie."
+    },
+    {
+      "id": "richting-114",
+      "titel": "Wat vroeg goed abstract was, overleefde alles",
+      "soort": "besluit",
+      "wat": "De bron achter één interface (`bron.js`, 22 sep), de action-bus met genormaliseerde waarden, positie van de audioklok, mapping naar plekken en racks als data hielden stand terwijl streamen, keylock, stems, instrumenten, de hub en de iPad erbij kwamen.",
+      "waarom": "ROADMAP “Onderzocht en vastgelegd” (22 sep: “keylock is nu een bronwissel”); de drie regels in CLAUDE.md.",
+      "bron": [
+        {
+          "pad": "ROADMAP.md",
+          "waar": "Onderzocht en vastgelegd"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De drie regels; Onderzochte keuzes"
+        }
+      ],
+      "code": [
+        "src/engine/bron.js",
+        "src/control/actions.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Dit is de structuur die v2 als skelet kan overnemen."
+    },
+    {
+      "id": "richting-115",
+      "titel": "Beeld verhuisde drie keer",
+      "soort": "pijn",
+      "wat": "Video per deck in het hoofdvenster → het losse venster mengt zelf met inloop (25 sep) → de Stroommachine op de pc via een relay (6 okt) → zaalbeeld en beeld op één machine (10 okt). Elke stap liet de vorige staan.",
+      "waarom": "BEAMER.md, BEELD.md, ROADMAP 18 en 29.",
+      "bron": [
+        {
+          "pad": "docs/BEAMER.md",
+          "waar": ""
+        },
+        {
+          "pad": "docs/BEELD.md",
+          "waar": "§1, §8"
+        }
+      ],
+      "code": [
+        "src/video/",
+        "src/koppel/"
+      ],
+      "pijler": "beeld",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2 kiest één plek waar beeld gemengd wordt (richting-033/034) en laat de rest weg."
+    },
+    {
+      "id": "richting-117",
+      "titel": "De auto-DJ kreeg laag op laag, met regels voor wie wat bezit",
+      "soort": "pijn",
+      "wat": "Auto-DJ (30 sep) → planvenster (30 sep) → vloeiende fades (2 okt) → secties als frasegrenzen (6 okt) → automaat op eigen tracks naast Clay met GO, lagen en sets (14 okt). Elke laag voegde eigendomsregels toe (OVERNEEM, CLAY_RECENT 120 s, `_laagDecks`); een geslaagde laad die null gaf telde als “door Clay geladen”.",
+      "waarom": "AUTO-DJ.md, PLAN-SET.md, review S9 ronde 2–3.",
+      "bron": [
+        {
+          "pad": "docs/AUTO-DJ.md",
+          "waar": ""
+        },
+        {
+          "pad": "docs/PLAN-SET.md",
+          "waar": "§9"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Een set klaarzetten (S9)"
+        }
+      ],
+      "code": [
+        "src/auto/automaat.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 is “wie bezit welke track” een expliciet veld van de track, niet een afleiding uit recente handelingen."
+    },
+    {
+      "id": "richting-118",
+      "titel": "Omvang van v1: groter dan één mens overziet",
+      "soort": "meting",
+      "wat": "66.700 regels in src/, 17.000 in server/, 155 testbestanden, 80 headless tools, 43 docs, 10 html-pagina's, 3251 actions, 710 APC-regels, 33 sjablonen, 26 vormsystemen, 325 proefpunten.",
+      "waarom": "Telling op 19 okt (wc, ls) en HANDEN.md.",
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "Bronnen"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Structuur"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Clay programmeert niet zelf; v2 moet klein genoeg blijven dat hij weet wat erin zit (VISIE §6: “geen reden om breedte boven diepte te kiezen”)."
+    },
+    {
+      "id": "richting-119",
+      "titel": "Niet-lijst van de visie: wat de kern klein houdt",
+      "soort": "grens",
+      "wat": "Nooit: distributie van de cache, Funnel, clips van anderen in beeld naar buiten, een tweede machine of cloud om draagbaar te worden, een opstelling die geluid of download start, merges door een agent vóór de proef. Niet nu: noodknoppen op touch, meters op de iPhone, Ableton Link, in-app uitzenden zolang OBS volstaat.",
+      "waarom": "Synthese van 10 okt, §6 (getoetst aan VISIE §5).",
+      "bron": [
+        {
+          "pad": "docs/verslagen/2026-10-10/UITWERKING.md",
+          "waar": "§6"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§6"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een bestaande, gewogen grens die v2 kan overnemen als startpunt van zijn eigen niet-lijst."
+    }
+  ],
+  "onderdelen": []
+}
