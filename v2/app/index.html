@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VarveDJ</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="kop">
+    <div class="merk">Varve<span>DJ</span></div>
+    <section class="klok" id="klok" aria-label="Maatklok">
+      <div class="klok-bpm"><span id="klok-bpm">—</span><small>BPM</small></div>
+      <div class="klok-tellen" id="klok-tellen" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="klok-maat" id="klok-maat">klok staat stil</div>
+      <div class="klok-knoppen">
+        <button data-actie="klok.tempo.neer.grof" title="tempo −1">−1</button>
+        <button data-actie="klok.tempo.neer" title="tempo −0,1">−.1</button>
+        <button data-actie="klok.tempo.op" title="tempo +0,1">+.1</button>
+        <button data-actie="klok.tempo.op.grof" title="tempo +1">+1</button>
+        <button data-actie="klok.tap" class="tap" title="tik het tempo">TAP</button>
+      </div>
+    </section>
+    <section class="master" aria-label="Master">
+      <div class="meter" id="meter-master"><i></i><i></i></div>
+      <label class="mini">MASTER <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.master"></label>
+    </section>
+    <button class="start" id="start">Geluid aan</button>
+  </header>
+
+  <main class="tracks" id="tracks"></main>
+
+  <section class="onder">
+    <div class="xfader">
+      <span>A</span>
+      <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.xfader" aria-label="Crossfader">
+      <span>B</span>
+    </div>
+    <div class="bieb">
+      <div class="bieb-kop">
+        <strong>Library</strong>
+        <input type="search" id="zoek" placeholder="zoek titel of artiest" aria-label="Zoek in de library">
+        <span class="bieb-bron" id="bieb-bron"></span>
+      </div>
+      <ol class="bieb-lijst" id="bieb-lijst"></ol>
+    </div>
+  </section>
+
+  <div class="meldingen" id="meldingen" role="status" aria-live="polite"></div>
+
+  <template id="tpl-track">
+    <article class="track" data-n="">
+      <header class="t-kop">
+        <span class="t-nr"></span>
+        <div class="t-titel"><b>—</b><small>leeg</small></div>
+        <div class="t-tijd"><span class="t-rest">—</span><span class="t-bpm">—</span></div>
+      </header>
+      <canvas class="t-overzicht" height="34" aria-label="Overzicht: klik om te springen"></canvas>
+      <div class="t-fase" title="Waar dit nummer ligt t.o.v. de klok (−½ … +½ tel)"><i></i><b></b></div>
+      <div class="t-transport">
+        <button class="b-sync" data-actie="track.{n}.sync" title="Sync: koppel aan de klok">SYNC</button>
+        <button class="b-klok" data-actie="track.{n}.sync.klok" title="Klok naar dit nummer">KLOK</button>
+        <button class="b-cue" data-actie="track.{n}.cue">CUE</button>
+        <button class="b-play" data-actie="track.{n}.play">▶</button>
+        <button class="b-quant" data-actie="track.{n}.play.quant" title="Starten op de volgende 1 van de klok">▶1</button>
+      </div>
+      <div class="t-duw">
+        <button data-actie="track.{n}.nudge.terug" title="Nudge: trager zolang je drukt">‹</button>
+        <div class="jog" data-jog="{n}" title="Jog: sleep om het nummer t.o.v. de klok te schuiven"><span></span></div>
+        <button data-actie="track.{n}.nudge.voor" title="Nudge: sneller zolang je drukt">›</button>
+      </div>
+      <div class="t-strip">
+        <div class="knoppen">
+          <div class="knop" data-waarde="track.{n}.trim" data-label="TRIM"></div>
+          <div class="knop" data-waarde="track.{n}.hoog" data-label="HOOG" data-kill="track.{n}.kill.hoog"></div>
+          <div class="knop" data-waarde="track.{n}.mid" data-label="MID" data-kill="track.{n}.kill.mid"></div>
+          <div class="knop" data-waarde="track.{n}.laag" data-label="LAAG" data-kill="track.{n}.kill.laag"></div>
+          <div class="knop filter" data-waarde="track.{n}.filter" data-label="FILTER"></div>
+        </div>
+        <div class="faders">
+          <div class="fader pitch" data-waarde="track.{n}.pitch" data-label="PITCH" data-midden="1"></div>
+          <div class="fader vol" data-waarde="track.{n}.fader" data-label="VOL"></div>
+        </div>
+      </div>
+      <button class="t-kant" data-actie="track.{n}.kant" title="Crossfaderkant: A → B → thru">thru</button>
+    </article>
+  </template>
+
+  <script type="module" src="/src/ui/app.js"></script>
+</body>
+</html>

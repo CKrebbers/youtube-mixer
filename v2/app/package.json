@@ -1,0 +1,11 @@
+{
+  "name": "varvedj",
+  "version": "2.0.0-plak1",
+  "private": true,
+  "type": "module",
+  "description": "VarveDJ v2: dj'en, produceren en programmeren op één maatklok.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "start": "node server.mjs"
+  }
+}
