@@ -196,6 +196,27 @@
       "kaartjes": [
         "dj-workflow-039"
       ]
+    },
+    {
+      "id": "klok-B14",
+      "status": "besloten",
+      "titel": "Een nummer dat je niet hoort verzet de klok nooit",
+      "tekst": "De pitchfader van een gekoppeld nummer dat niet in de zaal klinkt (fader dicht, alleen in de koptelefoon) doet niets aan de klok. Pas als het hoorbaar is, is zijn pitchfader weer het klok-tempo. Bij het opengaan geldt soft-takeover: de fader neemt het pas over als hij langs de stand van de klok komt.",
+      "waarom": "Clay 19 okt, op klok-O6: \"O6 b\". Zo kan voorbeluisteren het tempo van de zaal nooit verzetten; djay draaide in 5.3.3 precies deze fout terug.",
+      "kaartjes": [
+        "bediening-089"
+      ]
+    },
+    {
+      "id": "klok-B15",
+      "status": "besloten",
+      "titel": "Na de jog blijft het nummer waar je het neerzet",
+      "tekst": "Loslaten van de jog laat de nieuwe verschuiving staan: met de jog corrigeer je een nummer dat net naast de klok ligt. Sync blijft aan.",
+      "waarom": "Clay 19 okt, op klok-O7: \"O7 a\". djay zet sync uit bij een pitch bend; Varve niet.",
+      "kaartjes": [
+        "dj-workflow-039",
+        "bediening-089"
+      ]
     }
   ],
   "scenarios": [
@@ -224,7 +245,8 @@
       "wanneer": "Ik draai de jog van B een stukje vooruit en laat los.",
       "dan": "B ligt verder voor op de klok en blijft daar. De klok, A en alles op de tel blijven precies waar ze waren.",
       "besluiten": [
-        "klok-B03"
+        "klok-B03",
+        "klok-B15"
       ],
       "open": false
     },
@@ -387,6 +409,15 @@
         "klok-B09",
         "klok-B10"
       ]
+    },
+    {
+      "id": "klok-S21",
+      "gegeven": "A is gekoppeld en klinkt in de zaal; B is gekoppeld, fader dicht, alleen in de koptelefoon.",
+      "wanneer": "Ik schuif de pitchfader van B.",
+      "dan": "Niets verandert aan de klok of aan A. Zet ik B open, dan doet zijn pitchfader pas iets als hij langs de stand van de klok komt.",
+      "besluiten": [
+        "klok-B14"
+      ]
     }
   ],
   "open": [
@@ -429,26 +460,6 @@
         "(c) Ja, maar pas op de volgende tel."
       ],
       "advies": "(c): terugspringen midden in een tel hoor je; op de tel valt het weg."
-    },
-    {
-      "id": "klok-O6",
-      "vraag": "Verzet de pitchfader van een gekoppeld nummer dat je NIET hoort (alleen in de koptelefoon, fader dicht) ook de klok?",
-      "opties": [
-        "(a) Ja, altijd: de regel is dezelfde, wat je hoort maakt niet uit.",
-        "(b) Nee: een nummer dat niet in de zaal klinkt verzet de klok nooit; de fader doet dan niets tot het hoorbaar is (zoals djay sinds 5.3.3).",
-        "(c) Ja, maar alleen met Shift vast."
-      ],
-      "advies": "(b): voorbeluisteren mag het tempo van de zaal nooit verzetten. Dat is precies de fout die djay in 5.3.3 terugdraaide."
-    },
-    {
-      "id": "klok-O7",
-      "vraag": "Na de jog loslaten: blijft het nummer op zijn nieuwe plek, of springt het terug in de pas?",
-      "opties": [
-        "(a) Het blijft waar je het neerzet (zoals nu in klok-S03): met de jog corrigeer je een grid dat net naast ligt.",
-        "(b) Het glijdt terug naar de oude plek: de jog is een tijdelijke afwijking, voor een effect of een scratch.",
-        "(c) Jog = blijvend, scratch (jog ingedrukt bovenop) = tijdelijk."
-      ],
-      "advies": "(a), en (c) als je scratchen wilt: je antwoord \"de track schuift t.o.v. de klok\" lees ik als blijvend. djay zet sync uit bij een bend; dat doen wij niet."
     }
   ],
   "uitV1": [
@@ -499,7 +510,7 @@
     {
       "djay": "Een pitch bend op de jog zet sync uit; opnieuw syncen doe je zelf.",
       "nadeel": "Precies het moment van bijsturen breekt de koppeling.",
-      "varve": "Jog en nudge verschuiven het nummer op de klok; sync blijft aan (klok-B03, open vraag klok-O7)."
+      "varve": "Jog en nudge verschuiven het nummer op de klok en het blijft daar; sync blijft aan (klok-B03, klok-B15)."
     },
     {
       "djay": "Twee soorten sync plus schakelaars per handeling (\"resume after scratch/cue\") die per versie anders werken.",
@@ -509,7 +520,7 @@
     {
       "djay": "Een tempoknop op een gesynct deck verzette alles, of niet (wisselde per versie).",
       "nadeel": "Een deck in de koptelefoon kon het tempo van de zaal verzetten.",
-      "varve": "De pitchfader van een gekoppeld nummer is het klok-tempo (klok-B13); wat er gebeurt met een nummer dat je niet hoort: open vraag klok-O6."
+      "varve": "De pitchfader van een gekoppeld nummer is het klok-tempo (klok-B13), maar alleen als je het nummer hoort (klok-B14)."
     },
     {
       "djay": "Het Fluid Grid volgt elke schommeling, ook een break; sync trekt mee.",

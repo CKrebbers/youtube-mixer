@@ -26,6 +26,8 @@ Dit bestand gaat voor de oogst: een kaartje dat hiermee botst, verliest.
   schuift t.o.v. de klok". De klok is dus nooit van een track; een track verschuift erop.
 - **19 okt 2026** — "pitchfader verandert het tempo van de klok, optie a" (op een gekoppeld nummer; alles
   wat gekoppeld is volgt mee).
+- **19 okt 2026** — "O6 b, O7 a": een gekoppeld nummer dat je niet hoort verzet de klok nooit; na de
+  jog blijft het nummer waar je het neerzet (sync blijft aan).
 - **19 okt 2026** — "ik wil dat je kijkt naar wat djay doet maar dan wil ik het beter doen met alle
   bevindingen die we hebben." djay (Algoriddim) is de referentie; v2 moet het beter doen met wat v1
   heeft geleerd.
