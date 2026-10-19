@@ -229,6 +229,9 @@ export class Beatgrid {
    */
   telGrenzen() { return this._delen.map((d, i) => ({ b: i === 0 ? -Infinity : d.b0, L: d.L })); }
 
+  /** (v2) Seconden per tel rond tel b (exact, geen afgeleide): het deel waar b in valt, rechts-continu. */
+  lengteBijTel(b) { return this._deelBijBeat(b).L; }
+
   /** Index van het stuk waar tracktijd t in valt (vóór het eerste stuk: 0). */
   stukIndex(t) {
     const s = this._stukken;

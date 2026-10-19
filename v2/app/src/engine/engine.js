@@ -55,8 +55,14 @@ export class Engine extends Emitter {
     }
     this.tap = new TapTempo();
     this._laadNr = new Array(tracks + 1).fill(0);
+    // Verandert de klok door iets anders dan de pitchfader van een track, dan staat die fader
+    // niet meer op de stand van de klok: eerst weer erlangs (soft-takeover, modeltest K4c).
+    this.klokBron = null;
     this.klok.on('verander', () => {
-      for (const t of this.tracks) t.klokVerandert();
+      for (const t of this.tracks) {
+        if (t !== this.klokBron) t.grijpt = false;
+        t.klokVerandert();
+      }
       this.emit('klok');
     });
     for (const t of this.tracks) {
@@ -99,15 +105,23 @@ export class Engine extends Emitter {
     const g = track.grid;
     const q = g.barPhase(P) * g.beatsPerBar;
     this.klok.perMaat = g.beatsPerBar;
+    this.klokBron = track;
     this.klok.start(A, q, g.bpmAt(P) * rate);
+    this.klokBron = null;
   }
 
   /** Klok-tempo vanaf A (tempoknop, tap, pitchfader van een gekoppeld nummer). */
-  zetKlokTempo(bpm, A = this.straks()) {
-    if (!this.klok.loopt) { this.klok.start(A, 0, bpm); return; }
-    if (Math.abs(this.klok.bpm(A) - bpm) < 1e-6) return;
-    this.klok.houd(A, bpm);
+  zetKlokTempo(bpm, A = this.straks(), bron = null) {
+    this.klokBron = bron;
+    try {
+      if (!this.klok.loopt) { this.klok.start(A, 0, bpm); return; }
+      if (Math.abs(this.klok.bpm(A) - bpm) < 1e-6) return;
+      this.klok.houd(A, bpm);
+    } finally { this.klokBron = null; }
   }
+
+  /** Mag de klok stoppen? Niet zolang een track hem nodig heeft (speelt gekoppeld, wacht op de maat; K3). */
+  klokNodig() { const nu = this.nu(); return this.tracks.some((t) => t.heeftKlokNodig(nu) || t.speelt); }
 
   // ---- mixer ------------------------------------------------------------------
 

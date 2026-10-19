@@ -91,7 +91,7 @@ export function definieerActies(engine) {
   });
   bus.defineer({
     id: 'klok.stop', soort: 'trigger', label: 'klok stoppen', meta: { gevaarlijk: true },
-    doe: (v) => { if (v && !engine.tracks.some((t) => t.speelt)) engine.klok.stop(); else if (v) return { geweigerd: 'er speelt nog iets' }; },
+    doe: (v) => { if (!v) return; if (engine.klokNodig()) return { geweigerd: 'er speelt of wacht nog iets op de klok' }; engine.klok.stop(); },
   });
 
   // ---- strip ------------------------------------------------------------------------

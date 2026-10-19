@@ -30,17 +30,18 @@ export function segmenten(klok, grid, v, van, tot) {
   }
   const lijst = [...tijden].sort((a, b) => a - b);
   const uit = [];
-  for (let i = 0; i < lijst.length; i++) {
-    const T = lijst[i];
-    // Rate in het midden van het stuk: daar zijn klok en grid zeker één lijn.
-    const eind = lijst[i + 1] ?? T + 1;
-    const m = (T + eind) / 2;
-    const c = klok.tel(m) + v;
-    const P = grid.timeOf(klok.tel(T) + v);
-    const R = klok.rate(m) * (grid.timeOf(c + 1e-3) - grid.timeOf(c - 1e-3)) / 2e-3;
-    uit.push({ T, P, R });
-  }
+  for (const T of lijst) uit.push({ T, P: grid.timeOf(klok.tel(T) + v), R: rateOp(klok, grid, v, T) });
   return uit;
+}
+
+/**
+ * Seconden nummer per seconde audioklok op t, exact: tellen per seconde van de klok maal
+ * seconden per tel van het grid, allebei rechts-continu (op een grens geldt het nieuwe stuk).
+ * Geen numerieke afgeleide: die week ~1e-9 tel af en nam bij het laatste stuk de rate van
+ * een halve seconde later (modeltest K6, K7).
+ */
+export function rateOp(klok, grid, v, t) {
+  return klok.rate(t) * grid.lengteBijTel(klok.tel(t) + v + 1e-9);
 }
 
 /**
