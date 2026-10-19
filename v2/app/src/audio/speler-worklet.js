@@ -21,7 +21,7 @@
  *   { type: 'fout', bericht }               één keer per fout; daarna stilte
  *                                           tot een nieuwe 'laad' of 'leeg'.
  */
-import { maakKern, laadBron, planSegmenten, leegBron, wisKern, renderBlok } from './speler-kern.js';
+import { maakKern, laadBron, planSegmenten, leegBron, renderBlok } from './speler-kern.js';
 
 class VarveSpeler extends AudioWorkletProcessor {
   constructor() {
@@ -38,10 +38,10 @@ class VarveSpeler extends AudioWorkletProcessor {
       if (!m || this.gestopt) return;
       if (m.type === 'plan') { if (!this.kapot) planSegmenten(this.kern, m.segmenten); }
       else if (m.type === 'laad') {
-        if (this.kapot) { wisKern(this.kern); this.kapot = false; }
+        this.kapot = false;
         laadBron(this.kern, m.sr, m.frames, m.paginas);
       } else if (m.type === 'leeg') {
-        if (this.kapot) { wisKern(this.kern); this.kapot = false; }
+        this.kapot = false;
         leegBron(this.kern);
       } else if (m.type === 'stop') this._stop();
     } catch (e) { this._fout(e); }
@@ -49,14 +49,19 @@ class VarveSpeler extends AudioWorkletProcessor {
 
   _stop() {
     this.gestopt = true;
-    wisKern(this.kern);                   // pagina's los
     this.port.onmessage = null;
+    this.kern = null;                     // pagina's los
   }
 
+  /**
+   * Een fout: één melding, en een verse kern (stil, zonder bron). Opnieuw
+   * opbouwen in plaats van wissen: na een fout is de oude toestand niet te
+   * vertrouwen. Pas een nieuwe 'laad' of 'leeg' laat hem weer spelen.
+   */
   _fout(e) {
+    this.kern = maakKern(sampleRate);
     if (this.kapot) return;
     this.kapot = true;
-    try { wisKern(this.kern); } catch { /* niets meer aan te doen */ }
     this.port.postMessage({ type: 'fout', bericht: String((e && (e.stack || e.message)) || e) });
   }
 

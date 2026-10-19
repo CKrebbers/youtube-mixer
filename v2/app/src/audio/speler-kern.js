@@ -99,9 +99,9 @@ export function maakKern(ctxSr) {
     vRicht: new Int8Array(STEMMEN),          // +1 komt op, 0 staat, −1 zakt weg
     vEnv: new Float64Array(STEMMEN),         // gat-envelop 0..1
     lead: -1,                                // de stem die het laatste segment speelt, of −1
-    // Kladblok voor de vier buren van een sample.
-    yl: new Float64Array(4),
-    yr: new Float64Array(4),
+    // Kladblok voor de vier buren van een sample (ruwe Int16-waarden).
+    bl: new Int32Array(4),
+    br: new Int32Array(4),
   };
 }
 
@@ -189,20 +189,24 @@ export function planSegmenten(k, segmenten) {
 
 /**
  * De vier buren n−1..n+2 frame voor frame (paginagrens, gat, rand van het
- * nummer) naar k.yl/k.yr. Ontbreekt een pagina: 0.
+ * nummer) als RUWE Int16-waarden naar k.bl/k.br; ontbreekt een pagina: 0.
+ * Alleen hele getallen: dit pad draait een paar keer per paginagrens, te
+ * weinig om geoptimaliseerd te worden, en ongeoptimaliseerd maakt V8 van elke
+ * double een object (gemeten: ~350 bytes per venster met doubles hier).
  */
 function buren(k, pag, n) {
   const np = pag === null ? 0 : pag.length;
+  const bl = k.bl, br = k.br;
   for (let q = 0; q < 4; q++) {
     const m = n - 1 + q;
-    k.yl[q] = 0; k.yr[q] = 0;
+    bl[q] = 0; br[q] = 0;
     if (m < 0) continue;
     const pk = m >> PAGINA_SHIFT;
     if (pk >= np) continue;
     const p = pag[pk];
     if (p === undefined) continue;
     const j = (m & PAGINA_MASK) * 2;
-    if (j + 1 < p.length) { k.yl[q] = p[j] * SCHAAL; k.yr[q] = p[j + 1] * SCHAAL; }
+    if (j + 1 < p.length) { bl[q] = p[j]; br[q] = p[j + 1]; }
   }
 }
 
@@ -218,7 +222,7 @@ function stemBlok(k, v, L, R, van, tot) {
   const f0 = k.klok[0], csr = k.ctxSr;
   const T = k.vT[v], P = k.vP[v], Rr = k.vR[v];
   const dw = k.dw, de = k.de;
-  const yl = k.yl, yr = k.yr;
+  const bl = k.bl, br = k.br;
   let w = k.vW[v], richt = k.vRicht[v], env = k.vEnv[v];
   // Zo ver vooruit (frames) zien we een gat aankomen; minstens het halve tempo.
   const vooruit = Math.ceil(GAT_FADE * sr * (Rr > 0.5 ? Rr : 0.5)) + 2;
@@ -247,21 +251,23 @@ function stemBlok(k, v, L, R, van, tot) {
     if (ok) { if (env < 1) { env += de; if (env > 1) env = 1; } }
     else if (env > 0) { env -= de; if (env < 0) env = 0; }
     if (env === 0) continue;
-    // De vier buren: bijna altijd op één pagina, dan rechtstreeks.
+    // De vier buren (ruwe Int16): bijna altijd op één pagina, dan rechtstreeks.
     const k0 = (n - 1) >> PAGINA_SHIFT;
     const p = n >= 1 && k0 === ((n + 2) >> PAGINA_SHIFT) && k0 < np ? pag[k0] : undefined;
     const j = ((n - 1) & PAGINA_MASK) * 2;
+    let l0, l1, l2, l3, r0, r1, r2, r3;
     if (p !== undefined && j + 7 < p.length) {
-      yl[0] = p[j] * SCHAAL; yr[0] = p[j + 1] * SCHAAL;
-      yl[1] = p[j + 2] * SCHAAL; yr[1] = p[j + 3] * SCHAAL;
-      yl[2] = p[j + 4] * SCHAAL; yr[2] = p[j + 5] * SCHAAL;
-      yl[3] = p[j + 6] * SCHAAL; yr[3] = p[j + 7] * SCHAAL;
-    } else buren(k, pag, n);
-    const a = g * env;
-    let y0 = yl[0], y1 = yl[1], y2 = yl[2], y3 = yl[3];
-    L[i] += a * (y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0))));
-    y0 = yr[0]; y1 = yr[1]; y2 = yr[2]; y3 = yr[3];
-    R[i] += a * (y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0))));
+      l0 = p[j]; r0 = p[j + 1]; l1 = p[j + 2]; r1 = p[j + 3];
+      l2 = p[j + 4]; r2 = p[j + 5]; l3 = p[j + 6]; r3 = p[j + 7];
+    } else {
+      buren(k, pag, n);
+      l0 = bl[0]; l1 = bl[1]; l2 = bl[2]; l3 = bl[3];
+      r0 = br[0]; r1 = br[1]; r2 = br[2]; r3 = br[3];
+    }
+    // Hermite is lineair in y: eerst op de ruwe waarden, dan één keer schalen.
+    const a = g * env * SCHAAL;
+    L[i] += a * (l1 + 0.5 * x * (l2 - l0 + x * (2 * l0 - 5 * l1 + 4 * l2 - l3 + x * (3 * (l1 - l2) + l3 - l0))));
+    R[i] += a * (r1 + 0.5 * x * (r2 - r0 + x * (2 * r0 - 5 * r1 + 4 * r2 - r3 + x * (3 * (r1 - r2) + r3 - r0))));
   }
   k.vW[v] = w; k.vRicht[v] = richt; k.vEnv[v] = env;
   if (klaar) k.vAan[v] = 0;

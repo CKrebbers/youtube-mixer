@@ -471,7 +471,12 @@ test('8. afvalvrij: 20.000 blokken met wisselende plannen, 0 GC tijdens het rend
   // Opwarmen: tot V8 het pad geoptimaliseerd heeft maakt de interpreter van elke double een object.
   for (let v = 0; v < 30; v++) { plannen(v); draai(VENSTER); }
 
-  let gcs = 0, bytes = 0, blokken = 0;
+  // Heapgroei per venster: de meting zelf (memoryUsage, GCProfiler) kost ~256
+  // bytes, en de eerste vensters na het opwarmen ook zonder renderBlok ~3 kB
+  // (gemeten met een lege lus). Een echte allocatie per blok (≥ 16 bytes) is
+  // ≥ 6400 bytes per venster: de MEDIAAN moet daar ver onder blijven.
+  const groei = [];
+  let gcs = 0, blokken = 0;
   for (let v = 30; blokken < 20000; v++) {
     plannen(v);
     globalThis.gc(); globalThis.gc();
@@ -481,9 +486,11 @@ test('8. afvalvrij: 20.000 blokken met wisselende plannen, 0 GC tijdens het rend
     draai(VENSTER);
     const h1 = process.memoryUsage().heapUsed;
     gcs += prof.stop().statistics.length;
-    bytes += h1 - h0;
+    groei.push(h1 - h0);
     blokken += VENSTER;
   }
   assert.equal(gcs, 0, `${gcs} GC's tijdens ${blokken} blokken`);
-  assert.ok(bytes / blokken < 1, `heap groeide ${(bytes / blokken).toFixed(2)} bytes per blok`);
+  groei.sort((a, b) => a - b);
+  const mediaan = groei[groei.length >> 1];
+  assert.ok(mediaan <= 512, `heapgroei per venster van ${VENSTER} blokken: mediaan ${mediaan} bytes`);
 });
