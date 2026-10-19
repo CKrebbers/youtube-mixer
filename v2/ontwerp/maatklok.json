@@ -225,7 +225,8 @@
       "dan": "B ligt verder voor op de klok en blijft daar. De klok, A en alles op de tel blijven precies waar ze waren.",
       "besluiten": [
         "klok-B03"
-      ]
+      ],
+      "open": false
     },
     {
       "id": "klok-S04",
@@ -428,6 +429,26 @@
         "(c) Ja, maar pas op de volgende tel."
       ],
       "advies": "(c): terugspringen midden in een tel hoor je; op de tel valt het weg."
+    },
+    {
+      "id": "klok-O6",
+      "vraag": "Verzet de pitchfader van een gekoppeld nummer dat je NIET hoort (alleen in de koptelefoon, fader dicht) ook de klok?",
+      "opties": [
+        "(a) Ja, altijd: de regel is dezelfde, wat je hoort maakt niet uit.",
+        "(b) Nee: een nummer dat niet in de zaal klinkt verzet de klok nooit; de fader doet dan niets tot het hoorbaar is (zoals djay sinds 5.3.3).",
+        "(c) Ja, maar alleen met Shift vast."
+      ],
+      "advies": "(b): voorbeluisteren mag het tempo van de zaal nooit verzetten. Dat is precies de fout die djay in 5.3.3 terugdraaide."
+    },
+    {
+      "id": "klok-O7",
+      "vraag": "Na de jog loslaten: blijft het nummer op zijn nieuwe plek, of springt het terug in de pas?",
+      "opties": [
+        "(a) Het blijft waar je het neerzet (zoals nu in klok-S03): met de jog corrigeer je een grid dat net naast ligt.",
+        "(b) Het glijdt terug naar de oude plek: de jog is een tijdelijke afwijking, voor een effect of een scratch.",
+        "(c) Jog = blijvend, scratch (jog ingedrukt bovenop) = tijdelijk."
+      ],
+      "advies": "(a), en (c) als je scratchen wilt: je antwoord \"de track schuift t.o.v. de klok\" lees ik als blijvend. djay zet sync uit bij een bend; dat doen wij niet."
     }
   ],
   "uitV1": [
@@ -468,6 +489,47 @@
     }
   ],
   "contract": "// Schets, geen code van v1.\nklok.lijn            // [{ T, C, R }]: vanaf audiokloktijd T staat de klok op tel C, R tellen/s\nklok.maat            // tellen per maat (4); de \"1\" ligt op C = 0, 4, 8, …\nklok.telOp(t)        // tel op audiokloktijd t (plannen)\nklok.tijdVan(tel)    // audiokloktijd van een tel\nklok.hoorbaar(t)     // tel zoals je hem hoort: telOp(t - uitgangsvertraging)\nklok.volgendeEen(t)  // audiokloktijd van de volgende \"1\" na t (+ startDrempel)\nklok.zetTempo(bpm, { glij })  // nieuw stuk lijn ná wat gepland is, nooit een sprong\nklok.naarNummer(deck)         // tempo en tel van wat je van dat deck hoort\nklok.abonneer(fn)             // fn(lijn) bij elke wijziging; afnemers rekenen zelf niets\n\ndeck.koppeling       // null (vrij) of { verschuiving }  // in tellen\n// gekoppeld: tel van het nummer = klok.telOp(t) + verschuiving\n//            plek in het nummer = grid.timeOf(tel van het nummer)\n//            -> per stuk lijn één segment { T, P, R } naar de afspeelmotor\ndeck.koppel()        // weigert op een onzeker grid; verschuiving = dichtstbijzijnde tel\ndeck.ontkoppel()     // speelt vrij verder op de rate van nu\ndeck.duw(tellen)     // jog, nudge, fase: alleen de verschuiving",
-  "djay": "Het onderzoek naar djay loopt; de vergelijking komt hier.",
-  "beter": []
+  "djay": "djay heeft geen eigen klok: sync koppelt decks aan een master die zichzelf kiest, alleen een hoorbaar deck kan zijn, en nergens op het scherm staat (Algoriddim bevestigde dat in juli 2026). Een klok buiten de decks bestaat alleen met Ableton Link. De jog aanraken (pitch bend) zet sync uit: \"normal behaviour\" volgens een moderator (jan 2024); opnieuw syncen doe je zelf. Of een tempowijziging op een gesynct deck alle decks meeneemt, wisselde tussen versies (5.3.2 ja, 5.3.3 terug voor een deck dat je niet hoort). Het Fluid Beatgrid volgt elke schommeling, ook een break zonder ritme, en sync trekt mee (76 → 109 bpm in een break). djay toont niet hoe zeker een grid is. Volledig onderzoek met bronnen: v2/referentie/djay.md.",
+  "beter": [
+    {
+      "djay": "De master kiest zichzelf, onzichtbaar, en wisselt met de crossfader.",
+      "nadeel": "Je weet niet wie de maat geeft; een EQ-mix verzet ongemerkt het tempo.",
+      "varve": "Eén maatklok die nooit vanzelf wisselt. Tempo, tel en de \"1\" staan altijd op scherm en APC (klok-B02)."
+    },
+    {
+      "djay": "Een pitch bend op de jog zet sync uit; opnieuw syncen doe je zelf.",
+      "nadeel": "Precies het moment van bijsturen breekt de koppeling.",
+      "varve": "Jog en nudge verschuiven het nummer op de klok; sync blijft aan (klok-B03, open vraag klok-O7)."
+    },
+    {
+      "djay": "Twee soorten sync plus schakelaars per handeling (\"resume after scratch/cue\") die per versie anders werken.",
+      "nadeel": "Onvoorspelbaar; regressies in 5.0–5.1 en 5.3.2/5.3.3.",
+      "varve": "Eén begrip \"gekoppeld\", één regel per handeling, elk vastgelegd als scenario en straks als test."
+    },
+    {
+      "djay": "Een tempoknop op een gesynct deck verzette alles, of niet (wisselde per versie).",
+      "nadeel": "Een deck in de koptelefoon kon het tempo van de zaal verzetten.",
+      "varve": "De pitchfader van een gekoppeld nummer is het klok-tempo (klok-B13); wat er gebeurt met een nummer dat je niet hoort: open vraag klok-O6."
+    },
+    {
+      "djay": "Het Fluid Grid volgt elke schommeling, ook een break; sync trekt mee.",
+      "nadeel": "Hoorbaar versnellen en vertragen in stukken zonder ritme.",
+      "varve": "Zekerheid per stuk met een reden; in een onzeker stuk weigert koppelen en houdt de klok zijn tempo (klok-B08)."
+    },
+    {
+      "djay": "Een klok buiten de decks bestaat alleen via Ableton Link.",
+      "nadeel": "Patronen, sampler en beeld hebben geen tijd zonder een spelend deck.",
+      "varve": "De klok is de kern en loopt door zonder deck (klok-B02, klok-B05); Link kan later een ingang of uitgang zijn."
+    },
+    {
+      "djay": "Een loop kan uit de pas lopen tegen de Link-klok (open bug 5.2.6–5.3).",
+      "nadeel": "Drift precies als je een loop gebruikt.",
+      "varve": "Loops in tellen van het grid, alle afnemers lezen dezelfde klok; niemand herankert zelf (klok-B09, klok-B11)."
+    },
+    {
+      "djay": "Geen zekerheid of twijfelreden op het scherm.",
+      "nadeel": "Je merkt een fout grid pas in de mix.",
+      "varve": "Zeker / twijfel / geen puls naast de bpm, en een melding met reden als koppelen weigert (klok-B08, klok-S08)."
+    }
+  ]
 }
