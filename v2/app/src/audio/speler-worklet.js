@@ -1,0 +1,87 @@
+/**
+ * De AudioWorklet van de afspeler. Draait op de audiothread en doet bewust
+ * bijna niets zelf: berichten doorgeven aan de kern en per blok renderBlok()
+ * aanroepen. Beslissingen (wat, wanneer) neemt de hoofdthread.
+ *
+ * Klok: currentFrame, sample-exact. Sample i van dit blok ligt op
+ * (currentFrame + i) / sampleRate; geen eigen teller.
+ *
+ * Afval: process() maakt per blok niets aan. Wat wel iets aanmaakt gebeurt per
+ * BERICHT (dat object maakt de browser al) of bij een fout (één keer).
+ *
+ * Berichten erin:
+ *   { type: 'laad', sr, frames, paginas }   paginas overgedragen (transfer)
+ *   { type: 'plan', segmenten }             [{ T, P, R, speelt }]
+ *   { type: 'leeg' }                        stil, bron weg (na het uitvloeien)
+ *   { type: 'stop' }                        daarna geeft process() false: de
+ *                                           browser mag de node opruimen. Een
+ *                                           processor die true blijft geven
+ *                                           houdt zichzelf in leven.
+ * Berichten eruit:
+ *   { type: 'fout', bericht }               één keer per fout; daarna stilte
+ *                                           tot een nieuwe 'laad' of 'leeg'.
+ */
+import { maakKern, laadBron, planSegmenten, leegBron, wisKern, renderBlok } from './speler-kern.js';
+
+class VarveSpeler extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.kern = maakKern(sampleRate);
+    this.gestopt = false;
+    this.kapot = false;                   // na een fout: stilte, tot laad/leeg
+    this.reserve = null;                  // alleen als de uitgang ooit geen twee kanalen heeft
+    this.port.onmessage = (e) => this._bericht(e.data);
+  }
+
+  _bericht(m) {
+    try {
+      if (!m || this.gestopt) return;
+      if (m.type === 'plan') { if (!this.kapot) planSegmenten(this.kern, m.segmenten); }
+      else if (m.type === 'laad') {
+        if (this.kapot) { wisKern(this.kern); this.kapot = false; }
+        laadBron(this.kern, m.sr, m.frames, m.paginas);
+      } else if (m.type === 'leeg') {
+        if (this.kapot) { wisKern(this.kern); this.kapot = false; }
+        leegBron(this.kern);
+      } else if (m.type === 'stop') this._stop();
+    } catch (e) { this._fout(e); }
+  }
+
+  _stop() {
+    this.gestopt = true;
+    wisKern(this.kern);                   // pagina's los
+    this.port.onmessage = null;
+  }
+
+  _fout(e) {
+    if (this.kapot) return;
+    this.kapot = true;
+    try { wisKern(this.kern); } catch { /* niets meer aan te doen */ }
+    this.port.postMessage({ type: 'fout', bericht: String((e && (e.stack || e.message)) || e) });
+  }
+
+  process(_in, outputs) {
+    if (this.gestopt) return false;
+    const uit = outputs[0];
+    if (!uit || uit.length === 0) return true;
+    const L = uit[0];
+    let R = uit.length > 1 ? uit[1] : null;
+    if (R === null) {
+      if (this.reserve === null || this.reserve.length !== L.length) this.reserve = new Float32Array(L.length);
+      R = this.reserve;
+    }
+    if (this.kapot) { L.fill(0); R.fill(0); return true; }
+    try {
+      this.kern.klok[0] = currentFrame;
+      renderBlok(this.kern, L, R, L.length);
+    } catch (e) {
+      L.fill(0); R.fill(0);
+      this._fout(e);
+    }
+    if (uit.length === 1) for (let i = 0; i < L.length; i++) L[i] = 0.5 * (L[i] + R[i]);
+    for (let c = 2; c < uit.length; c++) uit[c].fill(0);
+    return true;
+  }
+}
+
+registerProcessor('varve-speler', VarveSpeler);
