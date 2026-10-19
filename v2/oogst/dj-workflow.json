@@ -119,10 +119,10 @@
     },
     {
       "id": "dj-workflow-006",
-      "titel": "Nooit cookies; links vooraf keuren en normaliseren",
+      "titel": "Nooit cookies; links vooraf keuren; beeld op de korte kant",
       "soort": "regel",
-      "wat": "Er gaat nooit een cookie-optie naar yt-dlp (ook niet uit de browser); een test grept alle server/*.js daarop. Playlist, kanaal en profiel worden vooraf geweigerd (bekijkLink), playlists en livestreams ook na de metadata. TikTok wordt https://www.tiktok.com/@naam/video/<id> zonder query (zonder \"www.\" herkent yt-dlp hem niet); id van een andere site krijgt de extractor ervoor (tiktok-<getal>).",
-      "waarom": "Cookies maken van een persoonlijk instrument een account-risico. Gemeten met yt-dlp 2026.08.19: TikTok vraagt curl_cffi (browser-imitatie); een nummer van 79 s kostte 57 s ingest.",
+      "wat": "Er gaat nooit een cookie-optie naar yt-dlp (ook niet uit de browser); een test grept alle server/*.js daarop. Playlist, kanaal en profiel worden vooraf geweigerd, playlists en livestreams ook na de metadata. TikTok wordt https://www.tiktok.com/@naam/video/<id> zonder query, id tiktok-<getal>. Beeld met -f bv/b -S res:720 (720 op de KORTE kant) en de transcode schaalt naar hooguit 720 op de korte kant; bij het meten -vn.",
+      "waarom": "Cookies maken van een persoonlijk instrument een account-risico. Zonder \"www.\" herkent yt-dlp een TikTok niet; [height<=720] gaf op een staande TikTok geen video; zonder -vn decodeerde het meten van een 4K-video minuten lang beeld. Gemeten met yt-dlp 2026.08.19: TikTok vraagt curl_cffi; 79 s nummer, 57 s ingest.",
       "bron": [
         {
           "pad": "CLAUDE.md",
@@ -131,6 +131,10 @@
         {
           "pad": "server/links.js",
           "waar": "normaliseerLink, bekijkLink, trackIdVoor, tiktokHint"
+        },
+        {
+          "pad": "server/ingest.js",
+          "waar": "VIDEO_FORMAAT r. 418, cfrTranscode, meetLoudness"
         },
         {
           "pad": "docs/KAART.md",
@@ -148,26 +152,6 @@
     },
     {
       "id": "dj-workflow-007",
-      "titel": "Beeld kiezen met -S res:720 (korte kant), niet [height<=720]",
-      "soort": "valkuil",
-      "wat": "yt-dlp krijgt -f bv/b -S res:720: sorteren op de kleinste kant. De transcode schaalt naar hooguit 720 op de korte kant (ook eigen 4K en staande 1080×1920). Bij het meten -vn, anders decodeert ffmpeg ook het hele beeld, twee keer. -fps_mode met terugval op -vsync voor oudere ffmpeg.",
-      "waarom": "[height<=720] gaf op een staande TikTok niets, dus geen video. Een 4K-video meten kostte minuten. Acht lagen video moeten tegelijk te decoderen blijven.",
-      "bron": [
-        {
-          "pad": "server/ingest.js",
-          "waar": "VIDEO_FORMAAT r. 418, cfrTranscode r. 382-401, meetLoudness r. 329"
-        }
-      ],
-      "code": [
-        "server/ingest.js"
-      ],
-      "pijler": "beeld",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Kleine, bewezen ffmpeg/yt-dlp-kennis."
-    },
-    {
-      "id": "dj-workflow-008",
       "titel": "Eigen bestanden: gestreamd, gehasht, dezelfde pijplijn",
       "soort": "contract",
       "wat": "POST /api/upload?naam=… met het bestand als body (octet-stream, audio/*, video/*), gestreamd naar een werkmap en onderweg gehasht; boven VARVE_UPLOAD_MAX (8 GB) 413. ffprobe keurt: geen geluidsspoor = 415 met reden, een hoesje in een mp3 telt niet als beeld. Id lokaal-<12 hex van de SHA-256>: hetzelfde bestand is hetzelfde nummer. Opties ?video=0, ?titel=, ?artiest=. Daarna dezelfde verwerk() als een link; het origineel wordt niet bewaard.",
@@ -193,7 +177,7 @@
       "reden": "Werkt; hash-id is het juiste idee."
     },
     {
-      "id": "dj-workflow-009",
+      "id": "dj-workflow-008",
       "titel": "Eén afspeelmotor: ook losse bestanden en de demo gaan door de StreamBron",
       "soort": "besluit",
       "wat": "Een losgesleept bestand of de demotrack wordt in de browser omgezet naar het ingest-formaat (16-bit stereo WAV) en via een geheugen-haal door dezelfde StreamBron gespeeld. Kost ~11 MB per minuut. Een video (of audio die de browser niet leest) gaat via de library en komt daarna op de track, niet als die track dan speelt.",
@@ -215,7 +199,7 @@
       "reden": "Eén pad voor alle bronnen houdt de rest van de workflow simpel."
     },
     {
-      "id": "dj-workflow-010",
+      "id": "dj-workflow-009",
       "titel": "Library: de server pagineert en sorteert, het paneel tekent alleen wat je ziet",
       "soort": "besluit",
       "wat": "GET /api/library?zoek=&sorteer=&richting=&van=&aantal= geeft { tracks, totaal, van }, hooguit 500 per verzoek; zonder aantal alles (voor tools). Het paneel is een virtuele lijst met vaste rijhoogte 28 px en 8 rijen marge. Eerst de rowids van de pagina uit een index, dan de rijen met aantallen erbij in één query.",
@@ -237,7 +221,7 @@
       "reden": "Schaalt naar 20.000 en houdt de server vrij voor de audio."
     },
     {
-      "id": "dj-workflow-011",
+      "id": "dj-workflow-010",
       "titel": "Sorteren: eigen sleutels, NULL achteraan, gelijkspel vast, titel vooraf",
       "soort": "regel",
       "wat": "Alleen eigen sorteersleutels (Object.hasOwn: \"constructor\" gaf een 500). Wat geen waarde heeft staat altijd achteraan; gelijk = laatst toegevoegd eerst, dan rowid, zodat pagina's nooit overlappen. Titel sorteert op een vooraf berekende titel_sleutel (zonder accenten, kleine letters, getallen op waarde: Track 2 vóór Track 10). In zoeken zijn % en _ gewone tekens.",
@@ -257,53 +241,33 @@
       "reden": "Simpele regels die paginering correct maken."
     },
     {
-      "id": "dj-workflow-012",
+      "id": "dj-workflow-011",
       "titel": "Pagina-cache met generaties: een laat antwoord valt weg",
       "soort": "valkuil",
       "wat": "Zoeken wacht 120 ms na de laatste toets. Elke nieuwe vraag (zoekterm, sortering, filter) is een nieuwe generatie; een antwoord op een oudere vraag, ook een pagina die nog voor de vorige vraag onderweg was, valt weg. Verversen ruilt pas als alles binnen is (geen flits). Laden zet \"gespeeld\" in de rij maar sorteert niet opnieuw, zodat de lijst niet onder de muis wegspringt.",
-      "waarom": "Scrollen vlak na een klik op de kop liet oude rijen in een nieuwe sortering vallen; review rond 25 sep.",
+      "waarom": "Scrollen vlak na een klik op de kop liet oude rijen in een nieuwe sortering vallen (review rond 25 sep). Verwant: cellen die periodiek bijwerken (stems, kaart-stand, ingest-strook) tekenen niet terwijl je in de lijst drukt, want in Chrome krijgt een knop die tussen indrukken en loslaten vervangen wordt geen klik.",
       "bron": [
         {
           "pad": "docs/LIBRARY.md",
-          "waar": "Het paneel"
+          "waar": "Het paneel; stems-kolom; De kaart-tab"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "INGEST-WACHTRIJ (laatste zin)"
         }
       ],
       "code": [
-        "src/ui/library-lijst.js"
+        "src/ui/library-lijst.js",
+        "src/ui/ingest-strook.js",
+        "src/ui/kaart-panel.js"
       ],
       "pijler": "dj",
       "gewicht": "belangrijk",
       "voorstel": "houden",
-      "reden": "Geldt voor elke gepagineerde lijst (library, kaart, plan)."
+      "reden": "Geldt voor elke gepagineerde of levende lijst (library, kaart, plan, rij)."
     },
     {
-      "id": "dj-workflow-013",
-      "titel": "Een knop die tussen indrukken en loslaten vervangen wordt, krijgt geen klik",
-      "soort": "valkuil",
-      "wat": "Lijsten die periodiek bijwerken (stems-cellen, kaart-stand, ingest-strook) tekenen niet terwijl je in de lijst drukt, en vervangen alleen de cellen die veranderden.",
-      "waarom": "In Chrome krijgt een element dat tussen pointerdown en pointerup uit de DOM gaat geen click; knoppen in de ingest-strook en de stems-kolom deden daardoor soms niets.",
-      "bron": [
-        {
-          "pad": "CLAUDE.md",
-          "waar": "INGEST-WACHTRIJ (laatste zin)"
-        },
-        {
-          "pad": "docs/LIBRARY.md",
-          "waar": "stems-kolom; De kaart-tab"
-        }
-      ],
-      "code": [
-        "src/ui/ingest-strook.js",
-        "src/ui/kaart-panel.js",
-        "src/ui/library-panel.js"
-      ],
-      "pijler": "systeem",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "UI-regel die in v2 net zo geldt."
-    },
-    {
-      "id": "dj-workflow-014",
+      "id": "dj-workflow-012",
       "titel": "Bpm sorteert op het eerste gridstuk maar toont het hoofdtempo",
       "soort": "pijn",
       "wat": "De kolom toont sinds 13 okt het hoofdtempo (zekere stukken gewogen naar lengte, \"~84.7\" = drift, \"128 / 117\" = tweede tempo, \"64.6?\" = geen zeker stuk); sorteren gebeurt nog op grid_bpm van het eerste stuk. Bij een nummer dat met een ander tempo begint lopen sorteren en tonen uiteen.",
@@ -328,7 +292,7 @@
       "reden": "In v2 één afgeleide kolom hoofdtempo voor tonen, sorteren én filteren."
     },
     {
-      "id": "dj-workflow-015",
+      "id": "dj-workflow-013",
       "titel": "\"Laatst gespeeld\" is eigenlijk \"laatst geladen\"",
       "soort": "grens",
       "wat": "De kolom gespeeld = laatst_geladen, gezet door POST /api/library/<id>/geladen bij elke laad. Of het nummer daarna echt klonk weet de server niet.",
@@ -349,10 +313,10 @@
       "reden": "Clay: is geladen genoeg, of moet v2 \"gespeeld\" afleiden uit wat echt hoorbaar was (dan ook beurten tellen)?"
     },
     {
-      "id": "dj-workflow-016",
+      "id": "dj-workflow-014",
       "titel": "Hotcues horen bij het nummer, niet bij het deck",
       "soort": "besluit",
-      "wat": "Tabel hotcues (track_id, nr 1..8, tijd, gemaakt), cascade bij verwijderen; GET/POST/DELETE per nummer. Het deck (kent geen library) meldt alleen zetten en wissen; restoreHotcues() vult alleen lege plekken en meldt niets (anders bewaart terugzetten weer), en pint de plekken meteen vast. Verzoeken gaan één voor één. Los bestand of demo: niets bewaard.",
+      "wat": "Tabel hotcues (track_id, nr 1..8, tijd, gemaakt; het deck gebruikt er 4), cascade bij verwijderen; GET/POST/DELETE per nummer. Het deck (kent geen library) meldt alleen zetten en wissen; restoreHotcues() vult alleen lege plekken en meldt niets (anders bewaart terugzetten weer), en pint de plekken meteen vast. Verzoeken gaan één voor één. Los bestand of demo: niets bewaard.",
       "waarom": "\"Zetten en meteen wissen\" kwam anders in omgekeerde volgorde aan en dan stond de hotcue er de volgende keer weer. Zelfde patroon als sampler-pads, racks en grid: alles wat je met de hand aan een nummer doet hoort bij het nummer.",
       "bron": [
         {
@@ -375,27 +339,7 @@
       "reden": "Het principe \"handwerk hoort bij het nummer\" is kern; de uitvoering kan simpeler (zie de atomische laad)."
     },
     {
-      "id": "dj-workflow-017",
-      "titel": "Het deck heeft 4 hotcues, de database ruimte voor 8",
-      "soort": "grens",
-      "wat": "Het deck kent hotcues 1–4; tabel en route laten nr 1..8 toe.",
-      "waarom": "Ruimte gelaten voor later; de APC- en scherm-indeling gebruikt er vier per track.",
-      "bron": [
-        {
-          "pad": "docs/LIBRARY.md",
-          "waar": "Hotcues per nummer"
-        }
-      ],
-      "code": [
-        "src/engine/deck.js"
-      ],
-      "pijler": "dj",
-      "gewicht": "detail",
-      "voorstel": "open",
-      "reden": "Clay: vier of acht hotcues per nummer in v2? Raakt de controller-indeling."
-    },
-    {
-      "id": "dj-workflow-018",
+      "id": "dj-workflow-015",
       "titel": "Laadgat: hotcues, grid, secties komen ná het laden",
       "soort": "valkuil",
       "wat": "Tussen \"load\" van het deck en het antwoord van de server is een gezette hotcue voorlopig; een bewaarde op die plek wint en het deck springt erheen als de druk ≤ 1 s oud is (HOTCUE_VERS). deckTrack gaat op null zodra laadStream slaagt. De sectiekaart komt ook pas na het laden: de auto-DJ wacht hooguit 3 s en nooit voorbij het moment dat hij zonder kaart zou plannen.",
@@ -421,7 +365,7 @@
       "reden": "In v2 een laad pas \"klaar\" melden als het nummer met al zijn metadata (hotcues, grid, toon, secties, pads) binnen is: één atomische gebeurtenis, dan bestaat het gat niet."
     },
     {
-      "id": "dj-workflow-019",
+      "id": "dj-workflow-016",
       "titel": "Sampler-pads horen bij het nummer; bewaard wordt alleen WAAR het stuk zit",
       "soort": "besluit",
       "wat": "Tabel samples (schema v4): per pad van/tot in tracktijd, tellen, bpm, geen audio. Laad je het nummer, dan staan zijn pads als \"bewaard\" (↺) op lege pads; klik = opnieuw knippen van schijf, ongeacht focus of positie. Shift op gevuld = leeg (blijft bewaard), shift op leeg bewaard = vergeten. De engine kent geen library: de sampler heeft herinneringen (pure data) en meldt onGevuld/onVergeet.",
@@ -443,7 +387,7 @@
       "reden": "Goed patroon: een verwijzing in tracktijd i.p.v. een kopie."
     },
     {
-      "id": "dj-workflow-020",
+      "id": "dj-workflow-017",
       "titel": "Categorieën plat, slimme categorie = bewaard filter, snel-tag = plek",
       "soort": "besluit",
       "wat": "Een categorie is een eigen bak met volgorde (plat, geen mappen); een slimme categorie een bewaard filter dat de server bij elke vraag rekent (slim in slim kan niet); een tag een label met kleur en een sleutel (kleine letters, zonder accenten); snel-tag 1–8 een PLEK die naar een tag wijst. Een kaartkrat overnemen maakt een KOPIE (wat binnen is, in kratvolgorde). Tags van nummers zijn niet die van racks.",
@@ -465,7 +409,7 @@
       "reden": "Heldere begrippen; Clay's vraag S11-1/2 staat nog open maar het advies is zo laten."
     },
     {
-      "id": "dj-workflow-021",
+      "id": "dj-workflow-018",
       "titel": "Eén filter-object, in de UI is de tekst van het zoekveld de enige bron",
       "soort": "contract",
       "wat": "Filter = { zoek, categorie, tags: { en, of, niet }, bpm, toon, grid, stems, energie }, gedeeld door server en browser. Zoekregel: #dub, #a|b, -#vocal, #\"deep house\", @cat, bpm:70-90, toon:8A, grid:zeker, stems / -stems / stems:4, energie:hoog. leesZoekregel en zoekregelVan gaan heen en terug; een klik op een categorie of tag schrijft de zoektekst om. Een slimme categorie plus wat je typt is strikt EN.",
@@ -489,7 +433,7 @@
       "reden": "Puur, getest, bruikbaar op elk scherm."
     },
     {
-      "id": "dj-workflow-022",
+      "id": "dj-workflow-019",
       "titel": "Afgeleide filterkolommen met dezelfde formules als de lijst",
       "soort": "regel",
       "wat": "Schema v10 bewaart k_grid, k_toon, k_energie naast de JSON, gezet op elke plek die grid, toon, secties of duur schrijft (_kenmerken(id)) en bij elk openen nagerekend (KENMERK_VERSIE). Formules alleen uit src/library/indeling.js (die gridStatus en ToonKaart gebruikt), nooit een tweede. Een kolom met weinig waarden (k_grid) gaat bewust NIET via de index (+t.k_grid).",
@@ -515,7 +459,7 @@
       "reden": "Snel filteren op 20.000 nummers vraagt afgeleide kolommen; de één-formule-regel voorkomt drift."
     },
     {
-      "id": "dj-workflow-023",
+      "id": "dj-workflow-020",
       "titel": "Indeling schrijven alleen vanaf deze Mac; op de bus alleen kiezen en taggen",
       "soort": "regel",
       "wat": "Elke POST op /api/indeling/* alleen vanDezeMac (403). Op de bus alleen library.category.*, library.quicktag/quickfilter.K en track.N.tag.K (log overslaan, geen beginstand); wissen, hernoemen, samenvoegen en categorieën maken nooit. Hernoemen of samenvoegen schrijft slimme regels en snel-tags mee om, in één transactie. Import voegt samen en wist nooit (?droog=1 zegt wat er zou gebeuren), zodat Claude een indeling kan schrijven.",
@@ -537,7 +481,7 @@
       "reden": "Goede scheiding tussen bedienen en beheren."
     },
     {
-      "id": "dj-workflow-024",
+      "id": "dj-workflow-021",
       "titel": "Past bij: wat mixt met de focus-track, met de regels van de auto-DJ",
       "soort": "regel",
       "wat": "Goed = beide grids zeker, tempo ≤ 6% en toon gelijk of één stap op het Camelot-wiel NA het gelijkzetten van het tempo. Bijna = tempo ≤ 6% met twee stappen, tempo 6–10% met ≤ 1 stap, of half/dubbel tempo met ≤ 1. Een gegokte toon telt mee maar zakt onder een zekere. Meetpunt: speelt de focus-track, dan waar hij NU is, anders vlak vóór het eind van zijn fragment (of het midden van het langste zekere stuk); de inkomende aan het begin van zijn fragment.",
@@ -558,7 +502,7 @@
       "reden": "Puur en gedeeld; hoort in v2 in de domeinlaag, niet in ui/."
     },
     {
-      "id": "dj-workflow-025",
+      "id": "dj-workflow-022",
       "titel": "Video vraagt open bereiken: knip op 2 MB, anders wacht de audio",
       "soort": "meting",
       "wat": "Een open Range-verzoek op video.mp4 (bytes=N-) krijgt hooguit 2 MB terug (VIDEO_KNIP); audio.wav/stems.wav vragen altijd een gesloten bereik en de StreamBron haalt met priority high. Gemeten met acht decks en video: audio wacht p90 4111 ms → 38 ms, sprong naar pagina p90 3721 ms → 610 ms, grootste gat per deck 7690 ms → 670 ms.",
@@ -579,7 +523,7 @@
       "reden": "Zelfde server voor library, audio en video blijft in v2: verbindingsbudget meenemen."
     },
     {
-      "id": "dj-workflow-026",
+      "id": "dj-workflow-023",
       "titel": "Migraties op positie in SCHEMA botsten tussen takken",
       "soort": "valkuil",
       "wat": "Migraties staan als lijst SCHEMA; het versienummer is de positie. Twee takken die elk een element achteraan zetten (toonsoort v6, library v6) gaven op een echte database een stille breuk: daarna draaide de samengevoegde code de ene migratie nooit en de andere nog eens (\"bestaat al\", server start niet). Tests rekenen daarom met SCHEMA.length.",
@@ -599,15 +543,15 @@
       "reden": "In v2 migraties met een naam of id die in de database wordt bijgehouden, niet een volgnummer."
     },
     {
-      "id": "dj-workflow-027",
+      "id": "dj-workflow-024",
       "titel": "De muziekkaart is een zoeklaag: 0 bytes per nummer tot \"haal binnen\"",
       "soort": "besluit",
       "wat": "varve-kaart.json (door de muziekkaart geschreven, Varve leest alleen; 18.233 nummers, 29 kratten, 10,7 MB op 10 okt) staat in het geheugen als index. Binnenhalen per nummer of per krat, alleen audio (geen video, geen stems). Drie bestanden naast de library, nooit erin: het json-bestand, media/kaart.db (wensen, nacht_runs) en media/nacht.json. library.db is niet gewijzigd; binnen = tracks.id gelijk aan youtube_id.",
-      "waarom": "Clay heeft 18 duizend nummers in zijn geschiedenis; alles binnenhalen kost schijf en vraagt YouTube te veel. Een externe bron die zichzelf ververst mag de library niet stil omschrijven.",
+      "waarom": "Clay heeft 18 duizend nummers in zijn geschiedenis; alles binnenhalen kost schijf en vraagt YouTube te veel. Een externe bron die zichzelf ververst mag de library niet stil omschrijven. Herladen op mtime (een stat per verzoek), kapot bestand = status fout en de vorige kaart blijft. Gemeten op het echte bestand: laden 62–70 ms, pagina van 100 2,2–2,5 ms, zoeken 4,5–5,0 ms, RSS 155 MB.",
       "bron": [
         {
           "pad": "docs/KAART.md",
-          "waar": "§1, §2"
+          "waar": "§1, §2, §9"
         }
       ],
       "code": [
@@ -621,27 +565,7 @@
       "reden": "Scheiding tussen \"wat ik ken\" en \"wat ik heb\" is precies goed."
     },
     {
-      "id": "dj-workflow-028",
-      "titel": "Kaart in het geheugen: herladen op mtime, kapot = vorige blijft",
-      "soort": "meting",
-      "wat": "Een stat per verzoek; alleen bij een nieuwe mtime opnieuw lezen. Kapot bestand = status fout met reden, de vorige kaart blijft bruikbaar; geen bestand = status ontbreekt. Sorteringen worden één keer per (sortering, richting) gemaakt. Gemeten op het echte bestand: laden 62–70 ms, pagina van 100 2,2–2,5 ms, zoeken 4,5–5,0 ms, GET /api/kaart 1,3 ms, RSS 155 MB na laden.",
-      "waarom": "Een JSON van 10 MB per verzoek lezen zou 50–100 ms kosten. De muziekkaart moet atomisch schrijven (.tmp dan hernoemen), anders kan één verzoek een half bestand lezen.",
-      "bron": [
-        {
-          "pad": "docs/KAART.md",
-          "waar": "§2, §8, §9"
-        }
-      ],
-      "code": [
-        "server/kaart.js"
-      ],
-      "pijler": "dj",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Simpel en snel genoeg; geen database nodig voor een leesbron."
-    },
-    {
-      "id": "dj-workflow-029",
+      "id": "dj-workflow-025",
       "titel": "Wenslijst: statussen, grens van 20, nooit meteen als er een deck speelt",
       "soort": "contract",
       "wat": "POST /api/kaart/wens { sleutels, meteen, bevestig }: meer dan 20 zonder bevestig = 409 \"meer dan 20\" met aantal; meteen met een spelend deck = 409 \"er speelt een deck\". Geweigerd met reden: dubbel in de vraag, niet op de kaart, al binnen, staat al op de lijst (<status>); mislukt of geannuleerd mag opnieuw. Status wacht | zoekt | kies | bezig | klaar | mislukt | geannuleerd. Meteen gaat de bestaande ingest-rij in met video: false, stems: 0. Lichte vorm ?licht=1 met ETag/304 voor de companion (1379 B → 143 B).",
@@ -662,7 +586,7 @@
       "reden": "Duidelijk contract met letterlijke foutteksten."
     },
     {
-      "id": "dj-workflow-030",
+      "id": "dj-workflow-026",
       "titel": "Zoeken naar een YouTube-versie: score, nooit gokken",
       "soort": "besluit",
       "wat": "yt-dlp \"ytsearch5:<artiest> <titel>\" --flat-playlist zonder cookies, hooguit 60 s. Score: Topic-kanaal of kanaal = artiest (ook VEVO) 0,35 · lengte binnen 2 s 0,4 (binnen 5 s 0,2) · titel bevat de titel 0,25. Zeker vanaf 0,9: twee van de drie komt daar nooit, en zonder bekende duur is zeker onbereikbaar. Onzeker = status kies met kandidaten; Clay kiest.",
@@ -682,7 +606,7 @@
       "reden": "Eerlijke drempel, uitlegbare reden per kandidaat."
     },
     {
-      "id": "dj-workflow-031",
+      "id": "dj-workflow-027",
       "titel": "De nachtwachtrij: zes regels, standaard uit",
       "soort": "regel",
       "wat": "1) alleen in het venster (01:00–07:00), alleen als aan, nooit op een speeldag of \"vandaag niet\"; een nacht hoort bij een datum (vóór 12:00 = de dag ervóór), dus een speeldag geldt ook voor de nacht erna; \"vandaag niet\" geldt voor de komende nacht. 2) eerst wensen (oudste eerst), dan vertrouwd en eigen likes op beurten; nooit twijfel, set/stream/lang/album of > 15 min (een wens wel). 3) één tegelijk door de gewone ingest-rij, met een willekeurige pauze van 20–90 s. 4) stopt vóór het volgende nummer als er een deck speelt. 5) 403/429/\"sign in to confirm\" of drie mislukkingen op rij = stop voor deze nacht. 6) elke run in nacht_runs en het log. Eén run per nacht, ook na een herstart.",
@@ -702,7 +626,7 @@
       "reden": "Puur getest en voorzichtig; de eerste echte nacht klein beginnen (perNacht 5)."
     },
     {
-      "id": "dj-workflow-032",
+      "id": "dj-workflow-028",
       "titel": "\"Er speelt een deck\" raadt de server uit Range-verzoeken",
       "soort": "pijn",
       "wat": "speeltDeck() = minder dan 30 s geleden een Range-verzoek op audio.wav of stems.wav. Een net gepauzeerd deck telt nog 30 s als spelend; een los bestand, de demo of een deck van een andere server ziet hij niet. Ondertussen stuurt de mixer zijn stand al naar POST /api/mixer (voor de companion), maar de nacht, de kaart en \"maak klaar\" gebruiken dat niet.",
@@ -728,7 +652,7 @@
       "reden": "In v2 één expliciete mixerstatus (speelt, met een time-out die bij twijfel \"speelt\" zegt) die nacht, kaart, sets en companion allemaal lezen."
     },
     {
-      "id": "dj-workflow-033",
+      "id": "dj-workflow-029",
       "titel": "UI en server apart gebouwd naar een contract: zes afwijkingen bij samenvoegen",
       "soort": "valkuil",
       "wat": "De kaart-UI en de kaartserver werden in parallelle sporen gebouwd; bij samenvoegen bleken zes punten anders (kies zonder wens, track als object, sorteer=krat, letterlijke 409-teksten, sp:-sleutels bij meteen, kratnaam). Erbij: de UI stuurt percent-gecodeerde sleutels (yt%3Aabc) en url.pathname decodeert niet, dus \"haal binnen\" gaf 404. Sindsdien wordt de nep-server tegen hetzelfde contract getoetst als de echte.",
@@ -750,7 +674,7 @@
       "reden": "Les voor v2: een contract krijgt één gedeelde toets die zowel nep als echt draait."
     },
     {
-      "id": "dj-workflow-034",
+      "id": "dj-workflow-030",
       "titel": "Binnen telt alleen youtube_id, niet de alternatieven",
       "soort": "grens",
       "wat": "Een nummer waarvan een alternatieve video binnen is (een andere upload van hetzelfde nummer), telt op de kaart als niet binnen en kan dubbel binnenkomen.",
@@ -770,11 +694,11 @@
       "reden": "Clay: moet v2 een nummer herkennen over versies heen (zelfde artiest/titel/duur), of blijft een video een nummer?"
     },
     {
-      "id": "dj-workflow-035",
+      "id": "dj-workflow-031",
       "titel": "\"Welk nummer staat op welke track\" woont op vier plekken",
       "soort": "pijn",
       "wat": "staat.deckTrack en deckHerkomst in laden.js (UI), een eigen boekhouding in hotcue-opslag.js, laadSleutel (bron.bestand) in de automaat, staat.terugspeelDecks voor terugspelen, en het setboek leidt het achteraf af uit het log. Elk heeft eigen regels voor het gat tijdens een laad.",
-      "waarom": "Gegroeid per spoor. Elk nieuw onderdeel (tags op track.N, sets, lagen) moest opnieuw uitzoeken wat er op een deck staat.",
+      "waarom": "Gegroeid per spoor; elk nieuw onderdeel (tags op track.N, sets, lagen) moest opnieuw uitzoeken wat er op een deck staat. Het ging al mis: de automaat vergeleek deck.buffer, de StreamBron geeft daar elke keer een nieuw object, dus elke gestreamde track werd \"van Clay\" en de automaat liep vast; de tests (BufferBron) zagen het niet (S9 review ronde 2, nu laadSleutel = bron.bestand).",
       "bron": [
         {
           "pad": "src/ui/laden.js",
@@ -801,32 +725,7 @@
       "reden": "v2: één model \"inhoud van een track\" { nummer, herkomst, laadnummer, terugspelen? } buiten de engine, met gebeurtenissen; iedereen leest daaruit."
     },
     {
-      "id": "dj-workflow-036",
-      "titel": "Nooit deck.buffer vergelijken om een andere laad te zien",
-      "soort": "valkuil",
-      "wat": "De automaat zag of Clay iets anders laadde door deck.buffer te vergelijken; de StreamBron geeft daar elke keer een nieuw object. Elke gestreamde track werd zo \"van Clay\" en de automaat liep na een paar overgangen vast. Nu: laadSleutel = bron.bestand, één object per laad.",
-      "waarom": "In de tests niet te zien: die laden met een BufferBron. Gevonden in review ronde 2 van S9; een test bootst nu de stream na.",
-      "bron": [
-        {
-          "pad": "docs/PLAN-SET.md",
-          "waar": "§9 review ronde 2"
-        },
-        {
-          "pad": "CLAUDE.md",
-          "waar": "Een set klaarzetten … (S9)"
-        }
-      ],
-      "code": [
-        "src/auto/automaat.js",
-        "src/engine/bron.js"
-      ],
-      "pijler": "dj",
-      "gewicht": "belangrijk",
-      "voorstel": "anders",
-      "reden": "Met een laadnummer in het track-model (vorige kaart) is dit vanzelf goed; les: test met de echte bron."
-    },
-    {
-      "id": "dj-workflow-037",
+      "id": "dj-workflow-032",
       "titel": "Elke laad krijgt een volgnummer; na elke await controleren",
       "soort": "regel",
       "wat": "laden.js nummert elke laad per track (nieuweLaad/nogDeLaatste) en StreamBron.laad doet hetzelfde; na elke await stopt een laad die niet meer de laatste is. Een gelukte laad geeft altijd een object terug (ook {}), nooit null: null betekent \"verdrongen\".",
@@ -847,7 +746,7 @@
       "reden": "Standaardpatroon voor elke asynchrone laad."
     },
     {
-      "id": "dj-workflow-038",
+      "id": "dj-workflow-033",
       "titel": "Laden gaat niet over de action-bus",
       "soort": "pijn",
       "wat": "Een laad is geen action: het log hangt een eigen haak aan de laadlaag (naLaad), de automaat moet elke tik kijken of er iets anders op een deck staat (_kijkLaden), terugspelen heeft een eigen laadweg (laadVoorTerugspelen) en set terugladen ook. Alleen track.N.load.selected (uit de library-keuze) staat op de bus.",
@@ -877,7 +776,7 @@
       "reden": "v2: een commando \"laad nummer X op track N\" op dezelfde bus (of een zusterkanaal met dezelfde meeluisteraars), met een begin- en klaar-gebeurtenis."
     },
     {
-      "id": "dj-workflow-039",
+      "id": "dj-workflow-034",
       "titel": "Destructief = tweede druk binnen 3 s, overal eigen code",
       "soort": "pijn",
       "wat": "Laden over een spelende track, nummer weghalen, opname stoppen, mapping resetten, DICHT/OPEN op een hoorbare track, een spelend nummer van een track halen, set terugladen, wissen in de indeling: allemaal een tweede druk binnen 3 s, geen prompt() (legt de pagina stil). Het patroon staat in ~20 bestanden met eigen timers en teksten.",
@@ -901,7 +800,7 @@
       "reden": "v2: één bevestig-hulp (sleutel, tekst, 3 s) die scherm, APC en iPad delen."
     },
     {
-      "id": "dj-workflow-040",
+      "id": "dj-workflow-035",
       "titel": "Beatjump rekent in tellen en weigert liever dan te klemmen",
       "soort": "regel",
       "wat": "track.N.beatjump.* (lengte 1–32, standaard 4) rekent in tellen via het grid: fase exact, ook over een stukgrens; in een loop schuift de loop mee. Geweigerd met melding: geen grid, onzeker stuk zonder slot, loop buiten het nummer, voorbij het einde, vóór het begin. Precies op 0 landen mag.",
@@ -922,7 +821,7 @@
       "reden": "Gemeten gedrag dat bij elke herbouw opnieuw fout zou gaan."
     },
     {
-      "id": "dj-workflow-041",
+      "id": "dj-workflow-036",
       "titel": "Loops: twee soorten, naad van 5 ms, springen buiten verlaat de loop",
       "soort": "regel",
       "wat": "Loops in seconden en in tellen (beat-loops klikken in op het grid, zonder grid niets). In/out/reloop: out zet de loop aan, reloop = eraf of de vorige loop terug. Geklemd op het trackeinde. Springen buiten de loop verlaat hem, binnen blijft hij; fasecorrectie (sync, nudge) vouwt terug in de loop. De streamkern vloeit de laatste 5 ms equal-power over naar wat vóór het loop-begin staat.",
@@ -943,31 +842,10 @@
       "reden": "Bewezen loopgedrag."
     },
     {
-      "id": "dj-workflow-042",
-      "titel": "Quantize is één schakelaar voor de hele engine",
-      "soort": "besluit",
-      "wat": "transport.quantize: zetten (cue, hotcue, loop) snapt naar de tel; een hotcue-SPRONG is fasebehoudend en meteen; de hotcue beslist of een loop blijft. Alleen op een zeker grid.",
-      "waarom": "Per-deck quantize gaf verwarring over wat Lock op de APC deed; één schakelaar is wat DJ-software ook doet.",
-      "bron": [
-        {
-          "pad": "CLAUDE.md",
-          "waar": "TRANSPORT, Quantize"
-        }
-      ],
-      "code": [
-        "src/engine/engine.js",
-        "src/engine/deck.js"
-      ],
-      "pijler": "dj",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Eenvoudig en bewezen."
-    },
-    {
-      "id": "dj-workflow-043",
-      "titel": "Starten op de maat: gepland, sample-exact, en de wachtende volgt de tel",
+      "id": "dj-workflow-037",
+      "titel": "Quantize en starten op de maat: gepland, sample-exact",
       "soort": "regel",
-      "wat": "track.N.play.quant: het geluid begint op het volgende maatbegin van de maatgever en de tel van het startpunt valt erop; zonder maatgever meteen. De bron speelt al maar klinkt pas vanaf T (bron.start(p, { op })). Een wachtende track volgt DEZELFDE tel als de maatgever verschuift, geeft zelf de maat niet, en sync doet dan alleen tempo. Lampje: 1 wacht, 0,5 speelt, 0 stil, null leeg.",
+      "wat": "Quantize is één schakelaar voor de hele engine (transport.quantize): zetten snapt naar de tel, een hotcue-sprong is fasebehoudend en meteen, alleen op een zeker grid. track.N.play.quant: het geluid begint op het volgende maatbegin van de maatgever en de tel van het startpunt valt erop; zonder maatgever meteen. De bron speelt al maar klinkt pas vanaf T (bron.start(p, { op })). Een wachtende track volgt DEZELFDE tel als de maatgever verschuift, geeft zelf de maat niet, en sync doet dan alleen tempo. Lampje: 1 wacht, 0,5 speelt, 0 stil, null leeg.",
       "waarom": "\"De volgende maat\" opnieuw uitrekenen schoof in een korte loop elke ronde op. Web Audio begint een bron in het verleden gewoon nu: zonder planning blijvend een paar ms te laat.",
       "bron": [
         {
@@ -986,50 +864,31 @@
       "reden": "Kern van samen spelen met lagen en de auto-DJ."
     },
     {
-      "id": "dj-workflow-044",
-      "titel": "Rem (vinylstop): één formule in hoofdthread en worklet",
+      "id": "dj-workflow-038",
+      "titel": "Rem en EQ-kill: één formule, klikvrij op de audioklok",
       "soort": "regel",
-      "wat": "track.N.brake remt in brake.time (0,1–5 s, standaard 1) lineair tot stilstand, dan een pauze; nog eens of play = los. Segment rem: { a }: positie = P + R·dt + a·dt²/2. Onder 25% snelheid dooft de worklet uit. speelt/remt komen van de audioklok. Tijdens een rem: sync alleen tempo, geen maatgever; seek, hotcue, pauze, nudge halen hem eraf.",
-      "waarom": "Vastgehouden laatste sample gaf een plof; een timer die nog niet vuurde gaf een \"spelende\" track die al stilstond.",
+      "wat": "Rem: track.N.brake remt in brake.time (0,1–5 s) lineair tot stilstand (segment rem: { a }, positie = P + R·dt + a·dt²/2, dezelfde formule in hoofdthread en worklet), onder 25% snelheid dooft de worklet uit; seek, hotcue, pauze en nudge halen hem eraf, sync zet dan alleen het tempo. Kill: track.N.kill.low/mid/high (schakelaar) en .hold, −70 dB; de knopstand blijft staan (ook bij een nieuw nummer), hellingen van 5 ms in een zachte S pas na startDrempel. speelt/remt komen van de audioklok.",
+      "waarom": "Een vastgehouden laatste sample gaf een plof; een timer die nog niet vuurde gaf een \"spelende\" track die al stilstond. Chrome zet een voorbij punt op zijn eigen nu: een kill van 5 ms viel anders samen tot één sample.",
       "bron": [
         {
           "pad": "CLAUDE.md",
-          "waar": "REM (vinylstop, 25 sep); RANDGEVALLEN"
+          "waar": "REM (vinylstop, 25 sep); EQ-KILL (25 sep); RANDGEVALLEN; Overgangen op een AudioParam"
         }
       ],
       "code": [
         "src/engine/deck.js",
         "src/engine/stream-kern.js",
-        "src/engine/bron.js"
-      ],
-      "pijler": "dj",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Werkt en is klein."
-    },
-    {
-      "id": "dj-workflow-045",
-      "titel": "EQ-kill: schakelaar en vasthouden, knopstand blijft, zachte S van 5 ms",
-      "soort": "regel",
-      "wat": "track.N.kill.low/mid/high (schakelaar) en .hold (zolang je drukt), −70 dB zoals de knop-kill. De knopstand blijft staan (kill uit = precies terug, ook bij een nieuw nummer). Klikvrij met hellingen van 5 ms die in amplitude een zachte S volgen, pas na startDrempel. Lampje 1 = weg.",
-      "waarom": "Chrome zet een voorbij punt op zijn eigen nu: een korte helling vlak voor currentTime viel samen tot één stap (de kill van 5 ms in één sample).",
-      "bron": [
-        {
-          "pad": "CLAUDE.md",
-          "waar": "EQ-KILL (25 sep); Overgangen op een AudioParam"
-        }
-      ],
-      "code": [
+        "src/engine/bron.js",
         "src/engine/audio-graph.js",
         "src/engine/overgang.js"
       ],
       "pijler": "dj",
       "gewicht": "detail",
       "voorstel": "houden",
-      "reden": "Bewezen klikvrij."
+      "reden": "Werkt, klein, bewezen klikvrij."
     },
     {
-      "id": "dj-workflow-046",
+      "id": "dj-workflow-039",
       "titel": "Bend, nudge en de tempo-encoder zijn drie verschillende dingen",
       "soort": "besluit",
       "wat": "Nudge op de APC = bend: zolang je drukt draait alleen de bron 4% trager/sneller, rate (pitchfader, bpm, sync) blijft, loslaten = precies terug. nudge.back/fwd (50 ms springen) bestaat voor het toetsenbord. De tempo-encoder stuurt track.N.tempo lineair over 0,5–2× (0,1% per tik, shift 0,01%), niet de pitchfader. Pitchbereik ±8/±16/±50% per track; een nieuw nummer begint op 0%.",
@@ -1049,7 +908,7 @@
       "reden": "Fijn onderscheid dat DJ-handen nodig hebben."
     },
     {
-      "id": "dj-workflow-047",
+      "id": "dj-workflow-040",
       "titel": "Crossfader: per track A, B of thru, één knop voor de kant",
       "soort": "besluit",
       "wat": "Elke track kiest A, B of thru met één rondlopende knop (track.N.xfade.side, A → B → thru), op scherm en APC dezelfde plek; LED geel = A, oranje = B, uit = thru. Standaard track 1 op A, 2 op B, de rest thru. Sends gaan vóór de crossfader (echo-out werkt ook met de crossfader, Clay 23 sep).",
@@ -1070,7 +929,7 @@
       "reden": "Simpel model dat schaalt naar acht tracks."
     },
     {
-      "id": "dj-workflow-048",
+      "id": "dj-workflow-041",
       "titel": "Sync naar de maatgever, met hysterese",
       "soort": "regel",
       "wat": "Er is geen \"ander deck\": een track synct naar de maatgever = de hardst klinkende (faderGain × crossfader) die speelt, een grid heeft, niet wacht en niet remt. Een ander neemt pas over als hij 3 dB harder klinkt en dat 250 ms audioklok volhoudt; stopt of remt de maatgever, dan meteen. MAAT-badge, sampler, bussen, video-puls, vormen en de auto-DJ volgen dezelfde track.",
@@ -1090,7 +949,7 @@
       "reden": "Eén maatgever voor alles is de ruggengraat van de crossover."
     },
     {
-      "id": "dj-workflow-049",
+      "id": "dj-workflow-042",
       "titel": "Sampler: knippen op het grid, exact op de maat via playbackRate",
       "soort": "regel",
       "wat": "Een lege pad knipt de laatste N tellen van de focus-track in tracktijd, eindigend op de laatste tel vóór de positie; een streamende track wordt daarvoor van schijf gelezen. De naad wordt bij het knippen naadloos gemaakt. Afspelen: loop, gestart op de volgende tel van de klok die sync gebruikt, met playbackRate = duur / (tellen × tellengte).",
@@ -1110,7 +969,7 @@
       "reden": "Gemeten valkuil, goede oplossing."
     },
     {
-      "id": "dj-workflow-050",
+      "id": "dj-workflow-043",
       "titel": "Spelende pads volgen de maat: herankeren op de volgende tel",
       "soort": "regel",
       "wat": "Elke pad houdt een segment { T, P, R } bij. heranker() rekent uit waar de pad op de volgende tel van de maat is; daar start een nieuwe bron op het nieuwe tempo, op de dichtstbijzijnde hele tel van het sample, met 5 ms overvloei. Klopt het al, dan niets. De engine roept dit bij elke change van een deck of de mixer. Een pad van meer dan 8 tellen is een sectie (knipSectie: hele maten, hooguit 32 maten of 90 s) en start op de \"1\".",
@@ -1131,32 +990,7 @@
       "reden": "Werkt; het segmentmodel is herbruikbaar."
     },
     {
-      "id": "dj-workflow-051",
-      "titel": "Sampler-pad als drumpad: werkt, maar verdwijnt na herladen",
-      "soort": "grens",
-      "wat": "sampler.N.drums zet pad N op drumpad 13–16 (S1–4) of 9–12 (S5–8) van de Drums. Pads 9–16 staan niet in de patronenset; terugspelen slaat de action over; na herladen zijn ze leeg en meldt herstelInstrumenten het als een patroon ze gebruikt.",
-      "waarom": "Instrumenten staan niet in het log; terugspelen zou de drumpads van nu overschrijven.",
-      "bron": [
-        {
-          "pad": "CLAUDE.md",
-          "waar": "Instrumenten op een track: Crossover"
-        },
-        {
-          "pad": "docs/HANDELINGENLOG.md",
-          "waar": "OVERSLAAN"
-        }
-      ],
-      "code": [
-        "src/engine/engine.js",
-        "src/control/terugspelen.js"
-      ],
-      "pijler": "produceren",
-      "gewicht": "detail",
-      "voorstel": "anders",
-      "reden": "In v2 een sample-op-drumpad bewaren als verwijzing (nummer + van/tot), zoals de sampler-pads zelf."
-    },
-    {
-      "id": "dj-workflow-052",
+      "id": "dj-workflow-044",
       "titel": "Drie partijen, drie tijdschalen: app, Clay, Claude",
       "soort": "besluit",
       "wat": "De app (ms tot maten) kiest moment, soort overgang en knopstanden met harde bewakers en klinkt altijd, ook zonder plan of internet. Clay (altijd) zegt ok / overslaan / langer / nu en neemt over door aan te raken. Claude (minuten tot de set) schrijft alleen het setplan; nooit in het audiopad, nooit op de bus.",
@@ -1178,7 +1012,7 @@
       "reden": "De rolverdeling is het hart van \"samenwerken met het programma\" (VISIE)."
     },
     {
-      "id": "dj-workflow-053",
+      "id": "dj-workflow-045",
       "titel": "De automaat is een bron van actions op de bus",
       "soort": "regel",
       "wat": "De automaat bedient Varve zoals Clay: via de action-bus (alles staat dus in het handelingenlog en speelt terug); laden via de laadlaag. De engine weet niets van de auto-DJ. Een timer van 40 ms beslist alleen WANNEER er gekeken wordt; WAAR de overgang is komt van de positie van de uitgaande (regel 3).",
@@ -1202,7 +1036,7 @@
       "reden": "Precies het goede ontwerp; in v2 wel met laden op de bus."
     },
     {
-      "id": "dj-workflow-054",
+      "id": "dj-workflow-046",
       "titel": "Bewakers: de veiligste overgang die past, gerekend na de sync",
       "soort": "regel",
       "wat": "Lange blend (16 maten, bas in het midden gewisseld) alleen als beide grids op het mengpunt zeker zijn, tempo ≤ 6% en toon ≤ 1 stap op het Camelot-wiel NA de sync. Filter-uit (8 maten highpass + echo, de nieuwe valt in op de \"1\") als alleen de uitgaande zeker is. Overvloeien (24 s, beatloos: lowpass en galm uit, de nieuwe eronder) als het grid van de uitgaande onzeker is. Een plan mag een veiligere soort vragen, nooit een riskantere.",
@@ -1222,15 +1056,19 @@
       "reden": "Altijd goed klinken is het product; de regels zijn gemeten en eenvoudig."
     },
     {
-      "id": "dj-workflow-055",
-      "titel": "Moment van de overgang: frasegrens, zo laat mogelijk",
+      "id": "dj-workflow-047",
+      "titel": "Moment van de overgang: frasegrens of sectie, zo laat mogelijk",
       "soort": "regel",
-      "wat": "Blend en filter op een veelvoud van 16 maten vanaf het maat-anker (anders de eerstvolgende 4-maatsgrens), zo laat mogelijk vóór het einde van het fragment; beatloos 24 s vóór het einde. Met een sectiekaart op een zeker grid bij voorkeur op een sectiegrens (outro → laatste break → …), binnen 32 maten (beatloos 60 s) vóór het laatste moment. Langer = +8 maten (beatloos +30 s) of de volgende sectiegrens binnen 16; nu = de eerstvolgende 4 maten of een sectiegrens binnen 8.",
-      "waarom": "Voorbeeld uit de test (120 bpm, einde 190 s): zonder secties begint de blend op 128 s, midden in de tweede drop; met secties op 144 s waar de outro begint. Een vroege break trok de overgang anders minuten naar voren.",
+      "wat": "Blend en filter op een veelvoud van 16 maten vanaf het maat-anker (anders de eerstvolgende 4-maatsgrens), zo laat mogelijk vóór het einde van het fragment; beatloos 24 s vóór het einde. Met een sectiekaart (alleen op het grid gerekend en op dat begin zeker) bij voorkeur op een sectiegrens (outro → laatste break → …), binnen 32 maten (beatloos 60 s) vóór het laatste moment, en alleen als dezelfde soort overgang daar OOK mag: secties maken nooit iets riskanter. momentArgs is de ene rekenregel voor automaat én planvenster. Langer = +8 maten (beatloos +30 s) of de volgende sectiegrens binnen 16; nu = de eerstvolgende 4 maten of een sectiegrens binnen 8.",
+      "waarom": "Voorbeeld uit de test (120 bpm, einde 190 s): zonder secties begint de blend op 128 s, midden in de tweede drop; met secties op 144 s waar de outro begint. Een vroege break trok de overgang anders minuten naar voren. Zonder kaart is het precies het oude gedrag.",
       "bron": [
         {
           "pad": "docs/AUTO-DJ.md",
           "waar": "§2, §3b"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Secties: Auto-DJ"
         }
       ],
       "code": [
@@ -1239,10 +1077,10 @@
       "pijler": "dj",
       "gewicht": "belangrijk",
       "voorstel": "houden",
-      "reden": "Puur en goed getest (auto.test, auto-secties.test)."
+      "reden": "Puur en goed getest (auto.test, auto-secties.test); één rekenregel voor voorspelling en uitvoering."
     },
     {
-      "id": "dj-workflow-056",
+      "id": "dj-workflow-048",
       "titel": "Nooit twee bassen, nooit een gat",
       "soort": "regel",
       "wat": "De bas is in de curves een schakelaar: in het midden van de blend direct voor beide tracks in dezelfde tik, zodat er nooit twee bassen en nooit een gat in de bas zijn. Speelt er niets meer (einde, of Clay zette alles stil), dan start de klaarstaande meteen of wordt er meteen iets gekozen.",
@@ -1263,7 +1101,7 @@
       "reden": "De twee harde beloften van een auto-DJ."
     },
     {
-      "id": "dj-workflow-057",
+      "id": "dj-workflow-049",
       "titel": "Clay wint: wie een track in de overgang aanraakt, neemt hem over",
       "soort": "regel",
       "wat": "Fader, EQ, filter, play, sync, seek, tempo, sends, kill, stems, rem, cue, hotcue of een sectie van een track in de overgang (of de crossfader) = overgenomen; de automaat laat los en gaat verder als er weer één track duidelijk klinkt. Kijken en luisteren (focus, select, pfl) telt niet. Een sectiedruk telt alleen als hij echt springt.",
@@ -1287,7 +1125,7 @@
       "reden": "Het principe blijft; de regex OVERNEEM moet in v2 uit de action-declaraties komen (zie de uitzonderingslijsten)."
     },
     {
-      "id": "dj-workflow-058",
+      "id": "dj-workflow-050",
       "titel": "Fades glijden: track.N.<knop>.glide = \"glijd hierheen in 0,5 s\"",
       "soort": "besluit",
       "wat": "Een gewone value-action (0..1) met als betekenis glijd naar die waarde in GLIJ = 0,5 s. De automaat stuurt het punt van de curve dat GLIJ verderop ligt (vanaf de positie van de uitgaande) en een nieuw punt zodra er nog 0,1 s te gaan is. De engine legt acht lineaire hellingen na startDrempel en laat een lopende helling doorlopen tot het nieuwe beginpunt (cancelAndHold in de toekomst). read() geeft de stand van NU. Een gewone set van Clay houdt vast waar het geluid nu is.",
@@ -1309,7 +1147,7 @@
       "reden": "Elke logregel blijft op zichzelf terug te spelen en de automaat hoeft geen dB of Hz te kennen."
     },
     {
-      "id": "dj-workflow-059",
+      "id": "dj-workflow-051",
       "titel": "Wat hij speelt: kiezer en fragmenten",
       "soort": "regel",
       "wat": "Met een plan de stappen op volgorde; zonder plan (of op) de kiezer: niet wat speelt of al speelde, dan tempo dichtbij, toon dichtbij (alleen als beide zeker), luidheid dichtbij en wat toeval. Een nummer tot 12 minuten helemaal; een mix of album een stuk van 6 minuten, bij voorkeur waar een zeker stuk begint; met secties in op de intro. Een fragment is minstens 60 s. Laden heen en weer tussen de tracks van de automaat, nooit op een track die speelt; de nieuwe krijgt de crossfaderkant van de uitgaande.",
@@ -1334,31 +1172,7 @@
       "reden": "Puur en bruikbaar; toeval komt via een rnd-argument."
     },
     {
-      "id": "dj-workflow-060",
-      "titel": "Secties in de mix: alleen op een zeker grid, bewakers gaan voor",
-      "soort": "regel",
-      "wat": "Een sectiekaart telt alleen als ze op het grid gerekend is en het grid op dat sectiebegin zeker is. Secties veranderen nooit de soort overgang: een sectiebegin telt alleen als dezelfde soort daar OOK mag (kiesOvergang met de kenmerken op dat begin). momentArgs is DE rekenregel voor automaat én planvenster: zelfde invoer, zelfde moment. Zonder kaart precies het oude gedrag.",
-      "waarom": "Een break in een stuk met een ander tempo mag geen blend worden, ook niet als het plan erom vraagt.",
-      "bron": [
-        {
-          "pad": "docs/AUTO-DJ.md",
-          "waar": "§3b"
-        },
-        {
-          "pad": "CLAUDE.md",
-          "waar": "Secties: Auto-DJ"
-        }
-      ],
-      "code": [
-        "src/auto/planner.js"
-      ],
-      "pijler": "dj",
-      "gewicht": "belangrijk",
-      "voorstel": "houden",
-      "reden": "Eén rekenregel voor voorspelling en uitvoering is de juiste les."
-    },
-    {
-      "id": "dj-workflow-061",
+      "id": "dj-workflow-052",
       "titel": "Tracks van de automaat en tracks van Clay",
       "soort": "regel",
       "wat": "plan.tracks.auto (minstens twee) = alleen daar laadt, start en mixt hij. Zonder: nooit een track waar iemand anders dan de automaat de laatste 120 s (CLAY_RECENT) een track.N.* stuurde, nooit een track met een laag, en wat Clay zelf laadde (ander nummer op het deck) is van Clay. Na een overname wacht hij alleen op ZIJN tracks; klinkt er helemaal niets meer, dan meteen verder.",
@@ -1382,7 +1196,7 @@
       "reden": "Nodig voor live bijmixen; de 120 s is een vangrail (S9-3)."
     },
     {
-      "id": "dj-workflow-062",
+      "id": "dj-workflow-053",
       "titel": "GO per stap, met een uiterste moment",
       "soort": "regel",
       "wat": "Een stap met go: \"wacht\" wordt klaargezet maar de overgang begint pas na plan.go. Komt GO niet, dan begint hij op het laatste moment dat de overgang nog vóór het einde van de uitgaande past (_goUiterst), met een melding: nooit stilte gaat voor GO. GO bij een gewone stap = nu. GO tijdens het laden gaat zodra de volgende klaarstaat.",
@@ -1402,7 +1216,7 @@
       "reden": "Geeft Clay timing zonder de belofte van geen stilte te breken."
     },
     {
-      "id": "dj-workflow-063",
+      "id": "dj-workflow-054",
       "titel": "Lagen: een extra stuk op een track van Clay, en Clay mag het overnemen",
       "soort": "contract",
       "wat": "Een stap mag tot 8 lagen hebben: soort nummer (track, van, stem, deck, duur, start auto|jij), sampler (pad) of patroon (deck, plek), met op = sectie van de stap of seconden. Een laag nummer laadt 30 s vooraf met de fader dicht, start op de maat met sync als beide grids zeker zijn (anders niet vanzelf, gemeld), gaat in 4 maten naar 0,8 en na duur weer dicht. Raakt Clay de track aan, dan is de laag van hem. Een laag gaat nooit over iets dat er al staat.",
@@ -1423,7 +1237,7 @@
       "reden": "Precies de crossover uit de VISIE; vorm is goed, niveaus nog niet beluisterd (S9-2)."
     },
     {
-      "id": "dj-workflow-064",
+      "id": "dj-workflow-055",
       "titel": "automaat.js groeide naar 1279 regels met elk spoor",
       "soort": "pijn",
       "wat": "Eén klasse voert overgangen uit, houdt track-eigendom bij (_mijn, _vanClay, _kijkLaden), wacht op sectiekaarten, plant opnieuw bij sprongen, glijdt, doet GO, buiten/terug en lagen. Elke review vond nieuwe randgevallen (S9 ronde 1: dertien punten, ronde 2: de deck.buffer-fout).",
@@ -1447,7 +1261,7 @@
       "reden": "v2: planner (puur, bestaat) + overgangsuitvoerder + eigendom van tracks + lagen als losse delen op het track-model."
     },
     {
-      "id": "dj-workflow-065",
+      "id": "dj-workflow-056",
       "titel": "Bekende grenzen van de auto-DJ",
       "soort": "grens",
       "wat": "De baswissel is een directe stand op de tik waarop p ≥ 0,5 (tot 40 ms na het midden, niet sample-exact op de tel). Na een blend blijft de nieuwe op het tempo van de oude. Frasegrenzen uit de muziek alleen met een kaart op een zeker grid; secties-labels zijn een gok. Hotcues als mix-in/out: nog niet. Alles alleen gemeten (nep-Web Audio, headless), niet beluisterd, niet op de M1 met Clay's library.",
@@ -1468,7 +1282,7 @@
       "reden": "Eerlijk vastgelegd; eerst luisteren voor v2 iets verandert."
     },
     {
-      "id": "dj-workflow-066",
+      "id": "dj-workflow-057",
       "titel": "Luistervragen: overvloeien 24 s en \"nu\" bij beatloos",
       "soort": "open",
       "wat": "Overvloeien duurt 24 s; misschien beter 32–48 s bij Clay's muziek (AU2). \"Nu\" bij beatloos begint na ~0,5 s; misschien een paar seconden later zodat je het ziet aankomen (AU3).",
@@ -1488,7 +1302,7 @@
       "reden": "Clay moet luisteren en kiezen."
     },
     {
-      "id": "dj-workflow-067",
+      "id": "dj-workflow-058",
       "titel": "Mag Clay een bewaker bewust breken?",
       "soort": "open",
       "wat": "Nu winnen de bewakers altijd (een plan mag alleen veiliger). Voorstel: een \"ik weet het\"-vinkje per stap om bijvoorbeeld een blend over een onzeker grid af te dwingen, alleen vanuit het venster door Clay, nooit door Claude.",
@@ -1509,7 +1323,7 @@
       "reden": "Raakt de belofte \"altijd goed klinken\"; dat is Clay's keuze."
     },
     {
-      "id": "dj-workflow-068",
+      "id": "dj-workflow-059",
       "titel": "Planformaat v2: vaste stap-id's, tijden in tracktijd, null = de app kiest",
       "soort": "contract",
       "wat": "{ versie: 2, naam, door, uitleg, tracks?, stappen: [{ id, track, van, speelduur, in?, uit?, overgang: auto|blend|filter|ambient, lengte: { maten 4–64 } | { sec 4–120 }, waarom, notitie, door, go?, lagen? }] }, hooguit 200 stappen. Een id wordt nooit hergebruikt. overgang is een WENS (de bewakers gaan voor). normaliseerPlan gooit nooit: rommel weg of begrensd, met fouten. Eén definitie (plan-model.js, puur) voor venster, automaat, server en tests.",
@@ -1533,7 +1347,7 @@
       "reden": "Goed formaat, leesbaar voor Claude."
     },
     {
-      "id": "dj-workflow-069",
+      "id": "dj-workflow-060",
       "titel": "In en uit op een sectie, met van als waarheid en terugval",
       "soort": "contract",
       "wat": "in/uit = { sectie (vanaf 1), label, groep, van? }. in = de stap begint daar, uit = de overgang naar de volgende begint daar (moet na in). van blijft de waarheid: wie een sectie als in kiest schrijft ook van. Terugvinden na een herberekende kaart (vindSectie): dezelfde label+groep, het dichtst bij de tijd van toen, binnen 30 s; anders wint van.",
@@ -1558,7 +1372,7 @@
       "reden": "Robuust tegen veranderende analyse."
     },
     {
-      "id": "dj-workflow-070",
+      "id": "dj-workflow-061",
       "titel": "Opslaan met versie: hash van de inhoud, 409 met wat er nu staat",
       "soort": "besluit",
       "wat": "GET geeft { plan, versie, fouten }; PUT { plan, versie } met versie = hash van de inhoud; klopt die niet, dan 409 met de huidige inhoud; null = nieuw. Elke opslag bewaart de vorige in .versies/<naam>/ (laatste 50), atomisch. Claude mag het bestand direct schrijven (de hash telt mee). Venster en mixer peilen elke 3 s: zonder eigen wijzigingen overnemen en zeggen wat er veranderde, met eigen wijzigingen een botsing: hun versie of mijn versie.",
@@ -1580,7 +1394,7 @@
       "reden": "Het samenwerkingsmodel met Claude rust hierop."
     },
     {
-      "id": "dj-workflow-071",
+      "id": "dj-workflow-062",
       "titel": "Zes eigen implementaties van \"document met versie en 409\"",
       "soort": "pijn",
       "wat": "Plannen, patronen, sets, standen, werkruimtes en sjablonen hebben elk een eigen server-module met versie-hash, 409, .versies en atomisch schrijven, en elk een eigen omgevingsvariabele (VARVE_PLANNEN, VARVE_SETS, …) die elke proefserver moet zetten. Ze vallen niet onder de backup van library.db.",
@@ -1613,7 +1427,7 @@
       "reden": "v2: één documentopslag (soort, naam, versie, geschiedenis) met één datamap en één backup-regel."
     },
     {
-      "id": "dj-workflow-072",
+      "id": "dj-workflow-063",
       "titel": "\"kent\": de server zet velden terug die een oud venster weggooide",
       "soort": "pijn",
       "wat": "Een oud planvenster (oude code nog open) kent nieuwe velden niet en gooit ze weg bij het bewerken. Daarom stuurt elke schrijver kent: KENT (in, uit, go, lagen, tracks); zonder zet de server ze terug (herstelVelden) onder regels per stap (eigen id, sleutel ontbreekt, zelfde nummer en zelfde van). Claude moet kent ALTIJD meesturen; een oude server gooit in/uit weg en het venster moet dat herkennen.",
@@ -1642,7 +1456,7 @@
       "reden": "v2: normaliseren laat onbekende velden ongemoeid door (zoals racks onbekende effecten bewaren); dan is kent overbodig."
     },
     {
-      "id": "dj-workflow-073",
+      "id": "dj-workflow-064",
       "titel": "De voorspelling rekent met dezelfde regels als de automaat",
       "soort": "regel",
       "wat": "tijdlijn.voorspel roept per overgang fragment, kiesOvergang en planMoment(momentArgs(…)) aan met dezelfde argumenten als de automaat; de strook volgt dat moment altijd. Enig verschil: de automaat plant vanaf waar de uitgaande dan is, het venster vanaf het begin van zijn stuk.",
@@ -1663,7 +1477,7 @@
       "reden": "Wat je ziet is wat er gebeurt."
     },
     {
-      "id": "dj-workflow-074",
+      "id": "dj-workflow-065",
       "titel": "Het planvenster is een venster van de mixer, geen tweede mixer",
       "soort": "regel",
       "wat": "plan.html leest window.opener.varvePlan (zoals de beamer): geen AudioContext, geen MIDI, geen Web Lock; knoppen gaan over de bus van de mixer. Los geopend is het alleen een editor. Bewerken: typen, slepen, alt+↑↓, Del, ctrl+z, ctrl+s; toetsen 1–4 = overgang, G = GO.",
@@ -1689,19 +1503,20 @@
       "reden": "Goed patroon voor elk extra venster."
     },
     {
-      "id": "dj-workflow-075",
+      "id": "dj-workflow-066",
       "titel": "Een set klaarzetten: deterministisch, boog, eerst korter dan minder",
       "soort": "regel",
       "wat": "maakSet: elk nummer krijgt een energie uit bpm, luidheid en de luidste sectie, genormaliseerd binnen de keuze; vorm boog (piek ~70%), oplopend of zoals gekozen; gulzig per plek de kleinste afstand tot de vorm plus de overgangskosten (tempo, toon na sync, wat de bewakers ervan maken). Dezelfde keuze geeft dezelfde set. Te lang: eerst kortere stukken (nooit onder 2 min), dan vallen de laatste nummers af (gemeld); te kort: gemeld, niets verzonnen. Bron: krat, selectie, \"past bij\"-keten of de hele library; duur \"90 min\" of \"tot 01:30\" (\"1,5\" = uren onder 10).",
-      "waarom": "Gemeten headless: een set van 12 nummers staat in 3 handelingen op de server, 4 tot de automaat speelt. \"1,5\" werd eerst 90 s (review ronde 1).",
+      "waarom": "Gemeten headless: een set van 12 nummers staat in 3 handelingen op de server, 4 tot de automaat speelt. \"1,5\" werd eerst 90 s (review ronde 1). Erbij: een kolom klaar per nummer (G grid, T toon, S stems, § secties, V video) uit één POST /api/set/klaar, en \"maak klaar\" (stems, secties) dat 409 geeft als er een deck speelt of het een speeldag is.",
       "bron": [
         {
           "pad": "docs/PLAN-SET.md",
-          "waar": "§2, §9"
+          "waar": "§2, §3, §9"
         }
       ],
       "code": [
-        "src/plan/klaarzetten.js"
+        "src/plan/klaarzetten.js",
+        "server/routes/sets.js"
       ],
       "pijler": "dj",
       "gewicht": "belangrijk",
@@ -1709,28 +1524,7 @@
       "reden": "Puur en snel; de vorm van de boog is Clay's vraag S9-1."
     },
     {
-      "id": "dj-workflow-076",
-      "titel": "Klaar voor de set: één controle, en \"maak klaar\" weigert op een speeldag",
-      "soort": "regel",
-      "wat": "Per nummer G grid · T toon · S stems · § secties · V video uit één POST /api/set/klaar (alleen lezen). \"Maak klaar\" zet stems en secties in de bestaande rijen; 409 als er een deck speelt of het een speeldag is (ook de nacht erna); het secties-werk stopt zodra er een deck gaat spelen. Niets van internet.",
-      "waarom": "Zwaar werk (Demucs) naast een set geeft haperingen; de speeldagregel komt van de nachtwachtrij.",
-      "bron": [
-        {
-          "pad": "docs/PLAN-SET.md",
-          "waar": "§3"
-        }
-      ],
-      "code": [
-        "server/routes/sets.js",
-        "src/plan/plan-venster.js"
-      ],
-      "pijler": "dj",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Goede voorbereidingsstap; leunt op de mixerstatus-heuristiek."
-    },
-    {
-      "id": "dj-workflow-077",
+      "id": "dj-workflow-067",
       "titel": "Live-stand: NU, VOLGENDE, DAARNA en de verwachte eindtijd",
       "soort": "contract",
       "wat": "liveStand (puur) geeft NU (titel, nog m:ss), VOLGENDE (titel, soort, over m:ss of N maten, \"wacht op GO · uiterlijk over m:ss\"), DAARNA, de volgende laag en de verwachte eindtijd (klok + rest van NU + voorspelde duur van de rest, met de overlap). In de AUTO-rij, het planvenster en het vak plan op werk.html en de iPad.",
@@ -1751,7 +1545,7 @@
       "reden": "Klein, puur, op elk scherm bruikbaar."
     },
     {
-      "id": "dj-workflow-078",
+      "id": "dj-workflow-068",
       "titel": "Een set = plan en patronen als kopie, werkruimte op naam, optioneel de mixer",
       "soort": "contract",
       "wat": "{ schema: 1, naam (a-z0-9_-, ≤ 60), uitleg, gemaakt, plan, patronen: { naam, set } | null, werkruimte: naam | null, momentopname: leesStand zonder speelt/wacht/pads/patronen | null }. sets/<naam>.json met versie, 409, .versies (50), kopie, hernoem; alleen vanaf deze Mac; Claude kan een set schrijven zoals een plan.",
@@ -1776,7 +1570,7 @@
       "reden": "Eén bestand per set past bij de draagbare set (VISIE §3)."
     },
     {
-      "id": "dj-workflow-079",
+      "id": "dj-workflow-069",
       "titel": "Terugladen: nummers uit de library van NU, er start niets",
       "soort": "regel",
       "wat": "Laad set zet het plan (meteen actief), de patronen (met versie) en de werkruimte; de momentopname alleen met \"ook de mixer\". Nummers komen gewoon uit de library (grid van NU); posities, cue, hotcues, loop, knoppen, racks, kant en kills worden gezet; speelt en wacht staan uit, pads en patronen stil. Over een spelende track pas bij de tweede druk binnen 3 s, en de auto-DJ gaat uit. Een ontbrekend nummer: één melding per nummer, de rest laadt. set.bewaar* en set.terugladen* zijn nooit van de iPad (VAST_NOOIT).",
@@ -1797,7 +1591,7 @@
       "reden": "Voorspelbaar en veilig; iPad-vraag S9-4 staat open."
     },
     {
-      "id": "dj-workflow-080",
+      "id": "dj-workflow-070",
       "titel": "Wat zit er in een set, en wie maakt er een backup van?",
       "soort": "open",
       "wat": "Nu: plan en patronen als kopie, werkruimte op naam, de mixer alleen met het vinkje. Als de werkruimte ook als kopie meegaat is een set helemaal draagbaar, maar zit een latere aanpassing van de werkruimte niet in oude sets (S9-5). De backup neemt alleen library.db mee; sets/, plannen/ en patronen/ zijn losse bestanden (S9-6).",
@@ -1822,7 +1616,7 @@
       "reden": "Bepaalt wat \"een set meenemen\" in v2 betekent."
     },
     {
-      "id": "dj-workflow-081",
+      "id": "dj-workflow-071",
       "titel": "Het handelingenlog: alles van de bus, op de audioklok, niet hash-exact",
       "soort": "besluit",
       "wat": "Elke action van de bus (MIDI, toetsenbord, muis, terugspelen, automaat) komt erin met het moment op ctx.currentTime, plus genoeg om de set terug te vinden: welk nummer op welke track, focus, rack, grid, hotcues, secties en pads. Doel: een set opnieuw renderen (andere visuals, opnieuw opnemen) of een fout naspelen. Belofte: dezelfde actions in dezelfde volgorde, hooguit één tik (10 ms) naast hun moment.",
@@ -1843,7 +1637,7 @@
       "reden": "Partituur van een set; voedt setboek, leren en Claude."
     },
     {
-      "id": "dj-workflow-082",
+      "id": "dj-workflow-072",
       "titel": "Logformaat v1: JSON Lines in ASCII, een teken is een byte",
       "soort": "contract",
       "wat": "Regels [t, \"actie\", waarde] (waarde precies wat invoke kreeg, niets uitgedund) en { t, e: soort, … }. Alles boven 0x7E als \\uXXXX. t = seconden op de audioklok sinds het begin, op 1 µs. Eerste regel kop (versie, begon, klok, opname, sampleRate, tracks) in de eerste 4 kB; tweede regel stand (~10 kB met acht tracks); gebeurtenissen laad (met duur), focus, rack, grid, hotcues, secties, pads, eind (regels of afgebroken). Een sectiedruk draagt een vierde element { van }. Lezer slaat nullen, kapotte regels en onbekende soorten over; een hogere versie wordt geweigerd.",
@@ -1863,7 +1657,7 @@
       "reden": "Formaat is solide en uitbreidbaar."
     },
     {
-      "id": "dj-workflow-083",
+      "id": "dj-workflow-073",
       "titel": "Stukken op hun byte-plek: herhalen is veilig, een gat is nullen",
       "soort": "regel",
       "wat": "Elke seconde POST /api/handelingen/<id>/stuk { van: byte, tekst }; de server zet de tekst OP byte van, niet erachter (zoals de opname met ?frame=N). De plek wordt bepaald als het stuk gemaakt wordt. Een verloren antwoord opnieuw sturen schrijft dezelfde bytes op dezelfde plek; een weggevallen stuk is een gat van nullen dat de lezer overslaat. Een crash kost hooguit één seconde. De server keurt: ASCII + \\n, elke regel JSON, ≤ 4 MB, id YYYYMMDD-HHMMSS(-n).",
@@ -1884,7 +1678,7 @@
       "reden": "Zelfde idee als de opname: idempotent schrijven."
     },
     {
-      "id": "dj-workflow-084",
+      "id": "dj-workflow-074",
       "titel": "Het log staat naast de opname, met hetzelfde id",
       "soort": "besluit",
       "wat": "opnames/set-<id>.acties.jsonl naast set-<id>.wav (en .mp4). Een opname neemt er vanzelf een mee; een los log (○ log, of altijd aan) krijgt een id uit dezelfde reeks; een opname kiest nooit een id waar al een log op staat. Altijd aan (Clay 26 sep, J18): het log begint zodra de AudioContext loopt, één keer per pagina. Pagina dicht = laatste stuk met keepalive en een eind met afgebroken.",
@@ -1910,7 +1704,7 @@
       "reden": "Eenvoudig en goed."
     },
     {
-      "id": "dj-workflow-085",
+      "id": "dj-workflow-075",
       "titel": "Toestand buiten de bus wordt vergeleken, niet gemeld",
       "soort": "besluit",
       "wat": "Rack, grid, hotcues, sectiekaart en pads worden na elke knopdruk (microtask), vóór elke sectiedruk en elke 100 ms vergeleken met de vorige stand (rack en kaart op identiteit, de rest op JSON) en bij verschil als gebeurtenis gelogd. Zo komen rack-editor, server-verfijning en library erin zonder dat die modules van het log weten. Knopstanden horen niet bij het rack (die staan al als actions).",
@@ -1931,7 +1725,7 @@
       "reden": "In v2 een model dat zelf wijzigingen meldt (zie het track-model); dan geen peiling van 100 ms en geen identiteitstrucs."
     },
     {
-      "id": "dj-workflow-086",
+      "id": "dj-workflow-076",
       "titel": "Terugspelen te laat: laat en van meegeven aan invoke",
       "soort": "valkuil",
       "wat": "Terugspelen komt tot een tik (10 ms) te laat; het geeft invoke(id, waarde, { laat, van }) mee. Het log trekt laat eraf, zodat een opname van een terugspelen niet per generatie een tik opschuift. Een sectiedruk rekent vanaf van (de tracktijd uit het log, als die ≤ 50 ms naast ligt), anders nu min laat. Een regel die op een laad wachtte krijgt geen laat; geen regel komt eerder dan de vorige.",
@@ -1953,7 +1747,7 @@
       "reden": "Elke beslissing \"op de volgende 1\" moet in v2 dezelfde plek-informatie in het log hebben."
     },
     {
-      "id": "dj-workflow-087",
+      "id": "dj-workflow-077",
       "titel": "Terugspelen: beginstand, dan T0 + t op de audioklok",
       "soort": "regel",
       "wat": "Eerst alle nummers tegelijk laden, per track bereik, kant, rack, kill, grid, kaart, rate, cue, hotcues, positie, loop; dan de waarden via de bus, rondlopers door te drukken, focus, pads; als laatste alles wat speelde in één keer aan (zodat de tracks onderling liggen zoals toen), daarna wie op de maat wachtte. T0 = ctx.currentTime; een timer van 10 ms kijkt. Laden begint op t − duur; duurt het langer, dan wacht alleen die track. Een stand midden in het log is een nieuwe beginstand (klok staat stil). Klaar = alle regels gedaan én de duur om; stoppen laat los wat ingedrukt was.",
@@ -1973,7 +1767,7 @@
       "reden": "Werkend recept; de uitvoering wordt anders (zie de lijsten)."
     },
     {
-      "id": "dj-workflow-088",
+      "id": "dj-workflow-078",
       "titel": "MIDI en toetsenbord doen mee tijdens terugspelen",
       "soort": "besluit",
       "wat": "Terugspelen blokkeert geen invoer: je kunt live beeld spelen over een replay en een fader dichtdraaien moet altijd kunnen. Soft-takeover voorkomt springen. Loopt er tijdens terugspelen een log, dan is dat een nieuwe versie van de set (replay plus jouw handelingen), met de beginstand als stand midden in dat log.",
@@ -1993,7 +1787,7 @@
       "reden": "Juiste keuze voor een live-instrument."
     },
     {
-      "id": "dj-workflow-089",
+      "id": "dj-workflow-079",
       "titel": "Terugspelen bewaart niets in de library",
       "soort": "regel",
       "wat": "Tracks die terugspelen laadt staan in terugspeelDecks tot er gewoon iets anders op komt: geen grid, toon, hotcues, tap-verfijning of pads naar de library. Racks, pads en hotcues komen uit het log, niet uit de library; een library-id als rack-herkomst wordt null (anders overschrijft \"bewaar\" een rack dat nu anders is). Op een track zonder zijn nummer van toen worden transport, cues, loops, grid, seek, beatjump, rem en secties overgeslagen en geteld; faders, EQ, focus en kant gaan wel door.",
@@ -2014,10 +1808,10 @@
       "reden": "Een replay mag het heden niet veranderen."
     },
     {
-      "id": "dj-workflow-090",
+      "id": "dj-workflow-080",
       "titel": "Zeven uitzonderingslijsten als regex, plus meta-vlaggen ernaast",
       "soort": "pijn",
-      "wat": "Wat terugspelen overslaat (OVERSLAAN, 18 alternatieven), wat een nummer nodig heeft (NUMMER_NODIG), wat niet in de beginstand staat (NIET_IN_WAARDEN), welke triggers rondlopen (RONDLOPERS), wat een overgang overneemt (OVERNEEM) of alleen kijkt (KIJKEN), en wat nooit van de iPad mag (VAST_NOOIT) staan elk als regex of lijst in een andere module. Sinds 14 okt kan een action het ook zelf zeggen (log: \"overslaan\", beginstand: false, overneem: true, nummer: true): twee systemen naast elkaar.",
+      "wat": "Wat terugspelen overslaat (OVERSLAAN, 15 groepen), wat een nummer nodig heeft (NUMMER_NODIG), wat niet in de beginstand staat (NIET_IN_WAARDEN), welke triggers rondlopen (RONDLOPERS), wat een overgang overneemt (OVERNEEM) of alleen kijkt (KIJKEN), en wat nooit van de iPad mag (VAST_NOOIT) staan elk als regex of lijst in een andere module. Sinds 14 okt kan een action het ook zelf zeggen (log: \"overslaan\", beginstand: false, overneem: true, nummer: true): twee systemen naast elkaar.",
       "waarom": "Elke nieuwe knop moet in drie tot vijf lijsten (CLAUDE.md waarschuwt het per spoor: koptelefoon, stems, instrumenten, patronen, sampler-drums). OVERNEEM matcht alleen tracknummers van één cijfer.",
       "bron": [
         {
@@ -2050,7 +1844,7 @@
       "reden": "v2: elke action declareert zijn aard in define() (klank / kijken / data van het nummer / systeem, hoort bij nummer, toestandsvorm schakelaar-rondloper-waarde, gevaarlijk van buiten); alle lijsten worden daaruit afgeleid."
     },
     {
-      "id": "dj-workflow-091",
+      "id": "dj-workflow-081",
       "titel": "Loggrootte: ~47 bytes per handeling",
       "soort": "meting",
       "wat": "Met de echte klasse een uur lang, faders in stappen van 1/127: rustig (5/s) 0,8 MB, druk (50/s) 8,4 MB, extreem (300/s) 53 MB. De beginstand ~10 kB. Ter vergelijking de WAV van dat uur ~690 MB. In het geheugen hooguit één seconde.",
@@ -2071,7 +1865,7 @@
       "reden": "Rechtvaardigt \"alles vastleggen\"."
     },
     {
-      "id": "dj-workflow-092",
+      "id": "dj-workflow-082",
       "titel": "De server mag even weg zijn: herhalen, begrensde rij, één melding",
       "soort": "regel",
       "wat": "Opname, videostukken en log herhalen een stuk zonder antwoord (geen verbinding, time-out 10 s, 5xx) met een pauze van 0,25 → 2 s zolang ze lopen (src/lib/herhaal.js); 4xx hooguit drie keer, een volle schijf nooit. De rij is begrensd (log 16 MB, opname 300 s ≈ 57 MB); past een NIEUW stuk er niet meer in, dan valt dat stuk weg (je houdt de eerste 5 minuten van de storing). Bij stop nog 10 s. Eén melding per sleutel die \"weer goed\" wordt.",
@@ -2097,7 +1891,7 @@
       "reden": "Klein, puur, gemeten."
     },
     {
-      "id": "dj-workflow-093",
+      "id": "dj-workflow-083",
       "titel": "Elke fetch leest zijn antwoord, ook als het gelukt is",
       "soort": "valkuil",
       "wat": "leesWeg(res) (src/lib/antwoord.js) leest elk antwoord uit. Geldt voor elke POST die vaker dan af en toe gaat (opname, video, log, mixerstatus).",
@@ -2121,7 +1915,7 @@
       "reden": "Niet zichtbaar in tests; na een uur set wel."
     },
     {
-      "id": "dj-workflow-094",
+      "id": "dj-workflow-084",
       "titel": "Grenzen van terugspelen",
       "soort": "grens",
       "wat": "Een sectiesprong landt op een stap van de audioklok na hetzelfde (0, 2,7 of 5,3 ms; onder belasting tot 8 ms), nooit een maat. Tap tempo meet met performance.now (de grid-gebeurtenis erna zet het grid terug). Een los bestand is niet terug te halen (de demo wel). Een track die leeg was wordt stilgezet, niet leeggemaakt. Spelende pads starten op de eerste tel na de beginstand, niet op hun oude fase. In een achtergrondtab zonder geluid knijpt Chrome de timers.",
@@ -2141,7 +1935,7 @@
       "reden": "Bekende, aanvaarde grenzen."
     },
     {
-      "id": "dj-workflow-095",
+      "id": "dj-workflow-085",
       "titel": "Opnemen tapt de master na de limiter; elk stuk op zijn frame",
       "soort": "regel",
       "wat": "De opname-worklet hangt aan het eind van de master (wat de zaal hoort) en geeft per seconde een stuk; elk stuk gaat met ?frame=N (frames van de audioklok) en de server schrijft het op die plek. klaar?frames=N vult een weggevallen staart aan. De WAV-kop krijgt zijn lengte pas bij klaar; is dat nooit gebeurd, dan herstelt lijst() hem uit de bestandsgrootte. Kop van 80 bytes met een JUNK-chunk die boven 4 GB (~6,2 uur) ds64 wordt (RF64). Alleen 48 kHz.",
@@ -2163,7 +1957,7 @@
       "reden": "Robuust en gemeten."
     },
     {
-      "id": "dj-workflow-096",
+      "id": "dj-workflow-086",
       "titel": "Video-opname: het canvas van wie er mengt",
       "soort": "regel",
       "wat": "Met video naast de WAV een set-<id>.mp4 (H.264, 1280×720, 30 fps, 8 Mbit/s, ~3,6 GB per uur, eigen geluidsspoor) via MediaRecorder, per seconde weggeschreven met ?van=<byte>. Tijdens een video-opname rendert de mixer door, ook als het paneel dicht is. Een nieuwe opname neemt het canvas van wie mengt (los venster of hoofdvenster); een opname blijft op zijn bron (MediaRecorder wisselt niet). Het beeld loopt minder dan één beeld achter op het geluid.",
@@ -2184,7 +1978,7 @@
       "reden": "Werkt; past bij \"streamen = een uitgang\" (VI1)."
     },
     {
-      "id": "dj-workflow-097",
+      "id": "dj-workflow-087",
       "titel": "Het setboek reconstrueert wat KLONK uit de logs",
       "soort": "pijn",
       "wat": "tools/setboek leest de logs van een avond (altijd op een kopie) en maakt een tracklist \"hoorbaar (benaderd)\", wat geladen maar niet gehoord werd, het gebruik en een Buma/Stemra-lijst. Hoorbaar = speelt, nummer erop, niet alle EQ-banden weg, niet alle stems dicht, master via faderGain boven −30 dB, en 20·log10(klinkt(fader, kant) × trim × 2) > −30 dB. Een nummer over de grens van twee logs is één stuk; --vanaf knipt op de klok, ook binnen één log. Wat het log niet ziet (het einde van een nummer, het tempo dat sync kiest, of een nummer stems had, de sampler) mist.",
@@ -2209,7 +2003,7 @@
       "reden": "v2: laat het log ook \"wat klinkt\" vastleggen (een gebeurtenis bij elke wissel van hoorbaarheid, uit dezelfde formule als de maatgever); dan is het setboek een lezer en \"gespeeld\" eerlijk."
     },
     {
-      "id": "dj-workflow-098",
+      "id": "dj-workflow-088",
       "titel": "Domeinlogica woont in ui/ en de pure laag importeert uit ui/",
       "soort": "pijn",
       "wat": "src/library/indeling.js (puur, ook de server) importeert src/ui/grid-strook.js; src/plan/klaarzetten.js importeert src/ui/past-bij.js; past-bij.js (puur muziekrekenwerk) staat in ui/. De server laadt dus code uit de ui-map.",
