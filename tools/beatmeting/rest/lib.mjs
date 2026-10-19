@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const HIER = path.dirname(new URL(import.meta.url).pathname);
+const HIER = path.dirname(decodeURIComponent(new URL(import.meta.url).pathname));
 export const ROOT = path.resolve(decodeURIComponent(HIER), '..', '..', '..');
 
 /** De media-map: VARVE_MEDIA, anders die van de hoofdrepo (ook vanuit een worktree). */

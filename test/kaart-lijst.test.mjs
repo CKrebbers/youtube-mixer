@@ -11,7 +11,7 @@ const { maakKaartNep, SORTERING, FILTERS, nepKandidaten } = await import('../too
 const fails = [];
 const ok = (naam, cond) => { if (!cond) fails.push(naam); console.log((cond ? '  ok  ' : 'FAIL  ') + naam); };
 const geheugen = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
-const FIXTURE = new URL('./fixtures/varve-kaart.klein.json', import.meta.url).pathname;
+const FIXTURE = decodeURIComponent(new URL('./fixtures/varve-kaart.klein.json', import.meta.url).pathname);
 
 console.log('de tab onthouden');
 {
