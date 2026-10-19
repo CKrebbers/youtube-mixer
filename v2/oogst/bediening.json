@@ -1,6 +1,6 @@
 {
   "onderwerp": "bediening",
-  "samenvatting": "De kern van de bediening in v1 is goed en moet mee: één action-bus (value 0..1, trigger boolean, read voor terugkoppeling), mapping als data met sleutel sig#shift@laag, soft-takeover voor faders en endless voor ringknoppen, loslaten altijd naar de action van het indrukken, en een LED-laag die de mapping leest in plaats van de engine (drie standen, zelf knipperen op de tel, diffing, wachtrij 16 per 4 ms, één tabblad via Web Lock). De APC40 mkII-protocolfeiten (mode 0x42, noten van onder naar boven, palet n+1 = donker, ringen op knop+8, relatief 64 = −64) zijn goud en staan met bron in het profiel. Wat schuurt is de manier waarop alles erbovenop is gegroeid: uitzonderingen in regex-lijsten naast meta-vlaggen, 3251 actions doordat elke track zijn eigen ids heeft (440 van 710 APC-regels met een vast tracknummer, 237 kB mappingbestand met 87 kB voorgangers), mapjes en padmodi in code, voorrangsregels die per nieuwe modus een reparatieregel vragen, en vlaggen (?vormen, ?uitlijn, ?stukken, ?werk, ?hub). De werkruimte (S0–S11) is als laag bovenop gebouwd met de eis dat 'standaard' bit voor bit vandaag blijft; daardoor zijn er vier mapping-lagen, fragmenten, aanhakers met vijf plekken per spoor en policy-lijsten op naam (VAST_NOOIT). In v2 zou ik de werkruimte (delen, panelen, schermen) de kern maken waar de standaardmapping één voorbeeld van is, alle uitzonderingen en gevaarniveaus als meta in define() zetten, actions parametriseren per track, mapjes en padmodi als data in het mappingdocument, en de bron (APC, Maschine, muis, toets, iPad, auto) in elke logregel. Grootste risico blijft dat bijna niets na 23 september op de echte APC of Maschine is nagelopen: v2 moet elke indeling eerst door een proef-poort laten gaan.",
+  "samenvatting": "De kern van de bediening in v1 is goed en moet mee: één action-bus (value 0..1, trigger boolean, read voor terugkoppeling), mapping als data met sleutel sig#shift@laag, soft-takeover voor faders en endless voor ringknoppen, loslaten altijd naar de action van het indrukken, en een LED-laag die de mapping leest in plaats van de engine (drie standen, zelf knipperen op de tel, diffing, wachtrij 16 per 4 ms, één tabblad via Web Lock). De APC40 mkII-protocolfeiten (mode 0x42, noten van onder naar boven, palet n+1 = donker, ringen op knop+8, relatief 64 = −64) zijn goud en staan met bron in het profiel. Wat schuurt is de manier waarop alles erbovenop is gegroeid: uitzonderingen in regex-lijsten naast meta-vlaggen, 3251 actions doordat elke track zijn eigen ids heeft (440 van 710 APC-regels met een vast tracknummer, 237 kB mappingbestand met 87 kB voorgangers), mapjes en padmodi in code, voorrangsregels die per nieuwe modus een reparatieregel vragen, en vlaggen (?vormen, ?uitlijn, ?stukken, ?werk, ?hub). De werkruimte (S0–S11) is als laag bovenop gebouwd met de eis dat 'standaard' bit voor bit vandaag blijft; daardoor zijn er vier mapping-lagen, fragmenten, aanhakers met vijf plekken per spoor en policy-lijsten op naam (VAST_NOOIT). In v2 zou ik de werkruimte (delen, panelen, schermen) de kern maken waar de standaardmapping één voorbeeld van is, alle uitzonderingen en gevaarniveaus als meta in define() zetten, actions parametriseren per track, mapjes en padmodi als data in het mappingdocument, en de bron (APC, Maschine, muis, toets, iPad, auto) in elke logregel. Grootste risico blijft dat bijna niets na 23 september op de echte APC of Maschine is nagelopen: v2 moet elke indeling eerst door een proef-poort laten gaan. Clay vroeg op 19 okt om een echt modulaire bediening die je tijdens het bouwen kunt wisselen en testen, met een indeling per nummer: dat bevestigt deze richting. De telling (kanaalstrip 63%, mapjes 0,2% met de hand gewisseld, 12% van de knopacties in de top-40) zegt dat een vaste kern plus modules die met het nummer of het moment meekomen meer oplevert dan meer lagen; wat er precies per nummer wisselt is een open vraag (bediening-092).",
   "kaartjes": [
     {
       "id": "bediening-001",
@@ -8,8 +8,19 @@
       "soort": "regel",
       "wat": "Elke bediening (MIDI, toetsenbord, muis, iPad, terugspelen, auto-DJ) roept een action op de bus aan. Een value-action krijgt altijd 0..1, een trigger-action een boolean (true = indrukken, false = loslaten), en een action kan zijn stand teruglezen als 0..1 of null.",
       "waarom": "Zo weet een mapping niets van dB, Hz of seconden (de engine schaalt), kan soft-takeover zien waar de software staat, en weet de LED-laag wat er moet branden. Regel 1 en 2 van het project rusten erop.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "De drie regels, 1 en 2" }, { "pad": "src/control/actions.js", "waar": "regel 1-15" }],
-      "code": ["src/control/actions.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De drie regels, 1 en 2"
+        },
+        {
+          "pad": "src/control/actions.js",
+          "waar": "regel 1-15"
+        }
+      ],
+      "code": [
+        "src/control/actions.js"
+      ],
       "pijler": "systeem",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -21,8 +32,15 @@
       "soort": "contract",
       "wat": "define(id, type, fn, meta) met meta.read; invoke(id, waarde, opties) roept eerst alle bijInvoke-luisteraars (het handelingenlog) en dan de fn; een fn die gooit geeft false en meldt via bijFout, maar neemt de aanroeper niet mee; een read die gooit of geen eindig getal geeft wordt null.",
       "waarom": "Luisteraars vóór de action: de handeling staat in het log vóór wat eruit volgt. Een kapotte getter mag de LED-laag (die elke regel leest) niet omleggen; de MIDI-hub stuurt na een falende action het bericht nog naar de monitor.",
-      "bron": [{ "pad": "src/control/actions.js", "waar": "regel 90-190 (define, invoke, bijInvoke, read, metaOf, list)" }],
-      "code": ["src/control/actions.js"],
+      "bron": [
+        {
+          "pad": "src/control/actions.js",
+          "waar": "regel 90-190 (define, invoke, bijInvoke, read, metaOf, list)"
+        }
+      ],
+      "code": [
+        "src/control/actions.js"
+      ],
       "pijler": "systeem",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -34,8 +52,16 @@
       "soort": "regel",
       "wat": "Knoppen en faders op het scherm sturen via actions, maar lezen ook elk beeld hun stand terug via read(). Zonder dat loopt het scherm achter zodra er een tweede bron is (MIDI, auto-DJ, iPad).",
       "waarom": "Vastgesteld bij fase 2; met de auto-DJ, terugspelen en de iPad zijn er nu vijf bronnen.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Bekende grenzen: 'De UI stuurt de engine aan via actions, maar VOLGT hem ook'" }],
-      "code": ["src/ui/controls.js", "src/ui/renderloop.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: 'De UI stuurt de engine aan via actions, maar VOLGT hem ook'"
+        }
+      ],
+      "code": [
+        "src/ui/controls.js",
+        "src/ui/renderloop.js"
+      ],
       "pijler": "systeem",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -47,8 +73,20 @@
       "soort": "besluit",
       "wat": "Action-ids gebruiken tracknummers (track.1.filter), de engine decks (A, B …). De vertaling staat alleen in TRACKS in actions.js. {focus} in een mapping wordt bij het indrukken een tracknummer. Namen zijn Engels, labels Nederlands.",
       "waarom": "Acht tracks erbij zonder de mapping te raken. Versie 1 (deck.A.…) en 2 (Nederlandse namen) moesten met migreerAction worden omgezet: hernoemen is duur zodra er geëxporteerde mappings rondslingeren.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Bekende grenzen: 'De action-bus spreekt in TRACKS'" }, { "pad": "src/control/actions.js", "waar": "regel 196-197" }],
-      "code": ["src/control/actions.js", "src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: 'De action-bus spreekt in TRACKS'"
+        },
+        {
+          "pad": "src/control/actions.js",
+          "waar": "regel 196-197"
+        }
+      ],
+      "code": [
+        "src/control/actions.js",
+        "src/control/mapping.js"
+      ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -60,8 +98,24 @@
       "soort": "pijn",
       "wat": "Elke track krijgt zijn eigen ids (track.1.filter … track.8.filter), samen 3251 actions in het register. In mappings/apc40mk2.json hebben 440 van de 710 regels een vast tracknummer (dezelfde regel acht keer); het bestand is 237 kB, waarvan 87 kB voorgangers in 'eerder'.",
       "waarom": "Gemeten 19 okt met node op mappings/apc40mk2.json; 3251 uit het register van de handenkaart. Elke nieuwe grid-modus voegt 40-89 regels toe (stems 83, patronen 89, secties 82).",
-      "bron": [{ "pad": "docs/HANDEN.md", "waar": "§4 Bronnen (3251 actions)" }, { "pad": "mappings/apc40mk2.json", "waar": "rules, eerder" }, { "pad": "docs/APC40.md", "waar": "Modus stems / patronen" }],
-      "code": ["src/control/actions.js", "mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "§4 Bronnen (3251 actions)"
+        },
+        {
+          "pad": "mappings/apc40mk2.json",
+          "waar": "rules, eerder"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Modus stems / patronen"
+        }
+      ],
+      "code": [
+        "src/control/actions.js",
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "anders",
@@ -73,8 +127,30 @@
       "soort": "pijn",
       "wat": "Of een action terugspeelt, in de beginstand van het log staat, de auto-DJ laat overnemen of een nummer vraagt, staat in regex-lijsten (OVERSLAAN, NUMMER_NODIG, NIET_IN_WAARDEN, OVERNEEM, de kleuren in KLEURSCHEMA) én sinds 14 okt in meta-vlaggen (log: 'overslaan', beginstand: false, overneem: true, alleenScherm: true, nummer: true).",
       "waarom": "De vlaggen kwamen in werkruimte S0 zodat nieuwe sporen de regexen niet meer hoefden te raken; de oude regexen bleven. Een nieuwe action moet nu op twee manieren goed staan, en wie de regex vergeet merkt het pas bij terugspelen of tijdens een overgang van de auto-DJ.",
-      "bron": [{ "pad": "docs/werkruimte/S0.md", "waar": "§3 Meta-vlaggen" }, { "pad": "src/control/terugspelen.js", "waar": "regel 65, 85" }, { "pad": "src/control/handelingen.js", "waar": "regel 350" }, { "pad": "src/auto/automaat.js", "waar": "regel 38" }],
-      "code": ["src/control/terugspelen.js", "src/control/handelingen.js", "src/auto/automaat.js", "src/control/feedback.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S0.md",
+          "waar": "§3 Meta-vlaggen"
+        },
+        {
+          "pad": "src/control/terugspelen.js",
+          "waar": "regel 65, 85"
+        },
+        {
+          "pad": "src/control/handelingen.js",
+          "waar": "regel 350"
+        },
+        {
+          "pad": "src/auto/automaat.js",
+          "waar": "regel 38"
+        }
+      ],
+      "code": [
+        "src/control/terugspelen.js",
+        "src/control/handelingen.js",
+        "src/auto/automaat.js",
+        "src/control/feedback.js"
+      ],
       "pijler": "systeem",
       "gewicht": "kern",
       "voorstel": "anders",
@@ -86,8 +162,20 @@
       "soort": "pijn",
       "wat": "waaromNiet() loopt na bindEngine het register langs en wikkelt elke trigger die op NUMMER_NODIG, GRID_NODIG of KOPTELEFOON_NODIG past in een check met een melding ('track 3 is leeg …'). Actions die later gedefinieerd worden (aanhakers van S1) vallen erbuiten en moesten zelf melden.",
       "waarom": "Het patchen van fn's na registratie is volgorde-afhankelijk; S1 vond het en dupliceerde de meldingen in acties-precisie.js.",
-      "bron": [{ "pad": "src/control/actions.js", "waar": "regel 1160-1230 (waaromNiet)" }, { "pad": "docs/werkruimte/S1.md", "waar": "Regels: 'Meldingen zeggen het zelf'" }],
-      "code": ["src/control/actions.js", "src/control/acties-precisie.js"],
+      "bron": [
+        {
+          "pad": "src/control/actions.js",
+          "waar": "regel 1160-1230 (waaromNiet)"
+        },
+        {
+          "pad": "docs/werkruimte/S1.md",
+          "waar": "Regels: 'Meldingen zeggen het zelf'"
+        }
+      ],
+      "code": [
+        "src/control/actions.js",
+        "src/control/acties-precisie.js"
+      ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
       "voorstel": "anders",
@@ -99,8 +187,20 @@
       "soort": "regel",
       "wat": "Een nieuwe functie begint als action op de bus; pas daarna komen scherm en mapping. Elke action in de standaardmapping moet een uitleg in gewone taal hebben (apc-beschrijf.js en per spoor src/ui/beschrijf/<spoor>.js); een test eist dat.",
       "waarom": "De uitleg voedt apc.html, maschine.html, de mapje-balk, CONTROL-uitleg op de Maschine en de iPad-kaart. Zonder test raakte hij achter.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Conventies: Nieuwe functie" }, { "pad": "docs/werkruimte/S0.md", "waar": "§2 Uitleg" }],
-      "code": ["src/ui/apc-beschrijf.js", "src/ui/beschrijf/index.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Nieuwe functie"
+        },
+        {
+          "pad": "docs/werkruimte/S0.md",
+          "waar": "§2 Uitleg"
+        }
+      ],
+      "code": [
+        "src/ui/apc-beschrijf.js",
+        "src/ui/beschrijf/index.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "anders",
@@ -112,12 +212,24 @@
       "soort": "contract",
       "wat": "Een regel is { in, action, mode, shift?, laag?, als?, label, led?, takeover?, invert?, step? }. Signatures: 'note:<kanaal>:<noot>', 'cc:<kanaal>:<cc>', 'key:0:<HID-code>' (toetsenbord), 'master-volume' (SysEx). De sleutel sig[#shift][@laag][?als] maakt meerdere regels per knop mogelijk; versie 3 van het document.",
       "waarom": "Zo is één knop in elk mapje, met en zonder shift, iets anders, en kan de LED-laag, de spiegel en de kaart dezelfde regel lezen. Volgorde van regels betekent niets: kies() zoekt op sleutel.",
-      "bron": [{ "pad": "src/control/mapping.js", "waar": "regel 15-70, sleutelVan regel 109" }, { "pad": "docs/MAPPING-VERSCHIL.md", "waar": "Wat er nu bewaard wordt" }],
-      "code": ["src/control/mapping.js", "mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "src/control/mapping.js",
+          "waar": "regel 15-70, sleutelVan regel 109"
+        },
+        {
+          "pad": "docs/MAPPING-VERSCHIL.md",
+          "waar": "Wat er nu bewaard wordt"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js",
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "instellen",
       "gewicht": "kern",
       "voorstel": "houden",
-      "reden": "Data, geen code (VISIE §5.3); het formaat heeft 14 okt de modi van S4 opgenomen zonder bestaande regels te breken."
+      "reden": "Data, geen code (VISIE §5.3); het formaat heeft 14 okt de modi van S4 opgenomen zonder bestaande regels te breken. Modulair (Clay 19 okt): helpt: een indeling als data kan per nummer of per module worden gewisseld zonder code."
     },
     {
       "id": "bediening-010",
@@ -125,8 +237,23 @@
       "soort": "contract",
       "wat": "trigger (noot: true/false), absolute (fader met soft-takeover), relative-2c (1..63 = +, 64..127 = −, 64 = −64), relative-bin (waarde − 64), endless (ringknop, verschil bij de softwarestand), druk (zolang je drukt naar 'naar'), latch (druk = naar, nog eens = terug; met 'lang' 400 ms kort = vast, lang = zolang), stappen (encoder als .fwd/.back-triggers, hooguit 8 per bericht).",
       "waarom": "64 = −64 in tweecomplement is gerepareerd op 23 sep (protocol v1.2 p37). druk/latch/stappen kwamen in S4 zodat elke value-action een drukknop kan zijn zonder nieuwe action.",
-      "bron": [{ "pad": "src/control/mapping.js", "waar": "regel 20-70, 1093-1095, _stappen" }, { "pad": "docs/werkruimte/S4.md", "waar": "Wat er is" }, { "pad": "docs/APC40.md", "waar": "Knoppen: Relatief" }],
-      "code": ["src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "src/control/mapping.js",
+          "waar": "regel 20-70, 1093-1095, _stappen"
+        },
+        {
+          "pad": "docs/werkruimte/S4.md",
+          "waar": "Wat er is"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Knoppen: Relatief"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -138,8 +265,15 @@
       "soort": "besluit",
       "wat": "Een absolute fader pakt de softwarewaarde pas over als hij binnen 0,02 komt (TAKEOVER_EPS, ~2,5 stappen van 127) of er sinds het vorige bericht doorheen beweegt. Verzette iets anders de waarde (muis, auto-DJ, tweede controller) meer dan 0,02, dan moet hij opnieuw overpakken. Een vorige stand ouder dan 1 s (LAST_TTL) telt niet als bewijs. 'takeover': 1 zet het per regel uit.",
       "waarom": "Kleiner dan 0,02 was frustrerend fijn; zonder de herpak-regel sprong de fader alsnog, alleen later. De TTL dekt banken: een knop die na een bankwissel fysiek verdraaid is.",
-      "bron": [{ "pad": "src/control/mapping.js", "waar": "regel 72-84, _absolute" }],
-      "code": ["src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "src/control/mapping.js",
+          "waar": "regel 72-84, _absolute"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -151,8 +285,19 @@
       "soort": "besluit",
       "wat": "De 16 ringknoppen van de APC sturen absolute waarden, maar VARVE gebruikt alleen het verschil met het vorige bericht van die knop en telt het op bij de softwarestand. Eerste bericht (of na een focus- of mapjewissel, of als read > 0,02 afwijkt van wat we stuurden): alleen onthouden, één tik kwijt, nooit een sprong. Op de aanslag (0 of 127) nogmaals hetzelfde bericht telt als een stap.",
       "waarom": "De ring toont de softwarestand, dus na een wissel draai je door vanaf wat je ziet. Zonder de aanslagregel kwam je vanaf een ring op 0,2 met de knop op 127 nooit meer omhoog. Of de APC zijn interne stand gelijkzet met de ring is niet bekend; de herbegin-regel klopt in beide gevallen.",
-      "bron": [{ "pad": "src/control/mapping.js", "waar": "_endless" }, { "pad": "CLAUDE.md", "waar": "Bekende grenzen: 'De 16 ringknoppen'" }],
-      "code": ["src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "src/control/mapping.js",
+          "waar": "_endless"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: 'De 16 ringknoppen'"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -164,8 +309,16 @@
       "soort": "valkuil",
       "wat": "Met 'takeover': 1 op een fasemeter (endless, read schuift met de drift mee) begon _endless nooit opnieuw, en telde de eerste tik na een jog of sync alles mee wat er intussen veranderde.",
       "waarom": "Review ronde 1 van S1: +30,48 ms na een jog, −34,29 ms na een sync, in plaats van 3,81 ms per tik. Met de standaardmarge: geen sprong, drift kost hooguit één tik per 0,02.",
-      "bron": [{ "pad": "docs/werkruimte/S1.md", "waar": "Regels: 'Geen takeover: 1 op de fasemeters'" }],
-      "code": ["src/control/mapping.js", "mappings/stukken/uitlijn.json"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S1.md",
+          "waar": "Regels: 'Geen takeover: 1 op de fasemeters'"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js",
+        "mappings/stukken/uitlijn.json"
+      ],
       "pijler": "controllers",
       "gewicht": "detail",
       "voorstel": "houden",
@@ -177,12 +330,26 @@
       "soort": "regel",
       "wat": "Een knop kiest zijn regel bij het indrukken (shift, open mapje, focus, deel, houd-knop tellen dan) en de Mapping onthoudt dat (mapping.vast). Het loslaten gaat naar diezelfde action, ook als shift, het mapje, de focus, de padmodus of het deel intussen wisselde. Geldt ook voor toetsenbord, scherm, iPad (per pointerId) en Maschine-pads (padVast).",
       "waarom": "Anders blijven kills, bends, worpen en houd-mapjes hangen. In Chrome krijgt een knop die tussen indrukken en loslaten vervangen wordt geen klik (ingest-strook).",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "MAPJES (lagen) en SHIFT" }, { "pad": "docs/WERKRUIMTE.md", "waar": "C2 stap 5, C5" }],
-      "code": ["src/control/mapping.js", "src/control/keyboard.js", "src/control/maschine.js", "src/paneel/vrij.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "MAPJES (lagen) en SHIFT"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "C2 stap 5, C5"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js",
+        "src/control/keyboard.js",
+        "src/control/maschine.js",
+        "src/paneel/vrij.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
-      "reden": "Elke bron die indrukken en loslaten kent moet dit hebben; in v2 in één gedeelde laag in plaats van per apparaat."
+      "reden": "Elke bron die indrukken en loslaten kent moet dit hebben; in v2 in één gedeelde laag in plaats van per apparaat. Modulair (Clay 19 okt): voorwaarde voor live wisselen: een indeling die met een nieuw nummer wisselt terwijl een knop vastzit, mag die knop niet laten hangen."
     },
     {
       "id": "bediening-015",
@@ -190,8 +357,24 @@
       "soort": "regel",
       "wat": "Fader, play/cue, filter, EQ, sync, crossfaderkant en PFL staan altijd op dezelfde plek, in elk mapje, elke grid-modus en elk deel. Alleen wat je niet bij elke overgang nodig hebt mag in een mapje. Per kolom van boven naar onder: knob · 5 pads · Clip Stop · Track Select · 2×2 · fader.",
       "waarom": "Onderzoek 23 sep (DJ-conventies, bestaande APC-mappings): de kern nooit achter shift of een laag; klacht nummer één bij bestaande APC40-mappings is 'te veel modifiers'. Clay vond de eerste indeling met mapjes voor alles 'niet logisch'.",
-      "bron": [{ "pad": "docs/APC40-onderzoek.md", "waar": "§2 Conventies" }, { "pad": "docs/APC40.md", "waar": "Indeling (herzien 23 sep)" }, { "pad": "src/werk/model.js", "waar": "KERN, isKern" }],
-      "code": ["src/werk/model.js", "mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "docs/APC40-onderzoek.md",
+          "waar": "§2 Conventies"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Indeling (herzien 23 sep)"
+        },
+        {
+          "pad": "src/werk/model.js",
+          "waar": "KERN, isKern"
+        }
+      ],
+      "code": [
+        "src/werk/model.js",
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -203,8 +386,19 @@
       "soort": "besluit",
       "wat": "De shiftknop (APC note:0:98, Maschine note:1:39) staat bovenaan de mapping en gaat nooit de bus op. Met shift vast zoekt kies() eerst shift-regels, dan gewone (zodat een fader blijft werken); binnen elk eerst het open mapje, dan zonder mapje.",
       "waarom": "Het protocol: Shift (0x62) heeft geen eigen functie in het apparaat. Terugvallen op de gewone regel voorkomt dat een fader dood is zolang shift vastzit.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Knoppen: 'Shift (0x62) is gewoon een noot'" }, { "pad": "CLAUDE.md", "waar": "MAPJES (lagen) en SHIFT" }],
-      "code": ["src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Knoppen: 'Shift (0x62) is gewoon een noot'"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "MAPJES (lagen) en SHIFT"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -212,16 +406,24 @@
     },
     {
       "id": "bediening-017",
-      "titel": "Shift-regel gaat voor het open mapje: elke nieuwe modus vraagt een reparatieregel",
+      "titel": "Shift gaat voor het open mapje: elke nieuwe modus vraagt een reparatieregel",
       "soort": "valkuil",
       "wat": "Omdat een shift-regel voor een regel in het open mapje gaat, opende Shift + scene 2/3/4 in de grid-modus (Shift + Metronome) ineens patronen, stems of auto in plaats van bpm ×2, bpm ½ of halve tel. Elke nieuwe Shift + scene-modus kreeg daarom een expliciete regel note:0:8x#shift@edit.aan die het oude gedrag terugzet.",
       "waarom": "Drie keer gebeurd (2 okt auto, 5 okt stems, 5 okt patronen); telkens pas gevonden door mapping.test, die elke knop in elk mapje met de voorganger vergelijkt.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Modus auto / stems / patronen: 'Wat er bewust NIET verandert'" }],
-      "code": ["mappings/apc40mk2.json", "src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Modus auto / stems / patronen: 'Wat er bewust NIET verandert'"
+        }
+      ],
+      "code": [
+        "mappings/apc40mk2.json",
+        "src/control/mapping.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "anders",
-      "reden": "In v2 de voorrang als expliciete, zichtbare tabel en een validatie die meldt welke bestaande plek een nieuwe regel overschaduwt, in plaats van reparatieregels."
+      "reden": "In v2 de voorrang als expliciete, zichtbare tabel en een validatie die meldt welke bestaande plek een nieuwe regel overschaduwt, in plaats van reparatieregels. Modulair (Clay 19 okt): zit in de weg: elke module die je erbij zet zou nu een reparatieregel vragen; modules moeten elkaar kunnen overschaduwen volgens één zichtbare regel."
     },
     {
       "id": "bediening-018",
@@ -229,12 +431,25 @@
       "soort": "contract",
       "wat": "Groepen edit (grid-modus, schakelaar), device (strip/rack/inst/master/beeld/vorm), grid (hotcues … secties) en houd (open zolang je een knop vasthoudt, meer tegelijk, gedeeld over apparaten). Kiesknoppen zijn actions layer.<groep>.<knop>; kort drukken zet vast, vasthouden ≥ 400 ms (GLUREN) vanuit een ander mapje = gluren, loslaten = terug. kies() zoekt in de volgorde houd → edit → device → grid.",
       "waarom": "Meer functies dan knoppen; Clay koos de opzet op 23 sep (VRAGEN B3), herzien na het onderzoek. Een regel in een device-mapje wint daardoor ook op de scene-knoppen van elke grid-modus (zo kon de beeldregie op de scene-knoppen).",
-      "bron": [{ "pad": "src/control/lagen.js", "waar": "regel 1-110" }, { "pad": "docs/APC40.md", "waar": "Mapje beeld: 'Waarom een device-mapje'" }],
-      "code": ["src/control/lagen.js", "src/control/houd.js", "src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "src/control/lagen.js",
+          "waar": "regel 1-110"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Mapje beeld: 'Waarom een device-mapje'"
+        }
+      ],
+      "code": [
+        "src/control/lagen.js",
+        "src/control/houd.js",
+        "src/control/mapping.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
-      "reden": "Het idee (vast en gluren, oplichtende kiesknop, eigen kleur per modus) is goed en volgt de DJ-conventie van padmodi met eigen modusknoppen."
+      "reden": "Het idee (vast en gluren, oplichtende kiesknop, eigen kleur per modus) is goed en volgt de DJ-conventie van padmodi met eigen modusknoppen. Modulair (Clay 19 okt): mapjes worden maar 0,2% van de handelingen gewisseld (~2 wissels per log, v2/telling/nu.md punt 11): handmatig wisselen draagt weinig; een indeling die met het nummer of het moment meekomt kan veel lagen vervangen."
     },
     {
       "id": "bediening-019",
@@ -242,8 +457,16 @@
       "soort": "valkuil",
       "wat": "Edit staat vooraan in de groepen, dus in de grid-modus zijn Device ◀ ▶ en On/Off altijd van het grid. On/Off is daar grid.controle: op een stilstaand deck drukt die op play, en zonder koptelefoonuitgang van vier kanalen gaat de tik naar de master.",
       "waarom": "Wie uit gewoonte op On/Off drukt (buiten de grid-modus effect aan/uit) laat de zaal mogelijk de track en de tik horen. Gemeld als vraag op 14 okt.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Grid-modus: gelijkzetten en controleren (14 okt)" }],
-      "code": ["src/control/lagen.js", "mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Grid-modus: gelijkzetten en controleren (14 okt)"
+        }
+      ],
+      "code": [
+        "src/control/lagen.js",
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "anders",
@@ -255,12 +478,24 @@
       "soort": "pijn",
       "wat": "GROEPEN, OP_AANVRAAG, LAAGNAAM, MAPJE_KLEUR en de padmodi STEP/SCENE/SAMPLING van de Maschine zijn code. Van buiten kan het alleen via voegMapjeToe/haalMapjeWeg/zetVolgorde gevolgd door herbindLagen(); 'mapjes' in een stuk leest de mapping zelf niet.",
       "waarom": "De werkruimte (S0, S6) moest daarom een API om de code heen bouwen; E2 noemt 'mapjes en padmodi volledig als data' als volgende stap.",
-      "bron": [{ "pad": "docs/werkruimte/S0.md", "waar": "§4 Mapjes en fragmenten" }, { "pad": "docs/WERKRUIMTE.md", "waar": "E2" }],
-      "code": ["src/control/lagen.js", "src/control/maschine.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S0.md",
+          "waar": "§4 Mapjes en fragmenten"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "E2"
+        }
+      ],
+      "code": [
+        "src/control/lagen.js",
+        "src/control/maschine.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "anders",
-      "reden": "In v2 horen mapjes, hun kiesknop, kleur, volgorde en voorwaarde in hetzelfde document als de regels; dan kan Clay een modus maken zonder code."
+      "reden": "In v2 horen mapjes, hun kiesknop, kleur, volgorde en voorwaarde in hetzelfde document als de regels; dan kan Clay een modus maken zonder code. Modulair (Clay 19 okt): dit zit het meest in de weg: zolang een mapje of padmodus code is, kun je hem niet als module tijdens het bouwen aan- en uitzetten en testen."
     },
     {
       "id": "bediening-021",
@@ -268,12 +503,20 @@
       "soort": "besluit",
       "wat": "Bewaard wordt { kind: 'diff', version, device, base, top, rules, removed }: alleen regels die je toevoegde of veranderde (volledig, op sleutel) en sleutels die je weghaalde. base = FNV-1a-vingerafdruk van de standaard (apparaat, shiftknop, regels op sleutel gesorteerd) met het aantal regels. Laden = standaard + verschil; het verschil wordt bij elke wijziging opnieuw uitgerekend (koppel je een knop terug naar de standaard, dan verdwijnt hij). Export blijft het volledige document.",
       "waarom": "Op 23 sep kwam de grid-modus niet op Clay's APC omdat zijn volledige kopie de standaard verving. Clay's echte verschil na omzetten: 4 regels (rack-knoppen 5–8 op video-effecten), 524 bytes, tegen 291 regels / 30,8 kB als kopie.",
-      "bron": [{ "pad": "docs/MAPPING-VERSCHIL.md", "waar": "Het probleem, Wat er nu bewaard wordt, Hoe het werkt" }],
-      "code": ["src/control/mapping.js", "src/ui/mapping-opslag.js"],
+      "bron": [
+        {
+          "pad": "docs/MAPPING-VERSCHIL.md",
+          "waar": "Het probleem, Wat er nu bewaard wordt, Hoe het werkt"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js",
+        "src/ui/mapping-opslag.js"
+      ],
       "pijler": "instellen",
       "gewicht": "kern",
       "voorstel": "houden",
-      "reden": "De enige manier waarop een eigen indeling en een groeiende standaard naast elkaar kunnen leven."
+      "reden": "De enige manier waarop een eigen indeling en een groeiende standaard naast elkaar kunnen leven. Modulair (Clay 19 okt): het verschil moet in v2 per indeling (of per module) kunnen, niet alleen per apparaat; E2 noemde al een verschil per werkruimte."
     },
     {
       "id": "bediening-022",
@@ -281,8 +524,15 @@
       "soort": "valkuil",
       "wat": "'Standaard herstellen' bewaart een leeg verschil op server en in de browser. Bij opstarten gaat de server voor; de browser is reserve en volgt de server.",
       "waarom": "Wissen liet een oude kopie uit een andere browser (Comet) terugkomen: een lege server laat de browser voorgaan.",
-      "bron": [{ "pad": "docs/MAPPING-VERSCHIL.md", "waar": "Hoe het werkt: Standaard herstellen; Opstarten" }],
-      "code": ["src/ui/mapping-opslag.js"],
+      "bron": [
+        {
+          "pad": "docs/MAPPING-VERSCHIL.md",
+          "waar": "Hoe het werkt: Standaard herstellen; Opstarten"
+        }
+      ],
+      "code": [
+        "src/ui/mapping-opslag.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -294,8 +544,15 @@
       "soort": "valkuil",
       "wat": "Faalt GET /api/mapping, dan laadt de app de reserve uit de browser maar stuurt bij het opstarten niets naar de server. Kwam de standaard niet binnen, dan wordt die sessie niets bewaard tot je herlaadt. Een andere fout dan 404 bij het ophalen van de standaard is een fout, geen lege standaard.",
       "waarom": "Anders zette een oude browserkopie de grid-modus als 'weggehaald' over Clay's verschil, verving de eerste koppeling al zijn eigen regels door één, en overschreef een fragment zijn verschil met een lege mapping (gevonden door de controleur, 25 sep; mapping.test bouwt de strenge server na).",
-      "bron": [{ "pad": "docs/MAPPING-VERSCHIL.md", "waar": "Opstarten: wanneer er NIET bewaard wordt" }],
-      "code": ["src/ui/mapping-opslag.js"],
+      "bron": [
+        {
+          "pad": "docs/MAPPING-VERSCHIL.md",
+          "waar": "Opstarten: wanneer er NIET bewaard wordt"
+        }
+      ],
+      "code": [
+        "src/ui/mapping-opslag.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -307,8 +564,20 @@
       "soort": "pijn",
       "wat": "Het standaardbestand draagt zijn voorgangers mee als verschil (15 stuks, 87 kB). Een oude volledige kopie wordt afgezet tegen de standaard waar hij het dichtst bij ligt. Na elke wijziging aan apc40mk2.json moet 'node tools/mapping/eerder.mjs' draaien, anders faalt mapping.test.",
       "waarom": "Zonder voorganger gold alles wat de standaard erbij kreeg als 'door jou weggehaald' (83 regels op 25 sep, 328 bij beeld). Werkt, maar groeit per wijziging en is een handmatige stap.",
-      "bron": [{ "pad": "docs/MAPPING-VERSCHIL.md", "waar": "Eerdere standaarden" }, { "pad": "CLAUDE.md", "waar": "Eigen mapping = VERSCHIL" }],
-      "code": ["tools/mapping/eerder.mjs", "mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "docs/MAPPING-VERSCHIL.md",
+          "waar": "Eerdere standaarden"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Eigen mapping = VERSCHIL"
+        }
+      ],
+      "code": [
+        "tools/mapping/eerder.mjs",
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "instellen",
       "gewicht": "detail",
       "voorstel": "anders",
@@ -320,8 +589,15 @@
       "soort": "grens",
       "wat": "Verandert de standaard een sleutel die jij ook veranderde, dan wint jouw regel zonder dat de app zegt welke; een weggehaalde regel blijft weg. Er is geen driewegvergelijking. Alles in een regel telt mee in de vergelijking, ook label.",
       "waarom": "Het verschil onthoudt niet wat de standaard had toen jij hem veranderde. Je ziet alleen 'de standaardmapping is bijgewerkt'.",
-      "bron": [{ "pad": "docs/MAPPING-VERSCHIL.md", "waar": "Bekende grenzen" }],
-      "code": ["src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "docs/MAPPING-VERSCHIL.md",
+          "waar": "Bekende grenzen"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js"
+      ],
       "pijler": "instellen",
       "gewicht": "detail",
       "voorstel": "anders",
@@ -333,12 +609,23 @@
       "soort": "besluit",
       "wat": "Regels van buiten (de vormlagen met ?vormen=1, stukken 'stuk:<naam>', werkruimteregels 'werk:<naam>') komen via voegToe/vervangFragment(bron, doc): eerst alle regels van die bron weg, dan aanvullen op vrije sleutels. Ze gaan nooit mee in toJSON(), dus nooit in het eigen verschil; haalWeg(bron) maakt ze ongedaan.",
       "waarom": "Een fragment van de standaard maakte anders stilletjes een volledige eigen kopie. Bewaren gebeurt alleen als JOUW deel veranderde.",
-      "bron": [{ "pad": "docs/werkruimte/S0.md", "waar": "§4 mapping.js" }, { "pad": "CLAUDE.md", "waar": "VORMLAGEN: 'Die regels staan in een FRAGMENT'" }],
-      "code": ["src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S0.md",
+          "waar": "§4 mapping.js"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "VORMLAGEN: 'Die regels staan in een FRAGMENT'"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "anders",
-      "reden": "Het principe (bronnen gescheiden, eigen regel wint) houden; in v2 met minder bronsoorten als de werkruimte de kern is (zie bediening-070)."
+      "reden": "Het principe (bronnen gescheiden, eigen regel wint) houden; in v2 met minder bronsoorten als de werkruimte de kern is (zie bediening-070). Modulair (Clay 19 okt): vervangFragment(bron, doc) is precies het mechaniek voor een module die je live aan en uit zet (twee keer = één keer, haalWeg = weg); in v2 wordt elke module zo een bron, maar zonder de beperking tot vrije sleutels."
     },
     {
       "id": "bediening-027",
@@ -346,8 +633,20 @@
       "soort": "contract",
       "wat": "Kies een action, beweeg een control. Een noot is meteen een trigger. Een CC wordt bij het eerste bericht absoluut gekoppeld en daarna 600 ms aangescherpt: alleen 1–8 en 120–127 = relative-2c, alles binnen ±8 van 64 met hooguit 6 verschillende waarden = relative-bin; onder 4 berichten of bij twijfel absolute. De regel komt in het open mapje, met shift vast in de shift-laag.",
       "waarom": "Absoluut is de veilige gok: soft-takeover vangt een verkeerde gok op, terwijl een fader die als encoder gekoppeld is wegrent. Geen DOM en geen Web MIDI in de module: in Node getest.",
-      "bron": [{ "pad": "src/control/midi-learn.js", "waar": "regel 1-40 (raadModus)" }, { "pad": "CLAUDE.md", "waar": "MAPJES: 'Koppelen komt in het mapje dat open staat'" }],
-      "code": ["src/control/midi-learn.js", "src/ui/learn-mode.js"],
+      "bron": [
+        {
+          "pad": "src/control/midi-learn.js",
+          "waar": "regel 1-40 (raadModus)"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "MAPJES: 'Koppelen komt in het mapje dat open staat'"
+        }
+      ],
+      "code": [
+        "src/control/midi-learn.js",
+        "src/ui/learn-mode.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -359,8 +658,17 @@
       "soort": "besluit",
       "wat": "APC, Maschine, Xboard en toetsenbord hebben elk een standaard (mappings/<apparaat>.json) en een eigen verschil (/api/mapping/<apparaat>, sleutel mapping:<apparaat>; de APC houdt /api/mapping). Een document voor een ander apparaat geeft 400, een regel kan nooit in de mapping van een ander apparaat belanden. Op de Maschine koppel je alleen met CONTROL vast; wat maschine.js zelf afhandelt (pads, wiel, ENTER, STEP …) is niet te koppelen.",
       "waarom": "Clay maakt zelf de knoppenverdeling (14 okt). Zonder CONTROL-eis koppel je per ongeluk tijdens spelen.",
-      "bron": [{ "pad": "docs/werkruimte/S5.md", "waar": "§1 en §2" }],
-      "code": ["src/ui/mapping-opslag.js", "server/routes/mapping-apparaat.js", "src/control/midi-learn.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S5.md",
+          "waar": "§1 en §2"
+        }
+      ],
+      "code": [
+        "src/ui/mapping-opslag.js",
+        "server/routes/mapping-apparaat.js",
+        "src/control/midi-learn.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -372,8 +680,16 @@
       "soort": "besluit",
       "wat": "mappings/toetsen.json (66 regels) met signature key:0:<n>, n = HID-gebruikscode van de fysieke toets (USB HID page 0x07: A = 4 … Z = 29, 1 = 30 … 0 = 39, ` = 53, § = 100). Alleen trigger-regels; spatie, [ ], /, Esc, B en Cmd+Z blijven code.",
       "waarom": "Fysieke codes zijn onafhankelijk van de toetsenbordindeling. De oude KEYMAP bleef als gouden lijst: keyboard.test eist 0 verschillen.",
-      "bron": [{ "pad": "docs/werkruimte/S5.md", "waar": "§3 Het toetsenbord als data" }],
-      "code": ["src/control/keyboard.js", "mappings/toetsen.json"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S5.md",
+          "waar": "§3 Het toetsenbord als data"
+        }
+      ],
+      "code": [
+        "src/control/keyboard.js",
+        "mappings/toetsen.json"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -385,8 +701,15 @@
       "soort": "valkuil",
       "wat": "Het toetsenbord negeert elke toets met Cmd/Ctrl/Alt, doet niets tijdens typen (isTypen), geen auto-repeat, laat alles los bij blur of een verborgen tabblad, en loslaten gaat naar de action van het indrukken, ook met shift. Geen prompt(): dat legt de pagina stil.",
       "waarom": "Cmd+F startte een hotcue. L was hotcue 3 van de rechterhand, daarom is de library toets B.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Verbeterronde 23 sep, UI" }],
-      "code": ["src/control/keyboard.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Verbeterronde 23 sep, UI"
+        }
+      ],
+      "code": [
+        "src/control/keyboard.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -398,8 +721,19 @@
       "soort": "regel",
       "wat": "Voor elke regel die nu geldt (mapping.actieveRegels()) leest feedback.js de read van zijn action en zet het lampje onder die control. Koppel je een pad aan iets anders, dan verhuist zijn lampje mee. led.lees laat een lampje de stand van een andere action tonen (in diens kleur), led.invert keert om.",
       "waarom": "Er is bewust geen tweede tabel die uit de pas kan lopen; mapjes, shift en focus wisselen het licht vanzelf mee.",
-      "bron": [{ "pad": "src/control/feedback.js", "waar": "regel 1-35" }, { "pad": "CLAUDE.md", "waar": "De LED-laag leest de MAPPING" }],
-      "code": ["src/control/feedback.js"],
+      "bron": [
+        {
+          "pad": "src/control/feedback.js",
+          "waar": "regel 1-35"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De LED-laag leest de MAPPING"
+        }
+      ],
+      "code": [
+        "src/control/feedback.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -411,8 +745,19 @@
       "soort": "contract",
       "wat": "read null = UIT (niets te doen, bv. hotcue op een lege track) · donkergrijs = leeg maar bruikbaar · DONKERE tint = gevuld/dicht · volle kleur = actief · rood = wissen (alleen zichtbaar met shift vast). Een keuze-knop (lengte, mengvorm) brandt altijd gedimd: stand 0 als uit tonen zou liegen.",
       "waarom": "Clay akkoord (VRAGEN B4). Zo is een gevulde en een spelende sampler-pad te onderscheiden.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Kleuren (B4)" }, { "pad": "src/control/feedback.js", "waar": "KLEURSCHEMA" }],
-      "code": ["src/control/feedback.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Kleuren (B4)"
+        },
+        {
+          "pad": "src/control/feedback.js",
+          "waar": "KLEURSCHEMA"
+        }
+      ],
+      "code": [
+        "src/control/feedback.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -424,8 +769,19 @@
       "soort": "meting",
       "wat": "Een RGB-LED van de APC kiest zijn kleur met de velocity uit een palet van 128 kleuren. De gedimde stand is index n+1 (de #59xxxx-tinten); de 'zacht'-varianten (n−1, bv. 12/36/44/48) zijn pastels en op het apparaat even fel als de volle kleur. PALETTE_HEX in v1 dekt 60 van de 128.",
       "waarom": "Akai Communications Protocol v1.2, p18-22. Met de pastels als gedimd was het verschil op het apparaat niet te zien.",
-      "bron": [{ "pad": "src/control/devices/apc40mk2.js", "waar": "PALETTE, PALETTE_HEX, regel 34-98" }, { "pad": "docs/APC40.md", "waar": "LED's" }],
-      "code": ["src/control/devices/apc40mk2.js"],
+      "bron": [
+        {
+          "pad": "src/control/devices/apc40mk2.js",
+          "waar": "PALETTE, PALETTE_HEX, regel 34-98"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "LED's"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -437,8 +793,19 @@
       "soort": "besluit",
       "wat": "Niet het knipperkanaal van de APC (dat vraagt vermoedelijk MIDI clock, onbevestigd) maar track.N.phase: de gridfase op positie min uitgangsvertraging. Een kwart tel fel (TEL_VENSTER 0,25), op de '1' van de maat een halve tel (0,5); twee berichten per LED per tel. Loop-pads knipperen zolang ze aan staan, de Track Select van de maatgever knippert omgekeerd.",
       "waarom": "Het knipperen volgt dan de tel die je hoort, ook bij tempo, nudge en sprongen, en hangt niet aan een MIDI-clock die VARVE niet stuurt.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Knipperen op de tel (B2)" }, { "pad": "src/control/feedback.js", "waar": "TEL_VENSTER regel 150-165" }],
-      "code": ["src/control/feedback.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Knipperen op de tel (B2)"
+        },
+        {
+          "pad": "src/control/feedback.js",
+          "waar": "TEL_VENSTER regel 150-165"
+        }
+      ],
+      "code": [
+        "src/control/feedback.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -450,8 +817,16 @@
       "soort": "meting",
       "wat": "Het plan (welke regels gelden, doel-action, kleur) wordt alleen opnieuw gemaakt bij een andere mapping, shift, open mapjes of focus; per tik van 33 ms alleen de reads en verschillen. Feedback.wek() na elke action op de bus (microtaak, hooguit één per 4 ms) zet LAMPJES meteen; ringen blijven op de tik van 33 ms. Hooguit 160 berichten per tik.",
       "waarom": "Gemeten 14 okt: tik p50 454 → 45 µs in rust, 457 → 61 µs tijdens spelen (8 tracks); druk → lampje p50 17 → 1 ms (Node), via de hub in Chrome ~50 → ~6 ms; mapje → laatste lampje p50 56 → 11 ms. feedback-plan.test eist byte voor byte gelijk aan de oude berekening (567 standen).",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "De LED-laag: snel en juist (14 okt)" }],
-      "code": ["src/control/feedback.js", "src/ui/midi-opzet.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "De LED-laag: snel en juist (14 okt)"
+        }
+      ],
+      "code": [
+        "src/control/feedback.js",
+        "src/ui/midi-opzet.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -463,8 +838,15 @@
       "soort": "besluit",
       "wat": "De LED-laag tikt op setInterval (33 ms), niet op de renderloop.",
       "waarom": "requestAnimationFrame staat stil zodra het venster naar de achtergrond gaat; dan bevriezen de lampjes terwijl de muziek doorspeelt.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "LED's lopen op een eigen setInterval" }],
-      "code": ["src/control/feedback.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "LED's lopen op een eigen setInterval"
+        }
+      ],
+      "code": [
+        "src/control/feedback.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -476,8 +858,20 @@
       "soort": "valkuil",
       "wat": "Elk MIDI-bericht naar een controller gaat door een schuivend venster: in elk venster van 4 ms hooguit 16 (PER_TIK, TIK_MS), meteen sturen als er plaats is. Alleen bij het sluiten van de pagina mag het direct. Dezelfde regel in hub.js (ook voor de Maschine-lampjes en schermen) en in av-kern.",
       "waarom": "Comet (Chromium 152) legde zijn MIDI-dienst om bij een burst: vier crashes op 22 sep, alle in MidiService_TaskService_Thread. Een setTimeout per lampje kostte in Chrome soms 4 ms per lampje en liet een net lege rij weer 16 sturen.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Alles wat naar buiten gaat loopt door een wachtrij" }, { "pad": "src/control/midi.js", "waar": "regel 138-150" }],
-      "code": ["src/control/midi.js", "src/control/hub.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Alles wat naar buiten gaat loopt door een wachtrij"
+        },
+        {
+          "pad": "src/control/midi.js",
+          "waar": "regel 138-150"
+        }
+      ],
+      "code": [
+        "src/control/midi.js",
+        "src/control/hub.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -489,8 +883,19 @@
       "soort": "valkuil",
       "wat": "Een CC die identiek is aan wat wij net stuurden en binnen 60 ms terugkomt bereikt de mapping niet (tegen een lus: ring zetten → apparaat meldt → als draai verwerkt). Noten worden nooit gefilterd. Een ring op de waarde die de knop zelf net stuurde wordt niet onthouden (behalve 0 en 127).",
       "waarom": "Op noten slikte het echte knoppen in: lampje uit [0x90, n, 0] is precies het loslaten, een knipperend lampje 127 precies het indrukken. Synthetisch (tools/bench/echo.mjs, nep-hand op Sends met een loop op 124 bpm): ~13% van de drukken en ~12% van het loslaten weg; in Chrome 15–17 van 240. Zonder de ring-uitzondering at het filter bij terugdraaien elke vorige stap op.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Invoer en vertraging; De LED-laag" }, { "pad": "CLAUDE.md", "waar": "De hub negeert echo's" }],
-      "code": ["src/control/midi.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Invoer en vertraging; De LED-laag"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De hub negeert echo's"
+        }
+      ],
+      "code": [
+        "src/control/midi.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -502,8 +907,20 @@
       "soort": "open",
       "wat": "Het echofilter staat voor de APC nog aan (echoFilter in het profiel). Niet gemeten: of de APC in 0x42 een ring-CC terugstuurt (midi.status().echoes na een sessie), en of hij zijn interne knopstand gelijkzet met de ring die wij sturen (hub-proef V1; dan horen de draaiknoppen op absolute in het invoerpad).",
       "waarom": "Het protocoldocument zegt nergens dat de APC ringwaarden terugmeldt; bewezen overbodig is het ook niet.",
-      "bron": [{ "pad": "src/control/devices/apc40mk2.js", "waar": "echoFilter, regel 186-195" }, { "pad": "docs/APC40.md", "waar": "laatste alinea" }],
-      "code": ["src/control/devices/apc40mk2.js", "src/control/midi.js"],
+      "bron": [
+        {
+          "pad": "src/control/devices/apc40mk2.js",
+          "waar": "echoFilter, regel 186-195"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "laatste alinea"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js",
+        "src/control/midi.js"
+      ],
       "pijler": "controllers",
       "gewicht": "detail",
       "voorstel": "open",
@@ -515,8 +932,20 @@
       "soort": "regel",
       "wat": "Wie de Web Lock heeft is HET tabblad en luistert naar de APC; een tweede tabblad vraagt helemaal geen MIDI-toegang aan en wacht tot het eerste sluit (een lock verdwijnt ook bij een crash). Tot de lock beslist is telt een tabblad niet als eerste. Ook iPad-invoer, de zender naar de server en het beeld gaan alleen via dat tabblad.",
       "waarom": "Chrome crashte op 23 sep in MidiService_TaskService_Thread met vier VARVE-tabbladen die tegelijk init en LED's stuurden; twee tabbladen sturen anders één PLAY naar twee mixers. Een Web Lock geldt per origin: tegen av-kern beschermt hij niet, en localhost en de ts.net-naam zijn twee origins.",
-      "bron": [{ "pad": "src/ui/tabblad.js", "waar": "regel 1-40" }, { "pad": "CLAUDE.md", "waar": "ÉÉN VARVE-tabblad praat met de APC" }],
-      "code": ["src/ui/tabblad.js", "src/ui/midi-opzet.js"],
+      "bron": [
+        {
+          "pad": "src/ui/tabblad.js",
+          "waar": "regel 1-40"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "ÉÉN VARVE-tabblad praat met de APC"
+        }
+      ],
+      "code": [
+        "src/ui/tabblad.js",
+        "src/ui/midi-opzet.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -528,8 +957,20 @@
       "soort": "valkuil",
       "wat": "De MidiHub telt alleen poorten met state 'connected'. Valt de invoer weg, dan laat mapping.losgekoppeld() shift en ingedrukte knoppen los. Bij elke (her)aansluiting opnieuw de init-SysEx.",
       "waarom": "Chrome laat een losgetrokken poort staan als 'disconnected'; opnieuw aansluiten gaf eerst geen init en dode LED's.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "De hub telt alleen poorten met state connected" }, { "pad": "src/control/midi.js", "waar": "regel 88-92" }],
-      "code": ["src/control/midi.js", "src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De hub telt alleen poorten met state connected"
+        },
+        {
+          "pad": "src/control/midi.js",
+          "waar": "regel 88-92"
+        }
+      ],
+      "code": [
+        "src/control/midi.js",
+        "src/control/mapping.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -541,8 +982,20 @@
       "soort": "valkuil",
       "wat": "isSpeelapparaat(naam) (xboard, maschine) houdt die poorten buiten de controllerkeuze: niet automatisch, niet uit localStorage, niet met de hand. Speelapparaten van de hub krijgen een eigen nep-poort die niet in access.inputs staat; de APC-mapping en het echofilter zien ze nooit.",
       "waarom": "Vroeger pakte de MidiHub de Xboard als de APC ontbrak, en dan werden zijn noten 36–39 grid-pads van de APC-mapping.",
-      "bron": [{ "pad": "docs/MASCHINE.md", "waar": "§1 Hoe het binnenkomt" }, { "pad": "src/control/midi.js", "waar": "regel 107-109" }],
-      "code": ["src/control/midi.js", "src/control/hub.js"],
+      "bron": [
+        {
+          "pad": "docs/MASCHINE.md",
+          "waar": "§1 Hoe het binnenkomt"
+        },
+        {
+          "pad": "src/control/midi.js",
+          "waar": "regel 107-109"
+        }
+      ],
+      "code": [
+        "src/control/midi.js",
+        "src/control/hub.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "anders",
@@ -554,8 +1007,19 @@
       "soort": "meting",
       "wat": "Intro F0 47 7F 29 60 00 04 <modus> 00 00 00 F7 (antwoord 0x61 met de stand van 9 regelaars). 0x40 generic: apparaat doet zelf toggles en banken, Track Select stuurt geen MIDI. 0x41 Ableton: alles momentary, device-sectie niet gebankt, ringen van het apparaat. 0x42 Alternate Ableton: als 0x41 maar ALLE LED's en ringen van de host. VARVE gebruikt 0x42. Na loskoppelen staat hij weer in 0x40: init bij elke aansluiting.",
       "waarom": "Akai Communications Protocol v1.2; 0x41 gemeten en daarna 0x42 op 23 sep (VRAGEN B1). 0x42 wordt ook door Resolume aangeraden.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Wat het apparaat kan: Modi" }, { "pad": "src/control/devices/apc40mk2.js", "waar": "INIT_SYSEX regel 14-22" }],
-      "code": ["src/control/devices/apc40mk2.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Wat het apparaat kan: Modi"
+        },
+        {
+          "pad": "src/control/devices/apc40mk2.js",
+          "waar": "INIT_SYSEX regel 14-22"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -567,8 +1031,20 @@
       "soort": "meting",
       "wat": "Device knob 1–8 komen in 0x41/0x42 binnen op cc:0:16–23, welke track je ook selecteert: er zijn geen banken. Welke track ze bedienen bepaalt de mapping met {focus}. Alleen in generic (0x40) melden ze via het MIDI-kanaal (0–7 = track, 8 = master) bij welke strip ze horen. Per-strip-controls (fader, activator, solo, clip stop, track select, A/B, rec arm) melden de strip altijd via het kanaal.",
       "waarom": "Gemeten op 23 sep: in 0x41 draaide device knob 1 altijd aan track 1 terwijl de mapping met bank-kanalen rekende (de tegenstrijdigheid is opgelost in 08e9a86). Een van de twee dingen die echt op de hardware zijn nagelopen.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Tegenstrijdigheid 0x41 — OPGELOST" }, { "pad": "CLAUDE.md", "waar": "De APC draait in mode 0x42" }],
-      "code": ["src/control/devices/apc40mk2.js", "mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Tegenstrijdigheid 0x41 — OPGELOST"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De APC draait in mode 0x42"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js",
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -580,8 +1056,19 @@
       "soort": "meting",
       "wat": "Het clipgrid is 8×5 op noten 0x00–0x27; 0x00 is linksonder, de bovenste rij is 0x20–0x27. gridNote(kolom, rij) = (5 − rij) × 8 + (kolom − 1) met rij 1 bovenaan. Nooit rij × 8 + kolom: dat klopt alleen toevallig voor de middelste rij en spiegelt de rest. De hub telt pad{rij}-{kolom} met rij 1 = onder; VARVE telt rij 1 = boven.",
       "waarom": "Protocol v1.2 p13-17. Een makkelijke fout die het hele grid ondersteboven zet; de handenkaart vergelijkt daarom op hub-id's, niet op rijnummers.",
-      "bron": [{ "pad": "src/control/devices/apc40mk2.js", "waar": "gridNote regel 25-33" }, { "pad": "docs/HANDEN.md", "waar": "§6 Rijen" }],
-      "code": ["src/control/devices/apc40mk2.js"],
+      "bron": [
+        {
+          "pad": "src/control/devices/apc40mk2.js",
+          "waar": "gridNote regel 25-33"
+        },
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "§6 Rijen"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -593,8 +1080,19 @@
       "soort": "meting",
       "wat": "RGB (grid en scene launch 0x52–0x56): MIDI-kanaal = gedrag, 0 vast, 1–5 one-shot, 6–10 pulseren, 11–15 knipperen (1/24 … 1/2). Enkelkleurig (arm, solo, activator, track select, clip stop, device, bank, on/off, lock, views, master, pan, sends, user, metronome, play, record, session): 0 uit, 1–127 aan; clip stop velocity 2 = knipperen. Tweekleurig: crossfader A/B, 0 uit, 1 geel, 2–127 oranje. Geen LED: stop all clips, pijlen, shift, tap, nudge.",
       "waarom": "Protocol v1.2 (Bi-Color LED, LED-tabellen). Het tempo van het knipperkanaal komt vermoedelijk van MIDI clock: onbevestigd.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Wat het apparaat kan: LED's" }, { "pad": "src/control/devices/apc40mk2.js", "waar": "BICOLOR, buildControls" }],
-      "code": ["src/control/devices/apc40mk2.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Wat het apparaat kan: LED's"
+        },
+        {
+          "pad": "src/control/devices/apc40mk2.js",
+          "waar": "BICOLOR, buildControls"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -606,8 +1104,20 @@
       "soort": "meting",
       "wat": "Het ringtype gaat via CC 0x18–0x1F (device) en 0x38–0x3F (track): 0 uit, 1 single, 2 volume, 3 pan; de ring zit acht nummers boven zijn knop (0x10 → 0x18, 0x30 → 0x38). De waarde stuur je op de CC van de knop zelf. Een bipolaire action (meta bipolar) krijgt vanzelf de pan-ring.",
       "waarom": "Protocol v1.2; het ringtype wisselt mee met het mapje (actieveRegels).",
-      "bron": [{ "pad": "src/control/devices/apc40mk2.js", "waar": "RING, ringFor" }, { "pad": "docs/APC40.md", "waar": "Ringen (15 lampjes)" }],
-      "code": ["src/control/devices/apc40mk2.js", "src/control/feedback.js"],
+      "bron": [
+        {
+          "pad": "src/control/devices/apc40mk2.js",
+          "waar": "RING, ringFor"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Ringen (15 lampjes)"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js",
+        "src/control/feedback.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -617,27 +1127,25 @@
       "id": "bediening-048",
       "titel": "APC-controls: wat absoluut, wat relatief, welke noot waar",
       "soort": "meting",
-      "wat": "Absoluut: faders CC 7 op kanaal 0–7, master 0x0E, crossfader 0x0F, device knobs 0x10–0x17, track knobs 0x30–0x37 (draaien eindeloos maar sturen absoluut). Relatief: tempo 0x0D en cue level 0x2F (1–63 omhoog, 64–127 omlaag). Per strip noten 0x30–0x34 (rec arm, solo, activator, track select, clip stop) en 0x42 (A/B) op kanaal 0–7. Verder 0x50 master, 0x51 stop all, 0x57–0x59 pan/sends/user, 0x5A metronome, 0x5B play, 0x5D record, 0x5E–0x61 pijlen (0x60 = rechts, 0x61 = links), 0x62 shift, 0x63 tap, 0x64/0x65 nudge, 0x66 session, 0x67 bank; footswitch CC 0x40.",
+      "wat": "Absoluut: faders CC 7 op kanaal 0–7, master 0x0E, crossfader 0x0F, device knobs 0x10–0x17, track knobs 0x30–0x37 (draaien eindeloos maar sturen absoluut). Relatief: tempo 0x0D en cue level 0x2F (1–63 omhoog, 64–127 omlaag). Per strip noten 0x30–0x34 (rec arm, solo, activator, track select, clip stop) en 0x42 (A/B) op kanaal 0–7. Verder 0x50 master, 0x51 stop all, 0x57–0x59 pan/sends/user, 0x5A metronome, 0x5B play, 0x5D record, 0x5E–0x61 pijlen (0x60 = rechts, 0x61 = links), 0x62 shift, 0x63 tap, 0x64/0x65 nudge, 0x66 session, 0x67 bank; footswitch CC 0x40. Wat hij niet kan: geen scherm, motorfaders, aanslaggevoeligheid, editor of publieke firmware; USB-gevoed, dus direct in de Mac (niet via een hub zonder voeding).",
       "waarom": "Protocol v1.2 p13-17 en p23-26; de nummers in devices/apc40mk2.js komen uit dat document, niet uit herinnering. Wijk er niet van af zonder het document erbij.",
-      "bron": [{ "pad": "src/control/devices/apc40mk2.js", "waar": "buildControls regel 104-176" }, { "pad": "docs/APC40.md", "waar": "Knoppen" }],
-      "code": ["src/control/devices/apc40mk2.js"],
+      "bron": [
+        {
+          "pad": "src/control/devices/apc40mk2.js",
+          "waar": "buildControls regel 104-176"
+        },
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Knoppen"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
       "reden": "Het profiel kan ongewijzigd mee (geen action-id in het bestand)."
-    },
-    {
-      "id": "bediening-049",
-      "titel": "Wat de APC niet kan",
-      "soort": "grens",
-      "wat": "Geen scherm, geen motorfaders, geen aanslaggevoeligheid, geen editor of publieke firmware, geen verborgen instellingen. USB-gevoed: direct in de Mac, niet via een hub zonder eigen voeding.",
-      "waarom": "Onderzoek 23 sep; onderweg: APC direct, lader en Scarlett aan een PD-hub (AVONDPAKKET §6).",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Niet mogelijk" }],
-      "code": [],
-      "pijler": "controllers",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Bepaalt dat soft-takeover en het scherm (spiegel) nodig blijven."
     },
     {
       "id": "bediening-050",
@@ -645,8 +1153,17 @@
       "soort": "regel",
       "wat": "Een device-profiel (devices/apc40mk2.js, maschine-mk2.js, generic.js) beschrijft alleen controls, LED-soort, ringen, palet, init en echofilter: geen enkele action-id. Wat een knop doet staat in de mapping.",
       "waarom": "Zo kan het profiel uit het protocoldocument komen en blijft de mapping vrij te maken.",
-      "bron": [{ "pad": "src/control/devices/apc40mk2.js", "waar": "regel 1-11" }],
-      "code": ["src/control/devices/apc40mk2.js", "src/control/devices/maschine-mk2.js", "src/control/devices/generic.js"],
+      "bron": [
+        {
+          "pad": "src/control/devices/apc40mk2.js",
+          "waar": "regel 1-11"
+        }
+      ],
+      "code": [
+        "src/control/devices/apc40mk2.js",
+        "src/control/devices/maschine-mk2.js",
+        "src/control/devices/generic.js"
+      ],
       "pijler": "controllers",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -658,8 +1175,19 @@
       "soort": "besluit",
       "wat": "Per kolom: knob = filter (endless) · grid = modus · Clip Stop = loop (⇧ weg) · Track Select = focus (⇧ als tweede) · 2×2: nummer = play (⇧ op de maat), S = sync (⇧ tap), A|B = kant A → B → thru, ● = PFL (⇧ cue) · fader. Rechts voor de focus-track: device knobs strip trim · high · mid · low / echo · galm · fx-mix · fx 1, Clip/Device View = rack, tempo-encoder 0,1% per tik, Nudge = bend (⇧ toon), Tap (⇧ keylock), Bank ◀ ▶ beatjump, Pan/Sends/User loop in/out/reloop, Lock quantize, Stop All = rem, pijlen ◀ ▶ focus, ▲ ▼ grid-modus.",
       "waarom": "Uit de DJ-conventie (DJM-strip van boven naar onder, één kolom = één deck) en Voorstel A van Clay (25 sep). Cue alleen met shift: per ongeluk cue zette een hoorbare track stil.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Indeling (herzien en GEBOUWD 23 september), Voorstel A" }, { "pad": "docs/APC40-onderzoek.md", "waar": "§1-4" }],
-      "code": ["mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Indeling (herzien en GEBOUWD 23 september), Voorstel A"
+        },
+        {
+          "pad": "docs/APC40-onderzoek.md",
+          "waar": "§1-4"
+        }
+      ],
+      "code": [
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "dj",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -671,12 +1199,28 @@
       "soort": "open",
       "wat": "Scene 1–4 = hotcues · loops · sampler · video, Shift + scene 1–5 = secties · patronen · stems · auto · klank, ▲ ▼ loopt rond door alle negen, elk met een eigen kleur; in patronen en beeld worden de scene-knoppen zelf rijen of regie. In twee-handen gaan sampler, secties, patronen en auto naar de Maschine.",
       "waarom": "Elke modus is apart en 'alleen erbij' gebouwd (2–6 okt); de onderzoeksklacht 'lagen zonder zichtbare stand verwarren' en 'te veel modifiers' geldt ook hier. Niets ervan is op de APC geproefd.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Negen grid-modi" }, { "pad": "docs/APC40-onderzoek.md", "waar": "§2" }, { "pad": "docs/WERKRUIMTE.md", "waar": "A3" }],
-      "code": ["src/control/lagen.js", "mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Negen grid-modi"
+        },
+        {
+          "pad": "docs/APC40-onderzoek.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A3"
+        }
+      ],
+      "code": [
+        "src/control/lagen.js",
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "open",
-      "reden": "Clay moet na een proef kiezen welke modi op de APC blijven en welke naar de Maschine of het scherm gaan."
+      "reden": "Clay moet na een proef kiezen welke modi op de APC blijven en welke naar de Maschine of het scherm gaan. Modulair (Clay 19 okt): als de modi modules zijn die een nummer of moment aanvraagt (bediening-092), hoeven ze niet allemaal tegelijk op vijf scene-knoppen."
     },
     {
       "id": "bediening-053",
@@ -684,8 +1228,15 @@
       "soort": "besluit",
       "wat": "De master-knop (note:0:80) is beeld zwart (video.black, fade 250 ms) in elk mapje; het lampje brandt zolang het zwart is. Stop All Clips is buiten een mapje de rem en in het mapje beeld paniek: op die plek zit altijd een noodknop. Zwart en paniek in rood, zodat je in het donker ziet dat de zaal niets ziet.",
       "waarom": "Zwart moet altijd met één druk kunnen (ONTBREEKT A4, 2 okt). video.master is bewust NIET op Shift + masterfader: met shift vast draai je dan per ongeluk het beeld in plaats van het geluid dicht.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Beeld-noodknoppen; Mapje beeld" }],
-      "code": ["mappings/apc40mk2.json"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Beeld-noodknoppen; Mapje beeld"
+        }
+      ],
+      "code": [
+        "mappings/apc40mk2.json"
+      ],
       "pijler": "beeld",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -697,8 +1248,19 @@
       "soort": "regel",
       "wat": "Laden over een spelende track, een nummer weghalen, opname stoppen, mapping resetten, DICHT/OPEN op een hoorbare track, een spelend nummer van een instrumenttrack halen, een set terugladen over een spelende track: tweede druk binnen 3 s, ook op de APC en de Maschine ('druk nog eens').",
       "waarom": "Eén regel voor alle bronnen; een controller heeft geen dialoogvenster en prompt() legt de pagina stil.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Verbeterronde 23 sep UI: Destructief" }, { "pad": "docs/MASCHINE.md", "waar": "§2 masterwiel" }],
-      "code": ["src/control/actions.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Verbeterronde 23 sep UI: Destructief"
+        },
+        {
+          "pad": "docs/MASCHINE.md",
+          "waar": "§2 masterwiel"
+        }
+      ],
+      "code": [
+        "src/control/actions.js"
+      ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
       "voorstel": "anders",
@@ -710,7 +1272,20 @@
       "soort": "pijn",
       "wat": "Op de APC zijn alleen modus 0x42 en de kanalen van de device knobs gemeten (23 sep). Alle indelingen daarna (Voorstel A, auto, stems, patronen, secties, beeld, master, inst, de grid-modus, de werkruimte) staan als 'GEBOUWD, niet op het apparaat nagelopen'. De Maschine, LPD8 en Xboard zijn nooit in VARVE geproefd; de hub-lease ook niet.",
       "waarom": "VISIE §5.4: sinds 23 september ruim 500 commits zonder proef op de APC. HA1: het enige log van proefavond 1 is zeven minuten beeld zonder nummer.",
-      "bron": [{ "pad": "docs/VISIE.md", "waar": "§5.4" }, { "pad": "docs/HANDEN.md", "waar": "§1 'Bedoeling, niet werking'" }, { "pad": "docs/VRAGEN.md", "waar": "HA1" }],
+      "bron": [
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§5.4"
+        },
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "§1 'Bedoeling, niet werking'"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "HA1"
+        }
+      ],
       "code": [],
       "pijler": "controllers",
       "gewicht": "kern",
@@ -723,8 +1298,21 @@
       "soort": "meting",
       "wat": "Een MIDI-bericht wacht tot de hoofdthread vrij is. Het werk per bericht was klein (fader ~0,2 ms in Chrome); de vertraging kwam van brede :has()-regels in styles.css die bij elke tekstwissel ~256 elementen per beeld restyleden, en van scherm-werk in het bericht zelf (shift en modusknoppen 2–13 ms). Nu: geen :has() met body of een grote rij als onderwerp (klassen via rij-klassen.js), scherm-werk bij het volgende beeld, geluid meteen, en kies()/actieveRegels() uit een cache (285 → 8 µs per tik aan mapping-werk).",
       "waarom": "Clay: 'op veel punten erg laggy' (14 okt). Gemeten headless met nep-APC en acht spelende tracks (tools/headless/latentie.mjs); na de integraties fader → geluid p50 0,31–0,4 ms.",
-      "bron": [{ "pad": "docs/APC40.md", "waar": "Invoer en vertraging (14 okt)" }, { "pad": "docs/werkruimte/WACHTRIJ.md", "waar": "latentie per integratie" }],
-      "code": ["src/ui/rij-klassen.js", "src/control/mapping.js", "src/ui/midi-opzet.js"],
+      "bron": [
+        {
+          "pad": "docs/APC40.md",
+          "waar": "Invoer en vertraging (14 okt)"
+        },
+        {
+          "pad": "docs/werkruimte/WACHTRIJ.md",
+          "waar": "latentie per integratie"
+        }
+      ],
+      "code": [
+        "src/ui/rij-klassen.js",
+        "src/control/mapping.js",
+        "src/ui/midi-opzet.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -736,8 +1324,16 @@
       "soort": "besluit",
       "wat": "Onder links acht kolommen zoals een APC-kolom, rechts het focusdeel, boven de focus-track groot plus acht banen. Elk element heeft een data-sig; leesControl() vraagt mapping.kies(sig) + resolveTarget (shift, open mapje en focus tellen mee). Is de geladen mapping niet voor een APC, dan leest het scherm een eigen exemplaar van apc40mk2.json. Raak je de APC aan, dan licht het element 300 ms op; de spiegel licht op zoals de LED. APC-knopnamen alleen in de koppelmodus.",
       "waarom": "Clay 23 sep. Zo leer je de APC van het scherm, en klopt het scherm altijd met wat de knop doet. Moet passen op 1440×900.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Het scherm spiegelt de APC40 mkII" }],
-      "code": ["src/ui/spiegel.js", "src/ui/spiegel-plan.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Het scherm spiegelt de APC40 mkII"
+        }
+      ],
+      "code": [
+        "src/ui/spiegel.js",
+        "src/ui/spiegel-plan.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "open",
@@ -749,8 +1345,21 @@
       "soort": "besluit",
       "wat": "apc.html en maschine.html tonen elke knop op zijn fysieke plek (APC uitgemeten op de Features-tekening van de User Guide p4, x 70–1040, y 392–970 in procenten), met de tekst uit mapping.kies() en de uitleg (APC) of legUit() van een eigen Maschine-exemplaar. Schakelaars voor modus, strip/rack, shift; zoeken; kleur per soort. Ze lezen mee (APC zonder sysex) en sturen niets; ze tonen ook werkruimtes in voorbeeldmodus.",
       "waarom": "Nooit een tweede beschrijving die uit de pas loopt; je kunt een indeling bekijken zonder hem te activeren.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "apc.html is een interactieve kaart; De Maschine-kaart" }, { "pad": "docs/WERKRUIMTE.md", "waar": "A9 Eerst bekijken" }],
-      "code": ["src/ui/apc-kaart.js", "src/ui/maschine-kaart.js", "src/ui/maschine-kaart-plan.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "apc.html is een interactieve kaart; De Maschine-kaart"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A9 Eerst bekijken"
+        }
+      ],
+      "code": [
+        "src/ui/apc-kaart.js",
+        "src/ui/maschine-kaart.js",
+        "src/ui/maschine-kaart-plan.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -762,8 +1371,17 @@
       "soort": "besluit",
       "wat": "tools/handen/handenkaart.mjs maakt uit de standaardmappings, het action-register, de 148 APC-controls van de hub, handen/voorstel.json, de profielen en de handelingenlogs een overzicht: wat elke knop doet, welke plekken vrij zijn, en voor elke action zonder plek een voorstel of 'bewust geen' met reden. De test eist een regel voor elke nieuwe action zonder plek.",
       "waarom": "Een nieuwe plek komt eerst via learn (Clay's verschil), dan pas in de standaard, en dat pas na een proef. Bekend gat: de actions van de aanhakers (werk.*, set.*, precisie …) staan niet in het register.",
-      "bron": [{ "pad": "docs/HANDEN.md", "waar": "§1, §4, §6, §7" }],
-      "code": ["src/handen/kaart.js", "src/handen/telling.js", "handen/voorstel.json"],
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "§1, §4, §6, §7"
+        }
+      ],
+      "code": [
+        "src/handen/kaart.js",
+        "src/handen/telling.js",
+        "handen/voorstel.json"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -774,9 +1392,20 @@
       "titel": "Wat de handen echt doen: fader, filter en effectknoppen voorop",
       "soort": "meting",
       "wat": "27 logs (30 sep – 10 okt), 62.282 handelingen. Top: track.N.fader 11.796 · filter 6.452 · video.layer.knob 5.799 · fx.knob 5.064 · send.a 4.765 · fx.mix 3.717 · send.b 2.280 · filter.glide 1.602 · low 1.560 · mixer.xfader 1.518 · xfade.thru 1.306 (zonder knop) · fader.glide 1.208 · mixer.master 1.162 · video.fx.pixel 1.117 (zonder vaste plek). Per groep: track 28.089, effecten/sends 17.359, video/vormen 10.619.",
-      "waarom": "Het log kent geen bron, dus 'hand' is waar de action in een mapping staat, geen meting. Veel beeldhandelingen hebben geen controllerplek.",
-      "bron": [{ "pad": "docs/HANDEN.md", "waar": "§4 Wat de handen doen (top-40)" }],
-      "code": ["src/handen/telling.js"],
+      "waarom": "Het log kent geen bron, dus 'hand' is waar de action in een mapping staat, geen meting. Veel beeldhandelingen hebben geen controllerplek. Uitgewerkt in v2/telling/nu.md: de elf actions van de kanaalstrip zijn 63,4% van alle handelingen, de top-10 71,5%, de top-40 95,9%; van de 177 genormaliseerde actions op een knop staan er 22 (12%) in de top-40.",
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "§4 Wat de handen doen (top-40)"
+        },
+        {
+          "pad": "v2/telling/nu.md",
+          "waar": "De getallen; Conclusies 1, 2, 7, 11"
+        }
+      ],
+      "code": [
+        "src/handen/telling.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -788,8 +1417,19 @@
       "soort": "grens",
       "wat": "Een logregel is [t, action, waarde] en kent geen bron (APC, Maschine, muis, toets). Sinds S8 draagt alleen invoer van de iPad { bron: 'ipad' } in de vierde kolom; actions die een andere action aanroepen (superknop, stem-solo) staan als handeling op de Mac.",
       "waarom": "Daardoor is uit 62.282 handelingen niet af te leiden wat met de muis ging en wat met de APC; de handenkaart moet gokken.",
-      "bron": [{ "pad": "docs/HANDEN.md", "waar": "§6 De bron van een handeling" }, { "pad": "docs/werkruimte/S8.md", "waar": "§2 punt 7, §6b" }],
-      "code": ["src/control/handelingen.js"],
+      "bron": [
+        {
+          "pad": "docs/HANDEN.md",
+          "waar": "§6 De bron van een handeling"
+        },
+        {
+          "pad": "docs/werkruimte/S8.md",
+          "waar": "§2 punt 7, §6b"
+        }
+      ],
+      "code": [
+        "src/control/handelingen.js"
+      ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
       "voorstel": "anders",
@@ -801,8 +1441,16 @@
       "soort": "besluit",
       "wat": "Met ?hub=ws://localhost:7700/app bezit de hub APC40 en LPD8 (en Maschine, Xboard). HubMidi is een MidiHub met één nep-poort 'APC40 mkII (hub)', zodat mapping, LED-laag, mapjes en leren gelijk blijven. Invoer {t:'midi'} alleen met focus (loslaten altijd), LED's per beeld gebundeld als {t:'led'}. Geen requestMIDIAccess, de init-SysEx wordt ingeslikt (de hub zet 0x42), de Web Lock beslist niets over MIDI. ?hub= alleen naar deze machine, privé-LAN of tailnet; anders &hub_extern=1. De hubtoets is Bank (0x67): die komt nooit bij VARVE aan.",
       "waarom": "Meerdere apps (VARVE, av-kern, Stroommachine) op één APC zonder dat ze om de lampjes vechten; zonder vlag wordt hub.js niet geladen.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "AV-APP-HUB (3 okt 2026)" }],
-      "code": ["src/control/hub.js", "src/ui/speelapparaten.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "AV-APP-HUB (3 okt 2026)"
+        }
+      ],
+      "code": [
+        "src/control/hub.js",
+        "src/ui/speelapparaten.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -814,8 +1462,15 @@
       "soort": "valkuil",
       "wat": "Hartslag als er 0,6 s niets ging (HB_MS), niet per tik; elk bericht van de hub (~10×/s) kijkt ook of er een hb moet. Herverbinden 0,5 → 1 → 2 → 5 s, terug naar 0,5 s pas na 3 s stabiel open; een socket die na 5 s niet open is sluiten we zelf. Twee tabbladen: de hub laat de nieuwste winnen, de oude krijgt 4001, wacht 30 s en meldt het. Valt de verbinding weg terwijl paniek vastzit, dan laat VARVE zelf los.",
       "waarom": "In een verborgen stil tabblad lopen timers 1×/s (na 5 min 1×/min): een gepauzeerde DJ op de achtergrond werd anders 'stil'/'weg' en de hub zette de APC uit. Een hub die aanneemt en meteen sluit gaf anders een lus van 0,5 s.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "AV-APP-HUB: Hartslag, Herverbinden, Twee tabbladen" }],
-      "code": ["src/control/hub.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "AV-APP-HUB: Hartslag, Herverbinden, Twee tabbladen"
+        }
+      ],
+      "code": [
+        "src/control/hub.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -827,8 +1482,19 @@
       "soort": "valkuil",
       "wat": "LPD8 K2 = video.master (helderheid, slew 0,25 s), K4 = video.pulse, P1 (1 s vasthouden) = video.black.hold. K1 (intensiteit) is bewust NIET mixer.master; master en crossfader staan zonder rol en zonder slew.",
       "waarom": "De pickup van een LPD8-knop volgt de EERSTE app met die rol, en andere apps gebruiken intensiteit als beeld (av-scene-kit 0,35): K1 dichtdraaien gaf een hoorbare dip 0,80 → 0,43 van de mix. O1 (K1 in VARVE) is open.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "AV-APP-HUB: Rollen ALLEEN op het beeld" }, { "pad": "docs/VRAGEN.md", "waar": "O1" }],
-      "code": ["src/control/hub.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "AV-APP-HUB: Rollen ALLEEN op het beeld"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "O1"
+        }
+      ],
+      "code": [
+        "src/control/hub.js"
+      ],
       "pijler": "controllers",
       "gewicht": "detail",
       "voorstel": "houden",
@@ -840,8 +1506,21 @@
       "soort": "contract",
       "wat": "USB-HID 17CC:1140 zonder NI-software; de hub maakt er virtuele MIDI van ({t:'midi', dev:'maschine-mk2'}). Pads = noten 36–51 (pad 1 linksonder = KICK), velocity van de hub, polyfone aftertouch. Knoppen 0–47 op kanaal 1 (nooit aan noten.koppel hangen), shift note:1:39, wiel cc:0:24 relatief, draaiknop ±1000 tellen per omwenteling. Schermen: {t:'scherm', nr, data} = base64 van precies 2048 bytes (256 × 64, 1 bit, rij voor rij, hoogste bit links). Lampjes uit het APC-palet, door dezelfde wachtrij. Pads in rust ±750 rapporten/s (uitdunnen in de hub).",
       "waarom": "Uit het speelapparaten-spoor (5 okt) en het hub-profiel; gebouwd tegen een nep-Maschine op HID-niveau, nooit op Clay's toestel (poort M).",
-      "bron": [{ "pad": "docs/MASCHINE.md", "waar": "§1-4" }, { "pad": "/home/user/AV-app-hub/CLAUDE.md", "waar": "Hardwarefeiten: Speelapparaten" }],
-      "code": ["src/control/maschine.js", "src/control/maschine-scherm.js", "src/control/devices/maschine-mk2.js"],
+      "bron": [
+        {
+          "pad": "docs/MASCHINE.md",
+          "waar": "§1-4"
+        },
+        {
+          "pad": "/home/user/AV-app-hub/CLAUDE.md",
+          "waar": "Hardwarefeiten: Speelapparaten"
+        }
+      ],
+      "code": [
+        "src/control/maschine.js",
+        "src/control/maschine-scherm.js",
+        "src/control/devices/maschine-mk2.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -851,27 +1530,25 @@
       "id": "bediening-066",
       "titel": "APC breed, Maschine diep",
       "soort": "besluit",
-      "wat": "Op de APC bedien je alle acht tracks tegelijk (één kolom = één track); de Maschine werkt aan één track, de focus-track, met wiel, 16 pads, draaiknoppen in echte eenheden en twee schermen met namen. Groep A–H = focus, ◄ ► links boven = knoppagina (Instrument · Strip · Rack), CONTROL vasthouden = uitleg (niets uitvoeren), BROWSE = library.",
+      "wat": "Op de APC bedien je alle acht tracks tegelijk (één kolom = één track); de Maschine werkt aan één track, de focus-track, met wiel, 16 pads, draaiknoppen in echte eenheden en twee schermen met namen. Groep A–H = focus, ◄ ► links boven = knoppagina (Instrument · Strip · Rack), CONTROL vasthouden = uitleg (niets uitvoeren), BROWSE = library. Het masterwiel KIEST een instrument voor de focus-track (alleen op het scherm), indrukken of ENTER ZET het; een keuze vervalt na 8 s of bij een focuswissel, want een tik tegen het wiel zou anders je instrument met zijn knopstanden vervangen.",
       "waarom": "Zo doen ze nooit twee keer hetzelfde (WERKRUIMTE A1). Waarden op het scherm komen uit de engine-formules (eqDb, filterDoelen), nooit uit een tweede formule.",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "A1 punt 1" }, { "pad": "docs/MASCHINE.md", "waar": "§2, §5c" }],
-      "code": ["src/control/maschine.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A1 punt 1"
+        },
+        {
+          "pad": "docs/MASCHINE.md",
+          "waar": "§2, §5c"
+        }
+      ],
+      "code": [
+        "src/control/maschine.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
       "reden": "Heldere taakverdeling tussen twee controllers; nog niet op de hardware bevestigd."
-    },
-    {
-      "id": "bediening-067",
-      "titel": "Het wiel kiest, indrukken zet",
-      "soort": "besluit",
-      "wat": "Het masterwiel van de Maschine kiest een instrument voor de focus-track (alleen op het scherm, er verandert nog niets); indrukken of ENTER zet het (track.N.inst.choose). Een keuze vervalt na 8 s of bij een focuswissel. Met de library open bladert het wiel en laadt ENTER.",
-      "waarom": "Een tik tegen het wiel zou anders je instrument met zijn knopstanden vervangen. Op de focus-track en niet de speeltrack: zo zet je ook een instrument op een lege track.",
-      "bron": [{ "pad": "docs/MASCHINE.md", "waar": "§2 'Waarom het wiel kiest en niet meteen wisselt'" }],
-      "code": ["src/control/maschine.js"],
-      "pijler": "controllers",
-      "gewicht": "detail",
-      "voorstel": "houden",
-      "reden": "Algemeen patroon voor elke encoder die iets ingrijpends kiest."
     },
     {
       "id": "bediening-068",
@@ -879,8 +1556,19 @@
       "soort": "besluit",
       "wat": "Noten van een keyboard of de Maschine-pads gaan via noten.js rechtstreeks naar het instrument op de speeltrack, niet over de action-bus. Noot-uit en pedaal gaan naar waar de noot-aan heen ging, ook na een focuswissel. Live opnemen luistert op noten.js. Knoppen en de schuif van een keyboard gaan wel via een apparaatmapping (Xboard: SysEx Master Volume = signature master-volume).",
       "waarom": "Speellatentie: een pad in SPELEN kost via ontvang → noten ~0,2 µs (gemeten in S6). De bus en het log zouden per noot werk toevoegen.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Instrumenten op een track: Noten gaan NIET over de bus" }, { "pad": "docs/werkruimte/S6.md", "waar": "§5 Gemeten" }],
-      "code": ["src/control/noten.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Instrumenten op een track: Noten gaan NIET over de bus"
+        },
+        {
+          "pad": "docs/werkruimte/S6.md",
+          "waar": "§5 Gemeten"
+        }
+      ],
+      "code": [
+        "src/control/noten.js"
+      ],
       "pijler": "produceren",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -892,8 +1580,24 @@
       "soort": "open",
       "wat": "Of de Maschine-knoppen noot aan/uit sturen bij indrukken en loslaten, of het wiel relatief ±1 per klik is en of F1–F8 onder de schermlabels zitten, is een aanname tot de ijkproef (tools/proef/maschine-ijk.html, poort M). De CC's van de Xboard49 komen uit een Ardour-map: aanname tot de hub-middag.",
       "waarom": "S5 bouwde de ijkproef; HA2 plant een hub-middag van ±80 min vóór avond 2.",
-      "bron": [{ "pad": "docs/werkruimte/S5.md", "waar": "§4 De Maschine-ijkproef" }, { "pad": "docs/WERKRUIMTE.md", "waar": "E3 Aannames" }, { "pad": "docs/VRAGEN.md", "waar": "HA2" }],
-      "code": ["src/control/devices/maschine-mk2.js", "mappings/xboard49.json"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S5.md",
+          "waar": "§4 De Maschine-ijkproef"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "E3 Aannames"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "HA2"
+        }
+      ],
+      "code": [
+        "src/control/devices/maschine-mk2.js",
+        "mappings/xboard49.json"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "open",
@@ -905,12 +1609,25 @@
       "soort": "pijn",
       "wat": "De mapping die geldt is: standaard per apparaat + stukken (mappings/stukken) + werkruimteregels (fragment werk:<naam>) + jouw verschil, en daarbovenop de delen (welke mapjes, panelen, rijen). Zonder werkruimte moet alles bit voor bit gelijk zijn aan vóór de werkruimte; daarom vlaggen (?uitlijn=1, ?stukken=, ?werk=, naast ?vormen=1 en ?hub=), stukken alleen op vrije sleutels, en voorbeelden in plaats van een nieuwe standaard.",
       "waarom": "Ontwerpkeuze van 13 okt om niets te breken vóór een proef. Het resultaat: vier mapping-lagen, fragmentbronnen, aanhakers, en een standaardmapping die zelf nooit de werkruimte-indeling kreeg.",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "B1 Vier lagen; Gebouwd" }, { "pad": "docs/werkruimte/S3.md", "waar": "§1" }],
-      "code": ["src/werk/werkruimte.js", "src/werk/model.js", "src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "B1 Vier lagen; Gebouwd"
+        },
+        {
+          "pad": "docs/werkruimte/S3.md",
+          "waar": "§1"
+        }
+      ],
+      "code": [
+        "src/werk/werkruimte.js",
+        "src/werk/model.js",
+        "src/control/mapping.js"
+      ],
       "pijler": "instellen",
       "gewicht": "kern",
       "voorstel": "open",
-      "reden": "Advies: in v2 de werkruimte (delen, panelen, schermen, regels per apparaat) als kern, met 'standaard' als één gewone werkruimte; Clay kiest of dat de vorm wordt."
+      "reden": "Advies: in v2 de werkruimte (delen, panelen, schermen, regels per apparaat) als kern, met \"standaard\" als één gewone werkruimte; Clay kiest of dat de vorm wordt. Modulair (Clay 19 okt): de eis \"bit voor bit vandaag\" en de vlaggen zitten modulair wisselen in de weg; delen, live peilen (2,5 s, Claude schrijft het bestand) en de witte-lijstcondities helpen juist."
     },
     {
       "id": "bediening-071",
@@ -918,12 +1635,24 @@
       "soort": "regel",
       "wat": "Een deel (MIX, UITLIJN, FX, STEMS, SECTIES, SPELEN, BEELD, LIBRARY) zet alleen mapjes (via layer.* over de bus, per apparaat een adapter), rijen, onderpaneel en werkvak. Faders, effecten en wat er speelt blijven staan. Het event 'werkruimte' komt in het volgende beeld, nooit in het MIDI-bericht.",
       "waarom": "Getoetst met een bus-spion: 0 invokes buiten layer.*/werk.*. Met twee handen op de APC kun je dus altijd mixen, wat je ook wisselt.",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "A1 punt 3, C2, A12" }, { "pad": "docs/werkruimte/S3.md", "waar": "§4" }],
-      "code": ["src/werk/werkruimte.js", "src/werk/apparaten.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A1 punt 3, C2, A12"
+        },
+        {
+          "pad": "docs/werkruimte/S3.md",
+          "waar": "§4"
+        }
+      ],
+      "code": [
+        "src/werk/werkruimte.js",
+        "src/werk/apparaten.js"
+      ],
       "pijler": "instellen",
       "gewicht": "kern",
       "voorstel": "houden",
-      "reden": "De regel die een flexibele indeling veilig maakt midden in een set."
+      "reden": "De regel die een flexibele indeling veilig maakt midden in een set. Modulair (Clay 19 okt): geldt ook voor een indeling die met het nummer meekomt: wisselen mag alleen knoppen en panelen verzetten, nooit een klank."
     },
     {
       "id": "bediening-072",
@@ -931,12 +1660,24 @@
       "soort": "contract",
       "wat": "werkruimtes/<naam>.json (schema 1): vereist + terugval, stukken, deel { start, kiezen: expliciet|volgt, onthoud }, delen (≤ 8, label ≤ 8 tekens, kleur uit het APC-palet, per apparaat welke mapjes, per scherm rijen/werkvak/vakken), volgt (alleen een VAST geopend mapje, gluren niet), mapjes.nieuw, regels per apparaat, superknoppen, panelen, schermen (mag/nooit). Condities { als, dan, anders } met als uit focus.instrument, focus.nummer, focus.stems, focus.leeg, speel.instrument, hub, apparaat.<id>; geen expressies. Opslaan met versie (409 met de huidige inhoud), .versies; de mixer peilt elke 2,5 s, dus Claude kan het bestand schrijven.",
       "waarom": "Ontwerp B2/B3, gebouwd in S3. Fouten weigeren (400), waarschuwingen overslaan; normaliseerWerkruimte is puur en wordt ook door de server gebruikt.",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "B2, B3" }, { "pad": "docs/werkruimte/S3.md", "waar": "§2" }],
-      "code": ["src/werk/model.js", "server/werkruimtes.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "B2, B3"
+        },
+        {
+          "pad": "docs/werkruimte/S3.md",
+          "waar": "§2"
+        }
+      ],
+      "code": [
+        "src/werk/model.js",
+        "server/werkruimtes.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "anders",
-      "reden": "Vorm houden (data, versie, witte lijsten), maar in v2 samenvoegen met de mapping zodat regels, mapjes en delen één document zijn."
+      "reden": "Vorm houden (data, versie, witte lijsten), maar in v2 samenvoegen met de mapping zodat regels, mapjes en delen één document zijn. De condities { als } zijn al een begin van een indeling die van de stand afhangt (focus.instrument, focus.stems); \"het nummer vraagt indeling X\" is een logische uitbreiding."
     },
     {
       "id": "bediening-073",
@@ -944,8 +1685,20 @@
       "soort": "regel",
       "wat": "Niets weghalen of verbergen (uit, verberg, acties … zijn fouten), geen klank of standen zetten, geen regel op de kern, geen houd/druk/latch op play, cue, op de maat, hotcues, laden of layer.*, geen onbereikbaar mapje (elk mapje een kiesknop of in een deel), geen werk.kies op een knop: een andere werkruimte kies je alleen op het scherm.",
       "waarom": "Zo krijg je nooit per ongeluk een andere indeling midden in een set, en blijft elke functie bereikbaar. Een deel wissel je wel met je handen.",
-      "bron": [{ "pad": "docs/werkruimte/S3.md", "waar": "§3" }, { "pad": "docs/WERKRUIMTE.md", "waar": "A9, A12, B3" }],
-      "code": ["src/werk/model.js", "src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S3.md",
+          "waar": "§3"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A9, A12, B3"
+        }
+      ],
+      "code": [
+        "src/werk/model.js",
+        "src/control/mapping.js"
+      ],
       "pijler": "instellen",
       "gewicht": "kern",
       "voorstel": "houden",
@@ -957,8 +1710,20 @@
       "soort": "besluit",
       "wat": "werk.thuis (⇧ + master-knop op de APC, SHIFT + F1 op de Maschine, de knop op de balk): deel = start, de standaardmapjes op elk apparaat, gluren en houd-mapjes los, onthouden weg. Klank, faders en wat er speelt blijven.",
       "waarom": "Ben je verdwaald in mapjes, dan heb je één knop die je altijd terugbrengt; het voorstel ⇧ master = clips uit schoof daarvoor op.",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "A9 THUIS, E1" }, { "pad": "mappings/stukken/basis.json", "waar": "" }],
-      "code": ["src/control/acties-werk.js", "src/werk/werkruimte.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A9 THUIS, E1"
+        },
+        {
+          "pad": "mappings/stukken/basis.json",
+          "waar": "heel bestand"
+        }
+      ],
+      "code": [
+        "src/control/acties-werk.js",
+        "src/werk/werkruimte.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -970,8 +1735,19 @@
       "soort": "besluit",
       "wat": "Shift = fijn (draaiknop, wiel, encoder), leegmaken (pad met inhoud), vastzetten (drukpad: kill, stem, worp), als loop (sectie). Variabelen: {focus} = waar je aan werkt, {speel} = wat je bespeelt (instrument), {tweede} = de vorige focus (was {R}), {maatgever} = wie de maat geeft. Wat SPEELT gaat naar {speel}, al het andere naar {focus}.",
       "waarom": "Ontwerp A2 van de werkruimte, zodat elk apparaat dezelfde taal spreekt.",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "A2" }, { "pad": "docs/werkruimte/S4.md", "waar": "{tweede}, {maatgever}" }],
-      "code": ["src/control/mapping.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A2"
+        },
+        {
+          "pad": "docs/werkruimte/S4.md",
+          "waar": "{tweede}, {maatgever}"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -983,8 +1759,19 @@
       "soort": "besluit",
       "wat": "Elk deel heeft één kleurnaam uit het APC-palet (MIX wit, UITLIJN groen, FX violet, STEMS zeegroen, SECTIES hemelsblauw, SPELEN oranje, BEELD geel, LIBRARY grijs), op de grid-modus van de APC, de werk-balk, mac-2, de iPad en de Maschine-pads. Heeft een deel een APC-grid-modus, dan moet de kleur die van de modus zijn (waarschuwing).",
       "waarom": "Grid-modi hadden elk al een kleur (de laatste vrije kleuren met een donkere tint waren limoen, zeegroen, roze); één kleurtaal maakt zichtbaar waar je bent.",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "A10" }, { "pad": "src/werk/kleuren.js", "waar": "" }],
-      "code": ["src/werk/kleuren.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A10"
+        },
+        {
+          "pad": "src/werk/kleuren.js",
+          "waar": "heel bestand"
+        }
+      ],
+      "code": [
+        "src/werk/kleuren.js"
+      ],
       "pijler": "instellen",
       "gewicht": "detail",
       "voorstel": "houden",
@@ -995,10 +1782,21 @@
       "titel": "Hooguit twaalf nieuwe plekken per proefavond",
       "soort": "besluit",
       "wat": "telNieuwePlekken(vorige, deze) telt hoeveel sleutels anders doen dan bij de vorige keer; boven 12 staat '⚠ N nieuw' op de werk-balk (een waarschuwing, geen blokkade, weg na een keer kijken).",
-      "waarwom": "",
       "waarom": "Leren zonder te verdwalen (A11); de eerste keer gaf het '⚠ 74 nieuw' (W24).",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "A11" }, { "pad": "docs/VRAGEN.md", "waar": "W24" }],
-      "code": ["src/werk/model.js", "src/ui/werk-balk.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A11"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "W24"
+        }
+      ],
+      "code": [
+        "src/werk/model.js",
+        "src/ui/werk-balk.js"
+      ],
       "pijler": "instellen",
       "gewicht": "detail",
       "voorstel": "houden",
@@ -1010,8 +1808,17 @@
       "soort": "contract",
       "wat": "Elke value-action kan een drukknop zijn (druk: naar, loslaten = terug), latch of lang (400 ms). Twee drukknoppen op hetzelfde doel: de eerste stand telt, terug pas als de laatste loslaat (DRUK_DOEL). Houd-mapjes (laag houd.<naam>) gelden zolang een houd-knop op welk apparaat ook vastzit, en gaan voor alle andere mapjes. Druk/latch op een action zonder stand (read null) of op een trigger doet niets, met een melding.",
       "waarom": "S4: meer combinaties zonder nieuwe actions in de engine. Bekende grens: druk gemengd met latch op hetzelfde doel telt niet mee; twee stem-solo's tegelijk geven stilte (W27 open).",
-      "bron": [{ "pad": "docs/werkruimte/S4.md", "waar": "Wat er is; Regels: De mapping" }],
-      "code": ["src/control/mapping.js", "src/control/houd.js", "src/control/acties-combi.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S4.md",
+          "waar": "Wat er is; Regels: De mapping"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js",
+        "src/control/houd.js",
+        "src/control/acties-combi.js"
+      ],
       "pijler": "programmeren",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -1023,8 +1830,20 @@
       "soort": "valkuil",
       "wat": "Een houd-knop op de Maschine en een doelknop op de APC komen via dezelfde WebSocket van de hub in volgorde van aankomst. Komt de houd-knop een paar ms later, dan krijgt de doelknop zijn gewone regel; niets met terugwerkende kracht. Daarom geen houd-regels op tijdkritische acties.",
       "waarom": "Gemeten in S6 via de echte hub: 1000/1000 in volgorde, scheefheid p99 10,3–20,9 ms, p50 −0,5 … −3,7 ms; de Maschine-weg is ~3,6 ms trager, onder ~5 ms tussenruimte draait de volgorde om.",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "C5" }, { "pad": "docs/werkruimte/S6.md", "waar": "§5 Gemeten" }],
-      "code": ["src/control/mapping.js", "src/control/houd.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "C5"
+        },
+        {
+          "pad": "docs/werkruimte/S6.md",
+          "waar": "§5 Gemeten"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js",
+        "src/control/houd.js"
+      ],
       "pijler": "controllers",
       "gewicht": "detail",
       "voorstel": "houden",
@@ -1036,12 +1855,24 @@
       "soort": "valkuil",
       "wat": "Een herlaad (peil na een bestand van Claude, een 409, een terugval) haalt mapjes weg en zet ze terug. Dat gaat via adapter.stil(fn), zonder volgt-melding, en daarna gaat per apparaat weer open wat er stond. Nog eens op het actieve deel drukken doet niets (radioknop).",
       "waarom": "Review ronde 2 van S3: zonder stil sprong het deel bij elke peil (elke 2,5 s). Een nieuwe adapter (de Maschine in S6) moet stil meegeven.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Werkruimte-kern: 'Een HERLAAD … gaat STIL'" }, { "pad": "docs/werkruimte/S3.md", "waar": "§4 HERLADEN" }],
-      "code": ["src/werk/werkruimte.js", "src/werk/apparaten.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Werkruimte-kern: 'Een HERLAAD … gaat STIL'"
+        },
+        {
+          "pad": "docs/werkruimte/S3.md",
+          "waar": "§4 HERLADEN"
+        }
+      ],
+      "code": [
+        "src/werk/werkruimte.js",
+        "src/werk/apparaten.js"
+      ],
       "pijler": "instellen",
       "gewicht": "detail",
       "voorstel": "houden",
-      "reden": "Algemene regel: een herlaad van configuratie verandert de toestand van de gebruiker niet."
+      "reden": "Algemene regel: een herlaad van configuratie verandert de toestand van de gebruiker niet. Modulair (Clay 19 okt): nodig voor elke live wissel, ook per nummer."
     },
     {
       "id": "bediening-081",
@@ -1049,12 +1880,21 @@
       "soort": "pijn",
       "wat": "Om de gedeelde bestanden niet aan te raken kreeg elk werkruimtespoor een eigen stub: src/ui/aanhakers/<spoor>.js (in vaste volgorde in AANHAKERS), src/ui/beschrijf/<spoor>.js (SPOREN), server/routes/<spoor>.js (SPOREN), een css-link in index.html, en links in werk.html/uitlijn.html plus de tabel OOK in de test. De aanhakers krijgen een ctx en een tweede requestAnimationFrame naast de renderloop.",
       "waarom": "S0 (14 okt) maakte parallel bouwen in sporen mogelijk; aanhaakpunten.test legt de lijsten tegen de bestanden. Het is een omweg om app.js, actions.js en server/index.js niet te openen.",
-      "bron": [{ "pad": "docs/werkruimte/S0.md", "waar": "De regel, §1, §8b" }],
-      "code": ["src/ui/aanhakers.js", "src/ui/beschrijf/index.js", "server/routes/index.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S0.md",
+          "waar": "De regel, §1, §8b"
+        }
+      ],
+      "code": [
+        "src/ui/aanhakers.js",
+        "src/ui/beschrijf/index.js",
+        "server/routes/index.js"
+      ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
       "voorstel": "anders",
-      "reden": "In v2 een modulestructuur waarin een onderdeel zijn actions, uitleg, stijl en routes zelf declareert (één manifest per module), met één renderloop."
+      "reden": "In v2 een modulestructuur waarin een onderdeel zijn actions, uitleg, stijl en routes zelf declareert (één manifest per module), met één renderloop. Modulair (Clay 19 okt): de modulariteit moet in de INDELING zitten (wat op de knoppen staat), niet alleen in de code-organisatie van sporen."
     },
     {
       "id": "bediening-082",
@@ -1062,8 +1902,22 @@
       "soort": "besluit",
       "wat": "Eén paneelpagina (werk.html?s=<scherm>). Een tweede Mac-scherm is een venster van de mixer en leest window.opener.varvePaneel elk beeld (zelfde thread, 0 ms, geen berichten). De iPad/iPhone krijgt de stand via de server: de mixer POST hooguit één verschil per 20 ms (reads ≤ 10/s per id, tijdlijn bij een nieuw segment, klok 1×/s), de server houdt de stand bij en stuurt SSE naar kijkers; zonder kijker 1×/s peilen en verder niets. Paneelpagina's openen nooit MIDI, audio of een Web Lock.",
       "waarom": "Zoals de beamer: een venster van dezelfde origin is gratis. Over het netwerk geen posities per beeld (zie bediening-083).",
-      "bron": [{ "pad": "docs/werkruimte/S7.md", "waar": "§4" }, { "pad": "docs/WERKRUIMTE.md", "waar": "C4" }],
-      "code": ["src/paneel/verbinding.js", "src/paneel/paneel.js", "src/ui/live-zender.js", "server/paneel.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S7.md",
+          "waar": "§4"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "C4"
+        }
+      ],
+      "code": [
+        "src/paneel/verbinding.js",
+        "src/paneel/paneel.js",
+        "src/ui/live-zender.js",
+        "server/paneel.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -1074,10 +1928,22 @@
       "titel": "Regel 3 over het netwerk: de iPad rekent zelf de positie",
       "soort": "regel",
       "wat": "De iPad krijgt per deck een tijdlijn-segment {segId, T, P, R, loop, rem, vorig …} (Deck.tijdlijn()) en de audioklok van de mixer op de serverklok (klokverschil: mediaan van 8 rondjes ping). Hij rekent positieIn(seg, t) met de formule uit stream-kern.js en trekt de uitgangsvertraging af (hoorbaar()). De klok volgt het midden van de blokken (getOutputTimestamp plus het gemiddelde verschil over 32 metingen).",
-      "waarwom": "",
       "waarom": "currentTime springt in Chrome per blok van de audiothread (headless 10,7 ms). Headless gemeten: mediaan 1,1–1,6 ms, p99 3,8–4,3 ms op een rustige machine, tot ~28 ms onder load; de 5 ms-eis is op de echte iPad niet aangetoond (W12).",
-      "bron": [{ "pad": "docs/werkruimte/S7.md", "waar": "§4 Regel 3 over het netwerk, §7" }, { "pad": "docs/werkruimte/S0.md", "waar": "§6 Deck.tijdlijn()" }],
-      "code": ["src/paneel/verbinding.js", "src/paneel/protocol.js", "src/engine/deck.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S7.md",
+          "waar": "§4 Regel 3 over het netwerk, §7"
+        },
+        {
+          "pad": "docs/werkruimte/S0.md",
+          "waar": "§6 Deck.tijdlijn()"
+        }
+      ],
+      "code": [
+        "src/paneel/verbinding.js",
+        "src/paneel/protocol.js",
+        "src/engine/deck.js"
+      ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -1089,8 +1955,17 @@
       "soort": "contract",
       "wat": "1 schakelaar in de Controlekamer, standaard uit en altijd uit na een herstart (dan 404). 2 Host/Origin: alleen localhost of de tailnet (VARVE_HOSTS, nooit funnel), Origin precies de eigen pagina. 3 koppelcode van 6 cijfers, 60 s, één keer, 5 fouten = ongeldig → token van 32 bytes in een HttpOnly; Secure; SameSite=Strict-cookie, op schijf alleen de SHA-256, per apparaat én scherm. 4 rem 120 invokes/s per apparaat en scherm (429), seq tegen dubbel. 5 de MIXER beslist (Uitvoerder): alleen wat in een paneel van dat scherm in het actieve deel staat en door waaromNietOpScherm komt. 6 loslaten: 1,5 s niets van die pagina (of de SSE dicht) = alles los wat met druk 'aan' kwam. 7 de bron in het log.",
       "waarom": "De eerste schrijfweg van buiten de Mac (W1, 14 okt ja). Drie reviewrondes vonden gaten in loslaten na een time-out (B1, ronde 3: een xy-pad op 120/s duwde een te late 'aan' uit de rij).",
-      "bron": [{ "pad": "docs/werkruimte/S8.md", "waar": "§2, §6b, §6c" }],
-      "code": ["server/paneel.js", "src/paneel/uitvoer.js", "src/paneel/schrijver.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S8.md",
+          "waar": "§2, §6b, §6c"
+        }
+      ],
+      "code": [
+        "server/paneel.js",
+        "src/paneel/uitvoer.js",
+        "src/paneel/schrijver.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -1102,8 +1977,20 @@
       "soort": "pijn",
       "wat": "VAST_NOOIT (record.*, log.*, mapping.*, werk.kies/opslaan/terug/vastleggen, library.*, *.load*, auto.*, track.*.grid.*, track.*.key(.*), patterns.record*, set.bewaar*/terugladen*) en TIJDKRITISCH (bend, play, cue, nudge, hotcues, loop in/out, tap) zijn patronen op de action-naam. Een nieuwe action die iets bewaart of laadt moet iemand er met de hand bij zetten.",
       "waarom": "Review S8 ronde 2 (B3): '*.grid.*' ving ook layer.grid.* (een grid-modus kiezen); grid en toonsoort werden pas in de review toegevoegd.",
-      "bron": [{ "pad": "src/werk/model.js", "waar": "regel 79-96" }, { "pad": "docs/werkruimte/S8.md", "waar": "§2 VAST_NOOIT, §6c B3" }],
-      "code": ["src/werk/model.js", "src/paneel/uitvoer.js"],
+      "bron": [
+        {
+          "pad": "src/werk/model.js",
+          "waar": "regel 79-96"
+        },
+        {
+          "pad": "docs/werkruimte/S8.md",
+          "waar": "§2 VAST_NOOIT, §6c B3"
+        }
+      ],
+      "code": [
+        "src/werk/model.js",
+        "src/paneel/uitvoer.js"
+      ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
       "voorstel": "anders",
@@ -1115,8 +2002,24 @@
       "soort": "besluit",
       "wat": "Server → paneel als Server-Sent Events, paneel → server als POST; geen dependency (node:http). De ontvanger in de mixer opent zijn SSE alleen als de schrijfweg aan staat; de server neemt één mixer-verbinding aan (het tabblad van de relais), een ander krijgt 409.",
       "waarom": "SSE is twintig regels serverkant. Op loopback: relais 0,13 ms mediaan, POST 0,98 ms mediaan. Een open SSE kost een van de zes verbindingen per host die Chrome over HTTP/1.1 opent, en die heeft de StreamBron nodig. Headless naar de mixer: POST p50 13 ms, p99 38 ms (W10, niet op een echte iPhone).",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "C4" }, { "pad": "docs/werkruimte/S8.md", "waar": "§2 Eén tabblad, Waarom de ontvanger niet altijd luistert" }, { "pad": "docs/VRAGEN.md", "waar": "W10" }],
-      "code": ["server/paneel.js", "src/paneel/verbinding.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "C4"
+        },
+        {
+          "pad": "docs/werkruimte/S8.md",
+          "waar": "§2 Eén tabblad, Waarom de ontvanger niet altijd luistert"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "W10"
+        }
+      ],
+      "code": [
+        "server/paneel.js",
+        "src/paneel/verbinding.js"
+      ],
       "pijler": "systeem",
       "gewicht": "detail",
       "voorstel": "houden",
@@ -1128,8 +2031,19 @@
       "soort": "grens",
       "wat": "Op een scherm buiten de Mac weigert de mixer standaard tijdkritische acties (bend, play, cue, nudge, hotcues, loop in/out, tap); 'tijdkritisch': true in de schermdefinitie zet ze open. Wel: op de maat, secties (vallen in op de '1'), worpen, draaien, duwen als afstand.",
       "waarom": "Tussen vinger en mixer zitten wifi en aanraking (tientallen ms, onvoorspelbaar; touch 30–60 ms en wifi + WireGuard 5–30 ms zijn niet gemeten).",
-      "bron": [{ "pad": "docs/WERKRUIMTE.md", "waar": "A5 'Waarom de iPad geen timing doet', E3" }, { "pad": "docs/VRAGEN.md", "waar": "W6" }],
-      "code": ["src/werk/model.js"],
+      "bron": [
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A5 'Waarom de iPad geen timing doet', E3"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "W6"
+        }
+      ],
+      "code": [
+        "src/werk/model.js"
+      ],
       "pijler": "controllers",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -1141,8 +2055,20 @@
       "soort": "besluit",
       "wat": "✎ op elk scherm: kies een paneel, wijs een knop aan (klik op het scherm, hij gaat niet af; of beweeg een control), de zoeker zet de top-40 handelingen bovenaan, zet het paneel op een scherm, of wijs het toe aan een groep knoppen (APC device knobs, Maschine-draaiknoppen of -pads, F1–F8) in een eigen mapje p-<paneel> dat het deel openzet. 'Leg vast in dit deel' (twee keer binnen 3 s) schrijft de mapjes en rijen die je met je handen openzette. Elke bewerking = één opslag met versie; terug = één stap.",
       "waarom": "VISIE §5.3: zelf instellen zonder code. Terug is één stap; een tweede terug zet het weer vooruit (twee stappen terug kan nog niet).",
-      "bron": [{ "pad": "docs/werkruimte/S8.md", "waar": "§4, §6b" }, { "pad": "docs/werkruimte/S3.md", "waar": "§2 Stap 3" }],
-      "code": ["src/werk/inrichten.js", "src/paneel/paneel.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S8.md",
+          "waar": "§4, §6b"
+        },
+        {
+          "pad": "docs/werkruimte/S3.md",
+          "waar": "§2 Stap 3"
+        }
+      ],
+      "code": [
+        "src/werk/inrichten.js",
+        "src/paneel/paneel.js"
+      ],
       "pijler": "instellen",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -1154,8 +2080,15 @@
       "soort": "besluit",
       "wat": "track.N.phase.offset (bipolair, read = 0,5 + fase in tellen) duwt omtrek(v − read): over de rand van de ring gaat rond in plaats van een tel terug; dezelfde v twee keer duwt de tweede keer niet. De read telt mee wat nog onderweg is. Duwen, jog en ±1 ms worden per deck opgeteld en als hooguit één nudge/seek per 15 ms uitgevoerd; met keylock nooit twee geplande sprongen tegelijk. Eén APC-tik = 3,81 ms op 124 bpm, fijn 0,48 ms.",
       "waarom": "Zonder 'read telt mee' telde een endless-knop elke tik twee keer of niet. Gemeten: 50 invokes in 100 ms = 7 seeks en dezelfde eindfase; met keylock 100 tikken = 6 sprongen, alles komt aan.",
-      "bron": [{ "pad": "docs/werkruimte/S1.md", "waar": "Wat er is; Regels; Gemeten" }],
-      "code": ["src/control/acties-precisie.js"],
+      "bron": [
+        {
+          "pad": "docs/werkruimte/S1.md",
+          "waar": "Wat er is; Regels; Gemeten"
+        }
+      ],
+      "code": [
+        "src/control/acties-precisie.js"
+      ],
       "pijler": "dj",
       "gewicht": "belangrijk",
       "voorstel": "houden",
@@ -1167,49 +2100,594 @@
       "soort": "regel",
       "wat": "Op de bus staan wat je met je handen doet: kiezen en taggen (library.category.*, track.N.tag.K), een deel kiezen, een set klaarzetten. Wissen, hernoemen, categorieën maken, werkruimtes en sets bewaren gaan via eigen routes die alleen vanaf deze Mac schrijven (vanDezeMac, 403), en staan in VAST_NOOIT als ze toch op de bus staan. Zulke actions hebben log: 'overslaan' en beginstand: false.",
       "waarom": "S11 en S9: terugspelen mag nooit de library of een set herschrijven, en een iPad of een per ongeluk geraakte pad mag niets bewaren.",
-      "bron": [{ "pad": "CLAUDE.md", "waar": "Categorieën en tags (S11): Schrijven; Een set klaarzetten (S9)" }],
-      "code": ["src/library/indeling.js", "server/indeling.js", "src/control/acties-set.js"],
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Categorieën en tags (S11): Schrijven; Een set klaarzetten (S9)"
+        }
+      ],
+      "code": [
+        "src/library/indeling.js",
+        "server/indeling.js",
+        "src/control/acties-set.js"
+      ],
       "pijler": "systeem",
       "gewicht": "belangrijk",
       "voorstel": "houden",
       "reden": "Duidelijke grens tussen spelen en beheren; in v2 als meta-veld afdwingen."
+    },
+    {
+      "id": "bediening-091",
+      "titel": "Modulaire bediening: wisselen en testen tijdens het bouwen, indeling per nummer",
+      "soort": "besluit",
+      "wat": "De knoppenindeling is in v2 opgebouwd uit modules die je tijdens het bouwen en spelen kunt aanzetten, wisselen en testen, en een nummer kan zijn eigen indeling hebben. Vast blijft de kern (de kanaalstrip, noodknoppen, loslaten naar de action van het indrukken); wat eromheen op de knoppen staat is een module.",
+      "waarom": "Clay, 19 okt, letterlijk: \"ook merk ik dat alle knoppen veel beter en logischer moeten. ik denk dat het daarvoor perfect zou zijn om het echt modular te maken zodat je tijdens dat je het bouwt direct meer mogelijkheid hebt om te switchen en te testen en zelf per nummer een andere layout zou kunnen hebben.\" De telling steunt het: de kanaalstrip is 63,4% van de handelingen, mapjes worden maar 0,2% met de hand gewisseld, en maar 12% van de acties op een knop komt in de top-40 (v2/telling/nu.md). Een indeling die met het nummer meekomt hoeft niet met de hand gewisseld te worden.",
+      "bron": [
+        {
+          "pad": "v2/telling/nu.md",
+          "waar": "Conclusies 1, 7, 11"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§2 pijler 4, §5.3"
+        }
+      ],
+      "code": [
+        "src/control/mapping.js",
+        "src/control/lagen.js",
+        "src/werk/werkruimte.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "v1 heeft de onderdelen (mapping als data, fragmenten met vervangFragment, delen, peilen, condities, racks die al per nummer meekomen), maar als lagen bovenop een vaste standaard; v2 maakt module en indeling de eenheid."
+    },
+    {
+      "id": "bediening-092",
+      "titel": "Wat wisselt per nummer?",
+      "soort": "open",
+      "wat": "Drie mogelijkheden. (a) Alleen welke modules op de wisselplekken staan (device knobs, grid, Maschine-pads): het ene nummer brengt stems en secties mee, het andere effecten; de kern blijft. (b) De hele indeling van de controller per nummer. (c) Een indeling per soort moment (dj'en / produceren / beeld) die een nummer kan aanvragen, zoals een deel van de werkruimte.",
+      "waarom": "v1 kent al dingen die met het nummer meekomen (effect-racks, hotcues, sampler-pads, grid, secties: allemaal per link bewaard) en een werkruimte met delen; een indeling per nummer bestaat nog niet. Telling: kanaalstrip 63,4%, mapjes 0,2% met de hand gewisseld, 12% van de knopacties in de top-40 (v2/telling/nu.md). (a) houdt het spiergeheugen voor de kern en is het kleinst; (b) geeft de meeste vrijheid maar elk nummer voelt anders onder de handen (de onderzoeksklacht \"lagen zonder zichtbare stand verwarren\"); (c) sluit aan op de delen van de werkruimte en blijft overzichtelijk, maar is minder per nummer. Ook te kiezen: wat gebeurt er bij twee nummers tegelijk (de focus-track, de maatgever, of de laatst geladen?), en of loslaten-naar-indrukken en \"een wissel zet nooit een klank\" voor alle drie gelden (advies: ja).",
+      "bron": [
+        {
+          "pad": "v2/telling/nu.md",
+          "waar": "Conclusies 1, 7, 11"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Een effect-rack hangt aan een LINK; Hotcues horen bij het NUMMER; Sampler-pads horen bij het NUMMER"
+        },
+        {
+          "pad": "docs/WERKRUIMTE.md",
+          "waar": "A1, B2"
+        },
+        {
+          "pad": "docs/APC40-onderzoek.md",
+          "waar": "§2"
+        }
+      ],
+      "code": [
+        "src/werk/werkruimte.js",
+        "src/control/mapping.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Advies: begin met (a), met (c) als bovenlaag; (b) pas als (a) op de hardware tekortschiet. Clay kiest."
     }
   ],
   "onderdelen": [
-    { "pad": "src/control/devices/apc40mk2.js", "regels": 241, "puur": true, "imports": [], "tests": ["test/mapping.test.mjs", "test/feedback.test.mjs", "test/feedback-plan.test.mjs", "test/spiegel.test.mjs", "test/handen.test.mjs", "test/learn.test.mjs"], "voorstel": "overnemen", "reden": "Protocolfeiten uit Akai v1.2 zonder action-ids; PALETTE_HEX aanvullen tot 128." },
-    { "pad": "src/control/devices/maschine-mk2.js", "regels": 89, "puur": true, "imports": [], "tests": ["test/maschine.test.mjs", "test/maschine-kaart.test.mjs", "test/learn.test.mjs"], "voorstel": "overnemen", "reden": "Profiel van de virtuele MIDI van de hub; eerst door de ijkproef (poort M)." },
-    { "pad": "src/control/devices/generic.js", "regels": 21, "puur": true, "imports": [], "tests": [], "voorstel": "overnemen", "reden": "Leeg startpunt voor een onbekend apparaat." },
-    { "pad": "src/control/mapping.js", "regels": 1294, "puur": true, "imports": ["src/lib/emitter.js", "src/control/houd.js"], "tests": ["test/mapping.test.mjs", "test/combinaties.test.mjs", "test/learn.test.mjs", "test/feedback-plan.test.mjs", "test/werkruimte-model.test.mjs"], "voorstel": "herschrijven", "reden": "Takeover, endless, relatief, druk/latch en loslaten-naar-indrukken kunnen bijna letterlijk mee; verschil, fragmenten, houd, als en caches zijn erop gestapeld en horen in v2 in een kleiner kernmodel met mapjes als data." },
-    { "pad": "src/control/lagen.js", "regels": 376, "puur": true, "imports": ["src/lib/emitter.js", "src/control/houd.js"], "tests": ["test/mapping.test.mjs", "test/spiegel.test.mjs", "test/werkruimte.test.mjs"], "voorstel": "herschrijven", "reden": "Gluren/vast en de groepen zijn goed; GROEPEN en OP_AANVRAAG moeten data in het mappingdocument worden." },
-    { "pad": "src/control/houd.js", "regels": 103, "puur": true, "imports": ["src/lib/emitter.js"], "tests": ["test/combinaties.test.mjs", "test/mapping.test.mjs", "test/maschine-delen.test.mjs"], "voorstel": "overnemen", "reden": "Klein puur register van open houd-mapjes per apparaat." },
-    { "pad": "src/control/feedback.js", "regels": 545, "puur": true, "imports": ["src/control/mapping.js"], "tests": ["test/feedback.test.mjs", "test/feedback-plan.test.mjs"], "voorstel": "herschrijven", "reden": "Plan/diff/wek en het zelf knipperen houden; KLEURSCHEMA (regex per action) wordt meta in define()." },
-    { "pad": "src/control/midi.js", "regels": 503, "puur": false, "imports": ["src/lib/emitter.js"], "tests": ["test/midi.test.mjs"], "voorstel": "overnemen", "reden": "Parsen, poortkeuze op connected, wachtrij als schuivend venster en echofilter alleen op CC zijn bewezen; alleen isSpeelapparaat naar het profiel." },
-    { "pad": "src/control/midi-learn.js", "regels": 226, "puur": true, "imports": ["src/lib/emitter.js", "src/control/noten.js"], "tests": ["test/learn.test.mjs", "test/mapping-opslag.test.mjs"], "voorstel": "overnemen", "reden": "Puur, getest, raadModus is precies goed." },
-    { "pad": "src/control/keyboard.js", "regels": 305, "puur": false, "imports": ["src/control/actions.js", "src/control/mapping.js", "src/control/midi-learn.js"], "tests": ["test/keyboard.test.mjs"], "voorstel": "herschrijven", "reden": "Wordt in v2 een dunne adapter (keydown → mapping), de gouden KEYMAP is dan overbodig." },
-    { "pad": "src/control/actions.js", "regels": 1587, "puur": false, "imports": ["src/engine/*", "src/video/*", "src/koppel/beeld.js", "src/control/lagen.js", "src/control/drumpads.js"], "tests": ["test/engine.test.mjs", "test/mapping.test.mjs", "test/handelingenlog.test.mjs", "test/werkruimte.test.mjs"], "voorstel": "herschrijven", "reden": "De bus zelf (define/invoke/read, ~100 regels) kan mee; de bind-functies voor alle onderdelen, waaromNiet en de per-track-uitschrijving niet." },
-    { "pad": "src/control/noten.js", "regels": 308, "puur": true, "imports": ["src/lib/emitter.js", "src/control/midi.js", "src/control/mapping.js", "src/control/actions.js"], "tests": ["test/instrumenten.test.mjs", "test/maschine.test.mjs"], "voorstel": "overnemen", "reden": "Noten buiten de bus, loslaten naar waar aangeslagen; de import van actions.js eruit." },
-    { "pad": "src/control/hub.js", "regels": 687, "puur": false, "imports": ["src/control/midi.js", "src/analysis/maat.js", "src/video/puls.js", "src/engine/hoorbaar.js"], "tests": ["test/hub.test.mjs"], "voorstel": "overnemen", "reden": "Hard gewonnen protocolgedrag (lease, hartslag, herverbinden, 4001, wachtrij voor speelapparaten); in v2 de sectie-uitzending eruit naar een eigen module." },
-    { "pad": "src/control/maschine.js", "regels": 1302, "puur": true, "imports": ["src/lib/emitter.js", "src/control/midi.js", "src/control/mapping.js", "src/control/actions.js", "src/control/devices/maschine-mk2.js", "src/control/maschine-scherm.js", "src/control/houd.js"], "tests": ["test/maschine.test.mjs", "test/maschine-delen.test.mjs", "test/bladeren.test.mjs", "test/maschine-sampler.test.mjs"], "voorstel": "herschrijven", "reden": "Veel gedrag in code (padmodi, pagina's, wiel, lampjes) dat in v2 uit de mapping moet komen; ongetest op hardware." },
-    { "pad": "src/control/maschine-scherm.js", "regels": 629, "puur": true, "imports": [], "tests": ["test/maschine.test.mjs", "test/maschine-delen.test.mjs"], "voorstel": "overnemen", "reden": "Pure functie stand → 2048 bytes met eigen 5×7-font." },
-    { "pad": "src/control/superknop.js", "regels": 79, "puur": true, "imports": ["src/engine/rack.js"], "tests": ["test/superknop.test.mjs"], "voorstel": "overnemen", "reden": "Hergebruikt de rekenregel van een rack-macro." },
-    { "pad": "src/control/acties-precisie.js", "regels": 366, "puur": false, "imports": ["src/control/actions.js", "src/engine/engine.js"], "tests": ["test/precisie.test.mjs"], "voorstel": "herschrijven", "reden": "Duwer en fase-als-cirkel houden; de meldingen die waaromNiet miste horen in v2 in de bus." },
-    { "pad": "src/control/acties-combi.js", "regels": 321, "puur": false, "imports": ["src/control/actions.js", "src/control/mapping.js", "src/control/superknop.js", "src/engine/deck.js", "src/engine/engine.js"], "tests": ["test/combinaties.test.mjs"], "voorstel": "herschrijven", "reden": "Worpen, solo en superknoppen als gewone onderdelen in v2, niet als aanhaker." },
-    { "pad": "src/werk/model.js", "regels": 918, "puur": true, "imports": [], "tests": ["test/werkruimte-model.test.mjs", "test/paneel-schrijf.test.mjs", "test/inrichten.test.mjs"], "voorstel": "herschrijven", "reden": "De validatieregels (kern, verboden velden, witte lijsten) zijn goud; VAST_NOOIT/TIJDKRITISCH op naam worden meta, en het model gaat samen met de mapping." },
-    { "pad": "src/werk/werkruimte.js", "regels": 587, "puur": false, "imports": ["src/lib/emitter.js", "src/werk/model.js", "src/werk/apparaten.js", "src/control/lagen.js"], "tests": ["test/werkruimte.test.mjs", "test/werkruimte-server.test.mjs"], "voorstel": "herschrijven", "reden": "Als kern van v2 opnieuw, zonder de eis dat zonder werkruimte alles bit voor bit v1 is." },
-    { "pad": "src/werk/apparaten.js", "regels": 187, "puur": true, "imports": ["src/control/lagen.js"], "tests": ["test/werkruimte.test.mjs"], "voorstel": "herschrijven", "reden": "Het adapterpatroon (zetMapjes, mapjes, aanwezig, stil) houden." },
-    { "pad": "src/werk/inrichten.js", "regels": 285, "puur": true, "imports": ["src/werk/model.js"], "tests": ["test/inrichten.test.mjs"], "voorstel": "herschrijven", "reden": "Bewerkingen als pure functies op het model; meekomen met het nieuwe documentformaat." },
-    { "pad": "src/werk/kleuren.js", "regels": 41, "puur": true, "imports": ["src/control/devices/apc40mk2.js"], "tests": ["test/werkruimte-model.test.mjs"], "voorstel": "overnemen", "reden": "Klein, puur." },
-    { "pad": "src/paneel/protocol.js", "regels": 281, "puur": true, "imports": [], "tests": ["test/paneel-server.test.mjs", "test/paneel-schrijf.test.mjs", "test/vrij-paneel.test.mjs"], "voorstel": "overnemen", "reden": "Berichtvormen mixer ↔ server ↔ paneel en het klokverschil, puur." },
-    { "pad": "src/paneel/uitvoer.js", "regels": 113, "puur": true, "imports": ["src/werk/model.js"], "tests": ["test/paneel-schrijf.test.mjs"], "voorstel": "herschrijven", "reden": "De Uitvoerder (mixer beslist per scherm, loslaten) houden, maar op meta in plaats van naamlijsten." },
-    { "pad": "src/paneel/verbinding.js", "regels": 306, "puur": false, "imports": ["src/paneel/protocol.js", "src/engine/stream-kern.js", "src/engine/hoorbaar.js", "src/lib/antwoord.js", "src/lib/emitter.js"], "tests": ["test/paneel-server.test.mjs"], "voorstel": "overnemen", "reden": "Opener of server, regel 3 over het netwerk." },
-    { "pad": "src/paneel/schrijver.js", "regels": 111, "puur": false, "imports": ["src/lib/antwoord.js"], "tests": ["test/paneel-schrijf.test.mjs"], "voorstel": "overnemen", "reden": "Klein; seq, één herhaling, samenvoegen per action na drie reviewrondes." },
-    { "pad": "src/ui/spiegel-plan.js", "regels": 210, "puur": true, "imports": ["src/control/mapping.js", "src/control/devices/apc40mk2.js", "src/ui/apc-beschrijf.js"], "tests": ["test/spiegel.test.mjs"], "voorstel": "overnemen", "reden": "Puur: welke control waar en wat hij doet uit de mapping." },
-    { "pad": "src/ui/spiegel.js", "regels": 446, "puur": false, "imports": ["src/control/actions.js", "src/control/mapping.js", "src/ui/controls.js", "src/ui/waveform.js", "src/ui/spiegel-plan.js"], "tests": ["test/invoer.test.mjs"], "voorstel": "herschrijven", "reden": "DOM-specifiek; in v2 hangt het af van de keuze of de spiegel een paneel wordt (bediening-057)." },
-    { "pad": "src/ui/tabblad.js", "regels": 61, "puur": true, "imports": ["src/lib/emitter.js"], "tests": ["test/tabblad.test.mjs"], "voorstel": "overnemen", "reden": "Web Lock met geïnjecteerde locks, getest met een nagebouwde navigator.locks." },
-    { "pad": "src/ui/mapping-opslag.js", "regels": 293, "puur": false, "imports": ["src/control/mapping.js", "src/lib/antwoord.js"], "tests": ["test/mapping-opslag.test.mjs", "test/mapping.test.mjs"], "voorstel": "herschrijven", "reden": "De opstartregels (bediening-022, -023) meenemen; de omzetting van oude kopieën en 'eerder' niet." },
-    { "pad": "src/ui/apc-beschrijf.js", "regels": 280, "puur": true, "imports": ["src/control/lagen.js", "src/control/drumpads.js", "src/ui/beschrijf/index.js", "src/ui/wie.js"], "tests": ["test/mapping.test.mjs", "test/aanhaakpunten.test.mjs"], "voorstel": "weg", "reden": "Uitleg hoort in v2 in de meta van define()." },
-    { "pad": "src/ui/aanhakers.js", "regels": 82, "puur": true, "imports": [], "tests": ["test/aanhaakpunten.test.mjs"], "voorstel": "weg", "reden": "Omweg voor parallel bouwen op een vaste kern; v2 krijgt een modulestructuur." },
-    { "pad": "src/handen/kaart.js", "regels": 293, "puur": true, "imports": ["src/handen/telling.js"], "tests": ["test/handen.test.mjs"], "voorstel": "overnemen", "reden": "Pure handenkaart uit data." },
-    { "pad": "src/handen/telling.js", "regels": 82, "puur": true, "imports": [], "tests": ["test/handen.test.mjs"], "voorstel": "overnemen", "reden": "Telling van handelingenlogs, puur." }
+    {
+      "pad": "src/control/devices/apc40mk2.js",
+      "regels": 241,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/mapping.test.mjs",
+        "test/feedback.test.mjs",
+        "test/feedback-plan.test.mjs",
+        "test/spiegel.test.mjs",
+        "test/handen.test.mjs",
+        "test/learn.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Protocolfeiten uit Akai v1.2 zonder action-ids; PALETTE_HEX aanvullen tot 128."
+    },
+    {
+      "pad": "src/control/devices/maschine-mk2.js",
+      "regels": 89,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/maschine.test.mjs",
+        "test/maschine-kaart.test.mjs",
+        "test/learn.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Profiel van de virtuele MIDI van de hub; eerst door de ijkproef (poort M)."
+    },
+    {
+      "pad": "src/control/devices/generic.js",
+      "regels": 21,
+      "puur": true,
+      "imports": [],
+      "tests": [],
+      "voorstel": "overnemen",
+      "reden": "Leeg startpunt voor een onbekend apparaat."
+    },
+    {
+      "pad": "src/control/mapping.js",
+      "regels": 1294,
+      "puur": true,
+      "imports": [
+        "src/lib/emitter.js",
+        "src/control/houd.js"
+      ],
+      "tests": [
+        "test/mapping.test.mjs",
+        "test/combinaties.test.mjs",
+        "test/learn.test.mjs",
+        "test/feedback-plan.test.mjs",
+        "test/werkruimte-model.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Takeover, endless, relatief, druk/latch en loslaten-naar-indrukken kunnen bijna letterlijk mee; verschil, fragmenten, houd, als en caches zijn erop gestapeld en horen in v2 in een kleiner kernmodel met mapjes als data."
+    },
+    {
+      "pad": "src/control/lagen.js",
+      "regels": 376,
+      "puur": true,
+      "imports": [
+        "src/lib/emitter.js",
+        "src/control/houd.js"
+      ],
+      "tests": [
+        "test/mapping.test.mjs",
+        "test/spiegel.test.mjs",
+        "test/werkruimte.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Gluren/vast en de groepen zijn goed; GROEPEN en OP_AANVRAAG moeten data in het mappingdocument worden."
+    },
+    {
+      "pad": "src/control/houd.js",
+      "regels": 103,
+      "puur": true,
+      "imports": [
+        "src/lib/emitter.js"
+      ],
+      "tests": [
+        "test/combinaties.test.mjs",
+        "test/mapping.test.mjs",
+        "test/maschine-delen.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Klein puur register van open houd-mapjes per apparaat."
+    },
+    {
+      "pad": "src/control/feedback.js",
+      "regels": 545,
+      "puur": true,
+      "imports": [
+        "src/control/mapping.js"
+      ],
+      "tests": [
+        "test/feedback.test.mjs",
+        "test/feedback-plan.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Plan/diff/wek en het zelf knipperen houden; KLEURSCHEMA (regex per action) wordt meta in define()."
+    },
+    {
+      "pad": "src/control/midi.js",
+      "regels": 503,
+      "puur": false,
+      "imports": [
+        "src/lib/emitter.js"
+      ],
+      "tests": [
+        "test/midi.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Parsen, poortkeuze op connected, wachtrij als schuivend venster en echofilter alleen op CC zijn bewezen; alleen isSpeelapparaat naar het profiel."
+    },
+    {
+      "pad": "src/control/midi-learn.js",
+      "regels": 226,
+      "puur": true,
+      "imports": [
+        "src/lib/emitter.js",
+        "src/control/noten.js"
+      ],
+      "tests": [
+        "test/learn.test.mjs",
+        "test/mapping-opslag.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Puur, getest, raadModus is precies goed."
+    },
+    {
+      "pad": "src/control/keyboard.js",
+      "regels": 305,
+      "puur": false,
+      "imports": [
+        "src/control/actions.js",
+        "src/control/mapping.js",
+        "src/control/midi-learn.js"
+      ],
+      "tests": [
+        "test/keyboard.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Wordt in v2 een dunne adapter (keydown → mapping), de gouden KEYMAP is dan overbodig."
+    },
+    {
+      "pad": "src/control/actions.js",
+      "regels": 1587,
+      "puur": false,
+      "imports": [
+        "src/engine/*",
+        "src/video/*",
+        "src/koppel/beeld.js",
+        "src/control/lagen.js",
+        "src/control/drumpads.js"
+      ],
+      "tests": [
+        "test/engine.test.mjs",
+        "test/mapping.test.mjs",
+        "test/handelingenlog.test.mjs",
+        "test/werkruimte.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "De bus zelf (define/invoke/read, ~100 regels) kan mee; de bind-functies voor alle onderdelen, waaromNiet en de per-track-uitschrijving niet."
+    },
+    {
+      "pad": "src/control/noten.js",
+      "regels": 308,
+      "puur": true,
+      "imports": [
+        "src/lib/emitter.js",
+        "src/control/midi.js",
+        "src/control/mapping.js",
+        "src/control/actions.js"
+      ],
+      "tests": [
+        "test/instrumenten.test.mjs",
+        "test/maschine.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Noten buiten de bus, loslaten naar waar aangeslagen; de import van actions.js eruit."
+    },
+    {
+      "pad": "src/control/hub.js",
+      "regels": 687,
+      "puur": false,
+      "imports": [
+        "src/control/midi.js",
+        "src/analysis/maat.js",
+        "src/video/puls.js",
+        "src/engine/hoorbaar.js"
+      ],
+      "tests": [
+        "test/hub.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Hard gewonnen protocolgedrag (lease, hartslag, herverbinden, 4001, wachtrij voor speelapparaten); in v2 de sectie-uitzending eruit naar een eigen module."
+    },
+    {
+      "pad": "src/control/maschine.js",
+      "regels": 1302,
+      "puur": true,
+      "imports": [
+        "src/lib/emitter.js",
+        "src/control/midi.js",
+        "src/control/mapping.js",
+        "src/control/actions.js",
+        "src/control/devices/maschine-mk2.js",
+        "src/control/maschine-scherm.js",
+        "src/control/houd.js"
+      ],
+      "tests": [
+        "test/maschine.test.mjs",
+        "test/maschine-delen.test.mjs",
+        "test/bladeren.test.mjs",
+        "test/maschine-sampler.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Veel gedrag in code (padmodi, pagina's, wiel, lampjes) dat in v2 uit de mapping moet komen; ongetest op hardware."
+    },
+    {
+      "pad": "src/control/maschine-scherm.js",
+      "regels": 629,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/maschine.test.mjs",
+        "test/maschine-delen.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Pure functie stand → 2048 bytes met eigen 5×7-font."
+    },
+    {
+      "pad": "src/control/superknop.js",
+      "regels": 79,
+      "puur": true,
+      "imports": [
+        "src/engine/rack.js"
+      ],
+      "tests": [
+        "test/superknop.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Hergebruikt de rekenregel van een rack-macro."
+    },
+    {
+      "pad": "src/control/acties-precisie.js",
+      "regels": 366,
+      "puur": false,
+      "imports": [
+        "src/control/actions.js",
+        "src/engine/engine.js"
+      ],
+      "tests": [
+        "test/precisie.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Duwer en fase-als-cirkel houden; de meldingen die waaromNiet miste horen in v2 in de bus."
+    },
+    {
+      "pad": "src/control/acties-combi.js",
+      "regels": 321,
+      "puur": false,
+      "imports": [
+        "src/control/actions.js",
+        "src/control/mapping.js",
+        "src/control/superknop.js",
+        "src/engine/deck.js",
+        "src/engine/engine.js"
+      ],
+      "tests": [
+        "test/combinaties.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Worpen, solo en superknoppen als gewone onderdelen in v2, niet als aanhaker."
+    },
+    {
+      "pad": "src/werk/model.js",
+      "regels": 918,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/werkruimte-model.test.mjs",
+        "test/paneel-schrijf.test.mjs",
+        "test/inrichten.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "De validatieregels (kern, verboden velden, witte lijsten) zijn goud; VAST_NOOIT/TIJDKRITISCH op naam worden meta, en het model gaat samen met de mapping."
+    },
+    {
+      "pad": "src/werk/werkruimte.js",
+      "regels": 587,
+      "puur": false,
+      "imports": [
+        "src/lib/emitter.js",
+        "src/werk/model.js",
+        "src/werk/apparaten.js",
+        "src/control/lagen.js"
+      ],
+      "tests": [
+        "test/werkruimte.test.mjs",
+        "test/werkruimte-server.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Als kern van v2 opnieuw, zonder de eis dat zonder werkruimte alles bit voor bit v1 is."
+    },
+    {
+      "pad": "src/werk/apparaten.js",
+      "regels": 187,
+      "puur": true,
+      "imports": [
+        "src/control/lagen.js"
+      ],
+      "tests": [
+        "test/werkruimte.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Het adapterpatroon (zetMapjes, mapjes, aanwezig, stil) houden."
+    },
+    {
+      "pad": "src/werk/inrichten.js",
+      "regels": 285,
+      "puur": true,
+      "imports": [
+        "src/werk/model.js"
+      ],
+      "tests": [
+        "test/inrichten.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Bewerkingen als pure functies op het model; meekomen met het nieuwe documentformaat."
+    },
+    {
+      "pad": "src/werk/kleuren.js",
+      "regels": 41,
+      "puur": true,
+      "imports": [
+        "src/control/devices/apc40mk2.js"
+      ],
+      "tests": [
+        "test/werkruimte-model.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Klein, puur."
+    },
+    {
+      "pad": "src/paneel/protocol.js",
+      "regels": 281,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/paneel-server.test.mjs",
+        "test/paneel-schrijf.test.mjs",
+        "test/vrij-paneel.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Berichtvormen mixer ↔ server ↔ paneel en het klokverschil, puur."
+    },
+    {
+      "pad": "src/paneel/uitvoer.js",
+      "regels": 113,
+      "puur": true,
+      "imports": [
+        "src/werk/model.js"
+      ],
+      "tests": [
+        "test/paneel-schrijf.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "De Uitvoerder (mixer beslist per scherm, loslaten) houden, maar op meta in plaats van naamlijsten."
+    },
+    {
+      "pad": "src/paneel/verbinding.js",
+      "regels": 306,
+      "puur": false,
+      "imports": [
+        "src/paneel/protocol.js",
+        "src/engine/stream-kern.js",
+        "src/engine/hoorbaar.js",
+        "src/lib/antwoord.js",
+        "src/lib/emitter.js"
+      ],
+      "tests": [
+        "test/paneel-server.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Opener of server, regel 3 over het netwerk."
+    },
+    {
+      "pad": "src/paneel/schrijver.js",
+      "regels": 111,
+      "puur": false,
+      "imports": [
+        "src/lib/antwoord.js"
+      ],
+      "tests": [
+        "test/paneel-schrijf.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Klein; seq, één herhaling, samenvoegen per action na drie reviewrondes."
+    },
+    {
+      "pad": "src/ui/spiegel-plan.js",
+      "regels": 210,
+      "puur": true,
+      "imports": [
+        "src/control/mapping.js",
+        "src/control/devices/apc40mk2.js",
+        "src/ui/apc-beschrijf.js"
+      ],
+      "tests": [
+        "test/spiegel.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Puur: welke control waar en wat hij doet uit de mapping."
+    },
+    {
+      "pad": "src/ui/spiegel.js",
+      "regels": 446,
+      "puur": false,
+      "imports": [
+        "src/control/actions.js",
+        "src/control/mapping.js",
+        "src/ui/controls.js",
+        "src/ui/waveform.js",
+        "src/ui/spiegel-plan.js"
+      ],
+      "tests": [
+        "test/invoer.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "DOM-specifiek; in v2 hangt het af van de keuze of de spiegel een paneel wordt (bediening-057)."
+    },
+    {
+      "pad": "src/ui/tabblad.js",
+      "regels": 61,
+      "puur": true,
+      "imports": [
+        "src/lib/emitter.js"
+      ],
+      "tests": [
+        "test/tabblad.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Web Lock met geïnjecteerde locks, getest met een nagebouwde navigator.locks."
+    },
+    {
+      "pad": "src/ui/mapping-opslag.js",
+      "regels": 293,
+      "puur": false,
+      "imports": [
+        "src/control/mapping.js",
+        "src/lib/antwoord.js"
+      ],
+      "tests": [
+        "test/mapping-opslag.test.mjs",
+        "test/mapping.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "De opstartregels (bediening-022, -023) meenemen; de omzetting van oude kopieën en 'eerder' niet."
+    },
+    {
+      "pad": "src/ui/apc-beschrijf.js",
+      "regels": 280,
+      "puur": true,
+      "imports": [
+        "src/control/lagen.js",
+        "src/control/drumpads.js",
+        "src/ui/beschrijf/index.js",
+        "src/ui/wie.js"
+      ],
+      "tests": [
+        "test/mapping.test.mjs",
+        "test/aanhaakpunten.test.mjs"
+      ],
+      "voorstel": "weg",
+      "reden": "Uitleg hoort in v2 in de meta van define()."
+    },
+    {
+      "pad": "src/ui/aanhakers.js",
+      "regels": 82,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/aanhaakpunten.test.mjs"
+      ],
+      "voorstel": "weg",
+      "reden": "Omweg voor parallel bouwen op een vaste kern; v2 krijgt een modulestructuur."
+    },
+    {
+      "pad": "src/handen/kaart.js",
+      "regels": 293,
+      "puur": true,
+      "imports": [
+        "src/handen/telling.js"
+      ],
+      "tests": [
+        "test/handen.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Pure handenkaart uit data."
+    },
+    {
+      "pad": "src/handen/telling.js",
+      "regels": 82,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/handen.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Telling van handelingenlogs, puur."
+    }
   ]
 }
