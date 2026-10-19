@@ -9,6 +9,7 @@ Eén keer vooraf:
 cd ~/Desktop/"1. Projects/Youtube mixer"      # of waar de repo staat
 git fetch origin claude/optimistic-carson-66kozr && git checkout claude/optimistic-carson-66kozr
 node v2/meting/kliksporen.mjs                  # de kliksporen voor stap 3 (3 × 35 MB, niet in git)
+node v2/meting/abx-maak.mjs                    # de ABX-paren voor stap 5 (8 × 0,75 MB, niet in git)
 node v2/meting/server.mjs                      # laat dit draaien: http://localhost:8790
 ```
 
@@ -24,8 +25,12 @@ als uitgangsvertraging aftrekt moet daar binnen één beeld onder liggen.
 ```
 node v2/meting/latentie.mjs 60                                           # M3, ~1 min
 node v2/meting/soak.mjs 30 --uit v2/meting/uitslag/soak-mac.json          # M5 + M6, 30 min; speelt geluid
+node v2/meting/soak.mjs 10 --nul --uit v2/meting/uitslag/soak-mac-nul.json  # nulmeting: een kale oscillator, zonder VarveDJ
+node v2/meting/faal.mjs > v2/meting/uitslag/faal-mac.txt                   # M7 + M8a–c (tijdelijke library van 357 MB in /tmp)
 ```
 Laat de Mac met rust tijdens de soak (geen andere zware apps). Wil je de echte grens: `soak.mjs 120`.
+Mist de nulmeting óók blokken, dan ligt het aan de Mac of de geluidskaart, niet aan VarveDJ (in de
+cloud: 1110 per uur zonder VarveDJ, 918 met).
 
 ## 3. Tegen djay — M13 (20 min)
 1. Loopback zoals bij 1. Open http://localhost:8790/meting/vergelijk.html.

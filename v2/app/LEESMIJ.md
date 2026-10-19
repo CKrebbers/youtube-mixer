@@ -34,7 +34,7 @@ v1 (poort 8777) en v2 (poort 8780) kunnen naast elkaar draaien; open ze niet teg
 ## Toetsen
 
 ```
-npm test                          # 105 tests: kern, scenario's, afspeelmotor, strip, mixer, limiter
+npm test                          # 152 tests: kern, scenario's, modeltest (10.000 reeksen), afspeelmotor, streamen, strip, mixer, limiter
 node tools/proef-sync.mjs         # echte Chrome (headless): klinkt een gesynct nummer op de tel?
 ```
 De proef laadt twee demonummers via het scherm, synct, zet de klok op 126 en jogt 1/16 tel, en
@@ -43,4 +43,4 @@ meetresolutie; de jog −29,5 ms waar −29,8 verwacht is).
 
 ## Nog niet in plak 1
 MIDI en de APC, sends, koptelefoon, stems, effecten, sampler, instrumenten, patronen, beeld,
-streamen (een nummer staat nu helemaal in het geheugen: ~11 MB per minuut), hotcues en loops.
+hotcues en loops. Wat plak 1 haalt en wat nog gemeten moet worden: `../meting/RAPPORT.md`.

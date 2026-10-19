@@ -1,0 +1,33 @@
+{
+  "b-128": {
+    "app": "v2",
+    "spoor": "b-128",
+    "seconden": 90,
+    "intern": true,
+    "klokBpm": 124.00000000000001,
+    "klikkenA": 166,
+    "klikkenB": 166,
+    "paren": 166,
+    "faseMs": -1.1,
+    "spreidingMs": 0.01,
+    "p95Ms": 0.227,
+    "maxMs": 0.23,
+    "driftMsPerMin": 0.002
+  },
+  "c-zwerft": {
+    "app": "v2",
+    "spoor": "c-zwerft",
+    "seconden": 90,
+    "intern": true,
+    "klokBpm": 124.00000000000001,
+    "klikkenA": 166,
+    "klikkenB": 166,
+    "paren": 166,
+    "faseMs": -0.99,
+    "spreidingMs": 0.176,
+    "p95Ms": 0.419,
+    "maxMs": 0.524,
+    "driftMsPerMin": 0.164
+  }
+}
+v2 intern: GESLAAGD (spreiding ≤ 1 ms, drift ≤ 0,5 ms/min, max ≤ 2 ms)

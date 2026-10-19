@@ -82,14 +82,19 @@ De afspeelmotor van één track. Weet niets van grid, klok of muziek: alleen seg
 const s = await Speler.maak(ctx)        // laadt de worklet hooguit één keer per context
 s.node                                  // AudioWorkletNode, 1 uitgang, 2 kanalen
 s.laad({ sr, kanalen, frames, paginas }) // paginas: Int16Array's van PAGINA frames, interleaved stereo
+s.laad({ sr, kanalen, frames, stroom })  // of STREAMEN: stroom.lees(i, signaal) -> Int16Array (audio/stroom.js)
+s.bijvullen(pins)                       // streamen bijhouden (de engine doet het bij elke tik, pins = [cue])
 s.plan(segmenten)                       // [{ T, P, R, speelt }]: vervangt alles vanaf segmenten[0].T
 s.leeg()                                // stil, bron weg
 s.vernietig()                           // 'stop' naar de worklet, dan los
 ```
 Segment `{ T, P, R, speelt }`: vanaf audiokloktijd T staat de plek op P seconden in het nummer en
 loopt hij R seconden nummer per seconde audioklok. `speelt: false` = stil. Een segment met een
-sprong in P vloeit 4 ms over; een segment dat precies aansluit (P = vorige plek op T) niet.
-Pagina's maken streamen later mogelijk zonder de kern te veranderen; plak 1 vult ze allemaal.
+sprong in P vloeit 10 ms over (equal-gain), start en stop 4 ms; een segment dat precies aansluit
+(P = vorige plek op T) niet (gemeten in `meting/klik.mjs`, zie de kop van `speler-kern.js`).
+Een nummer uit de library STREAMT (`audio/stroom.js`, budget M7): de pagina's die het plan nodig
+heeft (30 s vooruit, één terug, het cuepunt vast) komen met Range-verzoeken; een pagina die er nog
+niet is, is stilte. Demonummers en de tests laden alles in één keer.
 
 ### Strip en mixer (`audio/strip.js`, `audio/mixer.js`)
 ```
