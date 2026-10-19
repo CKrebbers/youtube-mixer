@@ -54,6 +54,15 @@ if (existsSync(tellingPad)) {
   };
 }
 
+// Clay's eigen woorden (WENSEN.md): elk punt `- **datum** — tekst`, over meer regels.
+const wensenPad = join(hier, 'WENSEN.md');
+const wensen = existsSync(wensenPad)
+  ? readFileSync(wensenPad, 'utf8').split(/\n(?=- \*\*)/).filter((s) => s.startsWith('- **')).map((s) => {
+    const m = s.match(/^- \*\*(.+?)\*\*\s*—\s*([\s\S]*)$/);
+    return m ? { datum: m[1], tekst: m[2].replace(/\s+/g, ' ').trim() } : null;
+  }).filter(Boolean)
+  : [];
+
 mkdirSync(dirname(uit), { recursive: true });
-writeFileSync(uit, JSON.stringify({ gemaakt: new Date().toISOString(), onderwerpen, telling }));
+writeFileSync(uit, JSON.stringify({ gemaakt: new Date().toISOString(), wensen, onderwerpen, telling }));
 console.log(`${onderwerpen.length} onderwerpen, ${ids.size} kaartjes -> ${uit}`);

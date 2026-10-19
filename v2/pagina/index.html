@@ -220,6 +220,11 @@ textarea { width: 100%; font: 14px/1.4 var(--f-tekst); color: var(--inkt); backg
     const delen = [];
     const ow = staat.data.onderwerpen.find((o) => o.onderwerp === staat.tab);
     if (ow) delen.push(tekenSamenvatting(ow));
+    else if (staat.data.wensen?.length) {
+      delen.push(el('section', { class: 'samenvatting' }, el('h2', {}, 'jouw woorden'),
+        el('p', { class: 'waarom' }, 'Deze gaan voor de oogst: een kaartje dat ermee botst, verliest.'),
+        el('ul', { class: 'tekst-md' }, staat.data.wensen.map((w) => el('li', {}, el('span', { class: 'mono' }, w.datum), ' — ', w.tekst)))));
+    }
     const lijst = (ow ? ow.kaartjes.map((k) => ({ ...k, onderwerp: ow.onderwerp })) : alleKaartjes())
       .filter(filter)
       .sort((a, b) => (GEWICHT[a.gewicht] ?? 3) - (GEWICHT[b.gewicht] ?? 3));
@@ -238,7 +243,7 @@ textarea { width: 100%; font: 14px/1.4 var(--f-tekst); color: var(--inkt); backg
       doos.append(el('details', { class: 'onderdelen' }, el('summary', {}, `Code die misschien zo mee kan (${o.onderdelen.length})`),
         el('div', { class: 'tabel' }, el('table', {},
           el('thead', {}, el('tr', {}, el('th', {}, 'bestand'), el('th', {}, 'regels'), el('th', {}, 'puur'), el('th', {}, 'voorstel'), el('th', {}, 'waarom'))),
-          el('tbody', {}, o.onderdelen.map((d) => el('tr', {}, el('td', { class: 'mono' }, d.pad), el('td', { class: 'num' }, d.regels ?? ''), el('td', {}, d.puur ? 'ja' : 'nee'), el('td', {}, d.voorstel), el('td', {}, d.reden ?? '')))))))));
+          el('tbody', {}, o.onderdelen.map((d) => el('tr', {}, el('td', { class: 'mono' }, d.pad), el('td', { class: 'num' }, d.regels ?? ''), el('td', {}, d.puur ? 'ja' : 'nee'), el('td', {}, d.voorstel), el('td', {}, d.reden ?? ''))))))));
     }
     return doos;
   }
