@@ -1,0 +1,2227 @@
+{
+  "onderwerp": "muziekkennis",
+  "samenvatting": "Volgens Clay (19 okt: \"ritme en bpm en een soort grid\") is ritme/bpm/grid de ruggengraat van v2; daarom staan alle kaartjes over tempo, grid, maat en fase op kern, en vraagt kaartje -082 wat hij met \"een soort grid\" bedoelt. De kern van wat v1 over een nummer weet is drie kaarten in TRACKTIJD van de plaat (tempokaart met maat-anker per stuk, toonsoortkaart met stemming per stuk, sectiekaart op de maten van het grid), plus één afgeleide laag 'wat je hoort' (positie min uitgangsvertraging, × rate) en één maatgever met hysterese waar sync, starten op de maat, effecten, sampler en beeld allemaal aan hangen. Het grootste inzicht van v1: 'zeker' moet een METING zijn (tellen van Beat This! tegen het grid, een tweede mening ernaast, twijfel met een reden) en een onzeker grid gebruiken is erger dan weigeren; elke correctie met de hand telt meteen als zeker en wordt nooit door de analyse overschreven. De pure rekenmodules (beatgrid.js, tellen.js, toonsoort.js, secties.js, hoorbaar.js, peaks.js, detect.js, toon.js, server/secties.js) zijn goed getest en kunnen vrijwel ongewijzigd mee, net als de benchmark met bekende antwoorden. Wat schuurt is de laag eromheen: zes losse versienummers, acht cachebestanden/kolommen en vier eigen 'moet opnieuw'-regels, een muteerbaar grid dat bij elke bewerking met de hand een versie moet ophogen, en dubbele constanten en code tussen browser, server en meetgereedschap. In v2 zou ik de analyse als één afhankelijkheidsgraaf bouwen (audio → onset/laag/tellen → grid → secties, elk artefact met versie en invoer-vingerafdruk), het grid onveranderlijk maken (een bewerking geeft een nieuw grid), en één 'muzikale positie'-dienst aanbieden (tel, maat, sectie, toon die je hoort) in plaats van dat elk subsysteem zelf marges en loop-terugvouwen doet. Open voor Clay: blijft de oude onset-analyse (2052 regels) als tweede mening, het DJ-tempobereik 88–180, en de regel welke sprongen op twijfel over de \"1\" moeten weigeren.",
+  "kaartjes": [
+    {
+      "id": "muziekkennis-001",
+      "titel": "Het beatgrid staat in tracktijd, niet in afspeeltijd",
+      "soort": "regel",
+      "wat": "Alle tijden in grid, toonsoort- en sectiekaart zijn seconden in de plaat. Draait een deck op 1,05×, dan verschuift het grid niet; de hoorbare bpm is grid.bpmAt(positie) × rate. Daardoor hoort een grid bij het NUMMER en klopt hij op elk deck en elk tempo.",
+      "waarom": "Eén keer uitmeten moet voorgoed kloppen, op welke track je het nummer ook laadt (schema v2, grid per link).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: 'Het beatgrid staat in TRACKTIJD'"
+        },
+        {
+          "pad": "src/engine/beatgrid.js",
+          "waar": "kop, regel 31-34"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js",
+        "src/engine/deck.js (get bpm, regel 1100)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Fundament van alles wat over een nummer gaat; nooit een probleem geweest."
+    },
+    {
+      "id": "muziekkennis-002",
+      "titel": "Tempokaart: een lijst stukken met doorgenummerde tellen",
+      "soort": "contract",
+      "wat": "Een grid is { stukken: [{ van, bpm, anker, zekerheid?, maat?, twijfel?, octaaf?, ok? }], beatsPerBar, slot, bron, methode, versie }. Een stuk geldt van `van` tot het volgende (het eerste ook ervóór); tellen liggen op anker + k·60/bpm en worden over de stukken heen doorgenummerd, zodat beatAt/timeOf monotoon en elkaars inverse zijn. Op een grens één overgangstel; korter dan een halve tel vervalt de laatste tel van het vorige stuk.",
+      "waarom": "Eén bpm + één anker paste op geen van de 4 gemeten nummers in Clay's library (album met tempo's 140/156/150/163, demo zonder klik ±1%, rubato, ambient zonder puls). Rekordbox, Traktor, Engine DJ en Mixxx doen het ook met markers.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "'Gemeten op Clay's library', 'Hoe anderen het doen', plan B"
+        },
+        {
+          "pad": "src/engine/beatgrid.js",
+          "waar": "kop regel 1-38, constructor regel 96-117"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Bewezen vorm, ook bij albums en live opnames; de bewerkingen 'vanaf hier' raken alleen het stuk rond de positie."
+    },
+    {
+      "id": "muziekkennis-003",
+      "titel": "Reken in tellen via bpmAt/beatLengthAt, nooit met grid.bpm",
+      "soort": "valkuil",
+      "wat": "grid.bpm en grid.beatLength geven alleen het EERSTE stuk. Alles wat een tempo of tellengte nodig heeft moet bpmAt(pos)/beatLengthAt(pos) of timeOf/beatAt gebruiken; beatjump rekent met verschuif(t, tellen) zodat de fase ook over een stukgrens exact blijft.",
+      "waarom": "Met een tempokaart verschilt het tempo per stuk; sync rekent daarom op 'de plek waar beide NU zijn'.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Beatgrid, eerste bullet"
+        },
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "sync(), regel ~832"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js (verschuif, regel 352)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "In v2 grid.bpm/beatLength niet aanbieden (of alleen als bpmAt(0)), dan kan de fout niet meer gemaakt worden."
+    },
+    {
+      "id": "muziekkennis-004",
+      "titel": "Maat-anker per stuk: elk stuk houdt zijn eigen \"1\"",
+      "soort": "contract",
+      "wat": "Elk stuk heeft `maat` = tracktijd van een tel 1 op zijn eigen rooster. Zonder `maat` (oude JSON, analyse) telt hij door vanaf het vorige stuk; daarna houdt elk stuk zijn \"1\", ook als je een ander stuk bewerkt. Met maten reken je ALTIJD via barPhase/telInMaat/isMaatbegin/beatsBetween/volgendeVeelvoud, nooit beat % beatsPerBar.",
+      "waarom": "Vroeger telden de maten door over de hele kaart: na een tempowissel (volgend nummer op een album) viel de \"1\" op een willekeurige tel, en een andere bpm vooraan verschoof hem tot achteraan.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "Restpunten §3 Maat-anker per stuk"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Beatgrid, MAAT-ANKER"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js (barPhase, telInMaat, volgendeVeelvoud)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Secties, starten op de maat, knipperen op de \"1\" en de sampler leunen erop."
+    },
+    {
+      "id": "muziekkennis-005",
+      "titel": "×2 houdt de \"1\", ½ houdt de \"1\" als tel: elkaars inverse",
+      "soort": "besluit",
+      "wat": "Verdubbelen houdt de \"1\" waar hij was; halveren begint het nieuwe rooster op de \"1\" (tellen 1 en 3 blijven). Zo geven ×2 en ½ in beide volgordes het oude grid terug. Tempo bijstellen (encoder, tap, verfijning) houdt de tel bij de positie op dezelfde plek in de maat.",
+      "waarom": "½ liet eerst de tel het dichtst bij de speelkop liggen, ook op tel 2 of 4; dan schoof de \"1\" een tel op en gaf ×2 hem niet terug (Clay, VRAGEN J26, 26 sep). Test faalt op de oude code.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "Restpunten §3, 'Gebouwd 26 sep'"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js (_schaal, regel 476)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Klein, juist, getest."
+    },
+    {
+      "id": "muziekkennis-006",
+      "titel": "Grid, toonsoort en secties horen bij het nummer, met bron en slot",
+      "soort": "contract",
+      "wat": "Elke kaart hangt aan de link (tracks.id), met `bron` ('auto' = voorstel van de analyse, 'hand' = daarna bewerkt) en `slot` (met de hand bevestigd). Een automatisch voorstel overschrijft NOOIT een slot of 'hand'; alleen ↻ in de library doet dat, over een slot pas met een tweede klik.",
+      "waarom": "Clay corrigeert één keer; de achtergrondanalyse mag dat werk nooit wissen. Elk slot is ook een meetpunt (grondwaarheid voor herijken).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Beatgrid 'Bij binnenhalen automatisch analyseGrid'; Toonsoort SERVER"
+        },
+        {
+          "pad": "server/library.js",
+          "waar": "autoGridWeigert regel 323, moetAnalyse regel 333"
+        }
+      ],
+      "code": [
+        "server/library.js",
+        "server/index.js (wilTellenGrid regel 611)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Vertrouwen in de library staat of valt hiermee."
+    },
+    {
+      "id": "muziekkennis-007",
+      "titel": "Muteerbaar grid: elke bewerking moet zelf een versie ophogen",
+      "soort": "pijn",
+      "wat": "Beatgrid wordt in-place bewerkt; daarna moet de aanroeper deck.gridGewijzigd()/setGrid() roepen (gridVersie++, bron:'hand', herankeren). Vergeet je dat, dan tekent de golfvorm oude lijnen en lopen effecten op het oude grid. De snapshot deelt sinds AR7 een diep bevroren kopie per gridVersie, en ↶ moest apart leren 'PRECIES terug' te zetten.",
+      "waarom": "engine.test heeft een aparte toets 'gridVersie volgt elke gridwijziging'; AR7 (16 okt) was nodig omdat het grid als tekst 8-17 kB per beeld kostte.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Audio-gezondheid: gridVersie, AR7"
+        },
+        {
+          "pad": "src/engine/deck.js",
+          "waar": "setGrid/gridGewijzigd regel 994-1013, gridTerug regel 1062"
+        }
+      ],
+      "code": [
+        "src/engine/deck.js",
+        "src/engine/beatgrid.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 een onveranderlijk grid: elke bewerking geeft een nieuw object; identiteit = versie, undo = de vorige waarde bewaren, geen handmatige versieteller."
+    },
+    {
+      "id": "muziekkennis-008",
+      "titel": "Zes versienummers, acht caches, vier eigen 'moet opnieuw'-regels",
+      "soort": "pijn",
+      "wat": "Analyse-artefacten staan los: peaks.bin, onset.bin, tellen.json, tweede-mening.json, laag.bin/laag.json, grid_json, toon_json, secties_json; versies TELLEN_VERSIE, kaart-VERSIE (3), OUDE_ANALYSE_VERSIE, LAAG_VERSIE, TOON_VERSIE, SECTIE_VERSIE; en eigen regels moetAnalyse, moetToonAnalyse, moetSecties (met FNV-vingerafdruk van het grid) en wilTellenGrid. Nummers zonder tellen.json houden een oud grid zonder versie (GA4).",
+      "waarom": "Elke uitbreiding kreeg zijn eigen bestand en regel; de secties weten pas bij het volgende laden dat het grid veranderde, en een oude analyse zonder versie wordt nooit opnieuw gedaan.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§12 slot ('VERSIE van de tellen-kaart'), §14 'De server'"
+        },
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§4"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "GA4"
+        }
+      ],
+      "code": [
+        "server/analyze.js",
+        "server/tellen.js",
+        "server/library.js",
+        "server/index.js",
+        "server/secties.js (gridSleutel)"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "v2: één analysegraaf (audio → onset/laag/tellen → grid → secties) waarin elk artefact zijn versie en de vingerafdruk van zijn invoer draagt; 'verouderd' wordt dan één generieke regel."
+    },
+    {
+      "id": "muziekkennis-009",
+      "titel": "Dubbele constanten en code tussen browser, server en meetgereedschap",
+      "soort": "pijn",
+      "wat": "ZEKER_VANAF/GEEN_PULS staan in beatgrid.js én analyze.js (een test controleert dat ze gelijk zijn); SPELLING, camelotGetal en leesToonsoort in src/engine/toonsoort.js én server/toon.js; server/toon.js is een kopie van tools/toonsoort/toon.mjs (toon.test legt ze bit voor bit naast elkaar). fft woont in detect.js (2052 regels beat) en wordt door toon.js en secties.js geïmporteerd.",
+      "waarom": "Gegroeid uit 'eerst meten in tools/, dan overnemen in server/'; elke kopie vraagt een test die de kopieën gelijk houdt.",
+      "bron": [
+        {
+          "pad": "src/engine/beatgrid.js",
+          "waar": "regel 47-54"
+        },
+        {
+          "pad": "server/analyze.js",
+          "waar": "regel 160-163"
+        },
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§13 'Waar'"
+        }
+      ],
+      "code": [
+        "server/toon.js",
+        "src/engine/toonsoort.js",
+        "tools/toonsoort/toon.mjs",
+        "server/detect.js (fft)"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 één bron per formule (gedeelde pure module voor browser en server), fft als eigen module, meetgereedschap importeert de server-code."
+    },
+    {
+      "id": "muziekkennis-010",
+      "titel": "Beat This! is de telbron: lokaal model, in stukken, met zwaartepunt",
+      "soort": "besluit",
+      "wat": "Na elke ingest en op de achtergrond zoekt Beat This! (CPJKU, MIT, model 81 MB lokaal, Python-venv) tellen en downbeats → tellen.json. In stukken van 4 minuten met 5 s context; het zwaartepunt van de piek over ±2 frames van 20 ms. Het grid wordt daarna in JS uit die tellen gemaakt (gridUitTellen). Ontbreekt het model, dan het grid van de oude analyse.",
+      "waarom": "Een album van 31 min in één keer liep vol op MPS (17,9 GB). Zwaartepunt: mediane afwijking ~7 → ~5 ms. Kost ~1,5 s per minuut op de GPU; stems en tellen om de beurt (GpuSlot): tegelijk duurde 2,8 min muziek 53 s.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11 'Hoe het werkt', 'Installeren'"
+        },
+        {
+          "pad": "server/tellen/tellen.py",
+          "waar": "kop regel 1-33"
+        }
+      ],
+      "code": [
+        "server/tellen/tellen.py",
+        "server/tellen.js",
+        "src/engine/tellen.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Hoort tellen én de \"1\" waar de oude analyse geen downbeat kende; MIT en lokaal past bij de draagbare set."
+    },
+    {
+      "id": "muziekkennis-011",
+      "titel": "Beat This! tegen het oude grid op 11 nummers van Clay",
+      "soort": "meting",
+      "wat": "Loving arms: oud grid 86% van de tellen binnen 50 ms maar de \"1\" in 1%, Beat This! \"1\" 99%. Ciel, het album, Let it all go: oud ~154/140-156/170, Beat This! 77/75/75 (een octaaf). Jungle-mix op slot: 90% zeker, 92% raak. No Surprises: oud 17% eens, Beat This! 73% zeker. zoned out: 94 tellen in 42 min = eerlijk 'geen puls'.",
+      "waarom": "Basis voor de keuze van §11 (6 okt) en voor het DJ-tempo (de halve tel).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11 'Wat er gemeten is'"
+        }
+      ],
+      "code": [],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Het enige echte-muziekbewijs voor de telbron; meenemen als ijkpunt."
+    },
+    {
+      "id": "muziekkennis-012",
+      "titel": "Houdt v2 de oude onset-analyse (detect.js) als tweede mening?",
+      "soort": "open",
+      "wat": "De oude analyse (onset-envelope, tempocurve, segmenteer, tweedeKans, stukPast, break-regel, blokDrift; 2052 regels) is sinds 6 okt alleen nog terugval zonder model en de tweede mening in `vergelijk`. Ze kost 0,7-4 s per nummer van 3 min en bevestigt o.a. het halveren (180-300 bpm).",
+      "waarom": "Zonder haar is 'zeker' alleen Beat This! tegen zichzelf; met haar draagt v2 de grootste en meest getweakte module mee. Het halveren rust op haar bevestiging.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11 punt 3, §12 punt 7 en 9"
+        },
+        {
+          "pad": "server/detect.js",
+          "waar": "analyseerGrid regel 1633"
+        }
+      ],
+      "code": [
+        "server/detect.js",
+        "server/analyze.js (maakGrid)"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Clay kiest: complexiteit tegen een onafhankelijke tweede bron. Advies: meenemen als ongewijzigde module, pas weg als de echte Beat This!-benchmark (GA3) laat zien dat ze niets toevoegt."
+    },
+    {
+      "id": "muziekkennis-013",
+      "titel": "Zeker = gemeten: tellen binnen 25 ms, blokken van 16, drift > 12 ms",
+      "soort": "contract",
+      "wat": "meetGrid geeft per stuk het deel van de gevonden tellen binnen RAAK (25 ms) van een gridlijn en de grootste mediaan van een blok van VENSTER (16) tellen; > DRIFT (12 ms) = systematisch naast. Een stuk wordt pas zeker als ook een tweede mening het eens is. Live: mediaan van de laatste 16 tellen vóór de speelkop > 15 ms (LIVE_DRIFT) = '⚠ N ms'.",
+      "waarom": "Clay (6 okt): 'ik wil er eigenlijk altijd zeker van zijn dat het klopt'. Eén tel van het netwerk zegt weinig (95% binnen 20-30 ms), een lijn door veel tellen ligt op een paar ms; vinylmix-blokken binnen ±5 ms, uitschieters 12.",
+      "bron": [
+        {
+          "pad": "src/engine/tellen.js",
+          "waar": "kop en constanten regel 1-63"
+        },
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11 punt 3"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js (meetGrid, afwijkingBij, oordeelStuk)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het centrale inzicht van het beatgridwerk: zekerheid als meting met een reden."
+    },
+    {
+      "id": "muziekkennis-014",
+      "titel": "Twijfel heeft altijd een reden, en het scherm toont hem",
+      "soort": "contract",
+      "wat": "TWIJFELS = geen puls, rubato, drift, los, maat, oneens, tel. Naast de bpm: ✓ zeker, 🔒 slot, ? controleer (reden in tooltip), – geen puls, ⚠ N ms. Onder de golfvorm een zekerheidsstrook (zeker vol, onzeker gedimd, geen puls rood gestreept); in de zoom de tellen van Beat This! als groene streepjes en de klappen als onset-streepjes.",
+      "waarom": "Bijna geen DJ-app toont onzekerheid (alleen VirtualDJ); zonder reden weet je niet wat je moet corrigeren.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "'Hoe anderen het doen'; §11 'Op het scherm'"
+        },
+        {
+          "pad": "src/engine/beatgrid.js",
+          "waar": "TWIJFELS regel 89"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js (TWIJFEL_TEKST, oordeelBij)",
+        "src/ui/grid-strook.js",
+        "src/ui/waveform.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Maakt de meting bruikbaar in de hand."
+    },
+    {
+      "id": "muziekkennis-015",
+      "titel": "Drempels van de oude zekerheid: 0,65 en 0,15 in de gaten van de verdeling",
+      "soort": "meting",
+      "wat": "Op Clay's library vielen de zekerheden van de oude analyse in drie groepen: 0-0,06 (geen puls), 0,20-0,62 (puls maar één tempo houdt niet: rubato, demo ±1%, octaaffout), 0,69-0,94 (vaste klik). ZEKER_VANAF 0,65, GEEN_PULS 0,15. Het bovenste gat is smal, dus een randgeval kan per versie wisselen: dan liever onzeker.",
+      "waarom": "Een melding 'tik eerst' is beter dan een sync die na zestien maten een tel wegloopt.",
+      "bron": [
+        {
+          "pad": "server/analyze.js",
+          "waar": "regel 145-163"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Beatgrid 'Zeker ≥ 0,65'"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js (soortZekerheid)",
+        "server/analyze.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Alleen nodig zolang de oude analyse meedoet (zie -012)."
+    },
+    {
+      "id": "muziekkennis-016",
+      "titel": "Op een onzeker grid weigeren sync en beat-loops, met een melding",
+      "soort": "regel",
+      "wat": "Een onzeker stuk (niet op slot) mag niet gebruikt worden voor sync, beat-loops, beatjump, quantize, starten op de maat of secties; de action weigert en zegt waarom. Op slot of met het oor goedgekeurd (`ok`) is het hele grid zeker.",
+      "waarom": "'Een onzeker grid is erger dan geen grid: de sync lijkt te lukken en loopt na een paar maten een tel weg' (engine.js, sync()).",
+      "bron": [
+        {
+          "pad": "src/engine/beatgrid.js",
+          "waar": "zekerBij/syncBij regel 238-258"
+        },
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "sync(), regel ~820"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js",
+        "src/engine/deck.js (gridZekerHier, gridSyncHier)",
+        "src/engine/engine.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Kern van 'nooit stil fout'."
+    },
+    {
+      "id": "muziekkennis-017",
+      "titel": "Twijfel over de \"1\": sync weigert, starten op de maat niet",
+      "soort": "open",
+      "wat": "Sinds AR3 weigeren sync en beat-loops bij twijfel 'maat' (syncBij), maar sync zet alleen de fase binnen een halve TEL, niet de maat. Starten op de maat, secties en beatjump rekenen juist op de \"1\" maar kijken alleen naar zekerBij. De regel staat dus precies omgekeerd aan wat de maat raakt.",
+      "waarom": "AR3 werd 16 okt gebouwd tegen het advies 'zo laten' in (Clay: 'alles bouwen'); de code van sync() (fase ±½ tel) en startOpDeMaat() (volgende maatbegin, alleen gridZekerHier) laat het verschil zien.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "AR3"
+        },
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "startOpDeMaat regel ~596, sync regel ~820-860"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js (syncBij)",
+        "src/engine/engine.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Clay moet kiezen welke handelingen op de \"1\" mogen weigeren; voorstel: alleen wat de maat gebruikt (starten op de maat, secties, loops van hele maten), sync niet."
+    },
+    {
+      "id": "muziekkennis-018",
+      "titel": "Het DJ-tempo: elk automatisch grid in 88-180 bpm",
+      "soort": "besluit",
+      "wat": "Beat This! kiest zelf zijn octaaf (77 waar Clay 153 tikt). dansOctaven verdubbelt elk stuk onder 88 (DANS_MIN) tot in 88-180, dicht bij het tempo van het nummer; een wals niet. Boven 180 blijft het tempo staan; halveren alleen als het moet (> 300) of bevestigd is. ×2/½ in de grid-modus is met de hand en blijft staan.",
+      "waarom": "Benchmark 126 gewone gevallen: op het DJ-tempo 52% → 95%. De prijs: wat echt op 70-87 telt (reggae, downtempo, trip-hop) krijgt het dubbele; secties, frasegrenzen, beatjump en loops in tellen zijn dan in seconden half zo lang.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§12 punt 1"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "GA1"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js (dansOctaven, DANS_MIN/DANS_MAX regel 418-451)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "GA1 staat open: vast bereik, of per krat/categorie instelbaar (pijler 4, zelf instellen)."
+    },
+    {
+      "id": "muziekkennis-019",
+      "titel": "Halveren is een gok: eerste versie werd vals zeker op 16 van 19 nummers",
+      "soort": "valkuil",
+      "wat": "Telt het netwerk het dubbele, dan liggen zijn tellen om en om op tel en halve tel: welke de tel is zeggen ze niet. Kiezen met de downbeats gaf, met downbeats op de 'en', vals zeker over het hele nummer, en `vergelijk` zag het niet. Nu: boven 300 gehalveerd = onzeker (twijfel 'tel') tot grid-tegen-grid en de downbeats het bevestigen; 180-300 alleen een voorstel `halveer` dat `vergelijk` uitvoert als de oude analyse ZEKER het halve tempo hoort.",
+      "waarom": "Review 14 okt: tellen-route vals zeker 1 → 20 (eerste versie) → 0. Echte 186/192 die Beat This! goed telt verloor anders zijn zekere grid (186,0 z0,96 → 93,0 z0,60).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§12 punt 7 en 9, tabel 'Gemeten'"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js (halvering, bevestigHalvering, halveer, voerHalverenUit)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Duur gevonden; bevestiging door een tweede bron is de les, ongeacht de implementatie."
+    },
+    {
+      "id": "muziekkennis-020",
+      "titel": "Dubbel tempo dat niemand bevestigt blijft zeker op het dubbele",
+      "soort": "grens",
+      "wat": "Telt Beat This! onder 300 het dubbele en bevestigt niets het, dan blijft het grid zeker op het dubbele tempo (alle lijnen op een tel, geen vals zeker), maar sync tegen een nummer op 124 speelt dan op halve snelheid. De 'blinde combinatie' (dubbel + downbeats op de 'en' + oude analyse ook op de offbeat) geeft zeker en een halve tel naast.",
+      "waarom": "Op Clay's muziek telde Beat This! nooit het dubbele (77/75/75 = de halve tel); het geval komt alleen uit de nep-variant 'dubbel'.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§12 'Wat niet opgelost is'"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "GA5"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "GA5: liever een melding 'dubbel tempo?' als voorstel; advies was 'de melding, als het voorkomt'."
+    },
+    {
+      "id": "muziekkennis-021",
+      "titel": "Tweede mening: octaaf is eens, alleen een ander tempo of vaste andere fase is oneens",
+      "soort": "contract",
+      "wat": "`vergelijk(kaart, beats, ander)` legt het tellen-grid naast de oude analyse. Half of dubbel tempo telt als eens (octaaf genoteerd). Oneens alleen bij een ánder tempo of een stabiele andere fase (de offbeat). Grover is geen tegenspraak. De uitkomst van de oude analyse wordt bewaard (tweede-mening.json, OUDE_ANALYSE_VERSIE).",
+      "waarom": "De oude analyse lag op Loving arms 35-60 ms naast een band zonder klik; dat is ruis, geen oneens. Bewaren: een nieuwe kaartversie kostte 3,5/3,8/8,1 s voor drie nummers, daarna 0,1 s.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11 punt 3; §12 slot over de kosten"
+        },
+        {
+          "pad": "src/engine/tellen.js",
+          "waar": "vergelijk regel 812"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js (vergelijk)",
+        "server/tellen.js (leesTweede/bewaarTweede)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Precieze definitie van 'eens' voorkomt valse twijfel."
+    },
+    {
+      "id": "muziekkennis-022",
+      "titel": "Een tweede mening over de \"1\" uit de lage band (onder 150 Hz)",
+      "soort": "besluit",
+      "wat": "maatMening meet per tel van de maat wat er in de energie onder 150 Hz (per 4 ms, per sample gefilterd) bij komt. Is de \"1\" zwakker dan 0,6 × de sterkste tel, steekt die tel boven 2 × de vloer uit en zijn er ≥ 8 maten, dan twijfel 'maat'. Nooit een andere \"1\" kiezen; de zekerheid blijft. laag.bin 180 kB per 3 min; 0,45 s per 3 min, 4-5 s per uur.",
+      "waarom": "Een consequent verkeerde \"1\" van Beat This! zag niets. Benchmark 168 gevallen: \"1\" fout zonder twijfel bij eenfout 99% → 50%, dubbel-laat 70 → 1%; een GOEDE \"1\" onterecht met twijfel: 0 van 168.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§14 'Een tweede mening over de 1'"
+        }
+      ],
+      "code": [
+        "src/engine/tellen.js (maatMening, MAAT_LAAG regel 952-978)",
+        "server/detect.js (laagEnvelope regel 304)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Goedkoop, gemeten zonder valse alarmen."
+    },
+    {
+      "id": "muziekkennis-023",
+      "titel": "FFT-flux per frame is niet bruikbaar voor de maat: aliasing",
+      "soort": "valkuil",
+      "wat": "De eerste maatMening mat een FFT-flux in frames van 11,6 ms. De plek van de aanslag tussen twee frames schuift per tel op; op 122,3 bpm (42,25 frames per tel, één ronde per maat) lag de \"1\" van vier op de vloer 30-45% zwakker dan tel 4. Energie per sample opgeteld hangt daar niet van af.",
+      "waarom": "Gevonden bij de bouw van spoor B, 15 okt.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§14, alinea 'De eerste versie mat een FFT-flux'"
+        }
+      ],
+      "code": [
+        "server/detect.js (laagEnvelope)"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Algemene les voor elke maat- of tel-sterktemeting."
+    },
+    {
+      "id": "muziekkennis-024",
+      "titel": "Vier op de vloer: de lage band zegt niets over de \"1\"",
+      "soort": "open",
+      "wat": "Bij house en techno is elke tel een kick, dus een \"1\" die een tel naast staat krijgt geen '?'. Gemarkeerd worden rock, shuffle, wals, reggae, jungle, half-time, opmaat; niet vier op de vloer en de live band. Er is bewust geen bas-toon- of crash-detector bij gebouwd.",
+      "waarom": "Samen met AR3 zou een gok sync blokkeren. Eerst kijken of het voorkomt (tools/beatmeting/vloer.mjs, AR4).",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "AR4"
+        },
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§14 slot"
+        }
+      ],
+      "code": [
+        "tools/beatmeting/vloer.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "Hangt af van Clay's meting op eigen house/techno."
+    },
+    {
+      "id": "muziekkennis-025",
+      "titel": "Benchmark met bekende antwoorden: 21 synthetische nummers × 8 soorten fouten",
+      "soort": "contract",
+      "wat": "tools/beatmeting/synth/: nummers.mjs (21 nummers met vast zaad: vast tempo 72-192, shuffle, break, intro, mix 124→131, band zonder klik, versnelling, wals, reggae, jungle, half-time, ambient, opmaat, band op 154), nep-beatthis.mjs (bt, ruis, half, dubbel, wissel, eenfout, dubbel-laat, dubbel-kaal), scoor.mjs (dekking, tempo, DJ-tempo, fase, naast, de \"1\", vals zeker = > 2% en ≥ 2 s), bench.mjs (beide analyses zoals de server, vóór/na met --code en --vergelijk).",
+      "waarom": "Op Clay's muziek is het echte antwoord onbekend; zonder benchmark was 'vals zeker' niet te tellen. test/beatbench.test.mjs eist nergens vals zeker.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§12 'De benchmark'"
+        },
+        {
+          "pad": "tools/beatmeting/LEESMIJ.md",
+          "waar": "'Wat leeft'"
+        }
+      ],
+      "code": [
+        "tools/beatmeting/synth/",
+        "test/beatbench.test.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het vangnet voor elke analysewijziging; v2 moet vanaf dag één tegen dezelfde set gemeten worden."
+    },
+    {
+      "id": "muziekkennis-026",
+      "titel": "Benchmarkcijfers vóór/na het DJ-tempo en de tweede mening",
+      "soort": "meting",
+      "wat": "Tellen-route, 168 gevallen: vals zeker 1 → 0. In de 126 gewone gevallen: dekking 91 → 96%, het echte octaaf 58 → 85%, DJ-tempo 52 → 95%, > 0,1 tel naast 5 → 0%, de \"1\" goed 80 → 83%. Oude analyse: DJ-tempo 76 → 82%; klik van 8 min op 128: 128,024 (37 ms te laat) → 128,0001 (7 ms).",
+      "waarom": "Nulmeting voor v2 (vóór = 7debab6, na = review ronde 1).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§12 tabel 'Gemeten'"
+        }
+      ],
+      "code": [
+        "tools/beatmeting/synth/bench.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "v2 moet minstens dit halen."
+    },
+    {
+      "id": "muziekkennis-027",
+      "titel": "Het echte Beat This! is nooit op de benchmark gedraaid",
+      "soort": "grens",
+      "wat": "Alle benchmarkwinst van het DJ-tempo, halveren en snappen is op nep-tellen gemeten (σ 6 ms, geen vaste afwijking per instrument, fase 0,1-0,4 ms: te mooi). Het checkpoint staat alleen op cloud.cp.jku.at, dat de container niet bereikt. `bench.mjs --beatthis <python>` en `ar2.mjs --meet` staan klaar voor de Mac.",
+      "waarom": "GA3 en AR2 staan open; op echte muziek ligt het netwerk ~5 ms mediaan naast.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§14 'Het echte Beat This! op de benchmark (GA3)'"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "GA3, AR2"
+        }
+      ],
+      "code": [
+        "tools/beatmeting/synth/bench.mjs",
+        "tools/beatmeting/ar2.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Clay moet de meting op zijn Mac draaien vóór v2 de drempels overneemt."
+    },
+    {
+      "id": "muziekkennis-028",
+      "titel": "Snappen: eerst de tel van Beat This!, dan de klap, dan de positie",
+      "soort": "besluit",
+      "wat": "'Tel 1 hier', 'tellen hier', vast en de klik in de golfvorm snappen via snapNaarTel(tellen, onsets, t): de tel binnen 30 ms (SNAP_VENSTER), anders de klap, anders de positie zelf. Vast telt op de tellen én klappen samen (klappenEnTellen), anders valt bij een netwerk op het halve tempo de helft naast.",
+      "waarom": "12 505 drukken ±25 ms naast: klap |p50| 10,4 ms, > 10 ms 53%; tel 2,3 ms, 6%. Omslagpunt: een netwerk dat ~10 ms scheef ligt (dan 9,9 ms, 48%).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§14 'Snappen naar de tel'"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Beatgrid SNAPPEN"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js (snapNaarTel regel 729, klappenEnTellen regel 745)",
+        "tools/beatmeting/synth/snap.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Eén helper voor elke plek die snapt; nooit snapNaarOnset alleen."
+    },
+    {
+      "id": "muziekkennis-029",
+      "titel": "Klappen (onsets) zijn ~9 ms scheef: goed om te snappen, niet voor de fase",
+      "soort": "meting",
+      "wat": "deck.onsets = pieken van de onset-envelope (11025 Hz, win 1024, hop 128) met één vaste ijking PIEK_GEIJKT 68,5 ms (p10-p90 53-76). Een scherpe klik valt ~15 ms te vroeg, een zachte aanzet ~10 ms te laat; synthetisch gemiddeld −8,9 ms, op Clay's fragmenten −6 tot −12 ms. Het telprofiel van de tempo-analyse heeft een andere vertraging (61 ms).",
+      "waarom": "Zonder correctie snapte 'tel 1 hier' 68 ms te vroeg; analyze.test meet de ijking opnieuw.",
+      "bron": [
+        {
+          "pad": "server/analyze.js",
+          "waar": "onsetPieken/piekVertraging regel 470-525"
+        },
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§2, §14"
+        }
+      ],
+      "code": [
+        "server/analyze.js",
+        "server/detect.js (onsetVertraging)"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Twee verschillende vertragingen voor 'piek' en 'profiel' zijn een bekende val."
+    },
+    {
+      "id": "muziekkennis-030",
+      "titel": "Verfijnen na 'tel 1 hier' gemeten en NIET gebouwd",
+      "soort": "grens",
+      "wat": "Na 'tel 1 hier' de server laten verfijnen (voorflank op 24 s audio) was synthetisch duidelijk beter (|p90| 21 → 3,5 ms) maar op 6 fragmenten van Clay niet: de voorflank lukte op 2 van 6, en op 'let it all go' lag hij steeds 20 ms vóór de grove fase (vermoedelijk een ander instrument vóór de kick).",
+      "waarom": "Synthetisch materiaal voorspelde hier verkeerd; zonder voorflank neemt de route de grove fase (±20 ms), niet beter dan snappen.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "Restpunten §2"
+        }
+      ],
+      "code": [
+        "tools/beatmeting/rest/tel1*.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "weg",
+      "reden": "Niet bouwen tenzij een meting per instrument uitwijst wie gelijk heeft."
+    },
+    {
+      "id": "muziekkennis-031",
+      "titel": "Tap: rechte lijn door de tikken, fase van de tap als voorwaarde",
+      "soort": "besluit",
+      "wat": "TapTempo legt een rechte lijn door de tikken (mediaan, overgeslagen tellen herkend, uitschieters > ¼ tel eruit), in kloktijd én tracktijd; de server verfijnt alleen ±25% rond de getikte fase. Zonder puls (score niet boven een geschudde nul): zeker:false en de tap blijft staan.",
+      "waarom": "Simulatie 40 proeven × 8 plekken: 4 tikken goed 53 → 72%, offbeat 12 → 0%; 8 tikken 74 → 87%. Vroeger maakte verfijnen een tap zonder puls slechter (13-25 van 40 op de offbeat).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "'Gemeten op Clay's library', tap-simulatie; plan A"
+        },
+        {
+          "pad": "src/engine/beatgrid.js",
+          "waar": "TapTempo regel 780, rechteLijn regel 839"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js",
+        "server/detect.js (fitTaps, verfijnTap)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Gemeten verbetering, puur."
+    },
+    {
+      "id": "muziekkennis-032",
+      "titel": "Vier tikken zetten het hele grid op slot",
+      "soort": "pijn",
+      "wat": "Een tap van ≥ 4 tikken zet het hele grid op slot, ook de stukken waar je niet tikte. Daarna komt geen automatisch voorstel er meer overheen, ook niet waar het beter was.",
+      "waarom": "Bekend sinds stap A; BEATGRID.md §10 noemt het 'bestaand gedrag' dat nog niet veranderd is.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§10 'Niet gebouwd (nog)'"
+        }
+      ],
+      "code": [
+        "src/control/actions.js (tap)",
+        "src/engine/beatgrid.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "In v2 slot en bevestiging per stuk, zoals elke andere correctie (zie -034)."
+    },
+    {
+      "id": "muziekkennis-033",
+      "titel": "Vast (pin): de tel hier hoort HIER, tegen drift",
+      "soort": "contract",
+      "wat": "pin(t) kiest het tempo zo dat er tussen het anker van het stuk (of de vorige pin) en hier een geheel aantal tellen ligt; vanaf hier begint een nieuw stuk. Weigert met waarom bij > 0,4 tel naast of > 4% tempoverandering; vlak bij het anker (< 4 tellen) alleen de fase. Ligt het grid > ¼ tel uit de pas, dan probeert hij n−1, n, n+1 tellen en kiest wat op de klappen valt (≥ 50% raak binnen 15 ms en 25 procentpunt beter).",
+      "waarom": "Plaat 124,3 met grid 124,0: één pin op tel 64 geeft 124,30 en elke tel exact tot tel 400; live mix 124 → 126 in 5 min met een pin per 32 tellen: elke tel binnen 1,6 ms. Vóór de klappen gaf 'vast pas op 5:00' stil fout 124,12 (de verkeerde kant op).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§10 tabel 'vastzetten (pin)', §13 tabel"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js (pin regel 556)",
+        "test/grid-bediening.test.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De enige weg naar een exact tempo; de encoder heeft 0,01 bpm resolutie."
+    },
+    {
+      "id": "muziekkennis-034",
+      "titel": "Elke correctie met de hand bevestigt het stuk meteen",
+      "soort": "besluit",
+      "wat": "Elke bewerking met de hand (‹ ›, 1, ½, ×2, halve tel, nieuw stuk, encoder, tikken, pin) maakt het stuk 'met de hand gezet' = zeker; sync en beat-loops mogen meteen. Met het oor goedgekeurd (✓, `ok`) is zeker ook waar de tellen het oneens zijn; een bewerking daarna haalt `ok` weg.",
+      "waarom": "Clay (5 okt): 'het is heel lastig om de beatgrid goed te zetten'; een correctie telde niet en sync bleef weigeren na het corrigeren.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§10 'een correctie bevestigt', §11 'Controleren'"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js (bevestig, keurGoed regel 527)",
+        "src/control/actions.js (bewerk)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Jouw oor wint van de meting."
+    },
+    {
+      "id": "muziekkennis-035",
+      "titel": "↶ zet het grid PRECIES terug, tot 30 stappen, een reeks is één stap",
+      "soort": "valkuil",
+      "wat": "Undo bewaart tot GRID_TERUG (30) toJSON's; een tikreeks, een reeks encodertikken of een vastgehouden nudge is één stap; leeg bij een nieuw nummer. Terug zet ook bron, methode, zekerheid en twijfel van toen.",
+      "waarom": "Eerst ging terug via gridGewijzigd() en werd een teruggezet analysevoorstel 'hand': daarna kwam het grid uit de tellen er nooit meer overheen (14 okt).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§13 '↶ zet precies terug'"
+        },
+        {
+          "pad": "src/engine/deck.js",
+          "waar": "gridTerug regel 1062"
+        }
+      ],
+      "code": [
+        "src/engine/deck.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "Met een onveranderlijk grid (-007) is undo gewoon de vorige waarde, zonder deze val."
+    },
+    {
+      "id": "muziekkennis-036",
+      "titel": "Grid-modus op de APC: elke gewone fout in 2-4 drukken",
+      "soort": "contract",
+      "wat": "Shift + Metronome = grid-modus. Scene 1 tel 1 hier (shift: vast), 2 ×2, 3 ½, 4 halve tel, 5 nieuw stuk; Nudge ±5 ms (shift ±1, vasthouden herhaalt na 350 ms elke 60 ms); Cue Level bpm ±0,01 (shift ±0,1); Lock = slot; Device ◀ ▶ de \"1\" ∓ een tel; Clip/Device View tellen hier; On/Off controle (shift ✓); Detail View ↶. Het lampje van scene 1: wit = klopt, oranje = twijfel.",
+      "waarom": "Scenariotest op een plaat van 124,317 bpm: octaaf 2 drukken, \"1\" verschoven 2, fase 12 ms 2 (kon eerst niet op de APC), fase 47 ms 12 of 4 met vasthouden, tempo 0,1% naast 2 (vast), geen grid 11. MIDI → grid 0,01-0,05 ms; het lampje volgt bij de LED-tik (33 ms).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§13 tabel en 'Wat er veranderd is'"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Beatgrid 'Grid-modus op de APC'"
+        }
+      ],
+      "code": [
+        "mappings/apc40mk2.json",
+        "src/control/actions.js",
+        "test/grid-bediening.test.mjs"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De bediening als data in de mapping; de scenariotest (drukken tellen + hele nummer nalopen) is een goed model voor v2."
+    },
+    {
+      "id": "muziekkennis-037",
+      "titel": "De grid-modus neemt zes device-knoppen over",
+      "soort": "open",
+      "wat": "In de grid-modus winnen Device ◀ ▶, On/Off, Clip/Device View en Detail View van elk open device-mapje (rack, effect aan/uit, strip ↔ rack, master-rack, instrument, vorm). Een ringknop voor de bpm is niet gebouwd: de device knobs sturen 127 stappen per slag over 40-300 bpm = 2 bpm per tik.",
+      "waarom": "GA6 nog niet op de proefavond nagelopen.",
+      "bron": [
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "GA6"
+        },
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§13 'Wat niet veranderd is'"
+        }
+      ],
+      "code": [
+        "mappings/apc40mk2.json"
+      ],
+      "pijler": "controllers",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "Hangt af van de proef op de hardware."
+    },
+    {
+      "id": "muziekkennis-038",
+      "titel": "Controleren met het oor: een tik op elke gridlijn, plekken langs",
+      "soort": "besluit",
+      "wat": "GridKlik plant op de audioklok (ctxTimeOf, 150 ms vooruit, timer 30 ms) een tik per gridlijn: 1760 Hz op de \"1\", 1175 Hz op de rest (duoklik op de maatgever een octaaf lager), in de koptelefoon als die er is, anders de master. Het deck springt naar de eerste PLEK met twijfel (stukken < 8 s uit elkaar = één plek); ✓ = klopt tot hier; alles goed = slot. Plant meteen opnieuw bij een gridwijziging.",
+      "waarom": "Een live opname gaf 100 losse stukken, als plekken 55. Zonder herplannen tikte hij tot 30 ms op het oude grid. Visueel controleren alleen was te traag.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11 'Controleren', §13"
+        },
+        {
+          "pad": "src/engine/grid-klik.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "src/engine/grid-klik.js",
+        "src/engine/tellen.js (plekkenTeControleren, PLEK_GAT)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Voorbereiden met het oor is betrouwbaarder dan elke meting."
+    },
+    {
+      "id": "muziekkennis-039",
+      "titel": "Een uur tellen meten kost ~5,7 ms: niet elke frame",
+      "soort": "valkuil",
+      "wat": "meetGrid over de tellen van een uur kost in Chrome ~5,7 ms. Het oordeel naast de bpm (elke frame) en het lampje (elke LED-tik) lezen daarom gridMetingBij(nu): tijdens een reeks bewerkingen hooguit eens per 150 ms opnieuw. Wie beslist (controle, ✓) leest gridMeting, altijd vers.",
+      "waarom": "Draaien aan de bpm (30 tikken/s) kostte 154-310 ms rekenen per seconde, nu ~50 (37-70 over vier runs).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§13 'De weergave meet minder vaak'"
+        },
+        {
+          "pad": "src/engine/deck.js",
+          "waar": "gridMeting/gridMetingBij regel 1015-1046"
+        }
+      ],
+      "code": [
+        "src/engine/deck.js (METING_RUST)"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "In v2 meten per stuk incrementeel (alleen het bewerkte stuk opnieuw), dan is de rem overbodig."
+    },
+    {
+      "id": "muziekkennis-040",
+      "titel": "Grid bewaren: 250 ms na de bewerking, één verzoek, andere tracks pas na de reeks",
+      "soort": "valkuil",
+      "wat": "Bewaren gaat 250 ms na de laatste bewerking (tijdens een reeks toch elke seconde), één ronde tegelijk, elk antwoord gelezen, na 5 s afgebroken. Na elke POST krijgt de library-rij het nieuwe grid; een andere track met hetzelfde nummer pas als de reeks klaar is (naReeks). Een geladen grid wordt niet bewaard alleen omdat hij geladen werd.",
+      "waarom": "Vroeger kreeg wie het nummer na een bewerking opnieuw laadde het grid van vóór de bewerking (track 1 248,65, track 2 kreeg 124,33) en overschreef hij jouw werk; één hangend verzoek legde het bewaren stil (1 POST in 6 s); de druk tot de server duurde gemiddeld 707 ms.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§13 'Bewaren', 'De library-rij en andere tracks'"
+        }
+      ],
+      "code": [
+        "src/ui/grid-bewaren.js",
+        "test/grid-bewaren.test.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 één bron van waarheid per nummer (een store die alle decks met dat nummer meteen ziet) in plaats van kopieën per deck die gesynchroniseerd moeten worden."
+    },
+    {
+      "id": "muziekkennis-041",
+      "titel": "Oude analyse: zekerheid = fase-stabiliteit, dat is niet 'het grid past'",
+      "soort": "valkuil",
+      "wat": "De tempocurve (vensters 12 s, stap 4 s) en segmenteer rijgen vensters op hetzelfde tempo (±4%) aaneen zonder naar de fase te kijken; twee nummers op hetzelfde tempo werden één 'zeker' stuk. Daarom stukPast (per venster de fase op het grid, > 10% verder dan 0,1 tel = past niet), splitsen op faseSprongen, bijstellen op de helling, anders onzeker; tweedeKans redt korte ketens alleen als eenGridPast.",
+      "waarom": "Synthetisch 14 valse zekere stukken → 0; op 48 fragmenten van Clay 41 gelijk, zeker-met-een-blok-naast 4 → 0. 0,1 en niet 0,15 tel: ±0,15 liet een sprong van 0,3 tel toe. Kost: een synthetisch uur 3,9 → 4,8 s (schoon) tot 17 s (live drums), in een worker.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "Restpunten §1 en §4, 'Controle'"
+        }
+      ],
+      "code": [
+        "server/detect.js (tweedeKans, eenGridPast, stukPast, faseSprongen, faseHelling, verfijnGrens)"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "Alleen relevant als de oude analyse mee gaat (-012); de les 'toets of het ene grid op elk deel past' geldt ook voor het tellen-grid."
+    },
+    {
+      "id": "muziekkennis-042",
+      "titel": "Een break is geen ander nummer, een vaste fasesprong wel",
+      "soort": "valkuil",
+      "wat": "Na de stukPast-toets werd een break met alleen offbeat-hats een eigen ZEKER stuk een halve tel naast. Regel: liggen de stukken vóór en na een tussendeel van ≤ 32 maten op één doorlopend grid en ligt de puls per blok van 4 s overal op de tel of precies op de offbeat, dan één stuk. Een andere vaste fase (let it all go 31:40, 0,2 tel) blijft gesplitst.",
+      "waarom": "Controle 25 sep: een break van 60 s werd een eigen stuk (100% van de tellen naast); een eerste break-regel plakte let it all go weer vast.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "Restpunten §4 'Controle'"
+        }
+      ],
+      "code": [
+        "server/detect.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Testgevallen (break 16/32/60 s, patroon 0,2 tel verschoven) horen in elke v2-analyse."
+    },
+    {
+      "id": "muziekkennis-043",
+      "titel": "Bekende grenzen van het automatische grid",
+      "soort": "grens",
+      "wat": "Niet opgelost: een tempo dat golft (rubato ±1-2%, periode 30-50 s) blijft deels zeker-en-naast; een kort stuk op 1-2% ander tempo aan de rand van een lang stuk blijft erin hangen; een deel net onder 20 s wordt een onzekere rest; hetzelfde patroon precies een halve tel verschoven tussen twee stukken wordt één stuk; een consequent verkeerde \"1\" van Beat This! bij vier op de vloer.",
+      "waarom": "Elk geprobeerd 'repareren' (o.a. 'twee vensters naast aan de rand') brak iets anders (het album op 156 in tweeën).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§4 'Wat niet opgelost is', §12 'Wat niet opgelost is'"
+        }
+      ],
+      "code": [
+        "server/detect.js",
+        "src/engine/tellen.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Eerlijke lijst; de controle met het oor (-038) vangt ze op."
+    },
+    {
+      "id": "muziekkennis-044",
+      "titel": "Analyse kost bijna niets, maar hoort in een worker",
+      "soort": "regel",
+      "wat": "Peaks, onset, tap-verfijning, grid, toonsoort en secties draaien in een worker_thread (analyse-werker.js), elke ffmpeg via startFfmpeg zodat stoppen geen zombies laat. De achtergrond doet één nummer tegelijk (grid, dan toon, dan secties), niet tijdens een ingest, en het zware werk wacht zolang er een deck speelt.",
+      "waarom": "Onset 0,3 s per minuut, tempocurve over 60 min 0,1 s; maar tap-verfijnen blokkeerde de server 2,6 s, en de server levert ook de streampagina's van spelende decks: gaten in het geluid.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "'Kosten'"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Verbeterronde 23 sep, 'Server, tweede ronde'"
+        },
+        {
+          "pad": "server/analyze.js",
+          "waar": "startFfmpeg regel 165-190"
+        }
+      ],
+      "code": [
+        "server/analyze.js",
+        "server/analyse-werker.js",
+        "server/index.js (heranalyseOpAchtergrond)"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Spelen gaat altijd voor analyseren."
+    },
+    {
+      "id": "muziekkennis-045",
+      "titel": "Een octaafwissel van een auto-grid neemt de sampler-pads mee",
+      "soort": "pijn",
+      "wat": "Een pad bewaart tellen en bpm van het grid van toen; na een herberekening 77 → 154 zou een pad van 4 tellen dubbel zo snel spelen. _samplesNaarOctaaf rekent bewaarde pads mee (alleen bij een macht van twee). Niet mee: lengtes in maten in het setplan, en de sectiekaart (die rekent pas bij het volgende laden opnieuw).",
+      "waarom": "Afgeleide data die op het grid van toen rust moet bij elke gridwissel apart worden nagelopen.",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§12 punt 8 en slot"
+        }
+      ],
+      "code": [
+        "server/library.js (_samplesNaarOctaaf)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "In v2 bewaren wat afhangt van het grid in tracktijd (van/tot) en tellen afleiden, of de afhankelijkheid expliciet in de analysegraaf (-008)."
+    },
+    {
+      "id": "muziekkennis-046",
+      "titel": "Maatsoort is per grid, niet per stuk",
+      "soort": "grens",
+      "wat": "beatsPerBar (standaard 4) geldt voor het hele grid; gridUitTellen leidt 3 of 4 tellen per maat af uit de downbeats. Een album met een wals tussen 4/4-nummers kan dat niet per stuk uitdrukken.",
+      "waarom": "Volgt uit de constructor van Beatgrid; nooit als probleem gemeld.",
+      "bron": [
+        {
+          "pad": "src/engine/beatgrid.js",
+          "waar": "constructor regel 103"
+        },
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11 punt 2"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "Goedkoop om in v2 per stuk te maken nu het formaat toch opnieuw opgezet wordt (mixen en albums)."
+    },
+    {
+      "id": "muziekkennis-047",
+      "titel": "Toonsoortkaart: stukken met stemming per stuk, vaste spelling",
+      "soort": "contract",
+      "wat": "{ versie, stemming, stukken: [{ van, toonsoort, stemming, zekerheid?, tweede? }], bron, slot } in tracktijd, kolom toon_json. Spelling C Db D Eb E F F# G Ab A Bb B, `m` voor mineur; stemming in cent −50..+50 (een stuk op +52 heet 'C♯ op −48'); `tweede` = beste toonsoort met een ANDER Camelot-getal. Alles wat de browser post gaat door normaliseerToon; POST zonder `toon` = 400, niet wissen.",
+      "waarom": "Een album of mix heeft per nummer een eigen A (ADRIANA −45…+25 ct, zoned out +43); met één stemming voor een mix C/C+45/Es−40 kwam er F, Des, Es uit.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§3, §13 'De kaart'"
+        }
+      ],
+      "code": [
+        "src/engine/toonsoort.js",
+        "server/library.js (normaliseerToon)",
+        "server/toon.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Zelfde vorm als het grid, bewezen."
+    },
+    {
+      "id": "muziekkennis-048",
+      "titel": "toonsoort null betekent twee dingen",
+      "soort": "pijn",
+      "wat": "In een automatische kaart is toonsoort:null = stilte (zekerheid 0); in een kaart met de hand = 'geen toonsoort' (bewust gezet). Wie de kaart leest moet `bron` erbij nemen om het verschil te zien.",
+      "waarom": "Ontstaan doordat de analyse later stilte ging melden in hetzelfde veld.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§13 'toonsoort: null in een AUTOMATISCHE kaart'"
+        }
+      ],
+      "code": [
+        "src/engine/toonsoort.js",
+        "server/toon.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "In v2 een expliciete waarde ('stil' tegenover 'geen') in plaats van een null die van de bron afhangt."
+    },
+    {
+      "id": "muziekkennis-049",
+      "titel": "Toonsoort-algoritme: chroma op 4410 Hz, stemmingscorrectie, Temperley 2005",
+      "soort": "besluit",
+      "wat": "Mono 4410 Hz, FFT 16384 (Hann), hop 8192; stemming als cirkelgemiddelde van spectrale pieken; halve tonen A1-B6; HPSS-masker; log(1 + 10·x/mediaan); Pearson met de 24 profielen van Temperley 2005; kaart via Viterbi over vensters van 24 s om de 6 s met straf 1,2 per wissel; per stuk een eigen stemming in een tweede doorgang.",
+      "waarom": "8 van 10 bekende stukken goed (edma, het ROADMAP-voorstel: 5; Krumhansl: 5); de kaart 81% van de tijd het goede Camelot-getal (edma 50%); ADRIANA: alle 17 kaartgrenzen binnen 15 s van een echte nummergrens. Straf 0,35 gaf 66 grenzen voor 30 echte, 1,2 gaf 39.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "Kort, §1, §2"
+        }
+      ],
+      "code": [
+        "server/toon.js",
+        "tools/toonsoort/"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Gemeten keuze; bit voor bit gelijk aan het meetinstrument."
+    },
+    {
+      "id": "muziekkennis-050",
+      "titel": "Zonder stemmingscorrectie gaan toonsoorten fout",
+      "soort": "meting",
+      "wat": "Synthetisch op 440/432/+25/−45 cent: stemming gemeten binnen ±1,5 ct, toonsoort 8/8 goed; ZONDER correctie 3/8 fout (432 Hz: C → Em). Alle 24 toonsoorten 24/24; ruis, alleen drums en willekeurige drieklanken zekerheid 0,00; modulatie C → Es → stilte → F♯m grenzen op 87/182/238 s (echt 90/180/240).",
+      "waarom": "Clay's repertoire staat vaak niet op 440 (A = 432, zoned out +43 ct, No Surprises ~−34 ct).",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§1 'Synthetisch'"
+        },
+        {
+          "pad": "tools/toonsoort/synth.txt",
+          "waar": "heel"
+        }
+      ],
+      "code": [
+        "test/toon.test.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Testmateriaal en eis voor elke v2-toonanalyse."
+    },
+    {
+      "id": "muziekkennis-051",
+      "titel": "Toonzekerheid: schud de toonklassen, niet de tijd",
+      "soort": "valkuil",
+      "wat": "Zekerheid = toon × beslist. `toon` = correlatie boven p97 van een nul van 64 keer dezelfde twaalf chromawaarden in willekeurige volgorde; `beslist` = marge tot de beste toonsoort met een ander Camelot-getal / 0,15 (relatief majeur/mineur telt niet als twijfel). Tijd schudden (zoals bij het grid) werkt niet: een toonsoort is een som over de tijd.",
+      "waarom": "De eerste poging (blokken van 4 s willekeurig transponeren) gaf zekerheid 0 op ALLES, ook op schone cadensen: een blok van 4 s draagt zelf een toonsoort.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§2 'De zekerheid'"
+        }
+      ],
+      "code": [
+        "server/toon.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Algemene les: de nul moet de eigenschap vernietigen die je meet, niet meer."
+    },
+    {
+      "id": "muziekkennis-052",
+      "titel": "Toondrempels 0,40 en 0,15 rusten op ~15 stukken",
+      "soort": "grens",
+      "wat": "Zeker ≥ 0,40, onder 0,15 '~' (geen duidelijke toonsoort). Boven 0,40 klopten 5 van 6, tussen 1 van 2, onder 3 van 5; geen natuurlijk gat zoals bij het grid. De helft van de tijd in Clay's library valt onder 0,15 (ambient, drone, rijke piano): dat is een eerlijk antwoord. Grondwaarheid dun: 10 stukken, vooral Sakamoto, 7 via Spotify's algoritme.",
+      "waarom": "Herijken na ~20 sloten (elk slot is een meetpunt; meet.mjs).",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§2 'Drempels', §10 Risico's"
+        }
+      ],
+      "code": [
+        "src/engine/toonsoort.js (ZEKER_VANAF, GEEN_TOON)"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Clay moet sloten zetten (of edma op elektronische nummers laten meten) voordat de drempels vast mogen."
+    },
+    {
+      "id": "muziekkennis-053",
+      "titel": "Typische toonfouten en wat ze voor mixen betekenen",
+      "soort": "grens",
+      "wat": "Relatief (Am F C G → C of F): onschadelijk, zelfde Camelot-getal. Kwint (Ieta F → C, ±1 op de wijzer): meestal onschadelijk. Parallel (Germination Bm → Dm): fout, drie tonen anders. Stemming rond ±50 cent: de naam springt een halve toon; opgevangen door stemming per stuk en die te tonen.",
+      "waarom": "Daarom staat de tweede kandidaat in de tooltip en is er één druk voor 'kwint ±'.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§2 'Bekende fouten'"
+        }
+      ],
+      "code": [],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Bepaalt welke correcties de bediening moet bieden."
+    },
+    {
+      "id": "muziekkennis-054",
+      "titel": "Wat je HOORT aan toon: transpositie + 12·log2(rate) + stemming",
+      "soort": "regel",
+      "wat": "Halve tonen erbij = transpositie + (keylock ? 0 : 12·log2(rate)) + stemming/100; hoorbaar = plaat + round(…), afwijking in cent = de rest; Camelot +7 per halve toon. Bend telt niet mee (mag niet flikkeren). Kolomkop en focusdeel tonen wat je hoort, de library de plaat (Clay, T3).",
+      "waarom": "+5,95% zonder keylock = een halve toon = zeven uren op de wijzer; No Surprises (~−34 ct) op +2% klinkt als F op 0 ct.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§6"
+        },
+        {
+          "pad": "src/engine/toonsoort.js",
+          "waar": "kop, hoorbaar regel 142"
+        }
+      ],
+      "code": [
+        "src/engine/toonsoort.js",
+        "src/engine/deck.js (get toonsoort)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Zelfde patroon als bpm: plaat in de kaart, hoorbaar afgeleid."
+    },
+    {
+      "id": "muziekkennis-055",
+      "titel": "Toonsoort tonen: Camelot + korte naam, ? gedimd, ~, cent vanaf 20",
+      "soort": "besluit",
+      "wat": "Library en kolomkop '9B G' / '3A B♭m' (album: hoofdtoonsoort + aantal andere, '+4'); focusdeel de volle Nederlandse naam ('As majeur'). Tussen 0,15 en 0,40 gedimd met '?', onder 0,15 '~' met de best passende en de tweede in de tooltip; stemming tonen vanaf 20 cent ('−32 ct'), bij ±40-50 'tussen C en C♯'. Toonsoort onder de bpm in de kolom.",
+      "waarom": "T2, T4, T5 volgens advies; naast de bpm drukte de MAAT-badge hem weg. Onder 20 cent hoor je het niet, erboven zweeft het naast een ander nummer.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§5, §9"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "blok I"
+        }
+      ],
+      "code": [
+        "src/ui/toon-weergave.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Klein, puur, besloten."
+    },
+    {
+      "id": "muziekkennis-056",
+      "titel": "Geen APC-knoppen en geen sneltoetsen voor de toonsoort",
+      "soort": "besluit",
+      "wat": "De actions track.N.key.* (kwint ±, relatief, halve toon ±, 24 standen, geen, splits, slot) bestaan om te koppelen, maar staan niet op de standaard-APC of het toetsenbord. Corrigeren gaat in de library-kiezer of de focuskop; met de hand gezet = 'hand' + slot.",
+      "waarom": "Een per ongeluk verzette kwint wordt bewaard als 'hand' en nooit meer overschreven; corrigeren is zeldzaam en niet live (T6).",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§7, §9 T6"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Toonsoort CLIENT"
+        }
+      ],
+      "code": [
+        "src/control/actions.js (track.N.key.*)"
+      ],
+      "pijler": "controllers",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Destructieve data-bewerking hoort niet onder een live knop."
+    },
+    {
+      "id": "muziekkennis-057",
+      "titel": "Toonanalyse kost 0,10 s per minuut, geen chroma-cache",
+      "soort": "meting",
+      "wat": "Op de M1 in rust ~0,10 s per minuut audio (een uur 6 s): ffmpeg naar 4410 Hz 0,07, FFT + stemming 0,033, de rest 0,003; druk tot ~0,45 s per minuut. Geheugen in de worker: pcm 64 MB per uur. Geen chroma.bin bewaard: met een stemming per stuk is één chroma niet genoeg.",
+      "waarom": "Een cachebestand met eigen formaat en ongeldig-maken was het niet waard (6-27 s per uur opnieuw rekenen).",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§1 'Rekentijd', §3 'Geen chroma.bin'"
+        }
+      ],
+      "code": [
+        "server/toon.js",
+        "server/analyze.js (maakToon)"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Goedkoop genoeg om bij elke ingest te doen."
+    },
+    {
+      "id": "muziekkennis-058",
+      "titel": "Harmonisch mixen (Camelot-buren oplichten) niet gebouwd",
+      "soort": "grens",
+      "wat": "Een stip bij tracks die passen bij de track die je het hardst hoort (zelfde getal, ±1 of relatief, met de afwijking in cent) is ontworpen maar niet gebouwd. Wel gebruiken de auto-DJ-bewakers en 'past bij' de toon: blend alleen bij toon ≤ 1 stap NA de sync.",
+      "waarom": "T7: eerst een paar weken alleen de toonsoort zien; rekenwerk ~0,5 sessie.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§8, §9 T7"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Auto-DJ, bewakers"
+        }
+      ],
+      "code": [
+        "src/ui/past-bij.js",
+        "src/auto/planner.js (kiesOvergang)"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "open",
+      "reden": "Clay kiest of hij het in v2 op scherm of controller wil."
+    },
+    {
+      "id": "muziekkennis-059",
+      "titel": "Sectiekaart: secties op maatbegins, met een vingerafdruk van het grid",
+      "soort": "contract",
+      "wat": "{ versie, opGrid, grid (FNV-vingerafdruk), stukken: [{ van, label, groep, energie, zeker?, stems? }], bron, slot } in tracktijd, kolom secties_json, NIET in /api/library. Laden haalt hem met GET /api/library/<id>/secties?maak=1; de server rekent eerst als er geen kaart is, de versie oud is, het grid anders is of er stems bij kwamen. Labels intro · opbouw · drop · break · outro · deel; groep één hoofdletter; hooguit 64 stukken.",
+      "waarom": "De lijst blijft klein; secties horen bij het grid van toen.",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§4"
+        },
+        {
+          "pad": "src/engine/secties.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "src/engine/secties.js",
+        "server/secties.js",
+        "server/library.js (normaliseerSecties, moetSectieAnalyse)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Derde as om een nummer te herschikken (welk stuk), naast stems en tracks."
+    },
+    {
+      "id": "muziekkennis-060",
+      "titel": "Secties vinden: Foote op maten, energie en stems, labels als gok",
+      "soort": "besluit",
+      "wat": "Per maat van het grid: chroma, vijf banden, rms, flux, kick- en hihat-flux, en het niveau per stem. Nieuwheid = Foote op twee schalen (2×8 en 2×4 maten) + sprong in energie en stems; grenzen = pieken (globaal of lokaal duidelijk), ≥ 4 maten uit elkaar, bij voorkeur op een frase van 4, > 32 maten splitsen, hooguit 40. Groepen onder afstand 0,3 (35% harmonie, 65% klank/stems). Labels uit energie en drums; zonder drums of zekere puls nooit 'drop'.",
+      "waarom": "Synthetisch (EDM 7 secties, pop met opmaat 8, ambient 5) alle grenzen op hun maat; mix van 62 min 40 secties in 4,3 s; 2,5 min 0,3 s zonder en 1,1 s met stems.",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "server/secties.js",
+          "waar": "constanten regel 49-66"
+        }
+      ],
+      "code": [
+        "server/secties.js",
+        "test/secties.test.mjs",
+        "test/synth-nummer.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Puur, snel, getest; drempels nog niet op echte muziek (zie -061)."
+    },
+    {
+      "id": "muziekkennis-061",
+      "titel": "Secties nog niet op Clay's muziek gemeten",
+      "soort": "open",
+      "wat": "Grenzen, groepen en labels zijn alleen op synthetisch materiaal goed bevonden; 'drop' is de luidste groep, ook in een popnummer. Open: oordeel op vijf eigen nummers (SE2), met de hand verschuiven/hernoemen (SE5), groepskleuren op de pads (SE4), een getraind model voor labels (all-in-one, SE6).",
+      "waarom": "In echte Chrome lagen grenzen 0,25-0,5 s te vroeg, maar dat was het grid (zijn \"1\" een tel vóór), niet de secties.",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§2 slot, §5, §8"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "SE2, SE4, SE5, SE6"
+        }
+      ],
+      "code": [
+        "server/secties.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Clay moet eerst op echte muziek oordelen voordat v2 de drempels of een model kiest."
+    },
+    {
+      "id": "muziekkennis-062",
+      "titel": "Sectiesprong: NU springen naar vlak vóór de sectie, niet wachten",
+      "soort": "besluit",
+      "wat": "sectieDoel springt meteen naar zo ver vóór de \"1\" van de sectie als je nu van de volgende \"1\" af zit: de rest van de maat hoor je de aanloop uit het nummer zelf, op de maatstreep valt de sectie in. Een gewone fasebehoudende seek (doorlopend), dus ook met keylock exact. Op de \"1\" (binnen 0,02 tel) meteen; stilstaand of zonder zeker grid naar het begin.",
+      "waarom": "Wachten tot de maat om is (Ableton) vraagt een geplande sprong terwijl het oude doorspeelt; de streamkern kan dat alleen voor keylock, en met een timer springen breekt regel 3 (SE1).",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§3"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "SE1"
+        }
+      ],
+      "code": [
+        "src/engine/secties.js (sectieDoel regel 109)",
+        "src/engine/deck.js (naarSectie regel 1229)"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "In v2 kan de bron misschien wel gepland springen; dan kiest Clay tussen 'aanloop uit het nummer' en 'wachten tot de maat'."
+    },
+    {
+      "id": "muziekkennis-063",
+      "titel": "Marges op de \"1\": 0,01 tel en 1 ms, niet weghalen",
+      "soort": "valkuil",
+      "wat": "sectieEen gebruikt een marge van 0,01 tel en SectieKaart.index 1 ms (BEGIN_MARGE). De server rondt sectiebegins af (0,1 ms); een begin net ná zijn \"1\" viel zonder marge een maat te laat in, en volgende/vorige rekenden in de laatste maat vóór zo'n grens met de verkeerde sectie.",
+      "waarom": "Gevonden bij studio/sec-toets, 6 okt.",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§7 Toetsenbord"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Secties VERWEVEN, Marges"
+        }
+      ],
+      "code": [
+        "src/engine/secties.js (BEGIN_MARGE, sectieEen)"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 grenzen opslaan als maatindex (geheel getal) in plaats van afgeronde seconden; dan zijn marges overbodig."
+    },
+    {
+      "id": "muziekkennis-064",
+      "titel": "In een loop: wat je hoort terugvouwen, en wat er NA het rondgaan komt",
+      "soort": "valkuil",
+      "wat": "Na het rondgaan van een loop gaf sectieHier 1-40 ms de vorige sectie (positie min uitgangsvertraging valt vóór het loopbegin); nu teruggevouwen in de loop. In de laatste maat van een sectie-loop gaf sectieOpDeMaat al de volgende sectie, zodat 'volgende' er een oversloeg; nu wat er na het rondgaan komt.",
+      "waarom": "Gerepareerd 7 okt (spoor maschine); hoorbaar.js noemt de terugval rond een loopnaad als bekende grens.",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§3 'In een loop', §7 'Gerepareerd onderweg'"
+        },
+        {
+          "pad": "src/engine/hoorbaar.js",
+          "waar": "kop 'Bekend: vlak nadat een loop rondging'"
+        }
+      ],
+      "code": [
+        "src/engine/deck.js (sectieHier, sectieOpDeMaat)",
+        "src/engine/hoorbaar.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Hoort in één 'muzikale positie'-dienst die loop en vertraging kent (-066), niet per afnemer."
+    },
+    {
+      "id": "muziekkennis-065",
+      "titel": "SectieLezer: geen valse klap bij een groeiende vertraging of een stutter",
+      "soort": "valkuil",
+      "wat": "De lezer voor beeld, vormen en hub: een stap terug in t kleiner dan GAT (1 s) is geen nieuwe klok (de uitgangsvertraging kan groeien); hetzelfde sectiebegin binnen 0,99 maat is een herhaling (een korte loop of stutter gaf tot 17 klappen/s: een stroboscoop); zonder maatgever blijft de energie HOUD (0,5 s) staan; een grens uit een gat > 1 s telt niet.",
+      "waarom": "Gerepareerd in spoor hub (7 okt): valse klap en dip, stroboscoop, energie die zakte bij een cut, B die begint terwijl A stilvalt.",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§7 'Gerepareerd onderweg (spoor hub)'"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Secties VERWEVEN, SectieLezer"
+        }
+      ],
+      "code": [
+        "src/analysis/maat.js (SectieLezer)"
+      ],
+      "pijler": "beeld",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Elke 'nieuw'-gebeurtenis voor beeld of hub heeft deze regels nodig."
+    },
+    {
+      "id": "muziekkennis-066",
+      "titel": "Secties zijn in tien subsystemen apart verweven",
+      "soort": "pijn",
+      "wat": "Toetsenbord, sampler (knipSectie, startOpDeEen), planvenster (in/uit, herstelSecties, kent), handelingenlog (kaart in de beginstand, `van` bij een druk), auto-DJ (momentArgs, vindSectie binnen 30 s), vormen/video (SectieLezer), hub (§18), Maschine, Controlekamer (sectieTelling) en APC (82 regels) hebben elk eigen regels voor marges, loops, verouderde kaarten en terugvinden.",
+      "waarom": "Elk onderdeel kwam als eigen tak met eigen review; de bugs (marges, loops, stroboscoop) moesten per afnemer gerepareerd worden.",
+      "bron": [
+        {
+          "pad": "docs/SECTIES.md",
+          "waar": "§6, §7"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Secties VERWEVEN"
+        }
+      ],
+      "code": [
+        "src/engine/deck.js",
+        "src/engine/sampler.js",
+        "src/auto/planner.js",
+        "src/analysis/maat.js",
+        "src/control/hub.js",
+        "src/control/maschine.js",
+        "src/plan/plan-model.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: één muzikale-positiedienst per deck (tel, maat, sectie, toon die je hoort, met loop en vertraging) waar alle afnemers op abonneren."
+    },
+    {
+      "id": "muziekkennis-067",
+      "titel": "Een sectie in een sampler-pad: hele maten, hooguit 32 maten en 90 s",
+      "soort": "contract",
+      "wat": "knipSectie knipt van de \"1\" tot de \"1\" van de volgende sectie in hele maten (stopt vóór een maat die niet vol is), hooguit SECTIE_MAX_MATEN 32 en SECTIE_MAX_SEC 90. Een pad van meer dan 8 tellen IS een sectie en start op de \"1\" van de maatgever (fxKlok().tellenTotEen); bij herankeren houdt hij ook de maat.",
+      "waarom": "Een pad houdt de audio vast: ~23 MB per minuut, acht volle pads ~280 MB (SVS4). 'Meer dan 8 tellen' is een afleiding zonder eigen veld.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Secties VERWEVEN, Sampler"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "SVS1-SVS4"
+        }
+      ],
+      "code": [
+        "src/engine/sampler.js (knipSectie, startOpDeEen)"
+      ],
+      "pijler": "produceren",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "Idee houden (crossover dj → produceren), maar 'is een sectie' als expliciet veld, niet afgeleid uit > 8 tellen."
+    },
+    {
+      "id": "muziekkennis-068",
+      "titel": "De maatgever: de hardst klinkende track, met hysterese",
+      "soort": "besluit",
+      "wat": "Er is geen 'het andere deck': de maatgever is de track met de hoogste faderGain × crossfadergain die speelt, een grid heeft, niet op zijn start wacht en niet remt. Een ander neemt pas over als hij 3 dB harder klinkt (MAAT_MARGE_DB) en dat 250 ms audioklok volhoudt (MAAT_WACHT); stopt of remt de maatgever, dan meteen. Sync, starten op de maat, bussen, sampler, video-puls, vormen, patronen en de MAAT-badge volgen dezelfde track.",
+      "waarom": "Twee tracks die ongeveer even hard klonken lieten de maat heen en weer springen (VRAGEN G2): badge, gate, echo, sampler en video-puls sprongen mee.",
+      "bron": [
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "regel 69-109 (volgMaatgever), maatgever() regel 780"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: 'Sync kent geen het andere deck meer'"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (volgMaatgever, maatgever, _kanMaat)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Werkt voor acht tracks en voor instrumenten/patronen; volgMaatgever is puur en kan als losse module mee."
+    },
+    {
+      "id": "muziekkennis-069",
+      "titel": "syncMaster: de maatgever, anders de luidste andere, nooit een remmende",
+      "soort": "contract",
+      "wat": "syncMaster(id) = de maatgever als die niet id zelf is; anders de luidste andere die klinkt; klinkt er verder niets, de luidste die op zijn start wacht (een keten van play.quant blijft werken); anders de eerste geladen met grid. Geen trap kiest een track die remt. Een wachtende track geeft de maat niet zolang er iets anders klinkt.",
+      "waarom": "Sync nam anders de rate over van een track die net stilviel (VERBETERINGEN ronde 4); een wachtende met hogere fader nam de maat over tot een maat voor je hem hoorde.",
+      "bron": [
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "syncMaster regel ~690-730"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Elke trap is een gevonden randgeval."
+    },
+    {
+      "id": "muziekkennis-070",
+      "titel": "Sync is eenmalig: hoorbaar tempo plus fase binnen een halve tel",
+      "soort": "contract",
+      "wat": "sync zet de rate zo dat grid.bpmAt(positie) × rate gelijk is aan de hoorbare bpm van de master (geweigerd buiten 0,5-2×: 'probeer ×2 of ½'), en verschuift de fase binnen ±½ tel, in een loop teruggevouwen (seek binnenLoop). Speelt een van beide niet, wacht hij of remt hij: alleen het tempo. Er is geen doorlopende fase-lock; drift (tempokaart, live opname) loopt na een sync weer weg.",
+      "waarom": "Verder springen dan een halve tel is muzikaal onzin; een sprong haalt een rem eraf.",
+      "bron": [
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "sync() regel ~815-860"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js",
+        "src/engine/deck.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Clay kiest of v2 een 'sync aan'-stand krijgt die tempo en fase blijft volgen (nodig bij tempokaarten en live opnames), of eenmalig blijft."
+    },
+    {
+      "id": "muziekkennis-071",
+      "titel": "Starten op de maat: gepland op de audioklok, de tel valt op de \"1\"",
+      "soort": "contract",
+      "wat": "play.quant start op het volgende maatbegin van de maatgever (de \"1\" van zijn stuk); de tel van de track die het dichtst bij het startpunt ligt valt er precies op (ligt het startpunt naast zijn tel, dan begint het geluid evenveel eerder of later). De bron start sample-exact (`bron.start(p, { op })`); ligt de \"1\" binnen startDrempel, dan de maat erna; zonder maatgever of zeker grid meteen. Tijdens het wachten volgt hij DEZELFDE tel als die verschuift (_volgWachtenden).",
+      "waarom": "'De volgende maat' opnieuw uitrekenen schoof in een korte loop elke ronde op. Wachten is hooguit één maat (2 s op 120 bpm), zoals launch in Ableton.",
+      "bron": [
+        {
+          "pad": "src/engine/engine.js",
+          "waar": "startOpDeMaat regel 566-620"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "TRANSPORT, 'Starten op de maat'"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (startOpDeMaat, _volgWachtenden)",
+        "src/engine/bron.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Regel 3 toegepast: geen timer bepaalt het moment."
+    },
+    {
+      "id": "muziekkennis-072",
+      "titel": "fxKlok: de brug van grid naar alles wat op de tel loopt",
+      "soort": "contract",
+      "wat": "deck.fxKlok() geeft { beatLengte (hoorbaar, /rate), ankerCtx (audiokloktijd van de volgende tel), tellenTotEen, perMaat }, null tijdens een rem of zonder grid. Effecten, sampler en patronen haken daaraan; herankeren is verplicht bij seek, hotcue, tempowissel, gridbewerking en het passeren van een stukgrens (een timer zegt alleen wanneer).",
+      "waarom": "Vergeet je één heranker, dan loopt een gate na twintig minuten een zestiende naast (gemeten ~1/16 na 26 min bij een bufferlengte die een fractie afweek).",
+      "bron": [
+        {
+          "pad": "src/engine/deck.js",
+          "waar": "fxKlok regel 720-755"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: 'Een tempo-gesynchroniseerd effect krijgt zijn klok van het DECK'"
+        }
+      ],
+      "code": [
+        "src/engine/deck.js (fxKlok, _heranker)"
+      ],
+      "pijler": "programmeren",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "Het contract houden, maar in v2 als abonnement (een 'klok veranderd'-gebeurtenis) zodat geen afnemer een heranker kan missen."
+    },
+    {
+      "id": "muziekkennis-073",
+      "titel": "Beatjump rekent in tellen en weigert in plaats van te klemmen",
+      "soort": "contract",
+      "wat": "track.N.beatjump (lengte 1-32 tellen, standaard 4) gebruikt Beatgrid.verschuif: fase exact, ook over een stukgrens; in een loop schuift de loop mee. Weigeren met een melding: geen grid, onzeker stuk, loop buiten het nummer, voorbij het einde, vóór het begin. Precies op 0 landen mag.",
+      "waarom": "Klemmen op het einde liet de track midden in een set stoppen; klemmen op 0 brak de beatmatch (Clay 26 sep, J4).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "TRANSPORT, Beatjump"
+        },
+        {
+          "pad": "src/engine/deck.js",
+          "waar": "beatjump regel 954"
+        }
+      ],
+      "code": [
+        "src/engine/deck.js (beatjump, SPRONG_TELLEN)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Weigeren is beter dan een stille muzikale fout."
+    },
+    {
+      "id": "muziekkennis-074",
+      "titel": "Quantize is één schakelaar; een hotcue-sprong houdt de fase",
+      "soort": "contract",
+      "wat": "transport.quantize geldt voor de hele engine: zetten (cue, hotcue, loop) snapt naar de tel; een hotcue-SPRONG is fasebehoudend en meteen (metFaseVan), en de hotcue beslist of een loop blijft, niet het landingspunt. Alleen op een zeker grid. Met quantize bewaart een hotcue de gesnapte tijd.",
+      "waarom": "Een hotcue tijdens een loop landde eerst ergens ín de loop.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "TRANSPORT, Quantize"
+        },
+        {
+          "pad": "src/engine/beatgrid.js",
+          "waar": "metFaseVan regel 360"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js (setQuantize)",
+        "src/engine/deck.js (_naarHotcue)"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Eenvoudig en voorspelbaar."
+    },
+    {
+      "id": "muziekkennis-075",
+      "titel": "Wat je HOORT staat op één plek: positie min uitgangsvertraging × rate",
+      "soort": "regel",
+      "wat": "hoorbaar(deck, V): tijdens spelen positie − V × rate (V = outputLatency + baseLatency + graafVertraging, o.a. de 1,5 ms vooruitblik van de limiter), tijdens een rem × de snelheid van nu, stilstaand of wachtend de positie zelf. Bend telt niet (< 1 ms). LED-fase, 'tel 1 hier', toonsoort, video, puls, maatbronnen, secties en de beeldklok gebruiken deze formule.",
+      "waarom": "De positie komt van de audioklok, maar wat die NU afspeelt hoor je pas na de uitgangsvertraging; zonder deze correctie snapte 'tel 1 hier' naar de verkeerde klap.",
+      "bron": [
+        {
+          "pad": "src/engine/hoorbaar.js",
+          "waar": "heel"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: 'Wat je HOORT staat op één plek'"
+        }
+      ],
+      "code": [
+        "src/engine/hoorbaar.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "57 regels, puur, door alle pijlers gedeeld."
+    },
+    {
+      "id": "muziekkennis-076",
+      "titel": "Knipperen op de tel rekenen we zelf, op wat je hoort",
+      "soort": "regel",
+      "wat": "track.N.phase = gridfase op de hoorbare positie; track.N.barbeat = welke tel van de maat je hoort. Een lampje is een kwart tel fel, op de \"1\" een halve tel (TEL_VENSTER_EEN); twee berichten per LED per tel. Niet het knipperkanaal van de APC (dat vraagt MIDI clock).",
+      "waarom": "Zo zie je op de APC waar de maat begint (aanname, B2); het knipperen van het apparaat zelf kent ons grid niet.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "'Knipperen op de tel rekenen we ZELF (B2)'"
+        },
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "Restpunten §3, 'Knipperen op de tel'"
+        }
+      ],
+      "code": [
+        "src/control/feedback.js",
+        "src/control/actions.js (track.N.phase, barbeat)"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Werkt voor elke controller, ook zonder MIDI clock."
+    },
+    {
+      "id": "muziekkennis-077",
+      "titel": "Peaks: min/max per 256 samples op 48 kHz, server en browser bit voor bit gelijk",
+      "soort": "contract",
+      "wat": "peaks.bin = per bucket van 256 samples een min en een max (float32) over alle kanalen, bij de ingest uitgerekend op 48 kHz; de browser leest het bestand en rekent alleen zelf (computePeaks) als het ontbreekt. analyze.test vergelijkt beide bit voor bit. De AudioContext staat vast op 48 kHz, gelijk aan de ingest.",
+      "waarom": "Golfvorm meteen zichtbaar zonder decoderen; laat je de samplerate aan de geluidskaart, dan hersamplet decodeAudioData en klopt de golfvorm niet meer.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: 'Peaks worden bij de ingest uitgerekend', 'AudioContext … 48 kHz'"
+        },
+        {
+          "pad": "src/analysis/peaks.js",
+          "waar": "heel"
+        }
+      ],
+      "code": [
+        "src/analysis/peaks.js",
+        "server/analyze.js (PER_BUCKET, maakPeaks)"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Eenvoudig, snel, getest."
+    },
+    {
+      "id": "muziekkennis-078",
+      "titel": "Teken de golfvorm NOOIT met buffer.sampleRate",
+      "soort": "valkuil",
+      "wat": "Gebruik effectieveSampleRate(count, perBucket, duur) = count × perBucket / duur om peaks op de tijd te leggen. buffer.sampleRate is de snelheid van de geluidskaart na hersamplen, niet die van de peaks.",
+      "waarom": "Op een 44,1 kHz-kaart liep de golfvorm 8,8% uit de pas; de gemeten correlatie met de audio zakte van 0,95 naar 0,004.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "'Teken de golfvorm NOOIT met buffer.sampleRate'"
+        },
+        {
+          "pad": "src/analysis/peaks.js",
+          "waar": "effectieveSampleRate regel 44"
+        }
+      ],
+      "code": [
+        "src/analysis/peaks.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Klassieke val die stil verkeerd tekent."
+    },
+    {
+      "id": "muziekkennis-079",
+      "titel": "De golfvorm tekent alleen bij een nieuwe sleutel",
+      "soort": "meting",
+      "wat": "Zoom, overzicht en de acht banen tekenen alleen als hun sleutel verandert (zelfde(): analyse, maat, positie in hele apparaatpixels, loop, cue, hotcues, gridVersie, zoom). Elke teken-actie is een upload naar de GPU. De sleutel leest gridVersie, niet het grid als tekst (8 kB → 0,3 kB per beeld).",
+      "waarom": "Zonder sleutel tekende VARVE in rust ~29 Mpx/s en liep Demucs (stems) op de helft (gemeten 5 okt).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "'De golfvormen … TEKENEN alleen als hun sleutel verandert'; Audio-gezondheid gridVersie"
+        }
+      ],
+      "code": [
+        "src/ui/waveform.js (zelfde regel 212)"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Op een MacBook Air deelt de golfvorm de GPU met stems, tellen en beeld."
+    },
+    {
+      "id": "muziekkennis-080",
+      "titel": "Nummers zonder tellen.json houden een oud grid, mogelijk een octaaf ernaast",
+      "soort": "grens",
+      "wat": "Een automatisch grid van de oude analyse heeft geen versie en wordt niet opnieuw gedaan; alleen een tellen.json maakt er een tellen-grid van. Zo'n nummer kan op 70-87 staan terwijl nieuwe ingests op 140-174 komen; voor de auto-DJ (tempo ≤ 6%) en 'past bij' liggen ze dan een octaaf uit elkaar tot er tellen zijn of je ↻ drukt.",
+      "waarom": "GA4 staat open (advies: ja, samen met GA2).",
+      "bron": [
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§12 slot"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "GA4"
+        }
+      ],
+      "code": [
+        "server/index.js (wilTellenGrid)"
+      ],
+      "pijler": "dj",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "Verdwijnt vanzelf met één analysegraaf waarin elk artefact een versie heeft (-008)."
+    },
+    {
+      "id": "muziekkennis-081",
+      "titel": "Een analyse mag de ingest nooit laten falen",
+      "soort": "regel",
+      "wat": "Grid, tellen, toonsoort en secties zijn stappen na de download; mislukt er een, dan is er geen kaart en probeert de achtergrond het later. Annuleren stopt ook de worker. Zonder Beat This!-model zegt de server dat bij het opstarten en valt terug op de oude analyse.",
+      "waarom": "Een nummer zonder toonsoort is bruikbaar; een nummer dat niet binnenkomt niet.",
+      "bron": [
+        {
+          "pad": "docs/TOONSOORT.md",
+          "waar": "§4 'Bij het binnenhalen'"
+        },
+        {
+          "pad": "docs/BEATGRID.md",
+          "waar": "§11 'Installeren'"
+        }
+      ],
+      "code": [
+        "server/ingest.js (verwerk)",
+        "server/analyze.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Robuustheid boven volledigheid."
+    },
+    {
+      "id": "muziekkennis-082",
+      "titel": "Wat bedoel je met \"een soort grid\"?",
+      "soort": "open",
+      "wat": "Clay (19 okt): \"ik heb vooral het idee dat ritme en bpm en een soort grid iets is wat ik heel belangrijk vind.\" Drie lezingen: (a) het beatgrid onder elk nummer (tempokaart, de \"1\", zekerheid); (b) één gedeelde maatklok waar alles op valt (decks, patronen, sampler, effecten, beeld); (c) een grid als bediening of weergave (zoals de uitlijnweergave of een stappenraster).",
+      "waarom": "In v1 bestaan alle drie, maar los: (a) beatgrid.js/tellen.js per nummer, (b) de maatgever met hysterese plus fxKlok en de patronenklok die zich erop richt, (c) uitlijn.html en de stapmodus van de patronen. Welke de ruggengraat van v2 is bepaalt de architectuur.",
+      "bron": [
+        {
+          "pad": "v2/oogst/muziekkennis.json",
+          "waar": "boodschap van de coördinator, 19 okt"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Beatgrid; Sync (maatgever); Patronen; uitlijn.html"
+        }
+      ],
+      "code": [
+        "src/engine/beatgrid.js",
+        "src/engine/engine.js (maatgever)",
+        "src/engine/patronen/klok.js",
+        "src/uitlijn/reken.js"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Clay moet kiezen (of rangschikken); advies: (b) als ruggengraat met (a) als invoer per nummer en (c) als weergave erop, zodat alles op één klok valt."
+    }
+  ],
+  "onderdelen": [
+    {
+      "pad": "src/engine/beatgrid.js",
+      "regels": 862,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/beatgrid.test.mjs",
+        "test/grid-bediening.test.mjs",
+        "test/tellen.test.mjs",
+        "test/engine.test.mjs",
+        "test/detect.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Tempokaart, maat-anker, pin, snappen, tap: puur, zwaar getest. Enige schuld is dat hij muteerbaar is; in v2 eromheen een onveranderlijke schil of de bewerkingen een kopie laten teruggeven."
+    },
+    {
+      "pad": "src/engine/tellen.js",
+      "regels": 1125,
+      "puur": true,
+      "imports": [
+        "src/engine/beatgrid.js"
+      ],
+      "tests": [
+        "test/tellen.test.mjs",
+        "test/beatbench.test.mjs",
+        "test/tellen-server.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "gridUitTellen, meetGrid, vergelijk, dansOctaven, maatMening: de kern van 'zeker = gemeten', tegen de benchmark getoetst."
+    },
+    {
+      "pad": "src/engine/toonsoort.js",
+      "regels": 421,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/toonsoort.test.mjs",
+        "test/past-bij.test.mjs",
+        "test/klankschaal.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "ToonKaart, Camelot, namen, hoorbaar(): puur en compleet; in v2 de server-kopie van spelling en Camelot hierheen laten wijzen."
+    },
+    {
+      "pad": "src/engine/secties.js",
+      "regels": 138,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/secties.test.mjs",
+        "test/sec-sampler.test.mjs",
+        "test/auto-secties.test.mjs",
+        "test/maschine.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "SectieKaart en sectieDoel, klein en puur; de marges (BEGIN_MARGE) vervallen als v2 grenzen als maatindex opslaat."
+    },
+    {
+      "pad": "src/engine/hoorbaar.js",
+      "regels": 57,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/analyse.test.mjs",
+        "test/grid-bediening.test.mjs",
+        "test/master.test.mjs",
+        "test/sec-maschine.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "De ene formule voor wat je hoort; geen reden om te veranderen."
+    },
+    {
+      "pad": "src/analysis/peaks.js",
+      "regels": 84,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/analyze.test.mjs",
+        "test/engine.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "computePeaks en effectieveSampleRate, bit voor bit gelijk aan de server."
+    },
+    {
+      "pad": "src/engine/grid-klik.js",
+      "regels": 144,
+      "puur": false,
+      "imports": [],
+      "tests": [
+        "test/grid-bediening.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Alleen Web Audio-nodes, geen DOM of MIDI; plant op de audioklok."
+    },
+    {
+      "pad": "src/ui/toon-weergave.js",
+      "regels": 148,
+      "puur": true,
+      "imports": [
+        "src/engine/toonsoort.js",
+        "src/lib/notatie.js"
+      ],
+      "tests": [
+        "test/toonsoort.test.mjs",
+        "test/notatie.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Toonsoort als tekst, puur; past bij welke UI v2 ook krijgt."
+    },
+    {
+      "pad": "src/ui/grid-strook.js",
+      "regels": 124,
+      "puur": true,
+      "imports": [
+        "src/engine/beatgrid.js"
+      ],
+      "tests": [
+        "test/gridzeker.test.mjs",
+        "test/gridauto.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Zekerheidsstrook in pixels zonder DOM."
+    },
+    {
+      "pad": "server/detect.js",
+      "regels": 2052,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/detect.test.mjs",
+        "test/beatbench.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Alleen als de oude analyse als tweede mening blijft (kaartje -012); dan ongewijzigd, met fft eruit gelicht als eigen module. Herschrijven van zoveel gemeten afstemming is te riskant."
+    },
+    {
+      "pad": "server/toon.js",
+      "regels": 626,
+      "puur": true,
+      "imports": [
+        "server/detect.js (fft)"
+      ],
+      "tests": [
+        "test/toon.test.mjs",
+        "test/library.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Gemeten keten; alleen de dubbele spelling/Camelot vervangen door import uit src/engine/toonsoort.js."
+    },
+    {
+      "pad": "server/secties.js",
+      "regels": 482,
+      "puur": true,
+      "imports": [
+        "server/detect.js (fft)",
+        "src/engine/beatgrid.js"
+      ],
+      "tests": [
+        "test/secties.test.mjs",
+        "test/sec-controle.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Puur rekenwerk, synthetisch getest; drempels pas na SE2 bijstellen."
+    },
+    {
+      "pad": "server/tellen/tellen.py",
+      "regels": 284,
+      "puur": false,
+      "imports": [
+        "beat_this (pip 1.1.0)",
+        "torch"
+      ],
+      "tests": [
+        "test/tellen-server.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Dunne wrapper rond Beat This! met stukken, zwaartepunt en net stoppen; contract tellen.json is stabiel."
+    },
+    {
+      "pad": "server/analyze.js",
+      "regels": 606,
+      "puur": false,
+      "imports": [
+        "node:child_process",
+        "node:fs/promises",
+        "node:worker_threads"
+      ],
+      "tests": [
+        "test/analyze.test.mjs",
+        "test/gridauto.test.mjs",
+        "test/toon.test.mjs",
+        "test/secties.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Orchestratie van ffmpeg, worker en losse versies; in v2 opgaan in één analysegraaf (kaartje -008). onsetPieken en de ijking (PIEK_GEIJKT) overnemen."
+    },
+    {
+      "pad": "server/tellen.js",
+      "regels": 346,
+      "puur": false,
+      "imports": [
+        "server/ingest.js",
+        "server/media-plek.js",
+        "server/stems.js",
+        "node:fs/promises"
+      ],
+      "tests": [
+        "test/tellen-server.test.mjs",
+        "test/media-verhuis.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Losse cachebestanden en versies (tellen.json, tweede-mening.json, laag.bin); GpuSlot en de rij als idee houden."
+    },
+    {
+      "pad": "src/engine/engine.js (volgMaatgever)",
+      "regels": 931,
+      "puur": false,
+      "imports": [
+        "src/engine/deck.js",
+        "src/engine/audio-graph.js",
+        "src/engine/fx.js",
+        "…"
+      ],
+      "tests": [
+        "test/engine.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Het bestand niet, wel volgMaatgever (≈20 regels, puur) en startOpDeMaat/sync als losse module overnemen."
+    },
+    {
+      "pad": "src/ui/grid-bewaren.js",
+      "regels": 116,
+      "puur": false,
+      "imports": [
+        "src/lib/antwoord.js"
+      ],
+      "tests": [
+        "test/grid-bewaren.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "De lessen (één verzoek, time-out, antwoord lezen, andere tracks na de reeks) meenemen in de v2-opslag."
+    },
+    {
+      "pad": "tools/beatmeting/synth/ (nummers, nep-beatthis, scoor, bench, groep, snap, opstart)",
+      "regels": 934,
+      "puur": false,
+      "imports": [
+        "src/engine/beatgrid.js",
+        "node:fs",
+        "node:crypto"
+      ],
+      "tests": [
+        "test/beatbench.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "De benchmark met bekende antwoorden; v2 meet vanaf dag één hiertegen."
+    },
+    {
+      "pad": "test/synth-nummer.mjs",
+      "regels": 94,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/secties.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Synthetische nummers met bekend sectieantwoord."
+    },
+    {
+      "pad": "tools/toonsoort/toon.mjs",
+      "regels": 724,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/toon.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Kopie van server/toon.js plus varianten; in v2 laat het meetinstrument (meet.mjs, synth.mjs) de server-code importeren en houdt alleen de varianten apart."
+    }
+  ]
+}
