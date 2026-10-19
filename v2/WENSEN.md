@@ -24,6 +24,8 @@ Dit bestand gaat voor de oogst: een kaartje dat hiermee botst, verliest.
   avond door (zoals de automaat: weinig knoppen, veel effect).
 - **19 okt 2026** — op de vraag of bij een jog-aanraking de track of de klok schuift: "de track
   schuift t.o.v. de klok". De klok is dus nooit van een track; een track verschuift erop.
+- **19 okt 2026** — "pitchfader verandert het tempo van de klok, optie a" (op een gekoppeld nummer; alles
+  wat gekoppeld is volgt mee).
 - **19 okt 2026** — "ik wil dat je kijkt naar wat djay doet maar dan wil ik het beter doen met alle
   bevindingen die we hebben." djay (Algoriddim) is de referentie; v2 moet het beter doen met wat v1
   heeft geleerd.

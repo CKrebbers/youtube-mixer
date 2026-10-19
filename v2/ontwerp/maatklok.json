@@ -4,71 +4,468 @@
   "titel": "Maatklok en sync",
   "doel": "Eén klok voor de hele set die tempo, tel en de \"1\" geeft. Alles wat op de maat loopt valt erop: nummers die gesynct zijn, patronen, sampler, effecten op de tel, sectiesprongen, lampjes en beeld. De klok loopt door tot jij hem aanraakt; een nummer zit er met zijn grid aan vast en schuift erop als je de jog gebruikt.",
   "woorden": [
-    { "datum": "19 okt", "tekst": "ik heb vooral het idee dat ritme en bpm en een soort grid iets is wat ik heel belangrijk vind." },
-    { "datum": "19 okt", "tekst": "b en a, een maatklok waar alles op valt." },
-    { "datum": "19 okt", "tekst": "ik denk dat veel met sync gebeurt en die klok blijft inderdaad lopen tot er iets is wat hem aanraakt als het waren. zoals de jogwheel." },
-    { "datum": "19 okt", "tekst": "de track schuift t.o.v. de klok." }
+    {
+      "datum": "19 okt",
+      "tekst": "ik heb vooral het idee dat ritme en bpm en een soort grid iets is wat ik heel belangrijk vind."
+    },
+    {
+      "datum": "19 okt",
+      "tekst": "b en a, een maatklok waar alles op valt."
+    },
+    {
+      "datum": "19 okt",
+      "tekst": "ik denk dat veel met sync gebeurt en die klok blijft inderdaad lopen tot er iets is wat hem aanraakt als het waren. zoals de jogwheel."
+    },
+    {
+      "datum": "19 okt",
+      "tekst": "de track schuift t.o.v. de klok."
+    }
   ],
   "begrippen": [
-    { "naam": "maatklok", "uitleg": "Eén per set. Heeft een tempo (bpm), een doorlopende tel en een maat (standaard 4 tellen) met een \"1\". Hij staat op de audioklok als een gebroken lijn: vanaf moment T staat hij op tel C en loopt hij R tellen per seconde (zoals de patroonklok van v1). Een tempowissel is een nieuw stuk lijn, nooit een sprong." },
-    { "naam": "gekoppeld (sync aan)", "uitleg": "Een nummer zit met zijn grid aan de klok: de tel van het nummer is de tel van de klok plus een vaste verschuiving. Het afspeeltempo volgt daaruit, ook als het nummer zelf van tempo wisselt." },
-    { "naam": "verschuiving", "uitleg": "Hoeveel tellen een gekoppeld nummer voor of achter de klok ligt. Koppelen kiest hem zo dat er niets hoorbaar springt; jog en nudge veranderen hem. Hij is van het nummer op dat deck, niet van de klok." },
-    { "naam": "vrij (sync uit)", "uitleg": "Een nummer speelt op zijn eigen pitch. De klok weet er niets van en wacht er niet op. Zo speelt ambient of iets zonder betrouwbaar grid." },
-    { "naam": "aanraking", "uitleg": "Jog, nudge, fase duwen en ±1 ms op een gekoppeld nummer: ze verschuiven dat nummer t.o.v. de klok. De klok zelf verandert alleen door klokbediening." },
-    { "naam": "klokbediening", "uitleg": "Wat de klok zelf verandert: de tempoknop van de klok, tappen, en \"klok naar dit nummer\". Alles wat gekoppeld is volgt mee zonder van fase te verliezen." },
-    { "naam": "hoorbare klok", "uitleg": "Dezelfde lijn, maar zoals je hem hoort: verschoven met de uitgangsvertraging (de formule van hoorbaar.js in v1). Plannen gebeurt op de klok, tonen (lampjes, beeld, de tel op het scherm) op de hoorbare klok." }
+    {
+      "naam": "maatklok",
+      "uitleg": "Eén per set. Heeft een tempo (bpm), een doorlopende tel en een maat (standaard 4 tellen) met een \"1\". Hij staat op de audioklok als een gebroken lijn: vanaf moment T staat hij op tel C en loopt hij R tellen per seconde (zoals de patroonklok van v1). Een tempowissel is een nieuw stuk lijn, nooit een sprong."
+    },
+    {
+      "naam": "gekoppeld (sync aan)",
+      "uitleg": "Een nummer zit met zijn grid aan de klok: de tel van het nummer is de tel van de klok plus een vaste verschuiving. Het afspeeltempo volgt daaruit, ook als het nummer zelf van tempo wisselt."
+    },
+    {
+      "naam": "verschuiving",
+      "uitleg": "Hoeveel tellen een gekoppeld nummer voor of achter de klok ligt. Koppelen kiest hem zo dat er niets hoorbaar springt; jog en nudge veranderen hem. Hij is van het nummer op dat deck, niet van de klok."
+    },
+    {
+      "naam": "vrij (sync uit)",
+      "uitleg": "Een nummer speelt op zijn eigen pitch. De klok weet er niets van en wacht er niet op. Zo speelt ambient of iets zonder betrouwbaar grid."
+    },
+    {
+      "naam": "aanraking",
+      "uitleg": "Jog, nudge, fase duwen en ±1 ms op een gekoppeld nummer: ze verschuiven dat nummer t.o.v. de klok. De klok zelf verandert alleen door klokbediening."
+    },
+    {
+      "naam": "klokbediening",
+      "uitleg": "Wat de klok zelf verandert: de tempoknop van de klok, tappen, en \"klok naar dit nummer\". Alles wat gekoppeld is volgt mee zonder van fase te verliezen."
+    },
+    {
+      "naam": "hoorbare klok",
+      "uitleg": "Dezelfde lijn, maar zoals je hem hoort: verschoven met de uitgangsvertraging (de formule van hoorbaar.js in v1). Plannen gebeurt op de klok, tonen (lampjes, beeld, de tel op het scherm) op de hoorbare klok."
+    }
   ],
   "besluiten": [
-    { "id": "klok-B01", "status": "besloten", "titel": "Eén maatklok waar alles op valt", "tekst": "Er is één klok voor de set. Het grid onder elk nummer zegt hoe dat nummer aan de klok vastzit.", "waarom": "Clay 19 okt: \"b en a, een maatklok waar alles op valt.\"", "kaartjes": ["muziekkennis-082"] },
-    { "id": "klok-B02", "status": "besloten", "titel": "De klok loopt door tot iets hem aanraakt", "tekst": "De klok wisselt nooit vanzelf naar een ander nummer omdat dat harder klinkt. Een nummer dat stopt, remt of wegdraait verandert niets aan de klok.", "waarom": "Clay 19 okt: \"die klok blijft inderdaad lopen tot er iets is wat hem aanraakt\". Daarmee vervalt de maatgever van v1 als stuur (de hardst klinkende met 3 dB/250 ms hysterese): die bestond om flapperen tussen twee even harde decks tegen te gaan, en met een klok die doorloopt is er niets dat flappert.", "kaartjes": ["muziekkennis-068", "muziekkennis-069", "dj-workflow-041", "beeld-009"] },
-    { "id": "klok-B03", "status": "besloten", "titel": "Jog en nudge schuiven het nummer, niet de klok", "tekst": "Een aanraking op een gekoppeld nummer verandert zijn verschuiving. De klok en de andere nummers merken er niets van.", "waarom": "Clay 19 okt: \"de track schuift t.o.v. de klok\".", "kaartjes": ["bediening-089", "dj-workflow-039"] },
-    { "id": "klok-B04", "status": "voorstel", "titel": "Sync is een koppeling die blijft, niet een eenmalige gelijkzetting", "tekst": "Sync aan = gekoppeld tot je het uitzet. Het nummer blijft op de klok, ook bij een tempowissel in zijn tempokaart of een live opname die een beetje zwerft.", "waarom": "In v1 is sync eenmalig: tempo gelijk en fase binnen een halve tel, daarna loopt een album of live opname weer weg. Sync-lock stond in elke lijst (ONTBREEKT A3, VERBETERINGEN, WINST) en is nooit gebouwd. Met één klok is koppelen de natuurlijke vorm.", "kaartjes": ["muziekkennis-070", "richting-040"] },
-    { "id": "klok-B05", "status": "voorstel", "titel": "De klok begint bij het eerste dat je start", "tekst": "Loopt de klok nog niet, dan neemt hij het hoorbare tempo en de \"1\" over van het eerste nummer dat je start (met een zeker grid), of het tempo van het eerste patroon. Dat nummer is meteen gekoppeld. Daarna leidt de klok.", "waarom": "Zo hoef je niets in te stellen om te beginnen, en is er vanaf de eerste tel één klok.", "kaartjes": ["muziekkennis-069", "produceren-039"] },
-    { "id": "klok-B06", "status": "voorstel", "titel": "Drie manieren om de klok te veranderen", "tekst": "(1) De tempoknop van de klok: de klok glijdt naar het nieuwe tempo. (2) Tappen. (3) \"Klok naar dit nummer\" (Shift + Sync): de klok neemt tempo en tel over van dat nummer zoals je het nu hoort. Alles wat gekoppeld is volgt mee, zonder fasesprong; wat al gepland is (noten van patronen) blijft staan.", "waarom": "Glijden zonder sprong is precies wat de patroonklok van v1 al doet (een rechte lijn naar de doellijn, wat gepland is staat vast; getest met 1000 venstergrenzen).", "kaartjes": ["produceren-035", "produceren-036", "muziekkennis-031"] },
-    { "id": "klok-B07", "status": "voorstel", "titel": "Koppelen springt nooit meer dan een halve tel", "tekst": "Sync aan legt de verschuiving op de dichtstbijzijnde tel: het nummer schuift hooguit een halve tel. De \"1\" van het nummer op de \"1\" van de klok leggen gebeurt alleen als je dat vraagt: met starten op de maat, of met een aparte handeling (open vraag klok-O2).", "waarom": "Verder springen dan een halve tel is muzikaal onzin (v1, sync()). De maat uitlijnen kan tot twee tellen springen; dat moet een keuze zijn.", "kaartjes": ["muziekkennis-070", "muziekkennis-071"] },
-    { "id": "klok-B08", "status": "voorstel", "titel": "Weigeren alleen waar het grid de handeling raakt", "tekst": "Onzeker over de tel: koppelen weigert met een melding, het nummer blijft vrij. Twijfel alleen over de \"1\": koppelen mag (dat raakt alleen de tel), maar wat op de \"1\" rekent weigert (starten op de maat, secties, loops van hele maten).", "waarom": "\"Een onzeker grid is erger dan geen grid: de sync lijkt te lukken en loopt na een paar maten een tel weg.\" In v1 staat de regel voor de \"1\" precies omgekeerd: sync weigert bij twijfel over de maat, starten op de maat niet.", "kaartjes": ["muziekkennis-016", "muziekkennis-017", "muziekkennis-013"] },
-    { "id": "klok-B09", "status": "voorstel", "titel": "Alles op de tel abonneert zich op de klok", "tekst": "Effecten op de maat, sampler, patronen, sectiesprongen, knipperende lampjes, beeld en de Stroommachine lezen de klok (of de hoorbare klok). Niemand rekent zelf een tel uit en niemand hoeft te herankeren: verandert de klok, dan krijgt iedereen de nieuwe lijn.", "waarom": "In v1 moest elke afnemer zelf herankeren bij seek, hotcue, tempo, gridbewerking en stukgrens; één vergeten heranker liet een gate na 20 minuten een zestiende naast lopen.", "kaartjes": ["audio-kern-040", "muziekkennis-072", "beeld-065"] },
-    { "id": "klok-B10", "status": "voorstel", "titel": "Plannen op de klok, tonen op de hoorbare klok", "tekst": "Geluid wordt gepland op de klok (audioklok, vooruit). Lampjes, beeld en de tel op het scherm volgen de hoorbare klok: dezelfde lijn, min de uitgangsvertraging. Eén formule, op één plek.", "waarom": "v1 hoorbaar.js: zonder één formule liep elk onderdeel een andere vertraging achter.", "kaartjes": ["audio-kern-017", "beeld-065"] },
-    { "id": "klok-B11", "status": "voorstel", "titel": "Een gekoppeld nummer wordt per stuk lijn afgespeeld", "tekst": "Klok-tel → tel van het nummer (+ verschuiving) → plek in het nummer (grid.timeOf) is stuksgewijs recht: elk stuk van de klok en elk stuk van de tempokaart. De engine geeft de afspeelmotor per stuk één segment {T, P, R}, precies het segment van v1. Nooit een eigen teller.", "waarom": "Regel 3 en het segmentmodel van v1 blijven zo heel; de worklet hoeft niets nieuws te weten.", "kaartjes": ["audio-kern-001", "muziekkennis-002"] },
-    { "id": "klok-B12", "status": "voorstel", "titel": "Zonder grid speelt een nummer vrij, de klok loopt door", "tekst": "Ambient of iets zonder betrouwbaar grid speelt vrij. De klok loopt eronder door, zodat een echo op de maat of een patroon er gewoon op kan blijven lopen.", "waarom": "De oogst zegt dat Clay's repertoire veel beatloos of onzeker materiaal heeft; de bewakers van de auto-DJ maken beatloos al de hoofdroute.", "kaartjes": ["dj-workflow-046"] }
+    {
+      "id": "klok-B01",
+      "status": "besloten",
+      "titel": "Eén maatklok waar alles op valt",
+      "tekst": "Er is één klok voor de set. Het grid onder elk nummer zegt hoe dat nummer aan de klok vastzit.",
+      "waarom": "Clay 19 okt: \"b en a, een maatklok waar alles op valt.\"",
+      "kaartjes": [
+        "muziekkennis-082"
+      ]
+    },
+    {
+      "id": "klok-B02",
+      "status": "besloten",
+      "titel": "De klok loopt door tot iets hem aanraakt",
+      "tekst": "De klok wisselt nooit vanzelf naar een ander nummer omdat dat harder klinkt. Een nummer dat stopt, remt of wegdraait verandert niets aan de klok.",
+      "waarom": "Clay 19 okt: \"die klok blijft inderdaad lopen tot er iets is wat hem aanraakt\". Daarmee vervalt de maatgever van v1 als stuur (de hardst klinkende met 3 dB/250 ms hysterese): die bestond om flapperen tussen twee even harde decks tegen te gaan, en met een klok die doorloopt is er niets dat flappert.",
+      "kaartjes": [
+        "muziekkennis-068",
+        "muziekkennis-069",
+        "dj-workflow-041",
+        "beeld-009"
+      ]
+    },
+    {
+      "id": "klok-B03",
+      "status": "besloten",
+      "titel": "Jog en nudge schuiven het nummer, niet de klok",
+      "tekst": "Een aanraking op een gekoppeld nummer verandert zijn verschuiving. De klok en de andere nummers merken er niets van.",
+      "waarom": "Clay 19 okt: \"de track schuift t.o.v. de klok\".",
+      "kaartjes": [
+        "bediening-089",
+        "dj-workflow-039"
+      ]
+    },
+    {
+      "id": "klok-B04",
+      "status": "voorstel",
+      "titel": "Sync is een koppeling die blijft, niet een eenmalige gelijkzetting",
+      "tekst": "Sync aan = gekoppeld tot je het uitzet. Het nummer blijft op de klok, ook bij een tempowissel in zijn tempokaart of een live opname die een beetje zwerft.",
+      "waarom": "In v1 is sync eenmalig: tempo gelijk en fase binnen een halve tel, daarna loopt een album of live opname weer weg. Sync-lock stond in elke lijst (ONTBREEKT A3, VERBETERINGEN, WINST) en is nooit gebouwd. Met één klok is koppelen de natuurlijke vorm.",
+      "kaartjes": [
+        "muziekkennis-070",
+        "richting-040"
+      ]
+    },
+    {
+      "id": "klok-B05",
+      "status": "voorstel",
+      "titel": "De klok begint bij het eerste dat je start",
+      "tekst": "Loopt de klok nog niet, dan neemt hij het hoorbare tempo en de \"1\" over van het eerste nummer dat je start (met een zeker grid), of het tempo van het eerste patroon. Dat nummer is meteen gekoppeld. Daarna leidt de klok.",
+      "waarom": "Zo hoef je niets in te stellen om te beginnen, en is er vanaf de eerste tel één klok.",
+      "kaartjes": [
+        "muziekkennis-069",
+        "produceren-039"
+      ]
+    },
+    {
+      "id": "klok-B06",
+      "status": "voorstel",
+      "titel": "Drie manieren om de klok te veranderen",
+      "tekst": "(1) De tempoknop van de klok: de klok glijdt naar het nieuwe tempo. (2) Tappen. (3) \"Klok naar dit nummer\" (Shift + Sync): de klok neemt tempo en tel over van dat nummer zoals je het nu hoort. Alles wat gekoppeld is volgt mee, zonder fasesprong; wat al gepland is (noten van patronen) blijft staan.",
+      "waarom": "Glijden zonder sprong is precies wat de patroonklok van v1 al doet (een rechte lijn naar de doellijn, wat gepland is staat vast; getest met 1000 venstergrenzen).",
+      "kaartjes": [
+        "produceren-035",
+        "produceren-036",
+        "muziekkennis-031"
+      ]
+    },
+    {
+      "id": "klok-B07",
+      "status": "voorstel",
+      "titel": "Koppelen springt nooit meer dan een halve tel",
+      "tekst": "Sync aan legt de verschuiving op de dichtstbijzijnde tel: het nummer schuift hooguit een halve tel. De \"1\" van het nummer op de \"1\" van de klok leggen gebeurt alleen als je dat vraagt: met starten op de maat, of met een aparte handeling (open vraag klok-O2).",
+      "waarom": "Verder springen dan een halve tel is muzikaal onzin (v1, sync()). De maat uitlijnen kan tot twee tellen springen; dat moet een keuze zijn.",
+      "kaartjes": [
+        "muziekkennis-070",
+        "muziekkennis-071"
+      ]
+    },
+    {
+      "id": "klok-B08",
+      "status": "voorstel",
+      "titel": "Weigeren alleen waar het grid de handeling raakt",
+      "tekst": "Onzeker over de tel: koppelen weigert met een melding, het nummer blijft vrij. Twijfel alleen over de \"1\": koppelen mag (dat raakt alleen de tel), maar wat op de \"1\" rekent weigert (starten op de maat, secties, loops van hele maten).",
+      "waarom": "\"Een onzeker grid is erger dan geen grid: de sync lijkt te lukken en loopt na een paar maten een tel weg.\" In v1 staat de regel voor de \"1\" precies omgekeerd: sync weigert bij twijfel over de maat, starten op de maat niet.",
+      "kaartjes": [
+        "muziekkennis-016",
+        "muziekkennis-017",
+        "muziekkennis-013"
+      ]
+    },
+    {
+      "id": "klok-B09",
+      "status": "voorstel",
+      "titel": "Alles op de tel abonneert zich op de klok",
+      "tekst": "Effecten op de maat, sampler, patronen, sectiesprongen, knipperende lampjes, beeld en de Stroommachine lezen de klok (of de hoorbare klok). Niemand rekent zelf een tel uit en niemand hoeft te herankeren: verandert de klok, dan krijgt iedereen de nieuwe lijn.",
+      "waarom": "In v1 moest elke afnemer zelf herankeren bij seek, hotcue, tempo, gridbewerking en stukgrens; één vergeten heranker liet een gate na 20 minuten een zestiende naast lopen.",
+      "kaartjes": [
+        "audio-kern-040",
+        "muziekkennis-072",
+        "beeld-065"
+      ]
+    },
+    {
+      "id": "klok-B10",
+      "status": "voorstel",
+      "titel": "Plannen op de klok, tonen op de hoorbare klok",
+      "tekst": "Geluid wordt gepland op de klok (audioklok, vooruit). Lampjes, beeld en de tel op het scherm volgen de hoorbare klok: dezelfde lijn, min de uitgangsvertraging. Eén formule, op één plek.",
+      "waarom": "v1 hoorbaar.js: zonder één formule liep elk onderdeel een andere vertraging achter.",
+      "kaartjes": [
+        "audio-kern-017",
+        "beeld-065"
+      ]
+    },
+    {
+      "id": "klok-B11",
+      "status": "voorstel",
+      "titel": "Een gekoppeld nummer wordt per stuk lijn afgespeeld",
+      "tekst": "Klok-tel → tel van het nummer (+ verschuiving) → plek in het nummer (grid.timeOf) is stuksgewijs recht: elk stuk van de klok en elk stuk van de tempokaart. De engine geeft de afspeelmotor per stuk één segment {T, P, R}, precies het segment van v1. Nooit een eigen teller.",
+      "waarom": "Regel 3 en het segmentmodel van v1 blijven zo heel; de worklet hoeft niets nieuws te weten.",
+      "kaartjes": [
+        "audio-kern-001",
+        "muziekkennis-002"
+      ]
+    },
+    {
+      "id": "klok-B12",
+      "status": "voorstel",
+      "titel": "Zonder grid speelt een nummer vrij, de klok loopt door",
+      "tekst": "Ambient of iets zonder betrouwbaar grid speelt vrij. De klok loopt eronder door, zodat een echo op de maat of een patroon er gewoon op kan blijven lopen.",
+      "waarom": "De oogst zegt dat Clay's repertoire veel beatloos of onzeker materiaal heeft; de bewakers van de auto-DJ maken beatloos al de hoofdroute.",
+      "kaartjes": [
+        "dj-workflow-046"
+      ]
+    },
+    {
+      "id": "klok-B13",
+      "status": "besloten",
+      "titel": "De pitchfader van een gekoppeld nummer is het tempo van de klok",
+      "tekst": "Schuif je de pitchfader van een gekoppeld nummer, dan verandert het tempo van de klok, en alles wat gekoppeld is volgt mee. Een vrij nummer houdt zijn eigen pitch. Er is dus nooit een dode fader.",
+      "waarom": "Clay 19 okt, op open vraag klok-O1: \"pitchfader verandert het tempo van de klok, optie a\".",
+      "kaartjes": [
+        "dj-workflow-039"
+      ]
+    }
   ],
   "scenarios": [
-    { "id": "klok-S01", "gegeven": "Er speelt niets en de klok loopt niet.", "wanneer": "Ik start nummer A (zeker grid, 124 bpm).", "dan": "De klok begint op 124 bpm met zijn \"1\" op de \"1\" van A zoals je die hoort. A staat gekoppeld.", "besluiten": ["klok-B05"] },
-    { "id": "klok-S02", "gegeven": "De klok loopt op 124 met A gekoppeld.", "wanneer": "Ik laad B (128 bpm, zeker grid), start hem en druk Sync.", "dan": "B speelt op 124 (rate 0,969) en schuift naar de dichtstbijzijnde tel van de klok, hooguit een halve tel. Sync op B brandt; B blijft gekoppeld tot ik het uitzet.", "besluiten": ["klok-B04", "klok-B07"] },
-    { "id": "klok-S03", "gegeven": "B is gekoppeld.", "wanneer": "Ik draai de jog van B een stukje vooruit en laat los.", "dan": "B ligt verder voor op de klok en blijft daar. De klok, A en alles op de tel blijven precies waar ze waren.", "besluiten": ["klok-B03"] },
-    { "id": "klok-S04", "gegeven": "B is gekoppeld.", "wanneer": "Ik houd Nudge ▶ van B een halve seconde vast.", "dan": "Zolang ik druk loopt B 4% sneller dan de klok; daarna weer precies op klok-tempo, met de opgebouwde voorsprong als nieuwe verschuiving.", "besluiten": ["klok-B03"] },
-    { "id": "klok-S05", "gegeven": "A en B zijn gekoppeld.", "wanneer": "Ik stop A, of draai zijn fader dicht.", "dan": "De klok loopt door op hetzelfde tempo. B en alles op de tel merken niets.", "besluiten": ["klok-B02"] },
-    { "id": "klok-S06", "gegeven": "De klok loopt op 124, A en B gekoppeld, een patroon speelt.", "wanneer": "Ik draai de tempoknop van de klok naar 126.", "dan": "De klok glijdt naar 126. A en B versnellen mee en blijven op dezelfde tel. Het patroon speelt geen noot dubbel en slaat er geen over.", "besluiten": ["klok-B06", "klok-B09"] },
-    { "id": "klok-S07", "gegeven": "De klok loopt op 124. C speelt vrij op 132.", "wanneer": "Ik druk Shift + Sync op C.", "dan": "De klok neemt tempo en tel van C over zoals ik C nu hoor (132). C is gekoppeld; A en B (gekoppeld) glijden mee naar 132 zonder fasesprong.", "besluiten": ["klok-B06"] },
-    { "id": "klok-S08", "gegeven": "D heeft hier een onzeker grid.", "wanneer": "Ik druk Sync op D.", "dan": "Geweigerd met een melding die zegt waarom en wat helpt (tik het tempo, zet tel 1 of zet het grid op slot). D blijft vrij spelen.", "besluiten": ["klok-B08"] },
-    { "id": "klok-S09", "gegeven": "B is gekoppeld; B's tempokaart gaat halverwege van 128 naar 132 (een album of een live opname).", "wanneer": "B speelt over die grens.", "dan": "B blijft op klok-tempo en op de tel: zijn rate past zich aan, de klok verandert niet.", "besluiten": ["klok-B04", "klok-B11"] },
-    { "id": "klok-S10", "gegeven": "E is een ambientnummer zonder grid; de klok loopt.", "wanneer": "Ik start E en zet een echo op de maat op E.", "dan": "E speelt vrij op zijn eigen tempo; de echo slaat op de tellen van de klok.", "besluiten": ["klok-B12", "klok-B09"] },
-    { "id": "klok-S11", "gegeven": "De klok loopt; B is geladen en staat stil.", "wanneer": "Ik druk Shift + Play (starten op de maat) op B.", "dan": "B wacht en begint precies op de volgende \"1\" van de klok, met zijn eigen \"1\" daarop, gekoppeld. Lampje fel groen tijdens het wachten.", "besluiten": ["klok-B07"] },
-    { "id": "klok-S12", "gegeven": "B is gekoppeld; quantize staat aan.", "wanneer": "Ik druk hotcue 2 van B.", "dan": "B springt naar hotcue 2 en houdt zijn plek t.o.v. de klok (de verschuiving blijft): het blijft in de pas.", "besluiten": ["klok-B03"] },
-    { "id": "klok-S13", "gegeven": "B is gekoppeld en speelt.", "wanneer": "Ik druk nog eens Sync op B.", "dan": "B is vrij en speelt verder op het tempo van dat moment, zonder sprong. Daarna loopt hij langzaam weg als zijn grid van tempo verandert.", "besluiten": ["klok-B04"] },
-    { "id": "klok-S14", "gegeven": "B is gekoppeld.", "wanneer": "Ik rem B (vinylstop) en druk daarna Play.", "dan": "De klok merkt niets van de rem. Na Play pakt B zijn koppeling weer op met dezelfde verschuiving: hij springt terug in de pas.", "besluiten": ["klok-B02"], "open": true },
-    { "id": "klok-S15", "gegeven": "Er speelt niets en de klok loopt niet.", "wanneer": "Ik start een drumpatroon.", "dan": "De klok begint op het tempo van de set (standaard 120, of wat ik tikte). Laad ik later A en druk ik Sync, dan volgt A de klok.", "besluiten": ["klok-B05"] },
-    { "id": "klok-S16", "gegeven": "De klok loopt; F heeft een zeker tempo maar twijfel over de \"1\".", "wanneer": "Ik druk Sync op F, en daarna Shift + Play op een ander nummer G met dezelfde twijfel.", "dan": "F koppelt (de tel is zeker). G weigert met een melding: starten op de maat heeft een zekere \"1\" nodig.", "besluiten": ["klok-B08"] },
-    { "id": "klok-S17", "gegeven": "Alle nummers zijn gestopt, er speelt geen patroon.", "wanneer": "Er gebeurt een minuut niets.", "dan": "De klok loopt door (lampjes knipperen op de tel). Start ik iets, dan valt het op dezelfde klok.", "besluiten": ["klok-B02"], "open": true },
-    { "id": "klok-S18", "gegeven": "B is gekoppeld; ik heb hem met de jog een kwart tel naar voren geschoven.", "wanneer": "Ik kijk naar het scherm of de APC.", "dan": "Ik zie dat B een kwart tel voor ligt (fasemeter), en waar de \"1\" van de klok en van B liggen.", "besluiten": ["klok-B10"] },
-    { "id": "klok-S19", "gegeven": "B is gekoppeld.", "wanneer": "Ik schuif de pitchfader van B.", "dan": "Open: zie klok-O1.", "besluiten": [], "open": true },
-    { "id": "klok-S20", "gegeven": "De klok loopt; de beamer en de Stroommachine staan aan.", "wanneer": "Een nummer wordt gekoppeld, of de klok glijdt naar een ander tempo.", "dan": "Puls, vormen en de Stroommachine slaan op de hoorbare klok, zonder te haperen bij de wissel.", "besluiten": ["klok-B09", "klok-B10"] }
+    {
+      "id": "klok-S01",
+      "gegeven": "Er speelt niets en de klok loopt niet.",
+      "wanneer": "Ik start nummer A (zeker grid, 124 bpm).",
+      "dan": "De klok begint op 124 bpm met zijn \"1\" op de \"1\" van A zoals je die hoort. A staat gekoppeld.",
+      "besluiten": [
+        "klok-B05"
+      ]
+    },
+    {
+      "id": "klok-S02",
+      "gegeven": "De klok loopt op 124 met A gekoppeld.",
+      "wanneer": "Ik laad B (128 bpm, zeker grid), start hem en druk Sync.",
+      "dan": "B speelt op 124 (rate 0,969) en schuift naar de dichtstbijzijnde tel van de klok, hooguit een halve tel. Sync op B brandt; B blijft gekoppeld tot ik het uitzet.",
+      "besluiten": [
+        "klok-B04",
+        "klok-B07"
+      ]
+    },
+    {
+      "id": "klok-S03",
+      "gegeven": "B is gekoppeld.",
+      "wanneer": "Ik draai de jog van B een stukje vooruit en laat los.",
+      "dan": "B ligt verder voor op de klok en blijft daar. De klok, A en alles op de tel blijven precies waar ze waren.",
+      "besluiten": [
+        "klok-B03"
+      ]
+    },
+    {
+      "id": "klok-S04",
+      "gegeven": "B is gekoppeld.",
+      "wanneer": "Ik houd Nudge ▶ van B een halve seconde vast.",
+      "dan": "Zolang ik druk loopt B 4% sneller dan de klok; daarna weer precies op klok-tempo, met de opgebouwde voorsprong als nieuwe verschuiving.",
+      "besluiten": [
+        "klok-B03"
+      ]
+    },
+    {
+      "id": "klok-S05",
+      "gegeven": "A en B zijn gekoppeld.",
+      "wanneer": "Ik stop A, of draai zijn fader dicht.",
+      "dan": "De klok loopt door op hetzelfde tempo. B en alles op de tel merken niets.",
+      "besluiten": [
+        "klok-B02"
+      ]
+    },
+    {
+      "id": "klok-S06",
+      "gegeven": "De klok loopt op 124, A en B gekoppeld, een patroon speelt.",
+      "wanneer": "Ik draai de tempoknop van de klok naar 126.",
+      "dan": "De klok glijdt naar 126. A en B versnellen mee en blijven op dezelfde tel. Het patroon speelt geen noot dubbel en slaat er geen over.",
+      "besluiten": [
+        "klok-B06",
+        "klok-B09"
+      ]
+    },
+    {
+      "id": "klok-S07",
+      "gegeven": "De klok loopt op 124. C speelt vrij op 132.",
+      "wanneer": "Ik druk Shift + Sync op C.",
+      "dan": "De klok neemt tempo en tel van C over zoals ik C nu hoor (132). C is gekoppeld; A en B (gekoppeld) glijden mee naar 132 zonder fasesprong.",
+      "besluiten": [
+        "klok-B06"
+      ]
+    },
+    {
+      "id": "klok-S08",
+      "gegeven": "D heeft hier een onzeker grid.",
+      "wanneer": "Ik druk Sync op D.",
+      "dan": "Geweigerd met een melding die zegt waarom en wat helpt (tik het tempo, zet tel 1 of zet het grid op slot). D blijft vrij spelen.",
+      "besluiten": [
+        "klok-B08"
+      ]
+    },
+    {
+      "id": "klok-S09",
+      "gegeven": "B is gekoppeld; B's tempokaart gaat halverwege van 128 naar 132 (een album of een live opname).",
+      "wanneer": "B speelt over die grens.",
+      "dan": "B blijft op klok-tempo en op de tel: zijn rate past zich aan, de klok verandert niet.",
+      "besluiten": [
+        "klok-B04",
+        "klok-B11"
+      ]
+    },
+    {
+      "id": "klok-S10",
+      "gegeven": "E is een ambientnummer zonder grid; de klok loopt.",
+      "wanneer": "Ik start E en zet een echo op de maat op E.",
+      "dan": "E speelt vrij op zijn eigen tempo; de echo slaat op de tellen van de klok.",
+      "besluiten": [
+        "klok-B12",
+        "klok-B09"
+      ]
+    },
+    {
+      "id": "klok-S11",
+      "gegeven": "De klok loopt; B is geladen en staat stil.",
+      "wanneer": "Ik druk Shift + Play (starten op de maat) op B.",
+      "dan": "B wacht en begint precies op de volgende \"1\" van de klok, met zijn eigen \"1\" daarop, gekoppeld. Lampje fel groen tijdens het wachten.",
+      "besluiten": [
+        "klok-B07"
+      ]
+    },
+    {
+      "id": "klok-S12",
+      "gegeven": "B is gekoppeld; quantize staat aan.",
+      "wanneer": "Ik druk hotcue 2 van B.",
+      "dan": "B springt naar hotcue 2 en houdt zijn plek t.o.v. de klok (de verschuiving blijft): het blijft in de pas.",
+      "besluiten": [
+        "klok-B03"
+      ]
+    },
+    {
+      "id": "klok-S13",
+      "gegeven": "B is gekoppeld en speelt.",
+      "wanneer": "Ik druk nog eens Sync op B.",
+      "dan": "B is vrij en speelt verder op het tempo van dat moment, zonder sprong. Daarna loopt hij langzaam weg als zijn grid van tempo verandert.",
+      "besluiten": [
+        "klok-B04"
+      ]
+    },
+    {
+      "id": "klok-S14",
+      "gegeven": "B is gekoppeld.",
+      "wanneer": "Ik rem B (vinylstop) en druk daarna Play.",
+      "dan": "De klok merkt niets van de rem. Na Play pakt B zijn koppeling weer op met dezelfde verschuiving: hij springt terug in de pas.",
+      "besluiten": [
+        "klok-B02"
+      ],
+      "open": true
+    },
+    {
+      "id": "klok-S15",
+      "gegeven": "Er speelt niets en de klok loopt niet.",
+      "wanneer": "Ik start een drumpatroon.",
+      "dan": "De klok begint op het tempo van de set (standaard 120, of wat ik tikte). Laad ik later A en druk ik Sync, dan volgt A de klok.",
+      "besluiten": [
+        "klok-B05"
+      ]
+    },
+    {
+      "id": "klok-S16",
+      "gegeven": "De klok loopt; F heeft een zeker tempo maar twijfel over de \"1\".",
+      "wanneer": "Ik druk Sync op F, en daarna Shift + Play op een ander nummer G met dezelfde twijfel.",
+      "dan": "F koppelt (de tel is zeker). G weigert met een melding: starten op de maat heeft een zekere \"1\" nodig.",
+      "besluiten": [
+        "klok-B08"
+      ]
+    },
+    {
+      "id": "klok-S17",
+      "gegeven": "Alle nummers zijn gestopt, er speelt geen patroon.",
+      "wanneer": "Er gebeurt een minuut niets.",
+      "dan": "De klok loopt door (lampjes knipperen op de tel). Start ik iets, dan valt het op dezelfde klok.",
+      "besluiten": [
+        "klok-B02"
+      ],
+      "open": true
+    },
+    {
+      "id": "klok-S18",
+      "gegeven": "B is gekoppeld; ik heb hem met de jog een kwart tel naar voren geschoven.",
+      "wanneer": "Ik kijk naar het scherm of de APC.",
+      "dan": "Ik zie dat B een kwart tel voor ligt (fasemeter), en waar de \"1\" van de klok en van B liggen.",
+      "besluiten": [
+        "klok-B10"
+      ]
+    },
+    {
+      "id": "klok-S19",
+      "gegeven": "B is gekoppeld.",
+      "wanneer": "Ik schuif de pitchfader van B.",
+      "dan": "Het tempo van de klok gaat mee met de fader; A, B en alles op de tel volgen zonder fasesprong. Een vrij nummer verandert niet.",
+      "besluiten": [
+        "klok-B13",
+        "klok-B06"
+      ]
+    },
+    {
+      "id": "klok-S20",
+      "gegeven": "De klok loopt; de beamer en de Stroommachine staan aan.",
+      "wanneer": "Een nummer wordt gekoppeld, of de klok glijdt naar een ander tempo.",
+      "dan": "Puls, vormen en de Stroommachine slaan op de hoorbare klok, zonder te haperen bij de wissel.",
+      "besluiten": [
+        "klok-B09",
+        "klok-B10"
+      ]
+    }
   ],
   "open": [
-    { "id": "klok-O1", "vraag": "Wat doet de pitchfader op een gekoppeld nummer?", "opties": ["(a) Hij verandert het tempo van de klok: alles wat gekoppeld is volgt mee (de fader blijft levend).", "(b) Hij doet niets zolang het nummer gekoppeld is (de fader is even dood; soft-takeover als je ontkoppelt).", "(c) Hij ontkoppelt het nummer en speelt dan vrij op de nieuwe pitch."], "advies": "(a): dan is er altijd één fader die het tempo van de set bedient, en blijft de klok de baas. Wachten op wat djay doet (onderzoek loopt)." },
-    { "id": "klok-O2", "vraag": "Hoe leg je de \"1\" van een gekoppeld nummer op de \"1\" van de klok?", "opties": ["(a) Alleen via starten op de maat; een lopend nummer schuif je met de jog.", "(b) Een eigen handeling, bv. Shift + Jog-druk of een knop \"op de 1\" (v1 had al 'op de 1' in de precisie-acties).", "(c) Sync doet het vanzelf als beide grids een zekere \"1\" hebben (kan tot twee tellen springen)."], "advies": "(b), met (a) erbij: koppelen springt nooit ver, de maat uitlijnen is een bewuste druk." },
-    { "id": "klok-O3", "vraag": "Is een nieuw nummer meteen gekoppeld als de klok loopt?", "opties": ["(a) Ja, sync staat standaard aan voor elk nummer met een zeker grid.", "(b) Nee, je drukt Sync (zoals nu).", "(c) Een instelling per avond of per layout."], "advies": "(c), standaard (b): je repertoire heeft veel nummers die vrij moeten kunnen spelen." },
-    { "id": "klok-O4", "vraag": "Stopt de klok ooit vanzelf?", "opties": ["(a) Nooit; alleen met een expliciete stop (bv. Shift + Stop All).", "(b) Na N minuten zonder iets dat speelt.", "(c) Zodra niets meer speelt; het volgende nummer start hem opnieuw op zijn eigen tempo."], "advies": "(a): dat is \"de klok blijft lopen tot iets hem aanraakt\"." },
-    { "id": "klok-O5", "vraag": "Een rem of scratch op een gekoppeld nummer: na loslaten terug in de pas?", "opties": ["(a) Ja, het nummer pakt zijn verschuiving weer op (springt terug in fase).", "(b) Nee, het speelt verder vanaf waar het is en is dan vrij.", "(c) Ja, maar pas op de volgende tel."], "advies": "(c): terugspringen midden in een tel hoor je; op de tel valt het weg." }
+    {
+      "id": "klok-O2",
+      "vraag": "Hoe leg je de \"1\" van een gekoppeld nummer op de \"1\" van de klok?",
+      "opties": [
+        "(a) Alleen via starten op de maat; een lopend nummer schuif je met de jog.",
+        "(b) Een eigen handeling, bv. Shift + Jog-druk of een knop \"op de 1\" (v1 had al 'op de 1' in de precisie-acties).",
+        "(c) Sync doet het vanzelf als beide grids een zekere \"1\" hebben (kan tot twee tellen springen)."
+      ],
+      "advies": "(b), met (a) erbij: koppelen springt nooit ver, de maat uitlijnen is een bewuste druk."
+    },
+    {
+      "id": "klok-O3",
+      "vraag": "Is een nieuw nummer meteen gekoppeld als de klok loopt?",
+      "opties": [
+        "(a) Ja, sync staat standaard aan voor elk nummer met een zeker grid.",
+        "(b) Nee, je drukt Sync (zoals nu).",
+        "(c) Een instelling per avond of per layout."
+      ],
+      "advies": "(c), standaard (b): je repertoire heeft veel nummers die vrij moeten kunnen spelen."
+    },
+    {
+      "id": "klok-O4",
+      "vraag": "Stopt de klok ooit vanzelf?",
+      "opties": [
+        "(a) Nooit; alleen met een expliciete stop (bv. Shift + Stop All).",
+        "(b) Na N minuten zonder iets dat speelt.",
+        "(c) Zodra niets meer speelt; het volgende nummer start hem opnieuw op zijn eigen tempo."
+      ],
+      "advies": "(a): dat is \"de klok blijft lopen tot iets hem aanraakt\"."
+    },
+    {
+      "id": "klok-O5",
+      "vraag": "Een rem of scratch op een gekoppeld nummer: na loslaten terug in de pas?",
+      "opties": [
+        "(a) Ja, het nummer pakt zijn verschuiving weer op (springt terug in fase).",
+        "(b) Nee, het speelt verder vanaf waar het is en is dan vrij.",
+        "(c) Ja, maar pas op de volgende tel."
+      ],
+      "advies": "(c): terugspringen midden in een tel hoor je; op de tel valt het weg."
+    }
   ],
   "uitV1": [
-    { "pad": "src/engine/patronen/klok.js", "wat": "De gebroken lijn {T, C, R}, glijden naar een doellijn zonder sprong. Wordt de maatklok zelf.", "voorstel": "overnemen" },
-    { "pad": "src/engine/hoorbaar.js", "wat": "Wat je hoort: positie minus uitgangsvertraging × rate. Wordt de hoorbare klok.", "voorstel": "overnemen" },
-    { "pad": "src/engine/beatgrid.js", "wat": "Tempokaart, timeOf/beatAt, maat-anker: hoe een nummer aan de klok vastzit.", "voorstel": "overnemen" },
-    { "pad": "src/engine/stream-kern.js", "wat": "Het segment {T, P, R} en gepland starten: de afspeelmotor hoeft niets nieuws te weten.", "voorstel": "overnemen" },
-    { "pad": "src/control/acties-precisie.js", "wat": "De Duwer (hooguit één nudge per 15 ms), fase duwen op een cirkel, jog, ±1 ms: de aanrakingen.", "voorstel": "overnemen (de rekenregels), herschrijven (als verschuiving i.p.v. seek)" },
-    { "pad": "src/engine/engine.js (volgMaatgever, syncMaster)", "wat": "De maatgever met hysterese en de trappen van syncMaster.", "voorstel": "weg als stuur van de klok; alleen de regel 'kies nooit iets dat remt of wacht' blijft voor klok-B05" },
-    { "pad": "fxKlok + herankeren per afnemer", "wat": "Elke afnemer rekent zelf de tel en herankert.", "voorstel": "weg: vervangen door abonneren op de klok (klok-B09)" }
+    {
+      "pad": "src/engine/patronen/klok.js",
+      "wat": "De gebroken lijn {T, C, R}, glijden naar een doellijn zonder sprong. Wordt de maatklok zelf.",
+      "voorstel": "overnemen"
+    },
+    {
+      "pad": "src/engine/hoorbaar.js",
+      "wat": "Wat je hoort: positie minus uitgangsvertraging × rate. Wordt de hoorbare klok.",
+      "voorstel": "overnemen"
+    },
+    {
+      "pad": "src/engine/beatgrid.js",
+      "wat": "Tempokaart, timeOf/beatAt, maat-anker: hoe een nummer aan de klok vastzit.",
+      "voorstel": "overnemen"
+    },
+    {
+      "pad": "src/engine/stream-kern.js",
+      "wat": "Het segment {T, P, R} en gepland starten: de afspeelmotor hoeft niets nieuws te weten.",
+      "voorstel": "overnemen"
+    },
+    {
+      "pad": "src/control/acties-precisie.js",
+      "wat": "De Duwer (hooguit één nudge per 15 ms), fase duwen op een cirkel, jog, ±1 ms: de aanrakingen.",
+      "voorstel": "overnemen (de rekenregels), herschrijven (als verschuiving i.p.v. seek)"
+    },
+    {
+      "pad": "src/engine/engine.js (volgMaatgever, syncMaster)",
+      "wat": "De maatgever met hysterese en de trappen van syncMaster.",
+      "voorstel": "weg als stuur van de klok; alleen de regel 'kies nooit iets dat remt of wacht' blijft voor klok-B05"
+    },
+    {
+      "pad": "fxKlok + herankeren per afnemer",
+      "wat": "Elke afnemer rekent zelf de tel en herankert.",
+      "voorstel": "weg: vervangen door abonneren op de klok (klok-B09)"
+    }
   ],
   "contract": "// Schets, geen code van v1.\nklok.lijn            // [{ T, C, R }]: vanaf audiokloktijd T staat de klok op tel C, R tellen/s\nklok.maat            // tellen per maat (4); de \"1\" ligt op C = 0, 4, 8, …\nklok.telOp(t)        // tel op audiokloktijd t (plannen)\nklok.tijdVan(tel)    // audiokloktijd van een tel\nklok.hoorbaar(t)     // tel zoals je hem hoort: telOp(t - uitgangsvertraging)\nklok.volgendeEen(t)  // audiokloktijd van de volgende \"1\" na t (+ startDrempel)\nklok.zetTempo(bpm, { glij })  // nieuw stuk lijn ná wat gepland is, nooit een sprong\nklok.naarNummer(deck)         // tempo en tel van wat je van dat deck hoort\nklok.abonneer(fn)             // fn(lijn) bij elke wijziging; afnemers rekenen zelf niets\n\ndeck.koppeling       // null (vrij) of { verschuiving }  // in tellen\n// gekoppeld: tel van het nummer = klok.telOp(t) + verschuiving\n//            plek in het nummer = grid.timeOf(tel van het nummer)\n//            -> per stuk lijn één segment { T, P, R } naar de afspeelmotor\ndeck.koppel()        // weigert op een onzeker grid; verschuiving = dichtstbijzijnde tel\ndeck.ontkoppel()     // speelt vrij verder op de rate van nu\ndeck.duw(tellen)     // jog, nudge, fase: alleen de verschuiving",
   "djay": "Het onderzoek naar djay loopt; de vergelijking komt hier.",
