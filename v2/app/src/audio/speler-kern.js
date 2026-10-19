@@ -97,6 +97,7 @@ export function maakKern(ctxSr, { overvloei = OVERVLOEI, sprong = OVERVLOEI_SPRO
     sR: new Float64Array(MAX_SEGMENTEN),
     sSpeelt: new Uint8Array(MAX_SEGMENTEN),
     sN: 0,
+    ongeldig: 0,                             // segmenten die planSegmenten weigerde (de worklet meldt het)
     // Twee bronnen om de beurt: bij laad/leeg leest wat uitvloeit nog de oude.
     bronPag: [null, null],                   // array van Int16Array|undefined, of null
     bronSr: new Float64Array(2),
@@ -184,7 +185,7 @@ export function leegBron(k) {
 export function planSegmenten(k, segmenten) {
   if (!segmenten || segmenten.length === 0) return 0;
   const T0 = +segmenten[0].T;
-  if (!Number.isFinite(T0)) return 0;
+  if (!Number.isFinite(T0)) { k.ongeldig += segmenten.length; return 0; }
   let n = k.sN;
   while (n > 0 && k.sT[n - 1] >= T0) n--;
   let erbij = 0, vorigeT = -Infinity;
@@ -192,8 +193,7 @@ export function planSegmenten(k, segmenten) {
     const s = segmenten[i];
     const T = +s.T, P = +s.P, speelt = !!s.speelt;
     const R = speelt ? +s.R : 1;
-    if (!Number.isFinite(T) || !Number.isFinite(P) || !Number.isFinite(R) || T < vorigeT) continue;
-    if (speelt && !(R > 0)) continue;
+    if (!Number.isFinite(T) || !Number.isFinite(P) || !Number.isFinite(R) || T < vorigeT || (speelt && !(R > 0))) { k.ongeldig++; continue; }
     k.sT[n] = T; k.sP[n] = P; k.sR[n] = R; k.sSpeelt[n] = speelt ? 1 : 0;
     vorigeT = T; n++; erbij++;
   }

@@ -89,18 +89,18 @@ export class Speler {
     this.node = new AudioWorkletNode(ctx, 'varve-speler', {
       numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
     });
-    this.onfout = null;                      // (bericht: string) => void
+    this.onfout = null;                      // (bericht: string, kapot: boolean) => void; kapot = hij speelt stil
     this._lijn = [];                         // de geplande segmenten, voor positie()
     this._weg = false;
     this.node.port.onmessage = (e) => {
       const m = e.data;
-      if (m && m.type === 'fout') this._meld(`afspeler: ${m.bericht}`);
+      if (m && m.type === 'fout') this._meld(`afspeler: ${m.bericht}`, m.kapot !== false);
     };
     this.node.onprocessorerror = (e) => this._meld(`afspeler gestopt (processorerror)${e?.message ? `: ${e.message}` : ''}`);
   }
 
-  _meld(bericht) {
-    if (typeof this.onfout === 'function') this.onfout(bericht);
+  _meld(bericht, kapot = true) {
+    if (typeof this.onfout === 'function') this.onfout(bericht, kapot);
     else console.error(bericht);             // een fout blijft nooit stil
   }
 

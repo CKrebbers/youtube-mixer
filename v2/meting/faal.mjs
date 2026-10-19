@@ -4,13 +4,15 @@
  *   node v2/meting/faal.mjs
  *
  * M7  een nummer van 31 minuten laden (zoals het ADRIANA-album in v1): hoeveel geheugen?
- * M8a tabblad op de achtergrond: timers worden geknepen. Blijft een gekoppelde track over
- *     een grens van zijn tempokaart heen op de klok? (de motor speelt wat gepland is)
+ * M8a tabblad op de achtergrond: Chrome knijpt de timers (1×/s, na 5 min 1×/min). Blijft een
+ *     gekoppelde track over een grens van zijn tempokaart heen op de klok? Headless verbergt
+ *     een tabblad niet echt (Playwright), dus we zetten de planner zelf 65 s stil: het ergste
+ *     geval van "1×/min". De motor speelt dan alleen wat al gepland was.
  * M8b een fout in de worklet van de afspeelmotor: komt er binnen 1 s een melding?
  * M8c de AudioContext gepauzeerd (zoals na slaap): zie je het, en komt hij terug?
  * Niet hier: de Scarlett eruit trekken (alleen op de Mac, zie MAC.md).
  */
-import { opzet, LAAD_IN_PAGINA } from './gemeen.mjs';
+import { opzet, LAAD_IN_PAGINA, procesGeheugenMB } from './gemeen.mjs';
 
 const o = await opzet({ poort: 8803 });
 const r = {};
@@ -29,10 +31,13 @@ try {
   };
 
   // ---- M7 ------------------------------------------------------------------------
-  const voor = await geheugen();
+  const voor = await geheugen(), voorProces = await procesGeheugenMB();
   await o.page.evaluate(() => window.__laad(1, { toon: 220, duur: 31 * 60 }));
-  const na = await geheugen();
-  r.M7 = { nummerMinuten: 31, extraMB: +(na - voor).toFixed(1), grens: 50, geslaagd: na - voor <= 50 };
+  await o.page.waitForTimeout(1500);
+  const na = await geheugen(), naProces = await procesGeheugenMB();
+  // De JS-heap van de pagina ziet de pagina's niet (die gaan naar de audiothread): het proces wel.
+  const extra = naProces - voorProces;
+  r.M7 = { nummerMinuten: 31, extraMB: +extra.toFixed(1), extraHeapPaginaMB: +(na - voor).toFixed(1), verwachtZonderStreamenMB: +(31 * 60 * 48000 * 4 / 1e6).toFixed(0), grens: 50, geslaagd: extra <= 50 };
 
   // ---- M8a -------------------------------------------------------------------------
   await o.page.evaluate(async () => {
@@ -45,9 +50,10 @@ try {
     e.bus.doe('track.3.play', true);
     e.bus.doe('track.3.sync', true);
     // Tel hoe vaak de engine vooruit plant.
+    // De planner 65 s stil (zoals een verborgen tabblad na 5 min: 1×/min).
     window.__tikken = 0;
-    const tik = e.tik.bind(e);
-    e.tik = () => { window.__tikken++; tik(); };
+    window.__tik = e.tik.bind(e);
+    e.tik = () => { window.__tikken++; };
   });
   const tweede = await o.browser.newPage();
   await tweede.goto('about:blank');
@@ -55,7 +61,7 @@ try {
   await o.page.waitForTimeout(1000);
   const zicht = await o.page.evaluate(() => document.visibilityState);
   const t0 = Date.now();
-  await o.page.waitForTimeout(45000);
+  await o.page.waitForTimeout(64000);
   // Gemeten terwijl hij nog verborgen is: wat de motor speelt (de laatst geplande segmenten)
   // tegen waar de track hoort te zijn.
   r.M8a = await o.page.evaluate(() => {
@@ -68,8 +74,9 @@ try {
     return { plekNu: t.plek(nu), voorbijGrens: t.plek(nu) > 60, tikkenVerborgen: window.__tikken, grootsteAfwijkingMs: +(grootste * 1000).toFixed(3) };
   });
   r.M8a.zichtbaarheid = zicht;
-  r.M8a.secondenVerborgen = Math.round((Date.now() - t0) / 1000);
-  r.M8a.geslaagd = r.M8a.grootsteAfwijkingMs <= 1;
+  r.M8a.secondenZonderPlanner = Math.round((Date.now() - t0) / 1000) + 1;
+  r.M8a.geslaagd = r.M8a.grootsteAfwijkingMs <= 1 && r.M8a.voorbijGrens;
+  await o.page.evaluate(() => { window.varve.tik = window.__tik; });
   await o.page.bringToFront();
   await tweede.close();
 

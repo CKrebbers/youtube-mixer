@@ -85,8 +85,10 @@ engine.on('laad', ({ n, stand }) => { if (stand !== 'klaar') return; engine.meld
 const start = $('#start');
 const zetStart = () => { start.hidden = ctx.state === 'running'; };
 start.onclick = () => ctx.resume().then(zetStart);
-ctx.onstatechange = zetStart;
-document.addEventListener('pointerdown', () => { if (ctx.state !== 'running') ctx.resume().then(zetStart); }, { once: true });
+ctx.addEventListener('statechange', zetStart);
+// Elke klik zolang hij niet loopt (ook na een slaap), niet alleen de eerste.
+document.addEventListener('pointerdown', () => { if (ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().then(zetStart); });
+document.addEventListener('keydown', () => { if (ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().then(zetStart); });
 zetStart();
 
 // ---- de library -------------------------------------------------------------------------

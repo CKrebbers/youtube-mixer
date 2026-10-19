@@ -36,7 +36,15 @@ class VarveSpeler extends AudioWorkletProcessor {
   _bericht(m) {
     try {
       if (!m || this.gestopt) return;
-      if (m.type === 'plan') { if (!this.kapot) planSegmenten(this.kern, m.segmenten); }
+      if (m.type === 'plan') {
+        if (this.kapot) return;
+        planSegmenten(this.kern, m.segmenten);
+        // Een segment dat hij niet kan spelen wordt overgeslagen (de rest speelt door), maar nooit stil.
+        if (this.kern.ongeldig > 0) {
+          this.port.postMessage({ type: 'fout', kapot: false, bericht: `${this.kern.ongeldig} ongeldig(e) segment(en) overgeslagen` });
+          this.kern.ongeldig = 0;
+        }
+      }
       else if (m.type === 'laad') {
         this.kapot = false;
         laadBron(this.kern, m.sr, m.frames, m.paginas);
@@ -62,7 +70,7 @@ class VarveSpeler extends AudioWorkletProcessor {
     this.kern = maakKern(sampleRate);
     if (this.kapot) return;
     this.kapot = true;
-    this.port.postMessage({ type: 'fout', bericht: String((e && (e.stack || e.message)) || e) });
+    this.port.postMessage({ type: 'fout', kapot: true, bericht: String((e && (e.stack || e.message)) || e) });
   }
 
   process(_in, outputs) {

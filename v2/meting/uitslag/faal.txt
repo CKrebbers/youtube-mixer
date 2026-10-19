@@ -1,0 +1,31 @@
+{
+  "M7": {
+    "nummerMinuten": 31,
+    "extraMB": 349.8,
+    "extraHeapPaginaMB": 0.1,
+    "verwachtZonderStreamenMB": 357,
+    "grens": 50,
+    "geslaagd": false
+  },
+  "M8a": {
+    "plekNu": 102.01062626262627,
+    "voorbijGrens": true,
+    "tikkenVerborgen": 260,
+    "grootsteAfwijkingMs": 0,
+    "zichtbaarheid": "visible",
+    "secondenZonderPlanner": 65,
+    "geslaagd": true
+  },
+  "M8b": {
+    "meldingNaMs": 3,
+    "geslaagd": true
+  },
+  "M8c": {
+    "knopGeluidAanZichtbaar": true,
+    "meldingVanDeEngine": true,
+    "naEenHandeling": "running",
+    "naDeKnop": "running",
+    "geslaagd": true
+  },
+  "fouten": []
+}

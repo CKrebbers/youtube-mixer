@@ -59,3 +59,27 @@ export const stats = (xs) => {
   const gem = s.reduce((a, b) => a + b, 0) / s.length;
   return { n: s.length, min: s[0], mediaan: q(0.5), p95: q(0.95), max: s.at(-1), gem, spreiding: Math.sqrt(s.reduce((a, b) => a + (b - gem) ** 2, 0) / s.length) };
 };
+
+/**
+ * Het geheugen van alles wat deze meting startte (Chrome, zijn renderer, de audiothread): de som
+ * van het RSS van alle nakomelingen van dit proces, in MB. Met `ps`, dus op Linux en op de Mac.
+ * Telt ook wat buiten de JS-heap staat (de pagina's van een nummer, in de worklet), en dat is
+ * precies wat performance.measureUserAgentSpecificMemory headless niet geeft. Gebruik het als
+ * VERSCHIL (voor/na): RSS telt gedeelde bibliotheken mee.
+ */
+export async function procesGeheugenMB() {
+  const { execFileSync } = await import('node:child_process');
+  const regels = execFileSync('ps', ['-A', '-o', 'pid=,ppid=,rss='], { encoding: 'utf8' }).trim().split('\n');
+  const kinderen = new Map();
+  const rss = new Map();
+  for (const r of regels) {
+    const [pid, ppid, kb] = r.trim().split(/\s+/).map(Number);
+    rss.set(pid, kb);
+    if (!kinderen.has(ppid)) kinderen.set(ppid, []);
+    kinderen.get(ppid).push(pid);
+  }
+  let som = 0;
+  const rij = [...(kinderen.get(process.pid) ?? [])];
+  while (rij.length) { const p = rij.pop(); som += rss.get(p) ?? 0; rij.push(...(kinderen.get(p) ?? [])); }
+  return som / 1024;
+}

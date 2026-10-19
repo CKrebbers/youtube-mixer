@@ -70,10 +70,13 @@ export class Engine extends Emitter {
       t.on('verander', () => this.emit('track', t.n));
     }
     this.bus.on('geweigerd', ({ id, reden }) => this.meld(`${id}: ${reden}`, 'fout', `geweigerd:${id}`));
+    this._bewaakContext();
     definieerActies(this);
     this.klaar = Promise.all(this.tracks.map(async (t) => {
       t.speler = await audio.speler(ctx);
-      t.speler.onfout = (bericht) => this.meld(`track ${t.n}: de afspeelmotor gaf een fout (${bericht}); hij speelt stil tot je opnieuw laadt`, 'fout', `speler:${t.n}`);
+      t.speler.onfout = (bericht, kapot = true) => this.meld(kapot
+        ? `track ${t.n}: de afspeelmotor gaf een fout (${bericht}); hij speelt stil tot je opnieuw laadt`
+        : `track ${t.n}: de afspeelmotor: ${bericht}`, 'fout', `speler:${t.n}`);
       t.speler.node?.connect?.(t.strip.in);
       t.plan();
     }));
@@ -170,6 +173,34 @@ export class Engine extends Emitter {
   // ---- meldingen ----------------------------------------------------------------
 
   meld(tekst, soort = 'info', sleutel = null) { this.emit('melding', { tekst, soort, sleutel }); }
+
+  /**
+   * De AudioContext bewaken (M8, v1 gezondheid.js): staat hij stil terwijl hij liep (slaap, de
+   * geluidskaart eruit, Chrome), dan een melding die blijft tot hij weer loopt; de eerste
+   * handeling daarna probeert hem weer aan te zetten, hooguit eens per seconde. Vóór de eerste
+   * start meldt hij niets: Chrome start een context pas na een klik, dat is geen storing.
+   */
+  _bewaakContext() {
+    const ctx = this.ctx;
+    if (typeof ctx.addEventListener !== 'function') return;
+    let stand = ctx.state === 'running' ? 'loopt' : 'nooit', laatstePoging = -Infinity;   // nooit | loopt | stil
+    ctx.addEventListener('statechange', () => {
+      if (ctx.state === 'running') {
+        if (stand === 'stil') this.meld('het geluid loopt weer', 'info', 'audio');
+        stand = 'loopt';
+      } else if (stand === 'loopt' && ctx.state !== 'closed') {
+        stand = 'stil';
+        this.meld(`het geluid staat stil (AudioContext ${ctx.state}): de klok en de tracks staan ook stil; druk op een knop om hem weer aan te zetten`, 'fout', 'audio');
+      }
+    });
+    this.bus.on('actie', () => {
+      if (stand !== 'stil' || ctx.state === 'running' || ctx.state === 'closed') return;
+      const nu = Date.now();
+      if (nu - laatstePoging < 1000) return;
+      laatstePoging = nu;
+      ctx.resume?.().catch((e) => this.meld(`het geluid gaat niet weer aan: ${e?.message ?? e}`, 'fout', 'audio'));
+    });
+  }
 
   vernietig() {
     if (this._timer) clearInterval(this._timer);
