@@ -7,6 +7,7 @@ import { Engine } from '../engine/engine.js';
 import { maakAudio } from '../audio/index.js';
 import { maakKnop, maakFader, maakJog, bindKnoppen, bindSchuiven, bindLampjes } from './bediening.js';
 import { Opnemer } from '../audio/opnemer.js';
+import { maakSamplerUitgang } from '../audio/sampler-uitgang.js';
 import { setId } from '../engine/log.js';
 import { schrijversVoor } from './schrijver.js';
 import { opzetLibrary } from './library.js';
@@ -18,7 +19,7 @@ const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floo
 // ---- opzet ----------------------------------------------------------------------
 
 const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
-const audio = { ...maakAudio(), opnemer: (c, mixer) => new Opnemer(c, mixer.analyser) };
+const audio = { ...maakAudio(), opnemer: (c, mixer) => new Opnemer(c, mixer.analyser), sampler: (c, mixer) => maakSamplerUitgang(c, mixer) };
 const engine = new Engine({ ctx, audio });
 window.varve = engine;   // voor de console en de headless proeven
 const bus = engine.bus;
@@ -89,6 +90,7 @@ const bewaarNummer = (id, data) => fetch(`/api/v2/nummer/${encodeURIComponent(id
 engine.on('hotcue', ({ id, hotcues }) => { if (!id.startsWith('demo')) bewaarNummer(id, { hotcues }); });
 engine.on('cue', ({ id, P }) => { if (!id.startsWith('demo')) bewaarNummer(id, { cue: P }); });
 const recTijd = $('#rec-tijd');
+const samplerTellen = $('#sampler-tellen');
 
 // ---- meldingen ----------------------------------------------------------------------
 
@@ -265,6 +267,8 @@ function teken() {
     if (l.textContent !== tekst) l.textContent = tekst;
     v.el.classList.toggle('focus', engine.focus === v.n);
   }
+  const st = `${engine.sampler.tellen} ${engine.sampler.tellen === 1 ? 'tel' : 'tellen'}`;
+  if (samplerTellen.textContent !== st) samplerTellen.textContent = st;
   const op = engine.opnemer;
   const rec = op?.loopt ? tijd(op.frames / ctx.sampleRate) : '';
   if (recTijd.textContent !== rec) recTijd.textContent = rec;

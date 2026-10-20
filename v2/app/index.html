@@ -34,6 +34,21 @@
   <main class="tracks" id="tracks"></main>
 
   <section class="onder">
+    <div class="sampler" aria-label="Sampler: klik = de laatste tellen van de focus-track knippen, dan spelen/stoppen op de tel; shift = leeg">
+      <strong>SAMPLER</strong>
+      <button data-actie="sampler.1" data-actie-shift="sampler.1.wis" data-lamp>1</button>
+      <button data-actie="sampler.2" data-actie-shift="sampler.2.wis" data-lamp>2</button>
+      <button data-actie="sampler.3" data-actie-shift="sampler.3.wis" data-lamp>3</button>
+      <button data-actie="sampler.4" data-actie-shift="sampler.4.wis" data-lamp>4</button>
+      <button data-actie="sampler.5" data-actie-shift="sampler.5.wis" data-lamp>5</button>
+      <button data-actie="sampler.6" data-actie-shift="sampler.6.wis" data-lamp>6</button>
+      <button data-actie="sampler.7" data-actie-shift="sampler.7.wis" data-lamp>7</button>
+      <button data-actie="sampler.8" data-actie-shift="sampler.8.wis" data-lamp>8</button>
+      <button data-actie="sampler.lengte.korter" data-lamp title="korter knippen">−</button>
+      <span class="sampler-tellen" id="sampler-tellen">4 tellen</span>
+      <button data-actie="sampler.lengte.langer" data-lamp title="langer knippen">+</button>
+      <label class="mini">VOL <input type="range" min="0" max="1" step="0.001" data-waarde="sampler.volume"></label>
+    </div>
     <div class="xfader">
       <span>A</span>
       <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.xfader" aria-label="Crossfader">

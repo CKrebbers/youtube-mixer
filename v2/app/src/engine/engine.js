@@ -19,6 +19,7 @@ import { Beatgrid, TapTempo } from '../kern/grid.js';
 import { Track } from './track.js';
 import { definieerActies } from './acties.js';
 import { Handelingenlog, setId } from './log.js';
+import { Sampler } from './sampler.js';
 
 /** Elke zoveel ms plannen de gekoppelde tracks hun lijn opnieuw vooruit. */
 export const TIK_MS = 250;
@@ -58,6 +59,7 @@ export class Engine extends Emitter {
     this._laadNr = new Array(tracks + 1).fill(0);
     this._instNr = new Array(tracks + 1).fill(0);
     this._speelTrack = null;   // de laatste track die een instrument kreeg (waar een keyboard heen speelt)
+    this.sampler = new Sampler(this, audio.sampler ? audio.sampler(ctx, this.mixer) : null);
     // Verandert de klok door iets anders dan de pitchfader van een track, dan staat die fader
     // niet meer op de stand van de klok: eerst weer erlangs (soft-takeover, modeltest K4c).
     this.klokBron = null;
@@ -107,6 +109,7 @@ export class Engine extends Emitter {
     const nu = this.nu();
     this.klok.ruim(nu - 1);
     for (const t of this.tracks) if (t.gekoppeldOp(nu) || t.wacht !== null) t.plan();
+    this.sampler.tik();
     // Streamen (M7): de pagina's volgen het plan, ook van een track die vrij speelt; het cuepunt
     // staat er altijd (cue moet direct klinken).
     for (const t of this.tracks) t.speler?.bijvullen?.(t.geladen ? [t.cue, ...t.hotcues.filter((h) => h !== null)] : []);
@@ -135,7 +138,7 @@ export class Engine extends Emitter {
   }
 
   /** Mag de klok stoppen? Niet zolang een track hem nodig heeft (speelt gekoppeld, wacht op de maat; K3). */
-  klokNodig() { const nu = this.nu(); return this.tracks.some((t) => t.heeftKlokNodig(nu) || t.speelt); }
+  klokNodig() { const nu = this.nu(); return this.sampler.speelt || this.tracks.some((t) => t.heeftKlokNodig(nu) || t.speelt); }
 
   // ---- mixer ------------------------------------------------------------------
 
@@ -170,6 +173,7 @@ export class Engine extends Emitter {
       const pcm = await nummer.haal();
       if (nr !== this._laadNr[n]) return false;
       t.speler.laad(pcm);
+      t._haal = nummer.haal;      // de sampler opent de bron opnieuw om te knippen
       const grid = nummer.grid ? (nummer.grid instanceof Beatgrid ? nummer.grid : new Beatgrid(nummer.grid)) : null;
       t.laad({ id: nummer.id, titel: nummer.titel, artiest: nummer.artiest ?? '', duur: nummer.duur ?? pcm.frames / pcm.sr, grid, hotcues: nummer.hotcues ?? null, cue: nummer.cue ?? 0 });
       this.emit('laad', { n, stand: 'klaar', nummer });

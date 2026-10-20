@@ -202,6 +202,27 @@ export function definieerActies(engine) {
     lees: (n) => (T(n).instrument ? 0 : null),
   });
 
+  // ---- sampler (plak 5): {n} = de pad (1..8) ---------------------------------------------
+  const S = engine.sampler;
+  bus.defineer({
+    id: 'sampler.{n}', soort: 'trigger', label: 'sampler-pad: vullen, spelen of stoppen',
+    doe: (v, k) => (v ? S.wissel(k) : undefined),
+    lees: (k) => S.lees(k),
+  });
+  bus.defineer({
+    id: 'sampler.{n}.wis', soort: 'trigger', label: 'sampler-pad leeg',
+    doe: (v, k) => (v ? S.wis(k) : undefined),
+    lees: (k) => S.lees(k),
+  });
+  for (const [r, naam] of [[-1, 'korter'], [1, 'langer']]) {
+    bus.defineer({ id: `sampler.lengte.${naam}`, soort: 'trigger', label: `sampler: ${naam} knippen`, doe: (v) => { if (v) S.lengteStap(r); }, lees: () => (S.uitgang ? 0 : null) });
+  }
+  bus.defineer({
+    id: 'sampler.volume', soort: 'waarde', label: 'sampler: volume',
+    doe: (v) => S.uitgang?.zet(v),
+    lees: () => (S.uitgang ? S.uitgang.lees() : null),
+  });
+
   // ---- opnemen -------------------------------------------------------------------------
   bus.defineer({
     id: 'opname', soort: 'trigger', label: 'opnemen aan/uit', meta: { log: 'overslaan', beginstand: false },

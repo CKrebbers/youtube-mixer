@@ -188,3 +188,12 @@ button[disabled] { opacity: .35; cursor: default; }
 .bieb-rij .demo { color: var(--sync); font-size: 10px; letter-spacing: .06em; margin-left: 6px; }
 
 .ctl-status { color: var(--dim); font: 11px var(--f-cijfer); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- sampler ---------------------------------------------------------------- */
+:root { --pad: #b47cff; }
+.sampler { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+.sampler strong { font-size: 11px; letter-spacing: .08em; color: var(--dim); margin-right: 6px; }
+.sampler button { min-width: 34px; font-family: var(--f-cijfer); }
+.sampler button[data-stand="gevuld"] { border-color: var(--pad); color: var(--pad); }
+.sampler button[data-stand="aan"] { background: var(--pad); border-color: var(--pad); color: var(--bg); }
+.sampler-tellen { font: 11px var(--f-cijfer); color: var(--dim); min-width: 60px; text-align: center; }
