@@ -1,0 +1,47 @@
+/* Beeld (plak 4): het paneel met het doek, de noodknoppen, de video-effecten en de vormlagen.
+   NOOIT een laag over de bediening (v1). Twee plekken:
+   - het tabblad "Beeld" onderin (class .paneel, 196 px hoog): doek links, bediening rechts;
+   - een zijkolom naast de tracks (in .met-beeld), als iemand dat ooit wil.
+   Gebruikt de tokens van styles.css (--vlak, --lijn, --tekst, …). */
+
+.beeld-paneel { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; min-height: 0; }
+.beeld-paneel[hidden], .beeld-paneel.paneel[hidden] { display: none; }
+
+/* In het tabblad onderin: doek links (zo hoog als het paneel), bediening rechts en die scrolt. */
+.beeld-paneel.paneel { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 4px 10px; overflow: hidden; }
+.beeld-paneel.paneel .beeld-kop { grid-column: 1 / -1; }
+.beeld-paneel.paneel .beeld-doek { height: 100%; min-height: 0; }
+.beeld-paneel.paneel .beeld-bediening { overflow-y: auto; min-height: 0; }
+
+/* Als zijkolom naast de tracks. */
+.met-beeld { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
+.met-beeld > .tracks { min-width: 0; }
+.met-beeld > .beeld-paneel { width: 420px; overflow-y: auto; }
+@media (max-width: 1500px) { .met-beeld > .beeld-paneel { width: 360px; } }
+
+.beeld-kop { display: flex; align-items: center; gap: 8px; }
+.beeld-kop strong { letter-spacing: .08em; font-size: 11px; color: var(--dim); }
+.beeld-kop button { min-height: 22px; padding: 2px 8px; font-size: 10px; }
+.beeld-status { flex: 1; min-width: 0; font: 11px var(--f-cijfer); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.beeld-doek { position: relative; aspect-ratio: 16 / 9; background: #000; border: 1px solid var(--lijn); border-radius: var(--r); overflow: hidden; }
+.beeld-doek canvas, .beeld-doek video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: contain; background: #000; }
+.beeld-doek .verstopt { visibility: hidden; }
+.beeld-bediening { display: flex; flex-direction: column; gap: 4px; }
+
+.beeld-rij { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.beeld-rij button { min-height: 22px; padding: 2px 6px; font-size: 10px; }
+.beeld-rij button b { font-weight: 400; color: var(--dim); margin-left: 3px; }
+.beeld-rij button[data-stand="aan"] { background: var(--tekst); color: var(--bg); border-color: var(--tekst); }
+.beeld-rij button[data-stand="aan"] b { color: var(--bg); }
+.beeld-nood button[data-beeld^="video.black"][data-stand="aan"] { background: #000; color: var(--tekst); border-color: var(--kill); }
+.beeld-clips[data-stand="leeg"] { border-color: var(--cue); color: var(--cue); }   /* clips uit: alleen eigen beeld */
+.beeld-label { font-size: 10px; letter-spacing: .08em; color: var(--dim); }
+.beeld-rij select { font: 11px var(--f-tekst); color: var(--tekst); background: var(--vlak2); border: 1px solid var(--lijn); border-radius: var(--r); max-width: 150px; }
+
+.beeld-schuif { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px; font-size: 10px; color: var(--dim); min-width: 110px; flex: 1 1 110px; }
+.beeld-schuif.breed { flex-basis: 150px; }
+.beeld-schuif span { min-width: 3.5em; letter-spacing: .04em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeld-schuif input { width: 100%; accent-color: var(--tekst); }
+.beeld-schuif input:disabled { opacity: .3; }
+.vorm-metingen { display: flex; gap: 10px; font: 11px var(--f-cijfer); color: var(--dim); margin-left: auto; }
+.vorm-meting.krap { color: var(--cue); }

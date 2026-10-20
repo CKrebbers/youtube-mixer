@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>VarveDJ — beeld</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  canvas { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+  p { position: fixed; inset: auto 0 16px 0; text-align: center; color: #7b8794; font: 13px system-ui; cursor: default; margin: 0; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<p class="hint">verbinden met de app…</p>
+<!-- Dit venster mengt zelf: zie src/beeld/venster.js en src/beeld/beamer.js. -->
+<script type="module" src="/src/beeld/venster.js"></script>
+</body>
+</html>
