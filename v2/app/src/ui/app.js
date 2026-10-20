@@ -16,6 +16,10 @@ import { opzetIndelingPaneel } from './indeling-paneel.js';
 import { opzetTrackPaneel, instrumentSectie, effectSectie, stemsSectie, patroonSectie } from './track-paneel.js';
 import { Automaat } from '../auto/automaat.js';
 import { opzetBeeld } from '../beeld/opzet.js';
+import { BeeldKoppeling } from '../koppel/beeld.js';
+import { definieerKoppeling } from '../koppel/acties.js';
+import { opzetKoppelPaneel } from './koppel-paneel.js';
+import { Luisteraar } from '../beeld/analyse/luisteraar.js';
 import { definieerAuto } from '../engine/acties-auto.js';
 import { opzetAutoPaneel, maakLaad } from './auto-paneel.js';
 
@@ -40,6 +44,11 @@ document.getElementById('kop-wissel')?.addEventListener('click', (ev) => {
 window.varve = engine;   // voor de console en de headless proeven
 audio.sjablonen?.().then((lijst) => { if (lijst) engine.fx.zetSjablonen(lijst); }).catch(() => engine.meld('de effect-sjablonen kwamen niet binnen: ‹ › loopt per effect', 'fout', 'fx'));
 const bus = engine.bus;
+// De Stroommachine (src/koppel/): klok, kenmerken en tracks naar de relay. Uit en zonder adres gebeurt er niets.
+const stroom = new BeeldKoppeling({ engine, luisteraar: new Luisteraar({ analyser: () => engine.mixer.analyser, sampleRate: () => ctx.sampleRate }), mag: false });
+definieerKoppeling(bus, stroom);
+window.varveStroom = stroom;
+addEventListener('pagehide', () => stroom.stop());
 const overzichten = new Map();   // n -> Float32Array
 
 // ---- tracks opbouwen ---------------------------------------------------------------
@@ -176,6 +185,11 @@ const ctl = opzetControllers({
   },
 });
 window.varveCtl = ctl;
+// Eén tabblad zendt naar de Stroommachine (anders antwoorden er twee op elke ping): met de hub het
+// tabblad dat de hub heeft (niet vervangen), anders het tabblad met de Web Lock.
+const magZenden = (s) => (s.hub ? !s.hub.vervangen : s.tabblad === 'eerste');
+ctl.on('status', (s) => stroom.magZenden(magZenden(s)));
+stroom.magZenden(magZenden(ctl.status()));
 // Wat je zelf leerde, en welke indeling bij welk nummer hoort, staat op de server (~/.varve/v2/instellingen).
 const instelling = (naam) => fetch(`/api/v2/instelling/${naam}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 const bewaarInstelling = (naam, v) => fetch(`/api/v2/instelling/${naam}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) })
@@ -229,6 +243,7 @@ engine.on('patronen-set', (set) => { clearTimeout(patronenTimer); patronenTimer 
 // Beeld (plak 4, src/beeld/): video per track als slaaf van wat je hoort, vormlagen, het losse venster.
 const beeld = opzetBeeld({ engine, bus, paneel: $('#paneel-beeld'), analyser: engine.mixer.analyser });
 void beeld;
+opzetKoppelPaneel({ koppeling: stroom, bus, wortel: $('#paneel-beeld'), meld: (t, so, k) => engine.meld(t, so, k) });
 
 // ---- tekenen ------------------------------------------------------------------------------
 

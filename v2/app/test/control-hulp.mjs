@@ -41,6 +41,7 @@ export const BEKEND = Object.freeze({
     [`track.{n}.stem.${s}`, 'waarde'], [`track.{n}.stem.${s}.kill`, 'trigger'], [`track.{n}.stem.${s}.kill.hold`, 'trigger']])),
   ...Object.fromEntries([1, 2, 3, 4, 5].map((k) => [`track.{n}.patroon.${k}`, 'trigger'])),
   'patronen.stop': 'trigger',
+  ...Object.fromEntries(['intensiteit', 'snelheid', 'helderheid', 'feedback', 'tint', 'dichtheid', 'glitch', 'balans'].map((n) => [`beeld.macro.${n}`, 'waarde'])),
 });
 
 /** Het sjabloon van een concrete id: 'track.3.fader' -> 'track.{n}.fader'. */

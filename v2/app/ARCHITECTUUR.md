@@ -252,4 +252,15 @@ tests. Nog niet: sends, cue, stems, effecten, sampler, instrumenten, MIDI.
   bewakers van v1 (blend alleen met twee zekere grids, tempo ≤ 6%, toon ≤ 1 stap ná de sync),
   overgangen in tellen van de maatklok, de nieuwe op de "1" via `play.quant`, de bas wisselt in het
   midden, Clay wint altijd (CLAY_RECENT 120 s), nooit stilte.
+- **De AV-app-hub** (`control/hub.js`, `hub-vlag.js`, alleen met `?hub=ws://…`): `HubMidi` is een
+  MidiHub met de hub als poort (lease), dus indeling, lampjes en leren blijven gelijk. Met de vlag
+  nooit requestMIDIAccess en beslist de Web Lock niets over MIDI; zonder vlag wordt hub.js niet
+  geladen. Hartslag op de tijd, herverbinden 0,5→5 s, 4001 = vervangen, paniek = `video.black.hold`.
+  Keyboards gaan met de hub nog niet (die komen via Web MIDI).
+- **De Stroommachine** (`src/koppel/`): de zender ongewijzigd uit haar repo; `BeeldKoppeling` leest de
+  engine en stuurt de tel zoals je hem hoort (`klok.tel(nu − vertraging + latentie)`), kenmerken van de
+  master, track per crossfaderkant (pas als de Stroommachine er is, opnieuw na herladen) en de mix.
+  Uit of zonder adres gebeurt er niets. Eén tabblad zendt (met de hub: het tabblad van de hub).
+  Acties `beeld.macro.*` (APC: Shift + Clip/Device View, device-knoppen 1–8), `beeld.regie.*`,
+  `beeld.aan`; de STROOM-rij bovenaan het tabblad Beeld.
 

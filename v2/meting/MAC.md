@@ -110,3 +110,19 @@ Laad een nummer dat in v1 gesplitst is (STEMS-kolom in v1).
 4. Pak midden in een overgang een fader of de crossfader: laat hij los, en gaat hij daarna verder?
 5. Het tabblad een poos op de achtergrond: loopt de overgang door?
 Schrijf het in `uitslag/auto.md`.
+
+## 14. De APC via de hub (plak 6, 15 min)
+Start de AV-app-hub, open `http://localhost:8780/?hub=ws://localhost:7700/app` (v1 dicht).
+1. Komen de lampjes op de APC (de hub zet 0x42)? Bank + Track Select wisselt de focus tussen apps; komt Bank nooit bij VarveDJ aan?
+2. Druk → lampje: voelt het even snel als zonder hub?
+3. LPD8: K2 helderheid, K4 puls, P1 een seconde vasthouden = zwart. Doet de master niets met K1?
+4. Het tabblad een kwartier op de achtergrond met de muziek op pauze: blijft de hub hem zien (geen "stil" of "weg")?
+5. Herstart de hub: verbindt VarveDJ vanzelf opnieuw?
+
+## 15. De Stroommachine (plak 6, 20 min)
+1. Relay en Stroommachine op de pc (of `zsh tools/beeld-lokaal.sh` uit v1 op deze Mac), tabblad Beeld, STROOM aan met het adres.
+2. Volgt ze het tempo en valt haar beeld op de tel van wat je HOORT? Zet de latentie (ms) tot de beamer precies op de kick slaat.
+3. Crossfader van A naar B: wisselt haar scène mee?
+4. Shift + Clip/Device View, device-knoppen 1–8: komen de macro's aan?
+5. Herlaad de Stroommachine (F5): komen de tracks vanzelf terug?
+6. Alle tracks op pauze: de klok van v2 loopt door, dus de Stroommachine blijft hem volgen. Wil je dat, of moet ze dan op haar eigen klok terugvallen (zoals in v1)?

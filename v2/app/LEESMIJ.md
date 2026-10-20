@@ -49,6 +49,14 @@ Eén kolom = één track (knop boven: filter, fader onder). Grid-standen op scen
 hotcues 5–8, kills en beatjump, stems (weg zolang je drukt, shift = vast), patronen. Rechts de
 focus-track. Een eigen indeling maken, leren door aanwijzen en per nummer kiezen: de knop ⌨.
 
+## De hub en de Stroommachine
+
+- **De APC via de AV-app-hub**: open `http://localhost:8780/?hub=ws://localhost:7700/app`. Dan vraagt
+  v2 geen Web MIDI; de hub bezit de APC en de LPD8 (K2 = helderheid van het beeld, K4 = puls,
+  P1 vasthouden = beeld zwart).
+- **De Stroommachine**: tabblad Beeld, de rij STROOM: adres van de relay (`deze Mac` of `pc`),
+  extra latentie in ms (+ = het beeld eerder), aan. De macro's op de APC: Shift + Clip/Device View.
+
 ## Toetsen van de code
 
 ```
@@ -64,5 +72,7 @@ node tools/proef-patronen.mjs     # patronen bouwen met de muis, exact op de klo
 node tools/proef-stems.mjs        # vier stems aan de master: kill, niveau, open na een laad
 node tools/proef-beeld.mjs        # video volgt wat je hoort, noodknoppen, het losse venster
 node tools/proef-auto.mjs         # een automatische blend op de "1", nooit twee bassen, nooit stilte
+node tools/proef-hub.mjs          # de APC via de echte hub (nep-APC/LPD8), met de conformiteitstoets van de hub
+node tools/proef-koppel.mjs       # de Stroommachine: nep-relay, en de echte relay als die naast deze map staat
 ```
 Elke proef draait headless Chrome tegen een eigen server met een tijdelijke datamap.
