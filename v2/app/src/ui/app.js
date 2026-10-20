@@ -13,6 +13,7 @@ import { schrijversVoor } from './schrijver.js';
 import { opzetLibrary } from './library.js';
 import { opzetControllers } from './controllers.js';
 import { opzetIndelingPaneel } from './indeling-paneel.js';
+import { opzetTrackPaneel, instrumentSectie } from './track-paneel.js';
 
 const $ = (s, w = document) => w.querySelector(s);
 const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; };
@@ -190,6 +191,8 @@ function kiesTab(naam) {
 for (const b of document.querySelectorAll('.tabs [data-tab]')) b.addEventListener('click', () => kiesTab(b.dataset.tab));
 try { const t = localStorage.getItem('varve.v2.tab'); if (t) kiesTab(t); } catch { /* geen opslag */ }
 const tabTrackN = $('#tab-track-n');
+const trackPaneel = opzetTrackPaneel({ engine, paneel: $('#paneel-track') });
+trackPaneel.sectie(instrumentSectie({ engine, bus, maakKnop }));
 
 // ---- tekenen ------------------------------------------------------------------------------
 
@@ -299,6 +302,7 @@ function teken() {
   const st = `${engine.sampler.tellen} ${engine.sampler.tellen === 1 ? 'tel' : 'tellen'}`;
   if (samplerTellen.textContent !== st) samplerTellen.textContent = st;
   if (tabTrackN.textContent !== String(engine.focus)) tabTrackN.textContent = engine.focus;
+  trackPaneel.teken();
   const op = engine.opnemer;
   const rec = op?.loopt ? tijd(op.frames / ctx.sampleRate) : '';
   if (recTijd.textContent !== rec) recTijd.textContent = rec;

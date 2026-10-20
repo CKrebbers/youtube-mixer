@@ -58,7 +58,7 @@ function sleepbaar(el, { bus, id, n, leesStand }) {
 }
 
 /** Een draaiknop: canvas met een boog, naam, waarde en eventueel een kill-knop. */
-export function maakKnop(el, bus) {
+export function maakKnop(el, bus, { tekst = null } = {}) {
   const id = el.dataset.waarde;
   el.innerHTML = '<canvas width="60" height="60"></canvas><div><span class="naam"></span><span class="waarde"></span></div>';
   el.querySelector('.naam').textContent = el.dataset.label;
@@ -84,7 +84,7 @@ export function maakKnop(el, bus) {
       }
       if (v === laatst) return;
       laatst = v;
-      waardeEl.textContent = toon(id, v);
+      waardeEl.textContent = v === null || v === undefined ? '—' : tekst ? tekst(v) : toon(id, v);
       el.setAttribute('aria-valuenow', String(v ?? ''));
       const s = cv.width, c = s / 2, r = s * 0.38;
       g.clearRect(0, 0, s, s);

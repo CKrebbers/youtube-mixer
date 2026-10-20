@@ -215,3 +215,11 @@ button[disabled] { opacity: .35; cursor: default; }
 .paneel { background: var(--vlak); border: 1px solid var(--lijn); border-radius: 6px; height: 196px; overflow: auto; }
 .paneel[hidden] { display: none; }
 .leeg-paneel { color: var(--dim); padding: 12px; margin: 0; }
+
+/* ---- tabblad track ------------------------------------------------------------ */
+#paneel-track { display: flex; gap: 14px; padding: 8px 10px; align-items: flex-start; }
+.tp-sectie { display: grid; gap: 6px; align-content: start; }
+.tp-kop { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.tp-kop strong { font-size: 11px; letter-spacing: .08em; color: var(--dim); margin-right: 6px; }
+.tp-kop button.aan { background: var(--klok); color: var(--bg); border-color: var(--klok); }
+.tp-knoppen { display: grid; grid-template-columns: repeat(8, 64px); gap: 6px; }
