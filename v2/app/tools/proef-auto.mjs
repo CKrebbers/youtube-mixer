@@ -31,11 +31,17 @@ try {
     const { maakLaad } = await import('/src/ui/auto-paneel.js');
     const { basOpen } = await import('/src/auto/planner.js');
     const DEMO = ['demo-124', 'demo-128', 'demo-122'];
+    const nummers = () => [...lib.nummers.values()].filter((x) => DEMO.includes(x.id));
     let a = window.varveAuto;
     if (!a) {
-      a = new Automaat({ engine: e, nummers: () => [...lib.nummers.values()].filter((x) => DEMO.includes(x.id)), laad: maakLaad({ engine: e, library: lib }), rnd: () => 0 });
+      a = new Automaat({ engine: e, nummers, laad: maakLaad({ engine: e, library: lib }), rnd: () => 0 });
       if (!bus.heeft('auto.aan')) definieerAuto(bus, a);
       window.varveAuto = a;
+    } else {
+      // De automaat van de app kiest uit ALLE demo's met echt toeval: dan begon hij soms met "Adem (geen
+      // tel)" (geen grid: overvloeien, stille stukken in de adem) en was dit een andere proef. Vastzetten.
+      a.rnd = () => 0;
+      a._nummersFn = nummers;
     }
     const acties = [];
     bus.on('actie', ({ id, v, bron }) => acties.push({ t: e.ctx.currentTime, id, v, bron }));
