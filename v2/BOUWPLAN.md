@@ -59,3 +59,13 @@ moet proberen.
 - Elke actie op de bus komt als `[t, id, v, { bron }]` in het log, met t op de audioklok. Het log staat altijd aan zodra de klok loopt (v1 J18).
 - Opnemen tapt de master ná de limiter. De server schrijft elk stuk op zijn frame (`?frame=N`), zoals v1: herhalen is veilig en een gat wordt stilte.
 - Data staat in `VARVE_V2_DATA`, standaard `~/.varve/v2` (opnames, logs, eigen racks, indelingen). Nooit in git, nooit in iCloud.
+
+## Bewust later (20 okt)
+
+- **iPad en iPhone bedienen** (v1 S7/S8): een schrijfweg van buiten de Mac is een eigen
+  beveiligingsontwerp (koppelcode, cookie, Origin, rem, loslaten bij wegvallen, VAST_NOOIT). Klein
+  in de handen (telling punt 6), groot in risico. Eerst de set op de Mac speelbaar en geproefd.
+- **Het setplan voor de auto-DJ** (v1 PLAN.md, secties, lagen, GO): de automaat rijdt nu op
+  "past bij" uit de library. Het plan komt als Clay de automaat op een avond heeft gehoord.
+- **Keylock** (Signalsmith): de bronwissel is voorbereid (één afspeelmotor met segmenten), maar het
+  is een eigen spoor met een luistertest, zoals in v1.
