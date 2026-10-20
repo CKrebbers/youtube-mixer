@@ -123,9 +123,13 @@ try {
   });
   if (schermPad) await page.screenshot({ path: schermPad });
   console.log(JSON.stringify(uitslag, null, 2));
-  // Gesynct: B even scherp op de tel van de klok als A, en hooguit 1 ms ernaast.
-  const ok = Math.abs(uitslag.gesynct.verschilMs) <= 1 && uitslag.gesynct.B.scherp > 0.8 * uitslag.gesynct.A.scherp
-    && Math.abs(uitslag.klok126.verschilMs) <= 1 && uitslag.klok126.B.scherp > 0.8 * uitslag.klok126.A.scherp
+  // Gesynct: B hooguit 1 ms naast A (de echte maat), en scherp op de tel van de klok (niet uitgesmeerd).
+  // Scherpte als vaste grens, niet als deel van die van A: A schommelt met waar het venster van 4 s in
+  // het nummer valt (gemeten 0,28–0,40 over 8 runs; 0,8 × A gaf 1 op 8 een valse fout in CI).
+  // Gesynct lag B steeds op 0,29–0,39, vrij (128 tegen 124, uitgesmeerd) op 0,06–0,14.
+  const SCHERP = 0.2;
+  const ok = Math.abs(uitslag.gesynct.verschilMs) <= 1 && uitslag.gesynct.B.scherp > SCHERP && uitslag.vrij.B.scherp < SCHERP
+    && Math.abs(uitslag.klok126.verschilMs) <= 1 && uitslag.klok126.B.scherp > SCHERP
     && Math.abs(uitslag.jog.verschilMs - uitslag.jog.verwachtMs) < 1.5 && !fouten.length;
   console.log(fouten.length ? `FOUTEN in de pagina:\n${fouten.join('\n')}` : 'geen fouten in de pagina');
   console.log(ok ? 'GESLAAGD: gesynct op de tel, ook na een tempowissel van de klok en een jog' : 'MISLUKT');
