@@ -29,7 +29,9 @@ export function nepAudio() {
         positie(t) {
           let s = this.segs[0];
           for (const x of this.segs) if (x.T <= t) s = x;
-          return s ? s.P + (t - s.T) * s.R : 0;
+          if (!s) return 0;
+          const p = s.P + (t - s.T) * s.R;
+          return s.lb !== undefined && p >= s.lb ? s.la + ((p - s.la) % (s.lb - s.la)) : p;   // zoals de kern: de lus vouwt terug
         },
         speeltOp(t) { let s = this.segs[0]; for (const x of this.segs) if (x.T <= t) s = x; return !!s?.speelt; },
       };

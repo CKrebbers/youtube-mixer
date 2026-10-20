@@ -441,7 +441,7 @@ test('speler.js: één addModule per context, kopieën, transfer, positie(t), fo
 
 // ---- 8. afvalvrij (als laatste: de rest heeft dan niets meer nodig) -------------
 
-test('8. afvalvrij: 20.000 blokken met wisselende plannen, 0 GC tijdens het renderen', () => {
+test('8. afvalvrij: 20.000 blokken met wisselende plannen (ook lussen), 0 GC tijdens het renderen', () => {
   const s = sinus(440, 44100, 9);
   s.paginas[2] = undefined;                               // ook het gat-pad
   const s2 = sinus(330, SR, 5);
@@ -464,7 +464,9 @@ test('8. afvalvrij: 20.000 blokken met wisselende plannen, 0 GC tijdens het rend
       const soort = toeval();
       if (soort < 0.3) plek = 0.2 + toeval() * 4;          // sprong
       else if (soort < 0.6) { plek += 0; tempo = 0.5 + toeval() * 1.5; } // tempo (sluit aan)
-      segs.push({ T, P: plek, R: tempo, speelt: soort < 0.9 });
+      const seg = { T, P: plek, R: tempo, speelt: soort < 0.9 };
+      if (soort > 0.7 && soort < 0.9) { seg.la = Math.max(0, plek - 0.01); seg.lb = seg.la + 0.05 + toeval() * 0.4; }   // ook het pad van de lus en de naad
+      segs.push(seg);
       const dt = toeval() * lengte / 8 + 0.0005;
       if (soort < 0.9) plek += dt * tempo;
       T += dt;

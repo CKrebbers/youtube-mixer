@@ -75,6 +75,17 @@ export const SPRONG_FRAMES = 2;         // verder dan dit van de klinkende plek 
 export const ZELFDE_LIJN = 1e-9;        // seconden: zo dicht en hetzelfde tempo = dezelfde lijn, niets doen
 export const MAX_SEGMENTEN = 64;        // zoveel wachtende segmenten
 export const STEMMEN = 4;               // zoveel lijnen kunnen tegelijk klinken (overvloeien)
+/**
+ * LOOP: een segment mag een lus [la, lb) hebben (seconden in het nummer). Wat erna zou komen
+ * vouwt terug: plek = la + (p − la) mod (lb − la). Een einde en een begin liggen bijna nooit
+ * op dezelfde hoogte (een tik), dus de laatste LOOP_NAAD vloeit lineair over naar wat vlak
+ * vóór la staat (v1 LOOP_NAAD). Zo is het laatste sample vóór de naad dat van vlak vóór la, en
+ * het eerste erna la zelf: naadloos. Ligt la dichter bij 0 dan LOOP_NAAD, dan staat er niets
+ * vóór: geen naad (v1: anders vloeide hij naar stilte). 10 ms, niet de 5 van v1: bij een
+ * verschil van 0,56 tussen einde en begin gaf 5 ms 1,41× een gewone stap (test/lus-kern), zoals
+ * bij de sprong (OVERVLOEI_SPRONG).
+ */
+export const LOOP_NAAD = 0.010;
 
 const HALF_PI = Math.PI / 2;
 const SCHAAL = 1 / 32768;
@@ -96,6 +107,8 @@ export function maakKern(ctxSr, { overvloei = OVERVLOEI, sprong = OVERVLOEI_SPRO
     sP: new Float64Array(MAX_SEGMENTEN),
     sR: new Float64Array(MAX_SEGMENTEN),
     sSpeelt: new Uint8Array(MAX_SEGMENTEN),
+    sLA: new Float64Array(MAX_SEGMENTEN),     // lus: begin (s), of 0/0 = geen lus
+    sLB: new Float64Array(MAX_SEGMENTEN),
     sN: 0,
     ongeldig: 0,                             // segmenten die planSegmenten weigerde (de worklet meldt het)
     // Twee bronnen om de beurt: bij laad/leeg leest wat uitvloeit nog de oude.
@@ -113,6 +126,8 @@ export function maakKern(ctxSr, { overvloei = OVERVLOEI, sprong = OVERVLOEI_SPRO
     vW: new Float64Array(STEMMEN),           // versterking 0..1 (klinkt als sin(w·π/2))
     vRicht: new Int8Array(STEMMEN),          // +1 komt op, 0 staat, −1 zakt weg
     vDw: new Float64Array(STEMMEN),          // de stap van w van deze stem (start/stop of sprong)
+    vLA: new Float64Array(STEMMEN),          // de lus van de stem (seconden; lb = 0: geen)
+    vLB: new Float64Array(STEMMEN),
     vEnv: new Float64Array(STEMMEN),         // gat-envelop 0..1
     lead: -1,                                // de stem die het laatste segment speelt, of −1
     // Kladblok voor de vier buren van een sample (ruwe Int16-waarden).
@@ -219,7 +234,13 @@ export function planSegmenten(k, segmenten) {
     const T = +s.T, P = +s.P, speelt = !!s.speelt;
     const R = speelt ? +s.R : 1;
     if (!Number.isFinite(T) || !Number.isFinite(P) || !Number.isFinite(R) || T < vorigeT || (speelt && !(R > 0))) { k.ongeldig++; continue; }
+    let la = 0, lb = 0;
+    if (s.lb !== undefined && s.lb !== null) {
+      la = +s.la; lb = +s.lb;
+      if (!(la >= 0) || !(lb > la) || !Number.isFinite(lb)) { k.ongeldig++; continue; }
+    }
     k.sT[n] = T; k.sP[n] = P; k.sR[n] = R; k.sSpeelt[n] = speelt ? 1 : 0;
+    k.sLA[n] = la; k.sLB[n] = lb;
     vorigeT = T; n++; erbij++;
   }
   k.sN = n;
@@ -260,6 +281,9 @@ function stemBlok(k, v, L, R, van, tot) {
   const sr = k.bronSr[b], frames = k.bronFrames[b];
   const f0 = k.klok[0], csr = k.ctxSr;
   const T = k.vT[v], P = k.vP[v], Rr = k.vR[v];
+  const la = k.vLA[v], lb = k.vLB[v], lus = lb > 0, lL = lb - la;
+  const naad = lus && la >= LOOP_NAAD ? LOOP_NAAD : 0;          // geen naad als er niets vóór la staat
+  const laF = Math.floor(la * sr), lbF = Math.floor(lb * sr), lF = lbF - laF;
   const dw = k.vDw[v], de = k.de;
   const bl = k.bl, br = k.br;
   let w = k.vW[v], richt = k.vRicht[v], env = k.vEnv[v];
@@ -276,7 +300,9 @@ function stemBlok(k, v, L, R, van, tot) {
       if (w >= 1) { w = 1; richt = 0; }
       else if (w <= 0) { w = 0; klaar = true; }                  // weggezakt: na deze sample stil
     }
-    const f = (P + ((f0 + i) / csr - T) * Rr) * sr;
+    let pos = P + ((f0 + i) / csr - T) * Rr;
+    if (lus && pos >= lb) pos = la + ((pos - la) % lL);
+    const f = pos * sr;
     if (!(f >= 0) || f >= frames) continue;                     // buiten het nummer: stilte (geen gat)
     const n = Math.floor(f);
     const x = f - n;
@@ -287,6 +313,7 @@ function stemBlok(k, v, L, R, van, tot) {
     m = n + 2;
     if (ok && m < frames) { const q = m >> PAGINA_SHIFT; ok = q < np && pag[q] !== undefined; }
     m = n + vooruit;
+    if (lus && m >= lbF && lF > 0) m = laF + ((m - laF) % lF);   // vooruit in een lus = na het terugvouwen
     if (ok && m < frames) { const q = m >> PAGINA_SHIFT; ok = q < np && pag[q] !== undefined; }
     if (ok) { if (env < 1) { env += de; if (env > 1) env = 1; } }
     else if (env > 0) { env -= de; if (env < 0) env = 0; }
@@ -306,8 +333,21 @@ function stemBlok(k, v, L, R, van, tot) {
     }
     // Hermite is lineair in y: eerst op de ruwe waarden, dan één keer schalen.
     const a = g * env * SCHAAL;
-    L[i] += a * (l1 + 0.5 * x * (l2 - l0 + x * (2 * l0 - 5 * l1 + 4 * l2 - l3 + x * (3 * (l1 - l2) + l3 - l0))));
-    R[i] += a * (r1 + 0.5 * x * (r2 - r0 + x * (2 * r0 - 5 * r1 + 4 * r2 - r3 + x * (3 * (r1 - r2) + r3 - r0))));
+    let yl = l1 + 0.5 * x * (l2 - l0 + x * (2 * l0 - 5 * l1 + 4 * l2 - l3 + x * (3 * (l1 - l2) + l3 - l0)));
+    let yr = r1 + 0.5 * x * (r2 - r0 + x * (2 * r0 - 5 * r1 + 4 * r2 - r3 + x * (3 * (r1 - r2) + r3 - r0)));
+    // De naad van een lus: de laatste LOOP_NAAD lineair naar wat een lus terug staat (vlak vóór la).
+    if (naad > 0 && pos > lb - naad) {
+      const wn = (pos - (lb - naad)) / naad;
+      const f2 = (pos - lL) * sr;
+      const n2 = Math.floor(f2), x2 = f2 - n2;
+      buren(k, pag, n2);
+      const m0 = bl[0], m1 = bl[1], m2 = bl[2], m3 = bl[3], q0 = br[0], q1 = br[1], q2 = br[2], q3 = br[3];
+      const zl = m1 + 0.5 * x2 * (m2 - m0 + x2 * (2 * m0 - 5 * m1 + 4 * m2 - m3 + x2 * (3 * (m1 - m2) + m3 - m0)));
+      const zr = q1 + 0.5 * x2 * (q2 - q0 + x2 * (2 * q0 - 5 * q1 + 4 * q2 - q3 + x2 * (3 * (q1 - q2) + q3 - q0)));
+      yl += wn * (zl - yl); yr += wn * (zr - yr);
+    }
+    L[i] += a * yl;
+    R[i] += a * yr;
   }
   k.vW[v] = w; k.vRicht[v] = richt; k.vEnv[v] = env;
   if (klaar) k.vAan[v] = 0;
@@ -350,21 +390,29 @@ export function renderBlok(k, L, R, frames) {
     let eerst = 0;
     while (eerst + 1 < k.sN && !(t < k.sT[eerst + 1])) eerst++;
     const T = k.sT[eerst], P = k.sP[eerst], Rs = k.sR[eerst], speelt = k.sSpeelt[eerst] === 1;
+    const sla = k.sLA[eerst], slb = k.sLB[eerst];
     const n = k.sN, weg = eerst + 1;
     if (n > weg) {
       k.sT.copyWithin(0, weg, n); k.sP.copyWithin(0, weg, n);
       k.sR.copyWithin(0, weg, n); k.sSpeelt.copyWithin(0, weg, n);
+      k.sLA.copyWithin(0, weg, n); k.sLB.copyWithin(0, weg, n);
     }
     k.sN = n - weg;
     const b = k.bron;
     const lead = k.lead;
     if (lead >= 0 && speelt && k.vBron[lead] === b) {
-      const oud = k.vP[lead] + (t - k.vT[lead]) * k.vR[lead];
-      const nieuw = P + (t - T) * Rs;
+      // Beide plekken teruggevouwen in hun eigen lus: een lus aan- of uitzetten waar je nu
+      // bent is geen sprong, en een lijn die in de lus doorloopt ook niet.
+      let oud = k.vP[lead] + (t - k.vT[lead]) * k.vR[lead];
+      const ola = k.vLA[lead], olb = k.vLB[lead];
+      if (olb > 0 && oud >= olb) oud = ola + ((oud - ola) % (olb - ola));
+      let nieuw = P + (t - T) * Rs;
+      if (slb > 0 && nieuw >= slb) nieuw = sla + ((nieuw - sla) % (slb - sla));
       const d = nieuw > oud ? nieuw - oud : oud - nieuw;
-      if (Rs === k.vR[lead] && d <= ZELFDE_LIJN) continue;        // dezelfde lijn: bit voor bit niets
+      const zelfdeLus = ola === sla && olb === slb;
+      if (Rs === k.vR[lead] && zelfdeLus && d <= ZELFDE_LIJN) continue;   // dezelfde lijn: bit voor bit niets
       if (d <= SPRONG_FRAMES / k.bronSr[b]) {                     // sluit aan: naadloos
-        k.vT[lead] = T; k.vP[lead] = P; k.vR[lead] = Rs;
+        k.vT[lead] = T; k.vP[lead] = P; k.vR[lead] = Rs; k.vLA[lead] = sla; k.vLB[lead] = slb;
         continue;
       }
     }
@@ -379,7 +427,7 @@ export function renderBlok(k, L, R, frames) {
       if (k.vW[u] < zachtst) { zachtst = k.vW[u]; v = u; }
     }
     k.vAan[v] = 1; k.vBron[v] = b;
-    k.vT[v] = T; k.vP[v] = P; k.vR[v] = Rs;
+    k.vT[v] = T; k.vP[v] = P; k.vR[v] = Rs; k.vLA[v] = sla; k.vLB[v] = slb;
     k.vW[v] = 0; k.vRicht[v] = 1; k.vEnv[v] = 1; k.vDw[v] = sprong ? k.dwSprong : k.dw;
     k.lead = v;
   }

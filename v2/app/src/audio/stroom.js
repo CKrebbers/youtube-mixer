@@ -47,6 +47,12 @@ export function paginasNodig(lijn, nu, { sr, frames, pins = [], vooruit = VOORUI
     const b = Math.min(i + 1 < lijn.length ? lijn[i + 1].T : Infinity, tot);
     const Pa = s.speelt ? s.P + (a - s.T) * s.R : s.P;
     if (!s.speelt) { erbij(pagina(Pa)); erbij(pagina(Pa) + 1); continue; }
+    if (s.lb !== undefined && s.lb > s.la) {
+      // Een lus: wat er nog vóór de lus komt, dan de lus zelf met de naad (en wat ervóór staat).
+      const P0 = Pa >= s.lb ? s.la : Pa;
+      for (let p = pagina(Math.max(0, Math.min(P0, s.la) - 0.01)); p <= pagina(s.lb); p++) erbij(p);
+      continue;
+    }
     const Pb = s.P + (b - s.T) * s.R;
     const p0 = pagina(Pa), p1 = pagina(Pb);
     erbij(p0);

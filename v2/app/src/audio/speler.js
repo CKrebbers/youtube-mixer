@@ -73,7 +73,13 @@ function schoon(segmenten) {
     if (speelt && !(R > 0 && Number.isFinite(R))) throw new RangeError(`plan: segment ${i} speelt met R = ${s?.R}; R moet positief zijn`);
     if (T < vorige) throw new RangeError(`plan: segment ${i} ligt vóór het vorige (T ${T} < ${vorige})`);
     vorige = T;
-    uit.push({ T, P, R, speelt });
+    const seg = { T, P, R, speelt };
+    if (s.lb !== undefined && s.lb !== null) {
+      const la = Number(s.la), lb = Number(s.lb);
+      if (!(la >= 0) || !(lb > la) || !Number.isFinite(lb)) throw new RangeError(`plan: segment ${i} heeft een lus [${s.la}, ${s.lb}) die niet klopt`);
+      seg.la = la; seg.lb = lb;
+    }
+    uit.push(seg);
   }
   return uit;
 }
@@ -200,7 +206,11 @@ export class Speler {
     if (lijn.length === 0) return null;
     for (let i = lijn.length - 1; i >= 0; i--) {
       const s = lijn[i];
-      if (s.T <= t) return s.speelt ? s.P + (t - s.T) * s.R : s.P;
+      if (s.T <= t) {
+        if (!s.speelt) return s.P;
+        const p = s.P + (t - s.T) * s.R;
+        return s.lb !== undefined && p >= s.lb ? s.la + ((p - s.la) % (s.lb - s.la)) : p;
+      }
     }
     return lijn[0].P;
   }

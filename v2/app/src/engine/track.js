@@ -29,6 +29,14 @@ export const BEND = 0.04;
 export const BEREIKEN = [0.08, 0.16, 0.5];
 /** Soft-takeover van de pitchfader: zo dicht moet hij bij de stand van de klok komen. */
 const GRIJP = 1e-6;
+/** Lusslengtes in tellen (halveren/verdubbelen loopt hierlangs), en waar hij begint. */
+export const LUS_LENGTES = [1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8, 16, 32];
+export const LUS_BEGIN = 4;
+/** Beatjump: zoveel tellen per druk (v1: standaard 4). */
+export const BEATJUMP = 4;
+/** Hotcues per nummer. */
+export const HOTCUES = 8;
+const mod = (a, n) => a - n * Math.floor(a / n);
 
 export class Track extends Emitter {
   constructor({ n, engine, speler, strip }) {
@@ -46,6 +54,11 @@ export class Track extends Emitter {
     this.bend = 0;             // -1, 0, 1
     this.cue = 0;
     this.kant = n === 1 ? 'A' : n === 2 ? 'B' : 'thru';   // zoals v1: 1 op A, 2 op B, de rest thru
+    // De lus: { A, B (seconden), bA (de tel van A), n (tellen) } of null. Hij geldt voor de hele
+    // track (alle tijdvakken): wat voorbij B komt vouwt terug, hier én in de motor.
+    this.lus = null;
+    this.lusLengte = LUS_BEGIN;
+    this.hotcues = new Array(HOTCUES).fill(null);
   }
 
   // ---- lezen -----------------------------------------------------------------
@@ -60,13 +73,20 @@ export class Track extends Emitter {
     return x;
   }
 
-  /** Plek in het nummer op audiokloktijd t (dezelfde formule als de segmenten). */
-  plek(t) {
+  /** Plek in het nummer op audiokloktijd t (dezelfde formule als de segmenten), teruggevouwen in de lus. */
+  plek(t) { return this._vouw(this._ruw(t)); }
+
+  /** De plek zonder de lus (in een lus: in de tellengte van de lus, lineair voorbij B). */
+  _ruw(t) {
     const x = this._vak(t);
     if (x.soort === 'stil') return x.P;
     if (x.soort === 'vrij') return x.P + (t - x.van) * x.R;
-    return this.grid.timeOf(this.klok.tel(t) + x.v);
+    const c = this.klok.tel(t) + x.v, l = this.lus;
+    if (l && c >= l.bA) return l.A + (c - l.bA) * ((l.B - l.A) / l.n);
+    return this.grid.timeOf(c);
   }
+
+  _vouw(p) { const l = this.lus; return l && p >= l.B ? l.A + mod(p - l.A, l.B - l.A) : p; }
 
   /** Seconden nummer per seconde audioklok op t (exact, zie koppeling.rateOp). */
   snelheid(t) {
@@ -163,9 +183,20 @@ export class Track extends Emitter {
       const van = Math.max(x.van, nu);
       const tot = this._eind(i);
       if (x.soort === 'stil') uit.push({ T: van, P: x.P, R: 0, speelt: false });
-      else if (x.soort === 'vrij') uit.push({ T: van, P: x.P + (van - x.van) * x.R, R: x.R, speelt: true });
+      else if (x.soort === 'vrij') uit.push(this._metLus({ T: van, P: x.P + (van - x.van) * x.R, R: x.R, speelt: true }));
       else if (!this.klok.loopt || !this.grid) uit.push({ T: van, P: this.vakken[i].P ?? 0, R: 0, speelt: false });
-      else {
+      else if (this.lus) {
+        // In een lus: de lijn in de tellengte van de lus, gebroken waar de klok breekt; de
+        // motor vouwt hem terug. (Een lus ligt binnen één stuk van de tempokaart.)
+        const l = this.lus, Lb = (l.B - l.A) / l.n;
+        const eind = Math.min(tot, nu + HORIZON);
+        const T0s = [van];
+        for (const k of this.klok.segmentenTussen(van, eind)) if (k.T > van && k.T < eind) T0s.push(k.T);
+        for (const T of T0s) {
+          if (uit.length >= MAX_SEG - (vakken.length - 1 - i)) break;
+          uit.push(this._metLus({ T, P: l.A + (this.klok.tel(T) + x.v - l.bA) * Lb, R: this.klok.rate(T) * Lb, speelt: true }));
+        }
+      } else {
         const ruimte = MAX_SEG - uit.length - (vakken.length - 1 - i);
         const eind = Math.min(tot, nu + HORIZON);
         let n = 0;
@@ -179,6 +210,8 @@ export class Track extends Emitter {
     return uit;
   }
 
+  _metLus(seg) { if (this.lus) { seg.la = this.lus.A; seg.lb = this.lus.B; } return seg; }
+
   plan() { if (this.speler) this.speler.plan(this.segmenten()); }
 
   // ---- handelingen (A = het moment waarop het ingaat) -----------------------
@@ -190,7 +223,10 @@ export class Track extends Emitter {
     this.grijpt = true;
     this.pitch = 0.5;
     this.bend = 0;
-    this.vakken = [{ van: -Infinity, soort: 'stil', P: 0 }];
+    this.lus = null;
+    this.hotcues = Array.from({ length: HOTCUES }, (_, i) => nummer?.hotcues?.[i] ?? null);
+    this.cue = nummer?.cue ?? 0;
+    this.vakken = [{ van: -Infinity, soort: 'stil', P: this.cue }];
     this._klaar();
   }
 
@@ -381,6 +417,8 @@ export class Track extends Emitter {
     const x = this._vak(A);
     const duur = this.nummer?.duur ?? Infinity;
     P2 = Math.max(0, Math.min(P2, duur));
+    // Naar buiten de lus = de lus eraf (v1); erbinnen blijft hij staan.
+    if (this.lus && (P2 < this.lus.A || P2 >= this.lus.B)) this.lus = null;
     if (x.soort === 'gekoppeld') {
       const c = this.klok.tel(A) + x.v;
       const v = x.v + Math.round(this.grid.beatAt(P2) - c);
@@ -395,6 +433,124 @@ export class Track extends Emitter {
       this._zet(A, { soort: 'gekoppeld', v });
     } else if (x.soort === 'vrij') this._zet(A, { soort: 'vrij', P: P2, R: x.R, zoek: true });
     else this._naarCue(A, P2);
+  }
+
+  // ---- lus, beatjump, hotcues --------------------------------------------------
+
+  /**
+   * Een lus van `this.lusLengte` tellen vanaf de tel onder de plek (op het grid, ook als hij vrij
+   * speelt). Vraagt een grid dat daar zeker is, en dat de lus binnen één stuk van de tempokaart
+   * valt (anders klopt een lus in seconden niet met de tellen).
+   */
+  lusAan() {
+    if (!this.geladen) return { geweigerd: 'geen nummer' };
+    const A = this.engine.straks(), P = this.plek(A);
+    if (!this.telZeker(P)) return { geweigerd: 'geen zeker grid hier: een lus op de tel kan niet' };
+    const n = this.lusLengte, g = this.grid;
+    const bA = n >= 1 ? Math.floor(g.beatAt(P) + 1e-9) : Math.floor((g.beatAt(P) + 1e-9) / n) * n;
+    const La = g.timeOf(bA), Lb = g.timeOf(bA + n);
+    if (g.stukIndex(La) !== g.stukIndex(Lb - 1e-6)) return { geweigerd: 'de lus valt over een tempowissel in het nummer' };
+    if (Lb > (this.nummer.duur ?? Infinity)) return { geweigerd: 'de lus loopt voorbij het einde' };
+    this._zetLus(A, { A: La, B: Lb, bA, n });
+  }
+
+  /** De lus eraf, waar hij nu is: geen sprong, de fase blijft (een geheel aantal lussen terug). */
+  lusUit() {
+    if (!this.lus) return;
+    this._zetLus(this.engine.straks(), null);
+  }
+
+  /** Een andere lus (of geen) vanaf A, zonder dat de plek op A verspringt. */
+  _zetLus(A, nieuw) {
+    const x = this._vak(A);
+    const P = this.plek(A);                      // teruggevouwen in de oude lus
+    const oud = this.lus;
+    if (x.soort === 'gekoppeld' && oud) {
+      // De verschuiving terug naar de plek waar hij nu echt is: hele lussen eraf.
+      const c = this.klok.tel(A) + x.v;
+      const v = c >= oud.bA ? x.v - oud.n * Math.floor((c - oud.bA) / oud.n) : x.v;
+      this.lus = nieuw;
+      this._zet(A, { soort: 'gekoppeld', v: nieuw && P >= nieuw.B ? v - nieuw.n * Math.floor((this.klok.tel(A) + v - nieuw.bA) / nieuw.n) : v });
+      return;
+    }
+    this.lus = nieuw;
+    if (x.soort === 'vrij') this._zet(A, { soort: 'vrij', P: this._vouw(P), R: x.R });
+    else if (x.soort === 'stil') this._zet(A, { soort: 'stil', P: this._vouw(P) });
+    else this._klaar();
+  }
+
+  /** Lus aan/uit met de huidige lengte. */
+  lusWissel() { return this.lus ? this.lusUit() : this.lusAan(); }
+
+  /** Halveren of verdubbelen; staat er een lus, dan verandert die mee (het begin blijft). */
+  lusLengteStap(richting) {
+    const i = LUS_LENGTES.indexOf(this.lusLengte);
+    const j = Math.max(0, Math.min(LUS_LENGTES.length - 1, (i < 0 ? LUS_LENGTES.indexOf(LUS_BEGIN) : i) + richting));
+    const n = LUS_LENGTES[j];
+    this.lusLengte = n;
+    const l = this.lus;
+    if (!l) { this.emit('verander'); return; }
+    const g = this.grid, Lb = g.timeOf(l.bA + n);
+    if (g.stukIndex(l.A) !== g.stukIndex(Lb - 1e-6) || Lb > (this.nummer.duur ?? Infinity)) {
+      this.lusLengte = l.n;
+      return { geweigerd: 'zo lang past de lus hier niet (tempowissel of einde)' };
+    }
+    this._zetLus(this.engine.straks(), { A: l.A, B: Lb, bA: l.bA, n });
+  }
+
+  /**
+   * Beatjump: BEATJUMP tellen verder of terug, fasebehoudend. In een lus schuift de lus mee (v1).
+   * Weigert voorbij het einde of vóór het begin (v1: klemmen brak de beatmatch).
+   */
+  beatjump(richting) {
+    if (!this.geladen) return { geweigerd: 'geen nummer' };
+    const A = this.engine.straks(), P = this.plek(A), g = this.grid;
+    if (!this.telZeker(P)) return { geweigerd: 'geen zeker grid hier: beatjump rekent in tellen' };
+    const d = richting * BEATJUMP;
+    const doel = g.timeOf(g.beatAt(P) + d);
+    if (doel < 0) return { geweigerd: 'begin' };
+    if (doel >= (this.nummer.duur ?? Infinity)) return { geweigerd: 'einde' };
+    const x = this._vak(A);
+    if (this.lus) {
+      const l = this.lus, LA = g.timeOf(l.bA + d), LB = g.timeOf(l.bA + d + l.n);
+      if (LA < 0 || LB > (this.nummer.duur ?? Infinity) || g.stukIndex(LA) !== g.stukIndex(LB - 1e-6)) return { geweigerd: 'de lus past daar niet' };
+      // Eerst de lus eraf waar hij is, dan verder, dan de lus op de nieuwe plek.
+      this._zetLus(A, null);
+      const y = this._vak(A);
+      if (y.soort === 'gekoppeld') this._zet(A, { soort: 'gekoppeld', v: y.v + d });
+      else if (y.soort === 'vrij') this._zet(A, { soort: 'vrij', P: doel, R: y.R });
+      else this._zet(A, { soort: 'stil', P: doel });
+      this._zetLus(A, { A: LA, B: LB, bA: l.bA + d, n: l.n });
+      return;
+    }
+    if (x.soort === 'gekoppeld') this._zet(A, { soort: 'gekoppeld', v: x.v + d });
+    else if (x.soort === 'vrij') this._zet(A, { soort: 'vrij', P: doel, R: x.R });
+    else this._naarCue(A, doel);
+  }
+
+  /**
+   * Hotcue k (0-based): leeg = hier zetten (op de dichtstbijzijnde tel als het grid daar zeker
+   * is), gezet = erheen (zoek: gekoppeld fasebehoudend). Meldt 'hotcue' voor de opslag.
+   */
+  hotcue(k) {
+    if (!this.geladen) return { geweigerd: 'geen nummer' };
+    const h = this.hotcues[k];
+    if (h === null || h === undefined) {
+      const P = this.plek(this.engine.straks());
+      const g = this.grid;
+      this.hotcues[k] = this.telZeker(P) ? Math.max(0, g.timeOf(Math.round(g.beatAt(P)))) : P;
+      this.emit('hotcue', { k, P: this.hotcues[k] });
+      this.emit('verander');
+      return;
+    }
+    this.zoek(h);
+  }
+
+  hotcueWis(k) {
+    if (this.hotcues[k] === null) return;
+    this.hotcues[k] = null;
+    this.emit('hotcue', { k, P: null });
+    this.emit('verander');
   }
 
   /**

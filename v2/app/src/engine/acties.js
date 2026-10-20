@@ -4,6 +4,7 @@
  * hier wordt geschaald.
  */
 import { MIN_BPM, MAX_BPM } from '../kern/klok.js';
+import { HOTCUES } from './track.js';
 
 const bpmUit01 = (v) => MIN_BPM + v * (MAX_BPM - MIN_BPM);
 const bpmNaar01 = (bpm) => (bpm - MIN_BPM) / (MAX_BPM - MIN_BPM);
@@ -92,6 +93,58 @@ export function definieerActies(engine) {
   bus.defineer({
     id: 'klok.stop', soort: 'trigger', label: 'klok stoppen', meta: { gevaarlijk: true },
     doe: (v) => { if (!v) return; if (engine.klokNodig()) return { geweigerd: 'er speelt of wacht nog iets op de klok' }; engine.klok.stop(); },
+  });
+
+  // ---- lus, beatjump, hotcues ---------------------------------------------------------
+  bus.defineer({
+    id: 'track.{n}.loop', soort: 'trigger', label: 'lus aan/uit', meta: { nummer: true },
+    doe: (v, n) => (v ? T(n).lusWissel() : undefined),
+    lees: (n) => (!T(n).geladen ? null : T(n).lus ? 1 : 0),
+  });
+  for (const [r, naam] of [[-1, 'halveer'], [1, 'verdubbel']]) {
+    bus.defineer({
+      id: `track.{n}.loop.${naam}`, soort: 'trigger', label: `lus ${naam}`,
+      doe: (v, n) => (v ? T(n).lusLengteStap(r) : undefined),
+      lees: (n) => (T(n).geladen ? 0 : null),
+    });
+  }
+  for (const [r, naam] of [[1, 'voor'], [-1, 'terug']]) {
+    bus.defineer({
+      id: `track.{n}.beatjump.${naam}`, soort: 'trigger', label: `beatjump ${naam}`, meta: { nummer: true },
+      doe: (v, n) => (v ? T(n).beatjump(r) : undefined),
+      lees: (n) => (T(n).geladen ? 0 : null),
+    });
+  }
+  for (let k = 1; k <= HOTCUES; k++) {
+    // Lampje: null = geen nummer, 0 = leeg, 0,5 = gezet.
+    bus.defineer({
+      id: `track.{n}.hotcue.${k}`, soort: 'trigger', label: `hotcue ${k}`, meta: { nummer: true },
+      doe: (v, n) => (v ? T(n).hotcue(k - 1) : undefined),
+      lees: (n) => (!T(n).geladen ? null : T(n).hotcues[k - 1] === null ? 0 : 0.5),
+    });
+    bus.defineer({
+      id: `track.{n}.hotcue.${k}.wis`, soort: 'trigger', label: `hotcue ${k} wissen`, meta: { nummer: true },
+      doe: (v, n) => (v ? T(n).hotcueWis(k - 1) : undefined),
+      lees: (n) => (!T(n).geladen ? null : T(n).hotcues[k - 1] === null ? 0 : 0.5),
+    });
+  }
+
+  // ---- focus en wat de lampjes van de klok lezen -------------------------------------
+  bus.defineer({
+    id: 'track.{n}.focus', soort: 'trigger', label: 'focus op deze track', meta: { log: 'overslaan' },
+    doe: (v, n) => { if (v) engine.zetFocus(n); },
+    lees: (n) => (engine.focus === n ? 1 : 0),
+  });
+  // Alleen lezen (knipperen op de tel): de fase van de klok zoals je hem HOORT, 0..1 per tel en per maat.
+  bus.defineer({
+    id: 'klok.fase', soort: 'waarde', label: 'fase in de tel (lezen)', meta: { log: 'overslaan', beginstand: false },
+    doe: () => ({ geweigerd: 'alleen lezen' }),
+    lees: () => { const c = engine.hoorbareTel(); return c === null ? null : c - Math.floor(c); },
+  });
+  bus.defineer({
+    id: 'klok.maat', soort: 'waarde', label: 'fase in de maat (lezen)', meta: { log: 'overslaan', beginstand: false },
+    doe: () => ({ geweigerd: 'alleen lezen' }),
+    lees: () => { const c = engine.hoorbareTel(); if (c === null) return null; const m = engine.klok.perMaat; return (c - m * Math.floor(c / m)) / m; },
   });
 
   // ---- strip ------------------------------------------------------------------------

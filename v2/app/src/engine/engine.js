@@ -65,9 +65,12 @@ export class Engine extends Emitter {
       }
       this.emit('klok');
     });
+    this.focus = 1;            // de track met focus (de device-knoppen, het scherm)
     for (const t of this.tracks) {
       t.strip.kant?.(t.kant);
       t.on('verander', () => this.emit('track', t.n));
+      // Hotcues horen bij het NUMMER: de app bewaart ze (v1 hotcue-opslag).
+      t.on('hotcue', ({ k, P }) => { if (t.nummer) this.emit('hotcue', { n: t.n, id: t.nummer.id, k, P, hotcues: [...t.hotcues] }); });
     }
     this.bus.on('geweigerd', ({ id, reden }) => this.meld(`${id}: ${reden}`, 'fout', `geweigerd:${id}`));
     this._bewaakContext();
@@ -161,7 +164,7 @@ export class Engine extends Emitter {
       if (nr !== this._laadNr[n]) return false;
       t.speler.laad(pcm);
       const grid = nummer.grid ? (nummer.grid instanceof Beatgrid ? nummer.grid : new Beatgrid(nummer.grid)) : null;
-      t.laad({ id: nummer.id, titel: nummer.titel, artiest: nummer.artiest ?? '', duur: nummer.duur ?? pcm.frames / pcm.sr, grid });
+      t.laad({ id: nummer.id, titel: nummer.titel, artiest: nummer.artiest ?? '', duur: nummer.duur ?? pcm.frames / pcm.sr, grid, hotcues: nummer.hotcues ?? null, cue: nummer.cue ?? 0 });
       this.emit('laad', { n, stand: 'klaar', nummer });
       return true;
     } catch (e) {
@@ -176,6 +179,13 @@ export class Engine extends Emitter {
   // ---- meldingen ----------------------------------------------------------------
 
   meld(tekst, soort = 'info', sleutel = null) { this.emit('melding', { tekst, soort, sleutel }); }
+
+  /** Focus op track n (de device-knoppen van een controller, het grote deel van het scherm). */
+  zetFocus(n) {
+    if (!(n >= 1 && n <= this.tracks.length) || n === this.focus) return;
+    this.focus = n;
+    this.emit('focus', n);
+  }
 
   /**
    * De audiocontext (ctx) bewaken (M8, v1 gezondheid.js): staat hij stil terwijl hij liep (slaap, de
