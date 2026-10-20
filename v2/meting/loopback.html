@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loopback</title>
+<style>
+  :root { color-scheme: dark; --bg: #0d0e10; --vlak: #16181b; --lijn: #2a2e34; --tekst: #e8eaed; --dim: #8a9099; --ok: #31c46f; --fout: #ef4b4f; }
+  body { margin: 0; padding: 24px max(16px, env(safe-area-inset-left)); background: var(--bg); color: var(--tekst); font: 15px/1.5 -apple-system, system-ui, sans-serif; max-width: 860px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p, li { color: var(--dim); max-width: 70ch; }
+  button { font: 600 15px inherit; padding: 10px 16px; background: var(--vlak); color: var(--tekst); border: 1px solid var(--lijn); border-radius: 4px; cursor: pointer; }
+  select { font: 15px inherit; background: var(--vlak); color: var(--tekst); border: 1px solid var(--lijn); padding: 6px; border-radius: 4px; }
+  pre { background: var(--vlak); border: 1px solid var(--lijn); padding: 12px; border-radius: 4px; white-space: pre-wrap; font: 13px ui-monospace, Menlo, monospace; }
+  .ok { color: var(--ok); } .fout { color: var(--fout); }
+</style>
+</head>
+<body>
+<h1>Loopback: klok, scherm en geluid op de Scarlett</h1>
+<p>Meet M2 uit <code>v2/meting/BUDGET.md</code>: hoeveel ms ligt de klik die uit de Scarlett komt achter op de tel die de app op dat moment denkt te spelen, en is dat stabiel?</p>
+<ol>
+  <li>Kabel van <b>uitgang 1</b> (links) van de Scarlett naar <b>ingang 1</b>. Gain van ingang 1 laag (rond 10 uur), direct monitor UIT. Speakers zacht of uit.</li>
+  <li>Kies hieronder ingang en uitgang (de Scarlett), en druk op Meten. Chrome vraagt om de microfoon: dat is ingang 1.</li>
+  <li>De echte app speelt een kliknummer dat de maatklok start (124 bpm), neemt 20 s ingang 1 op, en legt elke klik naast de tel van de klok.</li>
+</ol>
+<p><label>Ingang <select id="in"></select></label> <label>Uitgang <select id="uit"></select></label></p>
+<p><button id="meet">Meten (20 s)</button></p>
+<pre id="uitslag">nog niet gemeten</pre>
+<script type="module">
+import { analyseer } from './loopback-reken.js';
+const $ = (s) => document.querySelector(s);
+async function apparaten() {
+  try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop()); } catch {}
+  const l = await navigator.mediaDevices.enumerateDevices();
+  for (const [sel, soort] of [[$('#in'), 'audioinput'], [$('#uit'), 'audiooutput']]) {
+    sel.replaceChildren(...l.filter((d) => d.kind === soort).map((d) => Object.assign(document.createElement('option'), { value: d.deviceId, textContent: d.label || d.deviceId })));
+    const sc = [...sel.options].find((o) => /scarlett|focusrite/i.test(o.textContent)); if (sc) sel.value = sc.value;
+  }
+}
+apparaten();
+$('#meet').onclick = async () => {
+  const uit = $('#uitslag');
+  uit.textContent = 'bezig…';
+  const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
+  if (ctx.setSinkId && $('#uit').value) await ctx.setSinkId($('#uit').value);
+  const stroom = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: $('#in').value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  const bron = ctx.createMediaStreamSource(stroom);
+  const code = `registerProcessor('neemop', class extends AudioWorkletProcessor {
+    constructor(o) { super(); this.n = o.processorOptions.n; this.x = new Float32Array(this.n); this.i = 0; this.t0 = null; }
+    process(ins) { const x = ins[0][0]; if (this.i >= this.n) return false; if (this.t0 === null) this.t0 = currentFrame;
+      for (let k = 0; k < 128 && this.i < this.n; k++) this.x[this.i++] = x ? x[k] : 0;
+      if (this.i >= this.n) this.port.postMessage({ x: this.x, f0: this.t0 }); return true; } });`;
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+  // De echte app: engine, strip, mixer en limiter. Een kliknummer (klik op elke tel, grid op
+  // slot) op track 1 start de maatklok; dan meten we de klikken tegen de tellen van DIE klok.
+  const { Engine } = await import('/src/engine/engine.js');
+  const { maakAudio } = await import('/src/audio/index.js');
+  const { PAGINA } = await import('/src/ui/bronnen.js');
+  const engine = new Engine({ ctx, audio: maakAudio() });
+  await engine.klaar; await engine.mixer.klaar;
+  const SEC = 20, BPM = 124, L = 60 / BPM, sr = 48000, frames = 40 * sr;
+  const paginas = [];
+  for (let p = 0; p * PAGINA < frames; p++) {
+    const a = new Int16Array(PAGINA * 2);
+    for (let i = 0; i < PAGINA; i++) { const f = p * PAGINA + i, tel = f / sr / L, fr = (tel - Math.round(tel)) * L * sr; if (fr >= 0 && fr < 48) { a[2 * i] = 16000; a[2 * i + 1] = 16000; } }
+    paginas.push(a);
+  }
+  await engine.laad(1, { id: 'klik', titel: 'klik', duur: 40, grid: { stukken: [{ van: 0, bpm: BPM, anker: 0 }], slot: true }, haal: async () => ({ sr, kanalen: 2, frames, paginas }) });
+  engine.bus.doe('mixer.master', 1);
+  engine.bus.doe('track.1.play', true);
+  await new Promise((r) => setTimeout(r, 300));
+  const tStart = ctx.currentTime;
+  const tellen = [];
+  for (let k = Math.ceil(engine.klok.tel(tStart + 0.4)); engine.klok.tijd(k) < tStart + SEC - 1; k++) tellen.push(engine.klok.tijd(k));
+  const stempels = [];
+  const iv = setInterval(() => stempels.push(ctx.getOutputTimestamp()), 50);
+  const node = new AudioWorkletNode(ctx, 'neemop', { numberOfOutputs: 0, processorOptions: { n: Math.round((SEC + 0.6) * 48000) } });
+  bron.connect(node);
+  const { x, f0 } = await new Promise((r) => { node.port.onmessage = (m) => r(m.data); });
+  clearInterval(iv);
+  stroom.getTracks().forEach((t) => t.stop());
+  const res = analyseer({ opname: x, opnameStart: f0 / 48000, sr: 48000, tellen, stempels, outputLatency: ctx.outputLatency, baseLatency: ctx.baseLatency + (engine.mixer.vertraging || 0) });
+  res.klokBpm = engine.klok.bpm(ctx.currentTime);
+  engine.vernietig();
+  await ctx.close();
+  uit.innerHTML = '';
+  uit.append(JSON.stringify(res, null, 2));
+  const regel = document.createElement('div');
+  regel.className = res.geslaagd ? 'ok' : 'fout';
+  regel.textContent = res.geslaagd ? 'M2 GESLAAGD' : `M2 NIET GEHAALD (${res.reden})`;
+  uit.append('\n', regel);
+};
+</script>
+</body>
+</html>

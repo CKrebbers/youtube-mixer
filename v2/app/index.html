@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VarveDJ</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/src/ui/auto-paneel.css">
+<link rel="stylesheet" href="/src/beeld/beeld.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23f4efe6'/%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="kop">
+    <div class="merk">Varve<span>DJ</span></div>
+    <section class="klok" id="klok" aria-label="Maatklok">
+      <div class="klok-bpm"><span id="klok-bpm">—</span><small>BPM</small></div>
+      <div class="klok-tellen" id="klok-tellen" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="klok-maat" id="klok-maat">klok staat stil</div>
+      <div class="klok-knoppen">
+        <button data-actie="klok.tempo.neer.grof" title="tempo −1">−1</button>
+        <button data-actie="klok.tempo.neer" title="tempo −0,1">−.1</button>
+        <button data-actie="klok.tempo.op" title="tempo +0,1">+.1</button>
+        <button data-actie="klok.tempo.op.grof" title="tempo +1">+1</button>
+        <button data-actie="klok.tap" class="tap" title="tik het tempo">TAP</button>
+      </div>
+    </section>
+    <section class="master" aria-label="Master">
+      <div class="meter" id="meter-master"><i></i><i></i></div>
+      <label class="mini">MASTER <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.master"></label>
+      <span class="kop-groep" id="kop-groep" title="Koptelefoon op kanaal 3/4 van de uitgang">
+        <label class="mini">KOP <input type="range" min="0" max="1" step="0.001" data-waarde="koptelefoon.volume"></label>
+        <label class="mini" title="Mix: links alleen wat je voorbeluistert, rechts alleen de zaal">CUE↔ZAAL <input type="range" min="0" max="1" step="0.001" data-waarde="koptelefoon.mix"></label>
+        <button id="kop-wissel" title="Zaal en koptelefoon omwisselen (1/2 ↔ 3/4); geldt na herladen">⇄</button>
+      </span>
+    </section>
+    <span class="ctl-status" id="ctl-status" title="Controller en indeling"></span>
+    <button class="ind-knop" id="ind-knop" title="Indeling: wisselen, kopiëren, per nummer, leren">⌨</button>
+    <div class="ind-paneel" id="ind-paneel" hidden></div>
+    <button class="rec" data-actie="opname" data-lamp title="Opnemen: de master, zoals de zaal hem hoort, naar ~/.varve/v2/opnames">● REC <span id="rec-tijd"></span></button>
+    <button class="start" id="start">Geluid aan</button>
+  </header>
+
+  <main class="tracks" id="tracks"></main>
+
+  <section class="onder">
+    <div class="onder-rij">
+    <div class="sampler" aria-label="Sampler: klik = de laatste tellen van de focus-track knippen, dan spelen/stoppen op de tel; shift = leeg">
+      <strong>SAMPLER</strong>
+      <button data-actie="sampler.1" data-actie-shift="sampler.1.wis" data-lamp>1</button>
+      <button data-actie="sampler.2" data-actie-shift="sampler.2.wis" data-lamp>2</button>
+      <button data-actie="sampler.3" data-actie-shift="sampler.3.wis" data-lamp>3</button>
+      <button data-actie="sampler.4" data-actie-shift="sampler.4.wis" data-lamp>4</button>
+      <button data-actie="sampler.5" data-actie-shift="sampler.5.wis" data-lamp>5</button>
+      <button data-actie="sampler.6" data-actie-shift="sampler.6.wis" data-lamp>6</button>
+      <button data-actie="sampler.7" data-actie-shift="sampler.7.wis" data-lamp>7</button>
+      <button data-actie="sampler.8" data-actie-shift="sampler.8.wis" data-lamp>8</button>
+      <button data-actie="sampler.lengte.korter" data-lamp title="korter knippen">−</button>
+      <span class="sampler-tellen" id="sampler-tellen">4 tellen</span>
+      <button data-actie="sampler.lengte.langer" data-lamp title="langer knippen">+</button>
+      <label class="mini">VOL <input type="range" min="0" max="1" step="0.001" data-waarde="sampler.volume"></label>
+    </div>
+    <div id="auto-rij"></div>
+    </div>
+    <div class="onder-rij">
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="library" class="aan">Library</button>
+      <button role="tab" data-tab="track" title="Effecten, sends, instrument en patronen van de focus-track">Track <span id="tab-track-n"></span></button>
+      <button role="tab" data-tab="beeld">Beeld</button>
+    </nav>
+    <div class="xfader">
+      <span>A</span>
+      <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.xfader" aria-label="Crossfader">
+      <span>B</span>
+    </div>
+    </div>
+    <div class="paneel" id="paneel-track" data-paneel="track" hidden><p class="leeg-paneel">Hier komen de effecten, sends, het instrument en de patronen van de focus-track.</p></div>
+    <div class="paneel" id="paneel-beeld" data-paneel="beeld" hidden><p class="leeg-paneel">Hier komt het beeld.</p></div>
+    <div class="bieb paneel" data-paneel="library">
+      <div class="bieb-kop">
+        <strong>Library</strong>
+        <input type="search" id="zoek" placeholder="zoek titel of artiest" aria-label="Zoek in de library">
+        <span class="bieb-bron" id="bieb-bron"></span>
+      </div>
+      <div class="bieb-koppen" role="row">
+        <button data-sorteer="titel">titel</button><button data-sorteer="artiest">artiest</button>
+        <button data-sorteer="bpm">bpm</button><button data-sorteer="toon">toon</button>
+        <button data-sorteer="duur">duur</button><button data-sorteer="toegevoegd">nieuw</button>
+      </div>
+      <div class="bieb-lijst" id="bieb-lijst" role="list"></div>
+    </div>
+  </section>
+
+  <div class="meldingen" id="meldingen" role="status" aria-live="polite"></div>
+
+  <template id="tpl-track">
+    <article class="track" data-n="">
+      <header class="t-kop">
+        <button class="t-nr" data-actie="track.{n}.focus" data-lamp title="Focus op deze track"></button>
+        <div class="t-titel"><b>—</b><small>leeg</small></div>
+        <div class="t-tijd"><span class="t-rest">—</span><span class="t-bpm">—</span></div>
+      </header>
+      <canvas class="t-overzicht" height="34" aria-label="Overzicht: klik om te springen"></canvas>
+      <div class="t-fase" title="Waar dit nummer ligt t.o.v. de klok (−½ … +½ tel)"><i></i><b></b></div>
+      <div class="t-transport">
+        <button class="b-sync" data-actie="track.{n}.sync" title="Sync: koppel aan de klok">SYNC</button>
+        <button class="b-klok" data-actie="track.{n}.sync.klok" title="Klok naar dit nummer">KLOK</button>
+        <button class="b-quant" data-actie="track.{n}.play.quant" title="Starten op de volgende 1 van de klok">▶1</button>
+        <button class="b-cue" data-actie="track.{n}.cue">CUE</button>
+        <button class="b-play" data-actie="track.{n}.play">▶</button>
+      </div>
+      <div class="t-cues" aria-label="Hotcues (shift: wissen)">
+        <button data-actie="track.{n}.hotcue.1" data-actie-shift="track.{n}.hotcue.1.wis" data-lamp>1</button>
+        <button data-actie="track.{n}.hotcue.2" data-actie-shift="track.{n}.hotcue.2.wis" data-lamp>2</button>
+        <button data-actie="track.{n}.hotcue.3" data-actie-shift="track.{n}.hotcue.3.wis" data-lamp>3</button>
+        <button data-actie="track.{n}.hotcue.4" data-actie-shift="track.{n}.hotcue.4.wis" data-lamp>4</button>
+        <button data-actie="track.{n}.hotcue.5" data-actie-shift="track.{n}.hotcue.5.wis" data-lamp>5</button>
+        <button data-actie="track.{n}.hotcue.6" data-actie-shift="track.{n}.hotcue.6.wis" data-lamp>6</button>
+        <button data-actie="track.{n}.hotcue.7" data-actie-shift="track.{n}.hotcue.7.wis" data-lamp>7</button>
+        <button data-actie="track.{n}.hotcue.8" data-actie-shift="track.{n}.hotcue.8.wis" data-lamp>8</button>
+      </div>
+      <div class="t-lus">
+        <button data-actie="track.{n}.beatjump.terug" data-lamp title="Beatjump terug (4 tellen)">«</button>
+        <button data-actie="track.{n}.loop.halveer" data-lamp title="Lus halveren">½</button>
+        <button class="b-lus" data-actie="track.{n}.loop" data-lamp title="Lus aan/uit op de tel"><span class="lus-lengte">4</span></button>
+        <button data-actie="track.{n}.loop.verdubbel" data-lamp title="Lus verdubbelen">×2</button>
+        <button data-actie="track.{n}.beatjump.voor" data-lamp title="Beatjump vooruit (4 tellen)">»</button>
+      </div>
+      <div class="t-duw">
+        <button data-actie="track.{n}.nudge.terug" title="Nudge: trager zolang je drukt">‹</button>
+        <div class="jog" data-jog="{n}" title="Jog: sleep om het nummer t.o.v. de klok te schuiven"><span></span></div>
+        <button data-actie="track.{n}.nudge.voor" title="Nudge: sneller zolang je drukt">›</button>
+      </div>
+      <div class="t-strip">
+        <div class="knoppen">
+          <div class="knop" data-waarde="track.{n}.trim" data-label="TRIM"></div>
+          <div class="knop" data-waarde="track.{n}.hoog" data-label="HOOG" data-kill="track.{n}.kill.hoog"></div>
+          <div class="knop" data-waarde="track.{n}.mid" data-label="MID" data-kill="track.{n}.kill.mid"></div>
+          <div class="knop" data-waarde="track.{n}.laag" data-label="LAAG" data-kill="track.{n}.kill.laag"></div>
+          <div class="knop filter" data-waarde="track.{n}.filter" data-label="FILTER"></div>
+        </div>
+        <div class="faders">
+          <div class="fader pitch" data-waarde="track.{n}.pitch" data-label="PITCH" data-midden="1"></div>
+          <div class="fader vol" data-waarde="track.{n}.fader" data-label="VOL"></div>
+        </div>
+      </div>
+      <div class="t-fx" aria-label="Effect en sends">
+        <button data-actie="track.{n}.fx.vorig" title="Vorig effect-rack">‹</button>
+        <button class="b-fx" data-actie="track.{n}.fx.aan" data-lamp title="Effect aan/uit (het rack en zijn knoppen: tabblad Track)">FX</button>
+        <button data-actie="track.{n}.fx.volgend" title="Volgend effect-rack">›</button>
+        <div class="knop klein" data-waarde="track.{n}.fx.mix" data-label="MIX"></div>
+        <div class="knop klein" data-waarde="track.{n}.send.a" data-label="ECHO"></div>
+        <div class="knop klein" data-waarde="track.{n}.send.b" data-label="GALM"></div>
+      </div>
+      <div class="t-onder">
+        <button class="t-pfl" data-actie="track.{n}.pfl" data-lamp title="Koptelefoon: deze track voorbeluisteren (vóór de fader, de zaal hoort hem niet)">CUE</button>
+        <button class="t-kant" data-actie="track.{n}.kant" title="Crossfaderkant: A → B → thru">thru</button>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="/src/ui/app.js"></script>
+</body>
+</html>

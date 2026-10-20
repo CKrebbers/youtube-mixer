@@ -1,0 +1,2693 @@
+{
+  "onderwerp": "systeem",
+  "samenvatting": "De kern van het systeem in v1 is een kale Node-server op 127.0.0.1 naast een Chrome-app: witte lijst na normaliseren, Host/Origin-controle, no-store, Range met een knip voor video, en al het zware werk in workers of kindprocessen, omdat dezelfde server ook de audiopagina's van spelende decks levert. Rond die server is een sterk vangnet gegroeid dat v2 zo mag overnemen: idempotente stukken op hun plek met herhaal.js, een begrensde wachtrij, één meegroeiende melding, 60 s vooruit voor wat je hoort, een herstartlus met hang-wachter, en exit 3 bij een bezette poort; samen gemeten als 30 s server weg zonder één stil venster. De backup-les (iCloud is geen backup, nooit library.db als bestand kopiëren, VACUUM INTO, nooit --delete) is kern. Veel pijn komt uit één bron: code en data in iCloud op het Bureaublad (threadpool-ramp, beperkt(), \" 2\"-kopieën, verhuisgereedschap) en data verspreid over een tiental mappen met ruim 30 VARVE_*-variabelen. In v2 zou ik vanaf dag één code in ~/Projects en alle data in één map buiten de repo zetten, één generieke versie-opslag (hash, 409, .versies) gebruiken in plaats van zes, de server opdelen in kleine domeinmodules, de mixer expliciet laten melden wat hij speelt (één bron voor companion, Controlekamer en server), één headless-harnas en node:test met CI vanaf de eerste PR. Tien losse pagina's en een CLAUDE.md van 2298 regels zijn symptomen van groei per spoor; v2 hoort een schil met rollen en een korte kern te krijgen. Open voor Clay: blijft het browser plus Node, mag de eigen set naar een dienst (U1b), waar gaat de kopie buiten de laptop heen, en hoort herstel na een crash in het ontwerp van de toestand.",
+  "kaartjes": [
+    {
+      "id": "systeem-001",
+      "titel": "Blijft het browser (Chrome) plus een lokale Node-server?",
+      "soort": "open",
+      "wat": "v1 is twee processen: de app draait in Chrome (Web Audio, AudioWorklet, Web MIDI, WebGL2, plain ES-modules zonder build) en een kale Node-server op 127.0.0.1:8777 doet schijf, ingest (yt-dlp, ffmpeg), analyse in workers, SQLite en opslag. Alles wat tijdkritisch is zit in de browser, alles wat schijf of kindprocessen raakt in de server.",
+      "waarom": "Gekozen omdat Web Audio en Web MIDI zonder installatie werken en de cache lokaal moet staan. De prijs: Chrome-only (Web MIDI bestaat niet in Safari), een browser die tabbladen knijpt, crashes in de MIDI-service, en een server die even weg kan zijn. Een native host (bijv. een eigen app met de server erin) zou een deel van de valkuilen hieronder wegnemen maar de nul-build-, nul-dependency-aanpak breken.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies (Build, Server, Browser); Gekozen aanpak"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§3, §5.2"
+        }
+      ],
+      "code": [
+        "index.html",
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "open",
+      "reden": "Dit bepaalt de helft van de kaartjes in dit bestand; Clay moet kiezen voordat v2 zijn skelet krijgt."
+    },
+    {
+      "id": "systeem-002",
+      "titel": "Tien losse HTML-pagina's, elk met eigen regels",
+      "soort": "pijn",
+      "wat": "v1 heeft index.html (mixer), video.html (beamer), plan.html, uitlijn.html, werk.html, apc.html, maschine.html, companion.html, controle.html en spiekbrief.html. Elk heeft eigen afspraken: venster van de mixer via window.opener (plan, uitlijn, video, maschine), geen MIDI en geen Web Lock (companion, controle), wel of niet zelf mengen (video), eigen importboom-toets.",
+      "waarom": "Gegroeid per spoor. Elke pagina is een extra entry in de witte lijst, een extra plek waar \"maar één tabblad praat met de APC\" kan breken, en een extra headless-proef.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Structuur (bovenaan, de .html-regels)"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.1032 MAG"
+        }
+      ],
+      "code": [
+        "index.html",
+        "video.html",
+        "plan.html",
+        "uitlijn.html",
+        "werk.html",
+        "apc.html",
+        "maschine.html",
+        "companion.html",
+        "controle.html",
+        "spiekbrief.html"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 één app-schil met rollen (mixer, beamer, paneel, controle) die bewust kiest wie audio/MIDI/Lock bezit, in plaats van tien pagina's met losse verboden."
+    },
+    {
+      "id": "systeem-003",
+      "titel": "Server zonder framework, alleen op 127.0.0.1",
+      "soort": "besluit",
+      "wat": "De server is node:http zonder dependencies en luistert alleen op 127.0.0.1:8777 (PORT om te verleggen). Toegang van andere apparaten gaat via een proxy ervoor (tailscale serve), nooit door de server op 0.0.0.0 te zetten.",
+      "waarom": "Persoonlijk instrument: niets hoort van buiten bereikbaar te zijn. Een proxy met echt certificaat geeft HTTPS zonder dat de server dat zelf moet kunnen.",
+      "bron": [
+        {
+          "pad": "server/index.js",
+          "waar": "r.43-60, r.2101 listen"
+        },
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": "Hoe het in elkaar zit"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Klein, controleerbaar, geen supply chain."
+    },
+    {
+      "id": "systeem-004",
+      "titel": "Alles met Cache-Control: no-store",
+      "soort": "regel",
+      "wat": "Elk antwoord van de server, ook statische bestanden en JSON, krijgt Cache-Control: no-store.",
+      "waarom": "Chrome houdt ES-modules anders hardnekkig vast en dan debug je een versie die niet meer bestaat. Prijs: bij elk herladen worden alle modules opnieuw gehaald (117 modules voor de mixer), wat met bestanden in iCloud gevaarlijk werd (zie de threadpool).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Server"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.47, r.281, r.1087"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Zonder build-stap is dit de enige manier om zeker te zijn van de versie; met code buiten iCloud kost het niets."
+    },
+    {
+      "id": "systeem-005",
+      "titel": "Witte lijst getoetst op het pad NA decoderen en normaliseren",
+      "soort": "valkuil",
+      "wat": "De server serveert alleen paden die op een witte lijst (MAG) staan, en toetst die op het genormaliseerde pad relatief aan de projectmap. %2f, %5c, %00, backslashes en .- of ..-segmenten worden geweigerd. Wat niet op de lijst staat (library.db, .git, backups, profielen.json) is via HTTP onbereikbaar.",
+      "waarom": "In een review (d2f6844) gaf /src/..%2fmedia%2flibrary.db een 200: de lijst keek naar het pad vóór het oplossen van ..",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Verbeterronde 23 sep: Server, tweede ronde"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.1028-1064 MAG, schoonPad"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Goedkoop en bewezen nodig."
+    },
+    {
+      "id": "systeem-006",
+      "titel": "Host-controle tegen DNS-rebinding, Origin-controle tegen CSRF",
+      "soort": "regel",
+      "wat": "Elk verzoek: Host moet localhost/127.0.0.1/[::1] met de eigen poort zijn, of een naam uit VARVE_HOSTS. Alles behalve GET/HEAD moet een Origin hebben die precies de eigen oorsprong is; zonder Origin (curl, tests) mag het, Origin \"null\" (sandbox, file://) niet. Anders 403.",
+      "waarom": "Een vreemde website kan zijn naam naar 127.0.0.1 laten wijzen en dan als \"same-origin\" de library lezen; de Host-kop verraadt dat. Een POST vanaf een vreemde site herkent de Origin.",
+      "bron": [
+        {
+          "pad": "server/index.js",
+          "waar": "r.1121-1162 vreemdVerzoek"
+        },
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": "Hoe het in elkaar zit"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Nodig zolang er een lokale HTTP-server is."
+    },
+    {
+      "id": "systeem-007",
+      "titel": "POST alleen als application/json, met een grens; upload is de enige uitzondering",
+      "soort": "regel",
+      "wat": "Elke schrijvende route eist precies application/json en leest hooguit 64 kB (leesJson; per route soms 16 of 65 kB, Content-Length te groot = 413 vóór het lezen). De body wordt als Buffers verzameld en één keer gedecodeerd (25 sep brak data += d een UTF-8-teken over een pakketgrens). Alleen POST /api/upload neemt een bestand als body (octet-stream, audio/*, video/*), gestreamd naar een werkmap met een grens (VARVE_UPLOAD_MAX, standaard 8 GB).",
+      "waarom": "Een formulier van een vreemde site kan geen application/json sturen zonder preflight; een grens voorkomt dat een body het geheugen vult.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Server, tweede ronde; Eigen bestanden"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.310 leesJson"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Eenvoudige regel met grote werking."
+    },
+    {
+      "id": "systeem-008",
+      "titel": "COOP/COEP-headers al vooraf aan",
+      "soort": "besluit",
+      "wat": "Elk antwoord krijgt Cross-Origin-Opener-Policy same-origin, Cross-Origin-Embedder-Policy require-corp en Cross-Origin-Resource-Policy same-origin.",
+      "waarom": "Voorwaarde voor SharedArrayBuffer (een streaming-engine die geheugen met de worklet deelt). Kost niets zolang de pagina geen cross-origin verwijzing heeft; later aanzetten breekt dan pas wat er inmiddels van buiten geladen wordt.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: COOP/COEP"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.274-276 ISOLATIE"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Houdt de deur naar SharedArrayBuffer open zonder kosten."
+    },
+    {
+      "id": "systeem-009",
+      "titel": "Range-verzoeken: audio altijd een gesloten bereik",
+      "soort": "contract",
+      "wat": "De server beantwoordt bytes=a-b, bytes=a- en bytes=-N met 206 (Content-Range, geklemd op de grootte) of 416. De StreamBron vraagt voor audio.wav/stems.wav altijd een gesloten bereik (pagina's van ~1,4 s), met priority 'high'. Een leesfout halverwege vernietigt alleen dat antwoord.",
+      "waarom": "Streamen uit de library leest de WAV rechtstreeks met Range; een openstaand bereik zou een verbinding vasthouden.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: streamen, VIDEO_KNIP"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.1086-1117 statisch"
+        }
+      ],
+      "code": [
+        "server/index.js",
+        "src/engine/bron.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het contract tussen server en afspeelmotor."
+    },
+    {
+      "id": "systeem-010",
+      "titel": "Zes verbindingen per host: video's verdrongen de audio",
+      "soort": "meting",
+      "wat": "Over HTTP/1.1 opent Chrome hooguit 6 verbindingen per host. Elke zichtbare <video> houdt er een vast terwijl hij vooruit buffert. Met 6 zichtbare video's wachtte een audiopagina p90 17 s, max 24 s (gaten tot 17,5 s per deck). Nu krijgt een OPEN Range op video.mp4 hooguit 2 MB (VIDEO_KNIP): p90 119-130 ms, max 547-892 ms.",
+      "waarom": "acht.mjs en goedkoop/cap2mb.txt (WINST 13 okt). Via Tailscale (HTTP/2) speelt het niet. Ook een open SSE-verbinding kost een van de zes.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.1066-1107"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "De knip houden, maar in v2 bewust ontwerpen wie de verbindingen per host krijgt (audio voorrang, video en SSE op een eigen host of HTTP/2)."
+    },
+    {
+      "id": "systeem-011",
+      "titel": "Zwaar rekenwerk in een worker_thread, nooit op de event loop",
+      "soort": "regel",
+      "wat": "Peaks, onset, tap-verfijning, toonsoort, secties, grid en backup draaien in worker_threads (analyse-werker.js, backup-werker.js), bit-identiek aan de oude code. De event loop van de server bedient ook de audiopagina's van spelende decks.",
+      "waarom": "De langste blokkade was 2,6 s bij het verfijnen van een grid; daarna enkele ms. Een blokkade = gaten in elk deck. Sinds AR18 zet de wachter een event loop die ~15 s vastzit neer.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Server, tweede ronde; De server mag even weg zijn (HANGEN)"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.907-972"
+        }
+      ],
+      "code": [
+        "server/analyse-werker.js",
+        "server/backup-werker.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De server is ook de audioleverancier; alles wat hem stillegt is stilte."
+    },
+    {
+      "id": "systeem-012",
+      "titel": "Externe commando's in kindprocessen met time-out, nooit interactief",
+      "soort": "regel",
+      "wat": "git (versie-tegel), de sondes van het avondpakket (pmset, ioreg, system_profiler, find, tailscale) en ffmpeg/yt-dlp/Demucs draaien als kindproces met een eigen time-out, een grens op de uitvoer (8 MB) en SIGKILL. git krijgt nooit een wachtwoordvraag. De foutmelding noemt nooit de opdrachtregel.",
+      "waarom": "Een hangend commando mag de server niet meenemen; een prompt in een kindproces hangt voor altijd.",
+      "bron": [
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§3 voerUit"
+        },
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "Versie"
+        }
+      ],
+      "code": [
+        "server/avondpakket-meet.js",
+        "server/versie.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Algemeen patroon voor alles wat de server van het OS vraagt."
+    },
+    {
+      "id": "systeem-013",
+      "titel": "Kindprocessen stoppen: SIGINT, dan SIGKILL voor de hele familie",
+      "soort": "valkuil",
+      "wat": "Annuleren gaat met SIGINT, na 3 s SIGKILL voor het proces én wat het zelf startte. Nooit SIGTERM. Een worker ruimt eerst zijn eigen ffmpeg op.",
+      "waarom": "yt-dlp (Python) valt op SIGTERM om en laat de ffmpeg staan die hij bij live/HLS start; die erft de pijpen, dus run() hing en de wachtrij stond stil. Zonder opruimen: een zombie per annulering. Dezelfde regel staat in uitzend.js (G6).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "INGEST-WACHTRIJ"
+        },
+        {
+          "pad": "docs/UITZENDEN.md",
+          "waar": "§3 G6"
+        }
+      ],
+      "code": [
+        "server/wachtrij.js",
+        "server/ingest.js",
+        "server/uitzend.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Gemeten fout, eenvoudige regel."
+    },
+    {
+      "id": "systeem-014",
+      "titel": "server/index.js is 2124 regels met ~35 vaste /api-paden inline",
+      "soort": "pijn",
+      "wat": "Eén bestand doet HTTP, de witte lijst, statische bestanden, de ingest, library, analyse-aanroepen, opname, backup, kaart, nacht, standen, avondpakket, versie en meer; de sporen van de werkruimte hangen eraan via server/routes/ (spoorRoutes, vlak vóór de 404). De server leest daarnaast ruim 30 VARVE_*-omgevingsvariabelen (in de hele repo ~114 namen).",
+      "waarom": "Gegroeid per spoor; routes/ was de eerste stap terug (S0, 14 okt). Elke proefserver moet het juiste rijtje VARVE_* zetten.",
+      "bron": [
+        {
+          "pad": "server/index.js",
+          "waar": "heel bestand"
+        },
+        {
+          "pad": "server/routes/index.js",
+          "waar": "spoorRoutes"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§8 stap 5"
+        }
+      ],
+      "code": [
+        "server/index.js",
+        "server/routes/"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: een kleine router met een module per domein en één config-object (paden, poorten, testserver) dat alle modules krijgen."
+    },
+    {
+      "id": "systeem-015",
+      "titel": "Opslaan met versie: hash van de inhoud, 409 met wat er nu staat, .versies/",
+      "soort": "contract",
+      "wat": "Plannen, patronen, standen, werkruimtes, sets en eigen sjablonen gebruiken hetzelfde contract: GET geeft { inhoud, versie } (versie = hash), PUT stuurt de versie mee, een botsing geeft 409 met de huidige inhoud, en elke vorige inhoud gaat naar .versies/ en wordt nooit weggegooid. Claude mag het bestand direct schrijven; vensters zien het binnen ~3 s.",
+      "waarom": "Twee vensters, de iPad en Claude schrijven naar dezelfde bestanden; nooit stil overschrijven.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Het planvenster; Patronen; Werkruimte-kern; S9 sets; S10 sjablonen"
+        },
+        {
+          "pad": "docs/STANDEN.md",
+          "waar": "§4"
+        }
+      ],
+      "code": [
+        "server/plannen.js",
+        "server/patronen.js",
+        "server/standen.js",
+        "server/werkruimtes.js",
+        "server/sets.js",
+        "server/sjablonen.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Zesmaal hetzelfde gebouwd: in v2 één generieke versie-opslag."
+    },
+    {
+      "id": "systeem-016",
+      "titel": "Schrijven alleen vanaf deze Mac (vanDezeMac)",
+      "soort": "regel",
+      "wat": "Routes die iets veranderen dat bij het instrument hoort (mixer-melding, werkruimtes opslaan, sjablonen, indeling) eisen: Host lokaal met de eigen poort, Origin ontbreekt of is precies die oorsprong, en geen x-forwarded-for of tailscale-user-login. Anders 403. Lezen mag via de tailnet.",
+      "waarom": "Via Tailscale kan elk apparaat van Clay erbij; schrijven van buiten de Mac moet een bewuste, aparte weg zijn (de schrijfweg van S8 met koppelcode). AANNAME: dat tailscale serve die koppen zet, is niet op een echte tailnet nagekeken.",
+      "bron": [
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Stap 2: Grenzen"
+        },
+        {
+          "pad": "server/mixer-melding.js",
+          "waar": "vanDezeMac"
+        }
+      ],
+      "code": [
+        "server/mixer-melding.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Scheidt lezen op afstand van bedienen op afstand."
+    },
+    {
+      "id": "systeem-017",
+      "titel": "De server weet \"er speelt een deck\" alleen uit Range-verzoeken",
+      "soort": "grens",
+      "wat": "speeltDeck() = er kwam minder dan 30 s geleden een Range-verzoek op audio.wav/stems.wav. Daarop bevriest het avondpakket, weigert de nacht, en weigert \"set klaarmaken\" (409). Een set met alleen patronen, sampler of instrumenten, of een pauze > 30 s, ziet de server niet als spelen.",
+      "waarom": "Afgeleid in plaats van gemeld: de mixer zei het niet expliciet tegen de server.",
+      "bron": [
+        {
+          "pad": "server/index.js",
+          "waar": "r.190-198, r.1093"
+        },
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§2 Grens"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 meldt de mixer zelf \"speelt/klinkt\" (hij post toch al zijn stand); de server-afleiding als vangnet."
+    },
+    {
+      "id": "systeem-018",
+      "titel": "Huisregel: nooit binnenhalen op een speeldag of terwijl er een deck speelt",
+      "soort": "regel",
+      "wat": "De server is de bewaker: de nachtwachtrij en \"haal nu\" weigeren op een speeldag (in de tijdzone van de server) of als er een deck speelt; een lopende run stopt na het huidige nummer. Knoppen op de telefoon zijn alleen gemak.",
+      "waarom": "Downloaden en transcoderen kost CPU, schijf en netwerk precies wanneer de set ze nodig heeft, en een 403 van YouTube op een speelavond helpt niemand.",
+      "bron": [
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Grenzen"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§4"
+        }
+      ],
+      "code": [
+        "server/nacht.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Beleid hoort bij de partij die het afdwingt, niet bij de knop."
+    },
+    {
+      "id": "systeem-019",
+      "titel": "Polls goedkoop maken: cache op total_changes() plus PRAGMA data_version",
+      "soort": "regel",
+      "wat": "Wat elke 2 s gevraagd wordt (secties-telling, library-stand van S11, backup gewijzigdSinds) cachet de server op de stand van de database: total_changes() van de eigen verbinding plus PRAGMA data_version (andere verbindingen). Midden in een transactie niets cachen (een ROLLBACK liet hem anders staan). Bij een miss alleen de veranderde rijen opnieuw parsen.",
+      "waarom": "Gemeten 6 okt: 5000 nummers met grids van 400 stukken 1062 ms -> 98 ms per miss; zonder wijziging ~3-5 µs.",
+      "bron": [
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "De secties-telling"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "S11: stand() onthouden"
+        }
+      ],
+      "code": [
+        "server/library.js",
+        "server/indeling.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Herbruikbaar patroon voor elke tegel die pollt."
+    },
+    {
+      "id": "systeem-020",
+      "titel": "Code en data in iCloud kunnen alle decks tegelijk stilleggen",
+      "soort": "valkuil",
+      "wat": "De checkout stond op het Bureaublad in iCloud (\"Optimaliseer opslag\" aan). Statische bestanden en de Range-verzoeken van de decks delen dezelfde libuv-threadpool (standaard 4 draden). Vier bestanden die macOS zonder netwerk uit iCloud moet halen, houden alle draden vast: geen deck krijgt nog een pagina. Vangnet: UV_THREADPOOL_SIZE=16 in VARVE.app, de LaunchAgent en de herstartlus.",
+      "waarom": "Nagebootst met vier FIFO's (meet/draadpool.mjs): met de standaardpool hingen alle drie de audiopagina's > 3 s, met 16 draden 8/7/3 ms. AANNAME: dat macOS een uitgeplaatst codebestand op een speelavond echt moet halen.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§4"
+        },
+        {
+          "pad": "test/draadpool.test.mjs",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "tools/varve-app/VARVE.applescript",
+        "tools/varve-app/server-lus.sh",
+        "tools/bench/draadpool.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "v2 staat vanaf dag één buiten iCloud (code én data); de grotere pool blijft als vangnet."
+    },
+    {
+      "id": "systeem-021",
+      "titel": "beperkt(): hooguit twee lezers van instellingen tegelijk, 503 na 2 s",
+      "soort": "regel",
+      "wat": "Lezers van standen, werkruimtes, sjablonen, standaardmapping, profielen en hub-sets gaan door beperkt() (server/standen.js): een bestand dat volgens stat niet veranderde komt uit het geheugen, één lees per pad tegelijk, en over de hele server hooguit MAX_DRADEN = 2 tegelijk (ANDERE_LEZERS telt mee); wat langer dan LEES_MS = 2 s duurt geeft 503 \"niet lokaal beschikbaar (iCloud?)\". Opslaan weigert (503) als de vorige versie niet te lezen is: nooit overschrijven zonder kopie.",
+      "waarom": "Een draad die op een dataless bestand wacht blijft hangen tot het netwerk terug is; zo blijven er altijd twee van de vier draden voor de audio.",
+      "bron": [
+        {
+          "pad": "docs/STANDEN.md",
+          "waar": "§3"
+        },
+        {
+          "pad": "server/standen.js",
+          "waar": "r.40-221"
+        }
+      ],
+      "code": [
+        "server/standen.js",
+        "server/werkruimtes.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Als v2 buiten iCloud staat is dit overbodig; houd alleen het idee \"een gedeelde, begrensde I/O-poort voor alles wat niet audio is\"."
+    },
+    {
+      "id": "systeem-022",
+      "titel": "Synchrone fs-lezing in de server hangt hem helemaal",
+      "soort": "valkuil",
+      "wat": "server/kaart.js leest varve-kaart.json (in iCloud) met readFileSync. Is dat bestand dataless, dan staat de hele event loop stil bij het eerste laad(): geen audiopagina's meer.",
+      "waarom": "Gevonden bij de review van de standen (10 okt), niet opgelost op die tak; sinds AR18 zou de wachter zo'n server na ~15 s neerzetten, waarna de nieuwe weer hangt.",
+      "bron": [
+        {
+          "pad": "docs/STANDEN.md",
+          "waar": "§8"
+        }
+      ],
+      "code": [
+        "server/kaart.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: geen synchrone fs in het serverproces, en externe bestanden (de kaart) altijd via de begrensde I/O-weg."
+    },
+    {
+      "id": "systeem-023",
+      "titel": "Waar media/ staat: VARVE_MEDIA, dan <project>/media, dan media-VERHUISD.txt",
+      "soort": "contract",
+      "wat": "kiesMedia(): VARVE_MEDIA (alleen \"de mediamap\"), anders <projectmap>/media, en als die na een verhuizing weg is het pad uit media-VERHUISD.txt. VARVE.app leest ~/.varve/media-pad (launchd kent geen omgevingsvariabelen uit ~/.zprofile). library.db, backups, kaart.db, nacht.json en stems-rij.json staan in de mediamap. Paden in de database blijven relatief (media/<id>/...).",
+      "waarom": "Verhuizen uit iCloud (VI2, 11 okt) mocht geen absolute paden in de library laten; tools/media-verhuis.mjs doet het droog of met --doe, met de server uit.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Waar media/ staat"
+        },
+        {
+          "pad": "server/media-plek.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "server/media-plek.js",
+        "tools/media-verhuis.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Relatieve paden en één mediaplek houden; in v2 staat de plek vanaf het begin buiten de repo, dus geen verhuisbriefje nodig."
+    },
+    {
+      "id": "systeem-024",
+      "titel": "\"Dit is een testserver\" alleen via VARVE_TESTSERVER=1",
+      "soort": "valkuil",
+      "wat": "Tot 11 okt leidde de server \"testserver\" af uit VARVE_MEDIA. Nu zegt alleen VARVE_TESTSERVER=1 dat (geen Demucs/Beat This! tenzij een nep-commando gezet is, geen media-pad of verhuisbriefje lezen). Elke proefserver zet beide; test/media-verhuis.test.mjs faalt anders.",
+      "waarom": "Een testserver ruimde bij het opstarten .bezig-*-werkmappen op in de ECHTE media/ en wiste zo een ingest die op Clay's server liep (verbeterronde 23 sep).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Verbeterronde 23 sep: Server; Waar media/ staat"
+        },
+        {
+          "pad": "server/media-plek.js",
+          "waar": "isTestserver"
+        }
+      ],
+      "code": [
+        "server/media-plek.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een expliciete vlag voor een gevaarlijk onderscheid."
+    },
+    {
+      "id": "systeem-025",
+      "titel": "De data van het instrument staat verspreid over een tiental mappen",
+      "soort": "pijn",
+      "wat": "Naast media/ en opnames/ staan in de checkout (niet in git): patronen/, plannen/, proef/, standen/, sets/, werkruimtes/, racks/eigen.json, uitzend/doelen.json, en daarbuiten ~/.varve/ (media-pad, server-lus.pid, backup-laatste.json) en ~/.varve-hub/. Een server die vanuit een worktree draait schrijft al die data in de worktree.",
+      "waarom": "Gegroeid per spoor, elk met een eigen VARVE_*-variabele. De backup (set A) moet ze allemaal kennen; een vergeten env in een proefserver schreef in <worktree>/racks/eigen.json.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Git"
+        },
+        {
+          "pad": "docs/BACKUP.md",
+          "waar": "§3 Set A"
+        }
+      ],
+      "code": [
+        "server/index.js",
+        "tools/backup/gedeeld.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: één datamap buiten de repo (VARVE_DATA) met vaste submappen; code en data nooit door elkaar."
+    },
+    {
+      "id": "systeem-026",
+      "titel": "iCloud is geen backup",
+      "soort": "regel",
+      "wat": "iCloud synchroniseert ook wissen (binnen seconden overal weg), plaatst bestanden uit zonder versies, en zet library.db, -wal en -shm op verschillende momenten over zodat de set onderling niet klopt. Op 11 okt waren er nul kopieën buiten de laptop.",
+      "waarom": "Wat Clay met de hand instelde (grids op slot, hotcues, racks, pads, patronen, plannen, opstellingen) is ~16-20 MB en niet herbouwbaar; media ~32 GB is herbouwbaar (uren), opnames ~0,6 GB niet.",
+      "bron": [
+        {
+          "pad": "docs/BACKUP.md",
+          "waar": "§1"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Grondhouding voor elke opslagkeuze in v2."
+    },
+    {
+      "id": "systeem-027",
+      "titel": "De WAL-les: kopieer library.db nooit als bestand",
+      "soort": "meting",
+      "wat": "In WAL-modus staat recent werk vaak alleen in library.db-wal. Een gewone kopie van alleen library.db miste een nummer, een hotcue, drie sampler-pads, twee stems-sets en de v9-migratie, en quick_check zei toch \"ok\". VACUUM INTO gaf de volledige stand.",
+      "waarom": "Gemeten 11 okt op kopieën (BACKUP.md §2, tabel: live 15/15/6 pads, bestandskopie 14/14/3, VACUUM INTO 15/15/6). test/backup-kopie.test.mjs houdt de fout vast.",
+      "bron": [
+        {
+          "pad": "docs/BACKUP.md",
+          "waar": "§2"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "BACKUP VAN DE LIBRARY"
+        }
+      ],
+      "code": [
+        "server/backup.js",
+        "tools/backup/kopie.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Een onvolledige kopie die er gezond uitziet is erger dan geen kopie."
+    },
+    {
+      "id": "systeem-028",
+      "titel": "Server-backup: VACUUM INTO in een worker, alleen bij verandering",
+      "soort": "besluit",
+      "wat": "Bij het opstarten en elk uur als lib.wijzigingen() veranderde: VACUUM INTO op een eigen alleen-lezen verbinding in een worker_thread, fsync en quick_check vóór het hernoemen, alleen bewaard als de SHA-256 afwijkt van de nieuwste. Bewaard: de laatste 12 plus de nieuwste per dag van 30 dagen, vaste namen library-JJJJ-MM-DD_UU-MM-SS.db. Mislukt = [backup] MISLUKT in het log en een rode tegel; de server draait door.",
+      "waarom": "Alternatief (bestand kopiëren) mist WAL-rijen; een backup op de event loop zou decks laten haperen.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "BACKUP VAN DE LIBRARY"
+        },
+        {
+          "pad": "server/backup.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "server/backup.js",
+        "server/backup-werker.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Klein, getest, doet precies wat nodig is."
+    },
+    {
+      "id": "systeem-029",
+      "titel": "Backup naar buiten: nooit --delete, nooit iets weggooien",
+      "soort": "regel",
+      "wat": "tools/backup/kopie.mjs synchroniseert nooit met --delete; wat in de kopie anders was gaat eerst naar .vorige/<stempel>/; elke andere library wordt een nieuwe versie in versies/ (dezelfde SHA-256 niet); in het doel ruimt niets automatisch op. Een doel binnen de bron weigert hij (ook via symlink of iCloud-aliaspad), een doel op dezelfde schijf alleen met --zelfde-schijf, en één run tegelijk per doel (slot met pid).",
+      "waarom": "Een per ongeluk gewiste map mag niet ook uit de kopie verdwijnen; een backup in media/ gaat mee de prullenbak in.",
+      "bron": [
+        {
+          "pad": "docs/BACKUP.md",
+          "waar": "§5"
+        }
+      ],
+      "code": [
+        "tools/backup/kopie.mjs",
+        "tools/backup/gedeeld.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Past bij Clay's \"niets verwijderen\"."
+    },
+    {
+      "id": "systeem-030",
+      "titel": "Set A (staat, klein, dagelijks) en set B (media, groot, vóór een reis)",
+      "soort": "contract",
+      "wat": "Set A: VACUUM INTO-kopieën van library.db en kaart.db, de JSON-bestanden en mappen van het instrument met hun .versies/, de handelingenlogs, de hub-staat, met een MANIFEST (tellingen, SHA-256 per bestand). Set B: rsync -a --backup van media/ en opnames/ zonder de databases. herstel.mjs weigert als er al een library.db (of -wal/-shm/-journal) staat en overschrijft nooit; de migratie loopt alleen van oudere kopie naar nieuwere code.",
+      "waarom": "Gemeten 11 okt: verse worktree met hersteldataset van 85 MB, server op in ~1 s, alles terug. \"Een backup die nooit hersteld is, is geen backup\": elk kwartaal herhalen (10 min).",
+      "bron": [
+        {
+          "pad": "docs/BACKUP.md",
+          "waar": "§3, §4"
+        }
+      ],
+      "code": [
+        "tools/backup/kopie.mjs",
+        "tools/backup/controleer.mjs",
+        "tools/backup/herstel.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Het onderscheid klein/onvervangbaar tegen groot/herbouwbaar is precies goed."
+    },
+    {
+      "id": "systeem-031",
+      "titel": "Instellingen die het instrument zijn, horen op de server, niet in localStorage",
+      "soort": "besluit",
+      "wat": "Sinds 15 okt (PR #31) staan de instrument-sleutels (master-rack, klankschaal, MIDI-poorten, beeld, stems-standaard, cue-wissel, vormen, bus-racks) ook in de tabel instellingen van library.db, met een witte lijst (instellingen-lijst.js); de server gaat voor, oude waarden eenmalig omhoog. Gemak (panelen, sortering, werkruimte per scherm, pins) blijft per browser.",
+      "waarom": "Een nieuw Chrome-profiel of een kwijte laptop verloor anders de halve opstelling, en localStorage zit in geen enkele backup. Twee oorsprongen (localhost, ts.net) hebben elk een eigen localStorage.",
+      "bron": [
+        {
+          "pad": "docs/BACKUP.md",
+          "waar": "§3 Chrome"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "instellingen-opslag.js"
+        }
+      ],
+      "code": [
+        "src/ui/instellingen-opslag.js",
+        "src/ui/instellingen-lijst.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 vanaf het begin: alles wat het instrument is op de server, localStorage alleen voor gemak."
+    },
+    {
+      "id": "systeem-032",
+      "titel": "Waar de kopie buiten de laptop heen gaat, is nog niet gekozen",
+      "soort": "open",
+      "wat": "Het gereedschap staat er (kopie, controleer, herstel, een launchd-taak voor 08:00), maar launchd is standaard niet geïnstalleerd en het doel is niet gekozen: USB-stick/SSD, de Omarchy-pc via Tailscale, of een privé git-repo varve-staat (BK1). De sonde \"reiskopie\" in het avondpakket leest ~/.varve/backup-laatste.json nog niet.",
+      "waarom": "Niet getest: rsync naar een echte SSD, launchd zelf (of een LaunchAgent zonder Volledige schijftoegang bij ~/Desktop mag), een push naar GitHub.",
+      "bron": [
+        {
+          "pad": "docs/BACKUP.md",
+          "waar": "§6, §7"
+        },
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§14 punt 3"
+        }
+      ],
+      "code": [
+        "tools/backup/launchd/"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Een keuze van Clay (spullen en plek); zonder doel is de backup alleen een tweede kopie op dezelfde laptop."
+    },
+    {
+      "id": "systeem-033",
+      "titel": "herhaal.js: drie soorten mislukken, drie regels",
+      "soort": "contract",
+      "wat": "Voor alles wat de browser stuk voor stuk naar de server schrijft (opname, videostukken, handelingenlog): geen antwoord, time-out (10 s) of 5xx = opnieuw met een pauze die oploopt van 0,25 tot 2 s zolang mag() ja zegt; een 4xx hooguit 3 keer; vol (schijf) meteen opgeven. wacht en mag komen van de aanroeper, dus testbaar met een nep-klok.",
+      "waarom": "Vroeger gooide de opname elk stuk na 3 pogingen in 1,5 s weg, ook de 21 s die de zaal nog hoorde.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn"
+        },
+        {
+          "pad": "src/lib/herhaal.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "src/lib/herhaal.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Puur, klein, getest; precies het juiste niveau."
+    },
+    {
+      "id": "systeem-034",
+      "titel": "Schrijf een stuk op zijn PLEK, dan is herhalen altijd veilig",
+      "soort": "regel",
+      "wat": "Elk stuk draagt zijn plek: ?frame=N (frames van de audioklok) voor de WAV, ?van=<byte> voor de video, de byte voor het log. De server schrijft op die plek, niet erachter. Herhalen schrijft dezelfde bytes op dezelfde plek; een weggevallen stuk wordt stilte op zijn plek in plaats van dat alles erna verschuift.",
+      "waarom": "Een verloren antwoord gaf anders een dubbel stuk; een gat schoof de video t.o.v. het geluid.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Opnemen tapt de master; HANDELINGENLOG"
+        },
+        {
+          "pad": "src/lib/herhaal.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "server/opname.js",
+        "src/opname/opnemer.js",
+        "src/control/handelingen.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Idempotente schrijfacties maken de hele \"server mag weg\"-aanpak mogelijk."
+    },
+    {
+      "id": "systeem-035",
+      "titel": "De wachtrij is begrensd; vol = het nieuwste stuk valt weg",
+      "soort": "besluit",
+      "wat": "Zolang de server weg is wachten de stukken in de browser: opname hooguit 300 s (~57 MB), handelingenlog 16 MB. Past een nieuw stuk er niet meer in, dan valt DAT stuk weg (gat op zijn plek): je houdt de eerste 5 minuten van de storing aaneengesloten (AR10, 16 okt; daarvoor viel het oudste weg). Bij stop nog 10 s, dan de oude regel.",
+      "waarom": "Onbegrensd wachten vult het geheugen van de renderer, die ook het geluid maakt.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "AR10"
+        }
+      ],
+      "code": [
+        "src/opname/opnemer.js",
+        "src/control/handelingen.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Clay koos dit bewust."
+    },
+    {
+      "id": "systeem-036",
+      "titel": "Eén melding die meegroeit, met een sleutel",
+      "soort": "regel",
+      "wat": "meld(tekst, soort, duur, { sleutel }) vervangt wat onder die sleutel staat, wisMelding(sleutel) haalt hem weg. De opname heeft sleutel opname (\"server antwoordt niet, N s in de wacht\" -> \"weer goed\"), het log handelingenlog, een stream per track stream:<deck>, de audio audio. Foutmeldingen zonder sleutel blijven staan tot je ze wegklikt.",
+      "waarom": "Zonder sleutel gaf 30 s server weg 20 rode meldingen (per seconde een andere tekst, dus niet samengevoegd).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn; Audio-gezondheid"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§3 stap 2"
+        }
+      ],
+      "code": [
+        "src/ui/meldingen.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een storing hoort één regel te zijn die vertelt hoe het gaat."
+    },
+    {
+      "id": "systeem-037",
+      "titel": "Een hoorbare track houdt 60 s vooruit, de rest 20 s",
+      "soort": "meting",
+      "wat": "Een track die je HOORT (geladen, speelt, fader x crossfader > -60 dB; \"> 0\" werkt niet want een dichte fader is -70 dB) haalt 60 s pagina's vooruit, de rest 20 s; pas na 30 s audioklok niet-hoorbaar terug naar 20 s (hysterese, per nummer). Kost ~12,8 MB per hoorbare stereotrack, ~46 MB met vier stems. Met lus en wachtrij: 30 s server weg = 0 stille vensters van 50 ms in 1040, een WAV van 49 s zonder nullen, één melding.",
+      "waarom": "Zonder: 10 s stilte, 20 s nullen in de WAV, 20 meldingen (tools/headless/server-weg.mjs, 15 okt). Ook een hang van 30 s geen gat.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn; Bekende grenzen (StreamBron)"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§3"
+        }
+      ],
+      "code": [
+        "src/engine/engine.js",
+        "src/engine/stream-kern.js",
+        "tools/headless/server-weg.mjs"
+      ],
+      "pijler": "dj",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De buffer is wat een herstart van de server onhoorbaar maakt."
+    },
+    {
+      "id": "systeem-038",
+      "titel": "Zonder herstart: SIGKILL op de server = alle decks stil na ~21 s",
+      "soort": "meting",
+      "wat": "In de duurproef (beide runs): na een SIGKILL van de server was alles na ~21 s stil (20 s vooruit) en gingen 30 opnamestukken verloren. Na een herstart antwoordde de server in 0,8-1,0 s en klonk het binnen ~1,5 s vanzelf weer. Een echte servercrash tijdens het spelen is nooit gezien: de server vangt uncaughtException en unhandledRejection op en logt.",
+      "waarom": "duur-45.out (WINST 13 okt). Daarom kreeg het pakket \"server mag weg\" lagere winst dan eerst gedacht.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§3 Bewijs"
+        },
+        {
+          "pad": "server/index.js",
+          "waar": "r.2014-2015"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Bepaalt hoe zwaar de herstelmechanismen hoeven te zijn."
+    },
+    {
+      "id": "systeem-039",
+      "titel": "Lees het antwoord van elke fetch, ook als het gelukt is",
+      "soort": "valkuil",
+      "wat": "Een fetch waarvan het antwoord niet gelezen wordt houdt Chrome vast. leesWeg(res) (src/lib/antwoord.js) leest het weg; dat geldt voor elke POST die vaker dan af en toe gaat (opname, videostukken, log, status-zender elke 900 ms).",
+      "waarom": "Opname met een stil deck: renderer 189 -> 315 MB, na GC 306; ~410 kB bleef per POST hangen (gelezen: ~13 kB). De opname groeide 23-26,6 MB per minuut; in de duurproef viel de renderer na ~35 min om (950 MB). Na de fix 0,2 MB/min (tools/headless/lek.mjs).",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§1"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Opnemen tapt de master (ELKE fetch)"
+        }
+      ],
+      "code": [
+        "src/lib/antwoord.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het grootste gemeten risico van v1; in v2 één fetch-helper die het altijd doet."
+    },
+    {
+      "id": "systeem-040",
+      "titel": "Herstartlus: POSIX sh, hooguit 5 herstarts per minuut",
+      "soort": "besluit",
+      "wat": "tools/varve-app/server-lus.sh start node server/index.js en start hem na 1 s opnieuw als hij omvalt. Niet opnieuw na exit 0, SIGTERM/SIGINT/SIGHUP (143/130/129) of exit 3 (poort bezet); meer dan 5 per minuut = crash-lus, dan stopt de lus en logt waarom. Pidbestand ~/.varve/server-lus.pid (een tweede lus zegt \"draait al\"), stop/status als subcommando, POSIX sh zodat de test ook op Linux draait.",
+      "waarom": "Vroeger startte de Dock-app één keer nohup node &: viel hij om, dan herstartte niemand hem. De LaunchAgent start sinds AR8 dezelfde lus, zonder KeepAlive (launchd zou een crash-lus eindeloos herstarten): één weg naar de server.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn: HERSTARTLUS"
+        },
+        {
+          "pad": "tools/varve-app/server-lus.sh",
+          "waar": "kop"
+        },
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": "Altijd"
+        }
+      ],
+      "code": [
+        "tools/varve-app/server-lus.sh"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Getest, klein, en de regels voor wanneer niet herstarten zijn precies goed."
+    },
+    {
+      "id": "systeem-041",
+      "titel": "Hang-wachter: /api/leeft elke 5 s, drie keer niets = kill -9",
+      "soort": "regel",
+      "wat": "Naast de server peilt een wachter elke 5 s GET /api/leeft (antwoord alleen uit het geheugen, nooit schijf of database; 2 s wachten). Drie keer niets = kill -9 op de server en zijn nazaten (ffmpeg, yt-dlp, Demucs), en de lus start hem opnieuw (telt mee in de 5 per minuut). Een nieuwe server krijgt 120 s tot zijn eerste antwoord. Een schijf die hangt ziet hij bewust niet.",
+      "waarom": "Gemeten onder de echte lus met de mixer (AR18, 16 okt): 21,2 s van vastzetten tot een nieuwe server, 0 stille vensters, WAV zonder gat. Een herstart lost een hangende schijf niet op (de nieuwe hangt dan ook).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn: HANGEN"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "AR18"
+        }
+      ],
+      "code": [
+        "tools/varve-app/server-lus.sh",
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Gevolg: zwaar werk moet in een worker of kindproces, anders zet de wachter hem neer."
+    },
+    {
+      "id": "systeem-042",
+      "titel": "De lus geeft zijn geschiedenis mee aan elke nieuwe server",
+      "soort": "contract",
+      "wat": "VARVE_LUS_SINDS (start van de lus, s sinds 1970), VARVE_LUS_AANTAL en VARVE_LUS_HERSTARTS (de laatste 20 als \"<s>:<exitcode>:om|hang\"; een hang meldt de wachter met <pidbestand>.hang). server/lus.js leest het puur; GET /api/leeft geeft het door; de tegel Server zegt \"herstart om 22:14 (viel om, exitcode 137) · 1 keer sinds 21:30\", 10 minuten oranje.",
+      "waarom": "Een herstart van 1 s viel anders tussen twee peilingen van de Controlekamer weg en stond alleen in ~/.varve-server.log (AR9).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn"
+        },
+        {
+          "pad": "server/lus.js",
+          "waar": "heel bestand"
+        },
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "Server"
+        }
+      ],
+      "code": [
+        "server/lus.js",
+        "src/controle/server-tegel.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Goedkope zichtbaarheid zonder extra opslag."
+    },
+    {
+      "id": "systeem-043",
+      "titel": "Poort bezet = exit 3, vóór er iets op schijf gebeurt",
+      "soort": "valkuil",
+      "wat": "De server probeert eerst zelf kort te luisteren op zijn poort (server/poort.js); bezet = exit 3 zonder iets aan te raken. Pas daarna library, mappen en het opruimen van .bezig-*. exit 3 bij het echte listen() blijft als vangnet; de herstartlus herstart bij 3 niet.",
+      "waarom": "AR20 (16 okt): een tweede server ruimde eerst de werkmappen van de lopende op (een ingest of split die NU liep mislukte) en zette de stems-rij terug, en stopte pas bij het luisteren. Daarvoor liep een tweede server zonder poort door (uncaughtException ving de fout).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De server mag even weg zijn"
+        },
+        {
+          "pad": "server/poort.js",
+          "waar": "kop"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "AR20"
+        }
+      ],
+      "code": [
+        "server/poort.js",
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Eén regel volgorde voorkomt een stille beschadiging."
+    },
+    {
+      "id": "systeem-044",
+      "titel": "VARVE.app is een AppleScript die opnieuw gebouwd moet worden",
+      "soort": "pijn",
+      "wat": "De Dock-app (tools/varve-app/VARVE.applescript, 210 regels) start de herstartlus via /bin/zsh -lc met UV_THREADPOOL_SIZE=16, start de AV-hub alleen als de actieve opstelling hub.mixerVia zegt (hub-nodig.mjs vraagt het de server), en opent of haalt de Controlekamer naar voren (nooit de mixer zelf). Na elke wijziging: zsh tools/varve-app/maak.sh, anders draait de oude app.",
+      "waarom": "launchd en het Dock kennen geen Homebrew-PATH en lezen ~/.zprofile niet: daarom een login-shell, PATH en UV_THREADPOOL_SIZE expliciet in de plist, en ~/.varve/media-pad in plaats van VARVE_MEDIA. VARVE_HOSTS via ~/.zprofile is een AANNAME, niet getest. AR8 en AR21 waren allebei \"na de merge de app opnieuw bouwen\" of \"de app start de hub terwijl avond 1 zonder hub is\".",
+      "bron": [
+        {
+          "pad": "tools/varve-app/VARVE.applescript",
+          "waar": "kop r.1-30"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "AR8, AR21"
+        },
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Eenmalig instellen stap 4"
+        }
+      ],
+      "code": [
+        "tools/varve-app/VARVE.applescript",
+        "tools/varve-app/hub-nodig.mjs",
+        "tools/varve-app/maak.sh"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: een starter die alleen de lus aanroept en zijn regels uit de server/config haalt, zodat er niets in een gebouwde app vastzit."
+    },
+    {
+      "id": "systeem-045",
+      "titel": "Overal openen via Tailscale, nooit publiek",
+      "soort": "besluit",
+      "wat": "Andere apparaten bereiken de Mac via tailscale serve --bg 8777 (HTTPS met echt certificaat voor <naam>.ts.net) naar de server op 127.0.0.1. Nooit tailscale funnel (dat is publiek). Een ACL (autogroup:member naar de Mac op 443, geen tag:*) beperkt het tot Clay's apparaten.",
+      "waarom": "Geen openbare server: gedownloade YouTube-media serveren is distributie, de server heeft geen login, YouTube blokkeert yt-dlp vanaf datacenters, en streamen over internet maakt sprongen en loops minder strak.",
+      "bron": [
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": "kop, Eenmalig instellen"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "OVERAL OPENEN"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Past exact bij \"persoonlijk instrument, geen distributie\"."
+    },
+    {
+      "id": "systeem-046",
+      "titel": "VARVE_HOSTS: welke ts.net-naam de server binnenlaat",
+      "soort": "contract",
+      "wat": "VARVE_HOSTS=<naam>.ts.net (komma-gescheiden, zonder https:// en zonder poort) laat die naam door de Host-controle: Host zonder poort of met :443, Origin https://<naam>. Ook als de proxy de Host op localhost zet telt de Origin. Leeg = de server zegt bij het opstarten \"VARVE_HOSTS is leeg: iPad en iPhone krijgen 403\".",
+      "waarom": "Zonder hint ziet de iPhone alleen een kale 403 \"onbekende host\"; de opstartregel maakt het op de Mac zichtbaar.",
+      "bron": [
+        {
+          "pad": "server/index.js",
+          "waar": "r.1140-1162"
+        },
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": "Hoe het in elkaar zit"
+        }
+      ],
+      "code": [
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Klein en getest (server.test.mjs met de koppen van tailscale serve)."
+    },
+    {
+      "id": "systeem-047",
+      "titel": "localhost en de ts.net-naam zijn twee oorsprongen",
+      "soort": "valkuil",
+      "wat": "Voor Chrome zijn http://localhost:8777 en https://<naam>.ts.net twee oorsprongen, elk met een eigen Web Lock, BroadcastChannel en localStorage. Twee mixers (een op elke naam) pakken dan allebei de APC (MIDI-crash), de Controlekamer op de ene naam ziet de mixer op de andere niet, en localStorage-instellingen gelden per naam. Op de Mac zelf altijd localhost.",
+      "waarom": "De bescherming \"maar één tabblad praat met de APC\" rust op een Web Lock, en die geldt per origin. Ook 127.0.0.1 en localhost zijn twee oorsprongen (de companion detecteert dat via twee tab-id's die om beurten melden).",
+      "bron": [
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": "Wat er waar werkt"
+        },
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Stap 2: twee"
+        }
+      ],
+      "code": [
+        "src/ui/tabblad.js",
+        "server/mixer-melding.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "In v2 de \"wie bezit de APC\"-vraag op de server beslissen (die ziet alle oorsprongen), niet alleen in de browser."
+    },
+    {
+      "id": "systeem-048",
+      "titel": "Het hele pad op afstand is nooit echt geproefd",
+      "soort": "grens",
+      "wat": "Niet getest: een echte Tailscale (alleen de Host/Origin-koppen nagebootst), de hotspot-situaties (thuis-wifi; Mac en iPad op de iPhone-hotspot met en zonder mobiele data), iOS Safari (dvh, safe-area, sticky, zet op beginscherm), de ~/.zprofile-route, en dat de mixer (index.html) zelf ooit naar /api/mixer postte.",
+      "waarom": "Alles is in Node-tests en headless Chromium met mobiele emulatie gebouwd; de proefblokken staan in de speellijst.",
+      "bron": [
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Niet getest; Stap 2 NIET getest"
+        },
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": "Niet getest"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Eerst op de hardware proeven voordat v2 er een rol omheen bouwt."
+    },
+    {
+      "id": "systeem-049",
+      "titel": "iPad en iPhone krijgen een eigen rol, geen tweede mixer",
+      "soort": "besluit",
+      "wat": "/companion is voor iPad en iPhone: de muziekkaart (zoeken, kratten, wens, kies, haal nu, speeldag), \"nu\" (per track wat speelt en hoe lang nog) en \"beeld\" (alleen tonen). Geen AudioContext, geen requestMIDIAccess, geen Web Lock, geen BroadcastChannel, geen window.opener: alleen fetch naar /api en /mappings/companion.json. test/regels-companion.test.mjs volgt de hele importboom vanaf companion.html en toetst dat per bestand.",
+      "waarom": "Web MIDI bestaat niet op iOS (elke browser daar is Safari van binnen) en de mixer is daar nooit getest; een tweede mixer zou de APC-bescherming breken. De laptop blijft de enige die geluid maakt, MIDI opent en binnenhaalt.",
+      "bron": [
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "kop, Grenzen"
+        },
+        {
+          "pad": "docs/TAILSCALE.md",
+          "waar": "Wat er waar werkt"
+        }
+      ],
+      "code": [
+        "companion.html",
+        "src/companion/companion.js",
+        "test/regels-companion.test.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Het verbod als importboom-toets is een sterk patroon voor elke \"lichte\" pagina."
+    },
+    {
+      "id": "systeem-050",
+      "titel": "Polling van de companion: alleen zichtbaar, met ETag en rust na een 404",
+      "soort": "contract",
+      "wat": "GET /api/mixer elke seconde zolang de pagina zichtbaar is; wenslijst en nacht elke 5 s en alleen als de kaart in beeld is; na een 404 hooguit eens per minuut. De lichte wenslijst (?licht=1) heeft een ETag (sha1, 16 tekens): met If-None-Match een 304 zonder body zolang er niets verandert. Niets als de pagina op de achtergrond staat.",
+      "waarom": "Gemeten op de nep-kaart: 1379 B per klare wens gewoon, 143 B licht; een herhaling zonder wijziging 304 en 0 B (was 946 B voor 2 wensen). Bedoeld voor een hotspot.",
+      "bron": [
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Wat de companion de server vraagt"
+        }
+      ],
+      "code": [
+        "src/companion/companion.js",
+        "server/index.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Goed gedrag voor elke kijker op mobiel netwerk."
+    },
+    {
+      "id": "systeem-051",
+      "titel": "De mixer meldt zijn stand aan de server: hooguit 1 per 900 ms, nooit wachten",
+      "soort": "contract",
+      "wat": "Alleen het tabblad met de Web Lock post maakStatus (tracks met positie/duur/rate, eind zwart/bevroren/master, tab-id) naar POST /api/mixer: hooguit één per 900 ms, nooit een tweede zolang de eerste onderweg is, eigen time-out 900 ms, na 404/weigering 60 s rust, na netwerkfout of 5xx 10 s. Zonder kijker (niemand las GET /api/mixer de laatste 10 s) hooguit één per 4 s. De server houdt het alleen in het geheugen (≤ 16 kB, 413 erboven).",
+      "waarom": "Niets wat de POST doet mag in de mixer wachten (test/status-zender.test.mjs). Een melding met acht tracks en lange titels: 2307 bytes.",
+      "bron": [
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Stap 2"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "AR16"
+        },
+        {
+          "pad": "server/mixer-melding.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "src/ui/status-zender.js",
+        "server/mixer-melding.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Dit is de juiste richting (mixer meldt zich); in v2 de ene bron voor companion, Controlekamer en \"er speelt een deck\"."
+    },
+    {
+      "id": "systeem-052",
+      "titel": "De Controlekamer: één beginplek die zelf geen MIDI opent",
+      "soort": "besluit",
+      "wat": "/controle is waar een sessie begint: tegels met een lampje (Versie, Server, Opstelling, Binnenhalen, Ingest-rij, Stems, Backup, Avondpakket, Mixer, Audio, APC40), de knop \"mixer openen\" en de speellijst. Hij opent nooit MIDI; \"mixer openen\" staat uit zolang er al een mixer open is (hij ziet de Web Lock varve-mixer) en opent via ?hub= als de opstelling dat zegt.",
+      "waarom": "Clay: \"maak 1 plek waar de hele controle room samen komt\"; op 16 okt samengevoegd met een los claude.ai-artifact (\"waarom zijn er twee controle kamers?\"). De mixer meldt zich elke seconde op BroadcastChannel varve-status (alleen het Lock-tabblad) en de Controlekamer vraagt elke 2 s { vraag: 'status' }, omdat Chrome de timers van een achtergrondtab knijpt; dat werkt alleen binnen één oorsprong. Planvenster en beamer open je vanuit de mixer (opener nodig).",
+      "bron": [
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "kop, Wat erop staat, Hoe het werkt"
+        }
+      ],
+      "code": [
+        "controle.html",
+        "src/controle/controle.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een startpagina die zelf niets gevaarlijks kan, is precies goed voor een draagbare set."
+    },
+    {
+      "id": "systeem-053",
+      "titel": "Tegels pollen met een grens: geen stapel bij een trage server",
+      "soort": "regel",
+      "wat": "ververs() begint pas een nieuwe ronde als de vorige klaar is, elk verzoek geeft het na 6 s op (tooling 60 s). Losse routes (backups, stems, secties, avondpakket) worden na een 404 of fout hooguit eens per minuut opnieuw gevraagd, per route (pad zonder query); intussen blijft het laatste antwoord staan. Een 404 = \"onbekend (oudere server)\", een 500 = \"onbekend (fout)\", nooit \"server weg\".",
+      "waarom": "Bij een hangende server (of een telefoon via het LAN) stapelden de verzoeken zich op; gemeten na de fix hooguit 2 verzoeken in 10 s.",
+      "bron": [
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "Vragen aan de server; Getest sec-controle"
+        }
+      ],
+      "code": [
+        "src/controle/controle.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Een monitor mag het gemonitorde niet belasten."
+    },
+    {
+      "id": "systeem-054",
+      "titel": "De tegel Versie: draait = op schijf = main = GitHub?",
+      "soort": "contract",
+      "wat": "GET /api/versie: welke commit en tak draait, staat er nieuwere op schijf, en heeft main op GitHub iets anders. Groen alleen als alles gelijk is; anders staat bovenaan wat eerst moet (\"herstart de server\", \"git pull, dan herstarten\", \"git checkout main\", \"herlaad hem\"). git in een kindproces: \"draait\" bij het starten, \"op schijf\" hooguit eens per 15 s, GitHub (git ls-remote) hooguit eens per 10 min; geen netwerk = oranje, geen fout.",
+      "waarom": "Clay: \"hoe kan ik snel en makkelijk zien dat ik in de juiste laatste versie zit?\" Na git pull draaide de oude server door; op een speelavond wil je dat zien voor je begint.",
+      "bron": [
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "Versie"
+        },
+        {
+          "pad": "server/versie.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "server/versie.js",
+        "src/controle/versie-tegel.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Klein, waardevol, getest op echte git-mappen."
+    },
+    {
+      "id": "systeem-055",
+      "titel": "De speellijst van de proef: één stand op de server, ids nooit veranderen",
+      "soort": "contract",
+      "wat": "proef/sessie.json (VARVE_PROEF): per punt { status: open|ok|fout|overslaan, notitie, tijd }, per punt atomisch opgeslagen; \"nieuwe ronde\" archiveert naar proef/archief/<tijd>.json. De punten staan in src/controle/speellijst.js (326 punten in 61 blokken op 16 okt, in delen Vooraf/Avond 1-3/Werkruimte/Eerder werk). De test eist unieke ids, de avondvolgorde, vraagcodes die in VRAGEN.md staan, en dat elk geciteerde melding letterlijk in de code staat. Claude leest na een sessie de fouten met notitie eerst.",
+      "waarom": "Zo verandert een melding nooit zonder dat de proeflijst meekomt, en blijft een afgevinkt punt aan zijn id hangen.",
+      "bron": [
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "De speellijst; Een punt toevoegen"
+        }
+      ],
+      "code": [
+        "server/proef.js",
+        "src/controle/speellijst.js",
+        "src/controle/speellijst-weergave.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Het mechanisme (proef als data, citaten getoetst) houden; de omvang (326 ongeproefde punten) is een symptoom van bouwen zonder proeven."
+    },
+    {
+      "id": "systeem-056",
+      "titel": "Een opstelling zet alleen beginwaarden, nooit een pijler uit",
+      "soort": "regel",
+      "wat": "Een stand (in de Controlekamer \"Opstelling\") is één JSON per situatie met alleen waarden die VARVE al kent: mapping, nachtrem, krat, master-sjabloon (op naam, niet op plaats), hub-set en mixerVia, avondpakketprofiel. Verboden delen: panelen, acties, pijlers, mapjes. Hij start nooit geluid, een opname of een download (de nacht kan hij alleen remmen), laat de mixer nooit herladen, en is een startpunt, geen slot. normaliseerStand (puur) is de witte lijst.",
+      "waarom": "De crossover is de kern (VISIE §2): een instelling die een pijler verbergt breekt het instrument. Sessietoestand (faders, wat speelt) en beleid (de nacht aanzetten, datums) horen er niet in.",
+      "bron": [
+        {
+          "pad": "docs/STANDEN.md",
+          "waar": "§1, §2"
+        }
+      ],
+      "code": [
+        "src/standen/stand-model.js",
+        "server/standen.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een goede grens tussen instellen en spelen."
+    },
+    {
+      "id": "systeem-057",
+      "titel": "Activeren is één gebeurtenis met een verslag, en terug kan",
+      "soort": "contract",
+      "wat": "POST /api/standen/<naam>/activeer geeft { toegepast, gecontroleerd, genoemd, mixer, overgeslagen, fouten, waarschuwingen }: de server zet wat hij bezit (mapping, nachtrem), kijkt na wat hij kan zien (krat, profiel, hub-set, sjabloon) en legt vast wat de mixer later overneemt. Eerst schrijft hij .vorige/ met de oude mapping en nacht plus raakt (welke delen de stand echt zet). \"Vorige terugzetten\" zet alleen die terug, en zet de nacht nooit tegen een latere handkeuze in.",
+      "waarom": "Een eerste versie zette bij terug ook een mapping terug die de stand niet noemde (review 1).",
+      "bron": [
+        {
+          "pad": "docs/STANDEN.md",
+          "waar": "§4 Vorige terugzetten"
+        }
+      ],
+      "code": [
+        "server/standen.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "Het idee \"toepassen met verslag en een precieze undo\" houden; de vorm hangt af van wat v2 als instelbaar ziet."
+    },
+    {
+      "id": "systeem-058",
+      "titel": "Bestandsnamen in kleine letters: de Mac ziet APC.json en apc.json als één",
+      "soort": "valkuil",
+      "wat": "Namen van standen (en andere door Clay benoemde bestanden): kleine letters, cijfers, - en _ (≤ 60), niet actief, keuzes of terug. Een met de hand gemaakt Feest.json verschijnt als feest; \"bewaar als\" maakt van Avond3 zelf avond3. DELETE geeft 405: weghalen = het bestand met de hand verplaatsen.",
+      "waarom": "APFS is standaard hoofdletterongevoelig; twee namen die alleen in hoofdletters verschillen overschrijven elkaar.",
+      "bron": [
+        {
+          "pad": "docs/STANDEN.md",
+          "waar": "§2 Regels, §4"
+        }
+      ],
+      "code": [
+        "src/standen/stand-model.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Platformfeit dat elke naamgeving in v2 raakt."
+    },
+    {
+      "id": "systeem-059",
+      "titel": "\"Stand\" betekent zes dingen, en de opstelling is half af",
+      "soort": "pijn",
+      "wat": "\"Stand\" was al bezet (engine-stand, beginstand van het log, leesStand, LED-standen ...), daarom heet het in de UI \"Opstelling\" (LABEL). Van de delen werken alleen mapping en nachtrem echt; master (\"de mixer volgt nog niet\"), krat (\"kies hem zelf in de kaart\"), hub-set (\"start hem zelf\") en beeld/koptelefoon/vormen (overgeslagen) zijn genoemd maar niet toegepast. Nooit op de echte opstelling geproefd.",
+      "waarom": "Gebouwd 10 okt als stap 1; stappen P, K, M, D, S, H, L wachten op een proefavond.",
+      "bron": [
+        {
+          "pad": "docs/STANDEN.md",
+          "waar": "kop, §2 tabel, §6, §8, §9"
+        }
+      ],
+      "code": [
+        "src/standen/stand-model.js",
+        "server/standen.js",
+        "src/controle/stand-tegel.js"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: één woordenlijst voor begrippen vooraf, en een opstelling die alleen delen kent die ook echt toegepast worden."
+    },
+    {
+      "id": "systeem-060",
+      "titel": "Avondpakket: één alleen-lezen controle vóór vertrek en bij aankomst",
+      "soort": "besluit",
+      "wat": "Dezelfde vraag op twee momenten: kan ik met deze tas vertrekken (media en instellingen echt lokaal, library compleet, schijf, accu en lader, backup, geen achtergrondwerk) en kan ik hier beginnen (geluidsuitgang met 4 kanalen, APC, Scarlett, Maschine, AV-hub, Bluetooth uit, Tailscale, één server op library.db). Hij repareert niets en schrijft niets. Als tegel, als CLI (exit 0/1/2/3) en als route.",
+      "waarom": "VISIE §3: de draagbare set. Vóór het pakket was \"is alle audio echt lokaal, niet in iCloud\" handwerk met find -flags +dataless.",
+      "bron": [
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§1, §2, §10"
+        }
+      ],
+      "code": [
+        "server/avondpakket.js",
+        "server/avondpakket-meet.js",
+        "tools/avondpakket.mjs",
+        "src/controle/avondpakket-tegel.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "De goede vraag voor een draagbaar instrument; houd het concept, liefst kleiner."
+    },
+    {
+      "id": "systeem-061",
+      "titel": "Meet nooit iets duurs terwijl er gespeeld wordt",
+      "soort": "regel",
+      "wat": "Een volledige meting (system_profiler, ioreg, lsof, find) alleen bij openen, een keuze of een klik. Automatisch hooguit elke 5 min, alleen als de pagina zichtbaar is, en dan alleen het goedkope (pmset, df, defaults, pgrep, poort 7700) of de cache (< 10 s). Staat de mixer open: niet vanzelf meten. Speelt er een deck: de server geeft de laatste stand (\"bevroren: er speelt een deck · 18:30\").",
+      "waarom": "Of system_profiler onder het geluid een tik geeft is niet gemeten; daarom het zekere voor het onzekere.",
+      "bron": [
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§2"
+        }
+      ],
+      "code": [
+        "server/avondpakket-meet.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Algemene regel voor elke diagnose naast een live set."
+    },
+    {
+      "id": "systeem-062",
+      "titel": "Profielen, apparaten en paklijst zijn data",
+      "soort": "regel",
+      "wat": "avondpakket/profielen.json: apparaten (naam als regex, USB vid:pid), vijf profielen (laptop, apc, maschine, alles, beeld) met per onderdeel verwacht/optioneel/nee, grenzen (schijf 20/50 GiB, accu 80 %, lader 30 W), een bekend-lijst (oranje wordt grijs, rood nooit), de paklijst en hardwareBevestigd. Zolang hardwareBevestigd false is wordt een ontbrekend apparaat hooguit oranje: de echte uitvoer van aangesloten APC/Scarlett/Maschine is nooit gezien (fixtures HANDGEMAAKT).",
+      "waarom": "Pijler 4: een nieuwe controller is een regel, geen code. De USB-id van de APC (09e8:0029) is niet geverifieerd.",
+      "bron": [
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§4, §5, §6, §12"
+        }
+      ],
+      "code": [
+        "avondpakket/profielen.json"
+      ],
+      "pijler": "instellen",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Data-gedreven en eerlijk over wat niet gezien is."
+    },
+    {
+      "id": "systeem-063",
+      "titel": "Een sonde die een optie niet kent is nooit geslaagd",
+      "soort": "valkuil",
+      "wat": "De sondes worden per platform gekozen (metersVoor). Zegt stderr dat een optie onbekend is (\"unknown predicate\", \"unrecognized option\", ...: ONBEKENDE_OPTIE), dan telt de sonde als niet gemeten, welke exitcode er ook bij hoort. Op Linux alles met LC_ALL=C. Platform-eigen punten (op de pc: relay 7702, HDMI via /sys/class/drm, de Mac in de tailnet, Node-versie) gooien elders ALLEEN_PC en worden weggelaten.",
+      "waarom": "Op Linux gaven BSD-find -flags en stat -f exit 1, en exit 1 mocht (bij find ook \"een map niet leesbaar\"): media \"leeg\", library compleet vals rood, instellingen vals groen (15 okt).",
+      "bron": [
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§9b"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Het avondpakket per platform"
+        }
+      ],
+      "code": [
+        "server/avondpakket-meet.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Geen vals groen is belangrijker dan volledigheid."
+    },
+    {
+      "id": "systeem-064",
+      "titel": "Privacy in rapporten: geen paden, IP's, backupnamen of omgeving",
+      "soort": "regel",
+      "wat": "Elk punt van het avondpakket gaat door schoon(): absolute paden worden de laatste naam, library-....db wordt \"de kopie\", IPv4 wordt <ip>; foutteksten van kindprocessen noemen nooit de opdrachtregel; Tailscale-peers alleen bij naam en alleen die het profiel noemt. --vastleggen maakt fixtures met /home/test als thuismap en Tailscale zonder adressen of sleutels.",
+      "waarom": "Rapporten gaan naar de iPhone, in fixtures in git, en naar agents.",
+      "bron": [
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§8, §9b AR12"
+        }
+      ],
+      "code": [
+        "server/avondpakket.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Nodig zodra iets diagnostisch het apparaat verlaat."
+    },
+    {
+      "id": "systeem-065",
+      "titel": "Het avondpakket is ~1650 regels serverlogica voor een checklist",
+      "soort": "pijn",
+      "wat": "server/avondpakket.js (1034, puur: parsers voor pmset, ioreg, df, defaults, system_profiler, tailscale, find, sysfs, drm) plus avondpakket-meet.js (610: sondes, cache, bevriezing, nep-fixtures), drie testbestanden en een headless-proef. Wake/sleep (pmset displaysleep) zit er niet in; het oordeel heeft fase-, meting- en bekend-uitzonderingen in drie reviewrondes gekregen.",
+      "waarom": "Gegroeid door eerlijkheid per platform en per randgeval; de echte hardware-uitvoer (7a/7b) is nog nooit verwerkt.",
+      "bron": [
+        {
+          "pad": "docs/AVONDPAKKET.md",
+          "waar": "§3, §5, §13"
+        }
+      ],
+      "code": [
+        "server/avondpakket.js",
+        "server/avondpakket-meet.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "anders",
+      "reden": "In v2 eerst de vijf punten die echt rood kunnen worden (lokaal, uitgang, controllers, schijf/accu, backup) met echte fixtures; de rest pas als een avond erom vraagt."
+    },
+    {
+      "id": "systeem-066",
+      "titel": "Scherm en Mac wakker houden is niet gebouwd",
+      "soort": "open",
+      "wat": "Er is niets dat het scherm aanhoudt in de mixer of de beamer (alleen in het paneel van de werkruimte een Wake Lock), en het avondpakket kijkt niet naar displaysleep. AANNAME: macOS telt MIDI/HID van de APC en Maschine niet als gebruikersinvoer; wie alleen met controllers werkt, ziet scherm en beamer na de energie-instelling uitgaan. Chrome houdt bij geluid de Mac wakker maar niet het scherm.",
+      "waarom": "Voorgesteld (WINST §5): eerst 2 minuten pmset -g assertions tijdens het spelen; dan navigator.wakeLock in mixer en beamer (één helper), caffeinate -di -w <pid> op de server zolang er gespeeld wordt.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§5"
+        }
+      ],
+      "code": [
+        "src/paneel/paneel.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Eerst meten op de Mac; in v2 hoort \"wakker blijven tijdens een set\" bij de kern van de draagbare set."
+    },
+    {
+      "id": "systeem-067",
+      "titel": "Uitzenden is een uitgang die een groeiende opname volgt",
+      "soort": "besluit",
+      "wat": "server/uitzend.js leest de WAV (profiel stil) of mp4 (profiel beeld) die de opname al schrijft en voert de nieuwe bytes in de stdin van één ffmpeg naar één doel. Geen eigen klok: de achterstand wordt gemeten tegen de WAV-bytes (frames van de audioklok); een poll van 250 ms zegt alleen wanneer. Het opnamepad blijft byte voor byte gelijk, ook als ffmpeg sterft; geen uitzending zonder opname, en nog roept niets de module aan (geen route, knop of action).",
+      "waarom": "VISIE §4: \"de eigen set live uitzenden\" is een uitgang, geen distributie van de cache. Alternatief A (in-app naar een dienst) en C (Varve -> lokaal udp -> OBS -> dienst); C eerst.",
+      "bron": [
+        {
+          "pad": "docs/UITZENDEN.md",
+          "waar": "Stand, §1, §2"
+        }
+      ],
+      "code": [
+        "server/uitzend.js"
+      ],
+      "pijler": "beeld",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "Het principe (volg de opname, één ffmpeg, geen eigen klok) houden; of het een opname-afgeleide blijft hangt af van de keuze voor live streamen."
+    },
+    {
+      "id": "systeem-068",
+      "titel": "Lokaal-slot op uitzenddoelen: alleen bestand of letterlijk 127.0.0.1",
+      "soort": "grens",
+      "wat": "Doelen staan alleen op schijf (uitzend/doelen.json, niet in git); het verzoek noemt een naam en wordt verder genegeerd (geen url, pad of ffmpeg van buiten). Toegestaan: bestand (naar ~/Movies/VARVE-uitzend/, nooit overschrijven, nooit in opnames/, elk pad eerst absoluut), rtmp naar letterlijk 127.0.0.1 of [::1], udp naar 127.0.0.1 met poort ≥ 1024. localhost telt niet (hangt van /etc/hosts af). Een doel met een sleutel is ongeldig; stderr gaat door maskeer().",
+      "waarom": "Een slot tegen vergissing, niet tegen opzet. Met een relatief ../opnames kwam de flv eerst ín opnames/ (review 1).",
+      "bron": [
+        {
+          "pad": "docs/UITZENDEN.md",
+          "waar": "§3 G1-G9"
+        }
+      ],
+      "code": [
+        "server/uitzend.js"
+      ],
+      "pijler": "beeld",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Tot Clay U1b beslist moet naar buiten technisch dicht zitten."
+    },
+    {
+      "id": "systeem-069",
+      "titel": "ffmpeg live: één invoer, één klok; showwaves stempelt 4 beelden te laat",
+      "soort": "meting",
+      "wat": "Een stilstaande tweede invoer (-re lavfi of -loop 1 png) stokt of loopt live weg; het beeld uit het geluid zelf maken (showwaves) loopt gelijk (2,0 -> 6,0 s bij wand 6 s). showwaves stempelt elk beeld 4 beelden te laat: setpts=PTS-4/(FR*TB) plus trim zet de stoot op 3,02 s bij 2, 10 en 15 fps, zonder drift over 300 s. Beeld hercoderen met videotoolbox en geluid kopiëren houdt bij (11,0 s na 12 s); geluid ook hercoderen (aac) loopt weg (~0,45x echte tijd, oorzaak onbekend). -force_key_frames expr:gte(t,n_forced*2) geeft keyframes op 2,00 s, waar -g 60 op Chrome's variabele fps 2,27-2,4 s gaf.",
+      "waarom": "Gemeten 10 okt (jury en reviews, ffmpeg 9.0.1, MacBook Air); S27/S28 pinnen de \"4\" vast. CPU: hwaccel videotoolbox ~3,4 % van een kern, stil-profiel 2 fps ~10 %.",
+      "bron": [
+        {
+          "pad": "docs/UITZENDEN.md",
+          "waar": "§4, §7"
+        }
+      ],
+      "code": [
+        "server/uitzend.js",
+        "test/uitzend.test.mjs"
+      ],
+      "pijler": "beeld",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Harde, niet-voor-de-hand-liggende ffmpeg-feiten."
+    },
+    {
+      "id": "systeem-070",
+      "titel": "Mag de eigen set naar een dienst (YouTube, Twitch, Mixcloud)?",
+      "soort": "open",
+      "wat": "U1a: valt een uitgang naar een bestand of 127.0.0.1 binnen \"geen publieke streaming\"? (advies ja; CLAUDE.md heeft de zin inmiddels: \"Een uitgang is geen distributie\"). U1b: in-app naar een dienst, alleen als OBS te zwaar blijkt, met een verplichte rechtenregel per doel (advies: nog niet, eerst de thuisproef via OBS). Rechten: Content ID claimt mixen (drie strikes = kanaal kwijt), Mixcloud-regels per artiest, Twitch DJ Program, Sena-licentie bij inkomsten; beeld met clips van anderen alleen thuis.",
+      "waarom": "VISIE §4 noemt dit expliciet als spanning die Clay moet beslissen. Rechtenregels overgenomen uit het onderzoek van 9 okt, niet nagekeken bij de diensten, geen juridisch advies.",
+      "bron": [
+        {
+          "pad": "docs/UITZENDEN.md",
+          "waar": "§5, §11"
+        },
+        {
+          "pad": "docs/VRAGEN.md",
+          "waar": "U1a, U1b"
+        },
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§4"
+        },
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Gekozen aanpak"
+        }
+      ],
+      "code": [
+        "server/uitzend.js"
+      ],
+      "pijler": "beeld",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "Een keuze over rechten en identiteit, niet over techniek."
+    },
+    {
+      "id": "systeem-071",
+      "titel": "Eén testopdracht, in een pool, langste eerst; @alleen apart",
+      "soort": "regel",
+      "wat": "node test/alles.mjs draait alle bestanden *.test.mjs (145 op 19 okt) als losse Node-processen, zoveel tegelijk als er kernen zijn (of --banen N), langste eerst volgens test/.duur.json (niet in git). Een test met een tijdsgrens op de wandklok, een afvalmeting (0 GC) of een vaste poort zet bovenaan \"// @alleen: <waarom>\" en loopt daarna alleen (19 bestanden). Overgeslagen checks (\"  --  \") worden apart gemeld, nooit stil groen. Alle tests groen is een conventie voor elke commit.",
+      "waarom": "Serieel 737 s, met 4 tegelijk 368 s op een overbelaste machine (94 bestanden, 13 okt). Een belaste machine maakte tijdsgrenzen vals rood.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Tests"
+        },
+        {
+          "pad": "test/alles.mjs",
+          "waar": "kop"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§8"
+        }
+      ],
+      "code": [
+        "test/alles.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Zonder dependencies en met een eerlijke scheiding tussen snel en meetgevoelig."
+    },
+    {
+      "id": "systeem-072",
+      "titel": "De Node-versie ligt vast; een andere Node waarschuwt, slaat niets over",
+      "soort": "regel",
+      "wat": ".node-version zegt 26.8.2 (de Mac en de CI-workflow). alles.mjs meldt een andere Node boven en onder met de checks die op een andere V8 anders uitvallen (test/node-versie.mjs, VERSIEGEVOELIG). Een nieuwe afvalmeting met een grens die op één V8 is gemeten hoort in die lijst. De gouden hash van het audiopad hangt van V8's sin/cos af: na een Node-update opnieuw meten op de oude kern, niet blind overnemen.",
+      "waarom": "Op de pc en in de container draaide een andere Node; drie tests werden rood zonder dat de code fout was.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Tests; Bekende grenzen: HET AUDIOPAD"
+        },
+        {
+          "pad": "test/node-versie.mjs",
+          "waar": "heel bestand"
+        }
+      ],
+      "code": [
+        ".node-version",
+        "test/node-versie.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Metingen die van de runtime afhangen moeten dat zeggen."
+    },
+    {
+      "id": "systeem-073",
+      "titel": "Een mock mag niet makkelijker zijn dan de echte API",
+      "soort": "regel",
+      "wat": "De Web Audio-mock vuurt onended asynchroon zoals de browser, gooit NotSupportedError waar Chrome dat doet (setTargetAtTime bovenop een lopende curve) en telt afgebroken curves (CURVE_BREUK = 0). Nep-fetches kennen alleen json(). Nep-yt-dlp, nep-stems en een nep-kaart maken eigen materiaal met ffmpeg; geen netwerk.",
+      "waarom": "Een mock die makkelijker is verbergt bugs: twee rackwissels binnen 40 ms gooiden in Chrome NotSupportedError terwijl de oude mock groen bleef.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Mocks; Verbeterronde 23 sep (zetOvergang)"
+        }
+      ],
+      "code": [
+        "test/engine.test.mjs",
+        "test/nep-ytdlp.mjs",
+        "test/nep-stems.mjs",
+        "test/nep-tijdlijn.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Een les die elke v2-test moet volgen."
+    },
+    {
+      "id": "systeem-074",
+      "titel": "Architectuurregels als test, ook als importboom",
+      "soort": "regel",
+      "wat": "test/regels.test.mjs eist dat src/engine/ niets importeert uit ui/, control/ of de server en geen DOM gebruikt (ook geen document.currentScript in gevendorde code); regels-companion en regels-werk volgen de hele importboom vanaf een pagina en toetsen elk bestand (geen AudioContext, MIDI, Web Lock). Andere tests bewaken structuur: uitzend.js importeert alleen node:* en opname.js; test/aanhaakpunten legt de vijf aanhaakplekken per spoor tegen de bestanden op schijf.",
+      "waarom": "\"De engine kent geen MIDI, geen DOM en geen YouTube\" (regel 1) blijft alleen waar als een test het afdwingt; agents breken anders ongemerkt.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "De drie regels; Structuur test/"
+        },
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Grenzen"
+        }
+      ],
+      "code": [
+        "test/regels.test.mjs",
+        "test/regels-companion.test.mjs",
+        "test/aanhaakpunten.test.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Het goedkoopste wapen tegen erosie van de architectuur."
+    },
+    {
+      "id": "systeem-075",
+      "titel": "\"Is dit proces weg?\": een zombie telt als weg; pgrep op een poortnummer liegt",
+      "soort": "valkuil",
+      "wat": "In tests telt een zombie als gestopt (leeftNog in wachtrij.test; de herstartlus doet hetzelfde met ps -o stat): PID 1 in een container ruimt wezen niet op. Een opruimcontrole zoekt op het eigen Chromium-profiel (user-data-dir=...varve-companion-), nooit op een poortnummer in de argumenten.",
+      "waarom": "pgrep -fl ':8805|9405' vond de GPU-helper van Clay's eigen Chrome (9405 stond toevallig in zijn argumenten); wie daarop stopt, stopt een stuk van Clay's Chrome (review ronde 1).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Tests"
+        },
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Testen"
+        }
+      ],
+      "code": [
+        "test/wachtrij.test.mjs",
+        "tools/varve-app/server-lus.sh",
+        "tools/headless/companion.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "detail",
+      "voorstel": "houden",
+      "reden": "Kleine regels die echte schade voorkomen op Clay's machine."
+    },
+    {
+      "id": "systeem-076",
+      "titel": "145 testbestanden zonder framework, CI klaargezet maar uit",
+      "soort": "pijn",
+      "wat": "Elke test is een los script met een eigen ok()-helper en eigen uitvoer (samen ~55.000 regels). .github/workflows/test.yml (macos-14, Node 26.8.2, ffmpeg en yt-dlp via brew) draait alleen met de hand (workflow_dispatch); aanzetten op elke PR is een keuze van Clay. Breuk kwam pas bij het samenvoegen aan het licht (339310b, b61d8e3, 03275d3: reparaties achteraf).",
+      "waarom": "Geen dependencies in de frontend was de regel; de tests volgden die regel ook.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§8"
+        },
+        {
+          "pad": ".github/workflows/test.yml",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "test/",
+        ".github/workflows/test.yml"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: node:test (ingebouwd, geen dependency) met één gedeelde helper, en CI vanaf de eerste PR aan."
+    },
+    {
+      "id": "systeem-077",
+      "titel": "Proefservers raken nooit 8777, media/ of Clay's Chrome",
+      "soort": "regel",
+      "wat": "Elke headless-proef draait een eigen server op een eigen poort met een tijdelijke map voor elke VARVE_*-map (DB, MEDIA, OPNAMES, PLANNEN, PATRONEN, PROEF, STANDEN, SETS, WERKRUIMTES, SJABLONEN, ...) plus VARVE_TESTSERVER=1, een eigen Chromium-profiel met --mute-audio, requestMIDIAccess en AudioContext waar nodig als tellers die de echte nooit aanroepen (de APC kan aan deze Mac hangen), een waakhond, opruimen op SIGINT/SIGTERM, en controleert aan het eind zelf dat de poorten vrij zijn. Niet tijdens een speelavond: CPU.",
+      "waarom": "Een vergeten VARVE_PATRONEN liet een proefserver in een worktree de patronen van de echte mixer lezen; een vergeten VARVE_SJABLONEN schreef in <worktree>/racks/eigen.json.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Secties verweven: Headless; S10 eigen sjablonen"
+        },
+        {
+          "pad": "docs/COMPANION.md",
+          "waar": "Testen"
+        }
+      ],
+      "code": [
+        "tools/headless/"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "De regels zijn goed; de uitvoering hoort in één harnas (zie volgend kaartje)."
+    },
+    {
+      "id": "systeem-078",
+      "titel": "81 headless-tools, elk met eigen opzet en vaste poorten",
+      "soort": "pijn",
+      "wat": "tools/headless/ heeft 81 scripts (~26.000 regels); 74 zetten zelf VARVE_TESTSERVER en hun rij mappen, met vaste poortparen per tool (8805/9405, 8913/9513, 8961/8962, ...). Een gedeeld harnas bestaat maar in één tool. Elke nieuwe VARVE_*-map moet in alle tools die hem raken worden bijgezet.",
+      "waarom": "Gegroeid per spoor; de valkuilen hierboven (vergeten env) komen hier vandaan.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Structuur tools/headless"
+        },
+        {
+          "pad": "tools/headless/werk-scherm.mjs",
+          "waar": "harnas()"
+        }
+      ],
+      "code": [
+        "tools/headless/"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: één harnas (server met tmp-datamap via één VARVE_DATA, vrije poort, Chromium-profiel, opruimen) dat elke proef gebruikt."
+    },
+    {
+      "id": "systeem-079",
+      "titel": "Achtergrondtabbladen meten niets: timers, rAF en media worden geknepen",
+      "soort": "regel",
+      "wat": "Chrome knijpt timers in een verborgen tabblad (1 per s, na 5 min 1 per min), zet requestAnimationFrame stil en laadt/decodeert geen media. Video en alles op tijd meet je met het venster vooraan, of headless met Chrome for Testing --headless=new (alleen daar wordt een tabblad echt verborgen). Daarom lopen LED's op een eigen interval en hartslagen op de tijd, niet op tikken.",
+      "waarom": "Meerdere metingen (beamer, hub-hartslag, LED's) waren eerst fout door een tabblad op de achtergrond.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: Chrome laadt geen media; LED's; AV-APP-HUB hartslag"
+        }
+      ],
+      "code": [
+        "src/control/feedback.js",
+        "tools/headless/beamer.mjs"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Een browserfeit dat elke v2-meting en elke timer raakt."
+    },
+    {
+      "id": "systeem-080",
+      "titel": "Repo in iCloud: \" 2\"-kopieën nooit committen, git add per pad",
+      "soort": "valkuil",
+      "wat": "De repo staat op het Bureaublad (iCloud). Bestanden met \" 2\" in de naam zijn conflictkopieën van iCloud, meestal een oude versie: nooit committen. Daarom git add per pad, nooit -A. Groter werk gaat in een worktree buiten iCloud (~/Projects/varve-stems/<spoor>).",
+      "waarom": "iCloud maakt die kopieën stil bij gelijktijdige schrijfacties; met git add -A kwam een oude versie mee.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Git"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§4 stap 3"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2 begint buiten iCloud (~/Projects/varve), dan verdwijnen de kopieën en de regel."
+    },
+    {
+      "id": "systeem-081",
+      "titel": "Werk per spoor in een worktree, samenvoegen in één integratietak",
+      "soort": "regel",
+      "wat": "Groter werk per spoor op een eigen tak in een worktree buiten iCloud, samenvoegen in studio/integratie, naar main met een PR; daarna de worktree weg. Een server die vanuit een worktree draait schrijft patronen, speellijst, standen, sets en eigen sjablonen in die worktree: link media/ en opnames/, en zet de rest terug vóór de worktree weggaat. Committen en pushen mag; mergen in Clay's repo alleen met zijn oké.",
+      "waarom": "Veel parallelle agentsporen (S0-S11, AR, visie/*) op één codebasis.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Conventies: Git"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Het model werkt; de data-in-worktree-valkuil verdwijnt met één datamap buiten de repo."
+    },
+    {
+      "id": "systeem-082",
+      "titel": "Drie lijnen naast elkaar; wat de Dock-app start, stond niet op main",
+      "soort": "pijn",
+      "wat": "Op 13 okt waren er drie lijnen (main, studio/integratie, studio/afmaken), vijf van negen open PR's zaten al in afmaken, en niets van de draagbare stapel (avondpakket, opstellingen, companion) stond op main, terwijl VARVE.app de code van main start. De tegel Versie (16 okt) maakt het nu zichtbaar.",
+      "waarom": "Sporen gingen naar verschillende integratielijnen; een fix bleef in de verkeerde lijn liggen en ontbrak op de avond.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§8"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "v2: één integratielijn, main = wat er speelt, kleine PR's met CI."
+    },
+    {
+      "id": "systeem-083",
+      "titel": "CLAUDE.md is 2298 regels: het grootste conflictbestand",
+      "soort": "pijn",
+      "wat": "Het projectgeheugen groeide van 1880 regels (~45k tokens per agent, 13 okt) naar 2298 op 19 okt; elk spoor voegt een blok toe (\"Wat een bouwer niet mag missen\"). Het is tegelijk regels, structuur, valkuilen en verslag. Voorstel uit WINST §8: een kern van ~250 regels met de rest in geneste CLAUDE.md per laag.",
+      "waarom": "Elke agent laadt alles, ook wat niet over zijn laag gaat; bij parallel werk botsen de blokken.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "heel bestand"
+        },
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§8 stap 5"
+        }
+      ],
+      "code": [
+        "CLAUDE.md"
+      ],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "Precies wat deze oogst doet: kennis als losse kaartjes per onderwerp, een korte kern voor v2."
+    },
+    {
+      "id": "systeem-084",
+      "titel": "Ruim 500 commits zonder proef op de hardware",
+      "soort": "pijn",
+      "wat": "Sinds 23 september zijn er ruim 500 commits gemaakt zonder proef op de APC. Veel onderdelen staan als \"gebouwd, niet geproefd\" (standen, companion stap 2, avondpakket 7a/7b, koptelefoon, hub-lease); de speellijst groeide tot 326 punten. VISIE §5.4: eerst de proefuitkomst verwerken, dan bouwen.",
+      "waarom": "Agents kunnen sneller bouwen dan Clay kan proeven; elk ongeproefd stuk is een aanname op de avond.",
+      "bron": [
+        {
+          "pad": "docs/VISIE.md",
+          "waar": "§5.4"
+        },
+        {
+          "pad": "docs/CONTROLEKAMER.md",
+          "waar": "De speellijst"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "kern",
+      "voorstel": "anders",
+      "reden": "v2 bouwt in kleine stappen die elk op de hardware geproefd zijn voor de volgende begint."
+    },
+    {
+      "id": "systeem-085",
+      "titel": "Niets verwijderen: ordenen door verplaatsen",
+      "soort": "regel",
+      "wat": "Geen data, takken of bestanden van een ander weggooien; opruimen is handwerk van Clay. Routes volgen dat: DELETE op standen = 405 (het bestand met de hand verplaatsen), .versies/ en .vorige/ groeien zonder automatisch opruimen, backups nooit met --delete. De enige automatische opruiming is media/backups/ van de server (12 + 30 dagen).",
+      "waarom": "Clay's werkafspraak; een agent die \"opruimt\" kan onvervangbaar handwerk wissen.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Werkwijze die hier werkt"
+        },
+        {
+          "pad": "docs/BACKUP.md",
+          "waar": "§5"
+        }
+      ],
+      "code": [],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Grondregel van de gebruiker."
+    },
+    {
+      "id": "systeem-086",
+      "titel": "Chrome's MIDI-service crasht op bursts en meerdere tabbladen",
+      "soort": "valkuil",
+      "wat": "Alles wat naar een controller gaat loopt door een wachtrij: hooguit 16 berichten per schuivend venster van 4 ms (ook in hub.js), alleen bij het sluiten van de pagina direct. Eén tabblad praat met de APC (Web Lock varve-mixer); een tweede tabblad vraagt helemaal geen MIDI-toegang aan en neemt pas over als het eerste sluit (een lock verdwijnt ook bij een crash).",
+      "waarom": "Vier crashes op 22 sep in MidiService_TaskService_Thread op dezelfde codeplek bij een burst; op 23 sep een crash met vier VARVE-tabbladen die tegelijk init en LED's stuurden (Comet/Chromium 152).",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Bekende grenzen: wachtrij; ÉÉN VARVE-tabblad"
+        }
+      ],
+      "code": [
+        "src/control/midi.js",
+        "src/ui/tabblad.js",
+        "src/control/hub.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "kern",
+      "voorstel": "houden",
+      "reden": "Bewezen bij Clay; geldt zolang v2 Web MIDI gebruikt."
+    },
+    {
+      "id": "systeem-087",
+      "titel": "Een Web Lock beschermt alleen binnen één oorsprong",
+      "soort": "grens",
+      "wat": "Varve en AV-kern (eigen lock av-kern-apc, Vite op :5173) beschermen elkaar niet: nooit tegelijk open met de APC. Regel voor sessies: open nooit een extra VARVE-tabblad terwijl de APC aangesloten is en Clay's tabblad open staat; vraag eerst de APC los te koppelen. Met ?hub= opent de mixer zelf geen MIDI en beslist de hub (lease, nieuwste wint).",
+      "waarom": "Een Web Lock is per origin; elke app heeft zijn eigen.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "ÉÉN VARVE-tabblad; AV-APP-HUB"
+        }
+      ],
+      "code": [
+        "src/ui/tabblad.js",
+        "src/control/hub.js"
+      ],
+      "pijler": "controllers",
+      "gewicht": "belangrijk",
+      "voorstel": "anders",
+      "reden": "De hub als enige eigenaar van de controllers is de echte oplossing; in v2 standaard via de hub of een eigen MIDI-eigenaar, niet via Web Locks."
+    },
+    {
+      "id": "systeem-088",
+      "titel": "Na herladen of een crash zijn alle decks leeg",
+      "soort": "open",
+      "wat": "Er is een waarschuwing bij Cmd+R/Cmd+W zolang er iets speelt, wacht, laadt, de auto-DJ aan staat of er opgenomen wordt (src/ui/vertrek.js, beforeunload). Herstel is niet gebouwd: na herladen (app terug in 0,6-1,7 s) staat er niets geladen. Ontwerp uit WINST §6: elke ~5 s leesStand() naar localStorage varve.herstel (alleen het Lock-tabblad), bij opstarten een melding \"herstel de set van 21:43\" die met speelt/wacht op false terugzet; instrumenten en koptelefoon zitten niet in de stand.",
+      "waarom": "herlaad.mjs (WINST 13 okt). De Chrome-crashes van september zijn opgelost, maar een renderer die omvalt (bv. geheugen) blijft mogelijk.",
+      "bron": [
+        {
+          "pad": "docs/WINST.md",
+          "waar": "§6"
+        },
+        {
+          "pad": "src/ui/vertrek.js",
+          "waar": "kop"
+        }
+      ],
+      "code": [
+        "src/ui/vertrek.js",
+        "src/control/handelingen.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "open",
+      "reden": "In v2 hoort \"de set is altijd herstelbaar\" in het ontwerp van de toestand zelf; Clay kiest of dat lokaal of op de server staat."
+    },
+    {
+      "id": "systeem-089",
+      "titel": "Werk in een werkmap, pas bij succes verhuizen; opruimen bij opstarten",
+      "soort": "regel",
+      "wat": "De ingest (en upload, en stems) schrijft in media/.bezig-*/ en verhuist pas bij succes naar media/<id>/. Bij het opstarten ruimt de server achtergebleven .bezig-*-mappen op en zet de stems-rij terug (daarom eerst de poortproef). Migraties van de database lopen in een transactie; voor elke migratie is er een backup.",
+      "waarom": "Een ingest die halverwege stopt mag geen half nummer in de library achterlaten.",
+      "bron": [
+        {
+          "pad": "CLAUDE.md",
+          "waar": "Verbeterronde 23 sep: Server; Eigen bestanden"
+        }
+      ],
+      "code": [
+        "server/ingest.js",
+        "server/stems.js",
+        "server/library.js"
+      ],
+      "pijler": "systeem",
+      "gewicht": "belangrijk",
+      "voorstel": "houden",
+      "reden": "Standaard atomisch-schrijven-patroon; samen met de poortproef veilig."
+    }
+  ],
+  "onderdelen": [
+    {
+      "pad": "server/poort.js",
+      "regels": 22,
+      "puur": false,
+      "imports": [
+        "node:net"
+      ],
+      "tests": [
+        "test/server-poort.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Klein, generiek, lost een gemeten fout op."
+    },
+    {
+      "pad": "server/lus.js",
+      "regels": 22,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/herstart.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Puur leeswerk van de omgeving; hoort bij de herstartlus."
+    },
+    {
+      "pad": "tools/varve-app/server-lus.sh",
+      "regels": 217,
+      "puur": false,
+      "imports": [],
+      "tests": [
+        "test/server-lus.test.mjs",
+        "test/draadpool.test.mjs",
+        "test/herstart.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "POSIX sh, getest op Linux en Mac, regels voor herstart en hang zijn goed doordacht."
+    },
+    {
+      "pad": "src/lib/herhaal.js",
+      "regels": 71,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/opnemer.test.mjs",
+        "test/handelingenlog.test.mjs",
+        "test/opname.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Puur, klein, klok en wachten van buiten."
+    },
+    {
+      "pad": "src/lib/antwoord.js",
+      "regels": 21,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/opnemer.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "De fix voor het grootste geheugenlek; in v2 in de ene fetch-helper."
+    },
+    {
+      "pad": "server/media-plek.js",
+      "regels": 107,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "node:os",
+        "node:path"
+      ],
+      "tests": [
+        "test/media-verhuis.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "isTestserver, echtPad en iCloudReden zijn bruikbaar; kiesMedia met verhuisbriefje is overbodig als v2 vanaf het begin één datamap buiten iCloud heeft."
+    },
+    {
+      "pad": "server/backup.js",
+      "regels": 236,
+      "puur": false,
+      "imports": [
+        "node:worker_threads",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "tests": [
+        "test/backup.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "VACUUM INTO in een worker, SHA-dedupe, bewaarbeleid: precies goed, getest."
+    },
+    {
+      "pad": "server/backup-werker.js",
+      "regels": 64,
+      "puur": false,
+      "imports": [
+        "node:worker_threads",
+        "node:sqlite",
+        "node:fs",
+        "node:crypto",
+        "node:path"
+      ],
+      "tests": [
+        "test/backup.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Hoort bij backup.js."
+    },
+    {
+      "pad": "tools/backup/gedeeld.mjs",
+      "regels": 311,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "node:crypto",
+        "node:path",
+        "node:os",
+        "node:url",
+        "node:child_process",
+        "node:sqlite",
+        "../../server/media-plek.js",
+        "../../src/ui/instellingen-lijst.js"
+      ],
+      "tests": [
+        "test/backup-kopie.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "De regels (nooit --delete, .vorige, doel niet in bron, slot) houden; de lijst van mappen wordt veel korter met één datamap."
+    },
+    {
+      "pad": "tools/backup/kopie.mjs",
+      "regels": 398,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "node:path",
+        "node:os",
+        "node:child_process",
+        "node:url",
+        "../../server/backup.js",
+        "./gedeeld.mjs",
+        "./controleer.mjs"
+      ],
+      "tests": [
+        "test/backup-kopie.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Zelfde reden: het gedrag is goed, de kennis van verspreide mappen niet meer nodig."
+    },
+    {
+      "pad": "tools/backup/controleer.mjs",
+      "regels": 134,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "node:path",
+        "node:url",
+        "./gedeeld.mjs"
+      ],
+      "tests": [
+        "test/backup-kopie.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Manifest en tellingen nakijken is generiek."
+    },
+    {
+      "pad": "tools/backup/herstel.mjs",
+      "regels": 161,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "node:path",
+        "node:url",
+        "./gedeeld.mjs"
+      ],
+      "tests": [
+        "test/backup-kopie.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Weigeren bij een bestaande library houden; de doelpaden volgen de nieuwe datamap."
+    },
+    {
+      "pad": "server/versie.js",
+      "regels": 133,
+      "puur": false,
+      "imports": [
+        "node:child_process"
+      ],
+      "tests": [
+        "test/versie.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Generiek (git in een kindproces met caches), getest op echte git-mappen."
+    },
+    {
+      "pad": "server/mixer-melding.js",
+      "regels": 109,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/mixer-melding.test.mjs",
+        "test/companion-server.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "vanDezeMac en de twee-tabbladen-detectie houden; de melding wordt in v2 de ene bron voor alle kijkers (ook \"er speelt\")."
+    },
+    {
+      "pad": "server/proef.js",
+      "regels": 89,
+      "puur": false,
+      "imports": [
+        "node:fs/promises",
+        "node:path"
+      ],
+      "tests": [
+        "test/controle.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Klein, per punt atomisch; bruikbaar voor elke proeflijst."
+    },
+    {
+      "pad": "server/standen.js",
+      "regels": 765,
+      "puur": false,
+      "imports": [
+        "node:fs/promises",
+        "node:url",
+        "node:path",
+        "node:crypto",
+        "../src/control/mapping.js",
+        "../src/standen/stand-model.js",
+        "./nacht.js"
+      ],
+      "tests": [
+        "test/standen.test.mjs",
+        "test/standen-server.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Mengt versie-opslag, iCloud-grens (beperkt) en activeren; in v2 uit elkaar: generieke versie-opslag plus een kleine toepasser."
+    },
+    {
+      "pad": "src/standen/stand-model.js",
+      "regels": 221,
+      "puur": true,
+      "imports": [],
+      "tests": [
+        "test/standen-model.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Het witte-lijst-idee houden; de delen hangen af van wat v2 instelbaar maakt."
+    },
+    {
+      "pad": "server/avondpakket.js",
+      "regels": 1034,
+      "puur": true,
+      "imports": [
+        "../src/controle/backup-tegel.js"
+      ],
+      "tests": [
+        "test/avondpakket.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Parsers en privacy zijn waardevol, maar het oordeel is in rondes dichtgeplakt; kleiner opnieuw met echte fixtures."
+    },
+    {
+      "pad": "server/avondpakket-meet.js",
+      "regels": 610,
+      "puur": false,
+      "imports": [
+        "node:child_process",
+        "node:net",
+        "node:fs/promises",
+        "node:fs",
+        "node:path",
+        "node:os",
+        "./avondpakket.js",
+        "./backup.js",
+        "../src/controle/speellijst.js"
+      ],
+      "tests": [
+        "test/avondpakket-meet.test.mjs",
+        "test/avondpakket-server.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "voerUit (time-out, ONBEKENDE_OPTIE) en de bevriezing overnemen, de rest samen met avondpakket.js kleiner."
+    },
+    {
+      "pad": "tools/avondpakket.mjs",
+      "regels": 211,
+      "puur": false,
+      "imports": [
+        "node:fs/promises",
+        "node:os",
+        "node:fs",
+        "node:path",
+        "node:url",
+        "../server/avondpakket.js",
+        "../server/avondpakket-meet.js",
+        "../server/media-plek.js",
+        "../src/controle/backup-tegel.js"
+      ],
+      "tests": [
+        "test/avondpakket-meet.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Volgt de nieuwe kern van het avondpakket."
+    },
+    {
+      "pad": "server/uitzend.js",
+      "regels": 764,
+      "puur": false,
+      "imports": [
+        "node:fs/promises",
+        "node:fs",
+        "node:child_process",
+        "node:path",
+        "node:os",
+        "node:url",
+        "./opname.js"
+      ],
+      "tests": [
+        "test/uitzend.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Zelfstandig, alleen node:* en opname.js, 88 checks met echte ffmpeg; wacht alleen op een route en Clay's keuze."
+    },
+    {
+      "pad": "server/index.js",
+      "regels": 2124,
+      "puur": false,
+      "imports": [
+        "node:http",
+        "node:fs",
+        "node:fs/promises",
+        "node:path",
+        "node:url",
+        "node:os",
+        "node:crypto",
+        "./ingest.js",
+        "./links.js",
+        "./wachtrij.js",
+        "./library.js",
+        "./analyze.js",
+        "./toon.js",
+        "./secties.js",
+        "./media-plek.js",
+        "./poort.js",
+        "./lus.js",
+        "./versie.js",
+        "./opname.js",
+        "./handelingen.js",
+        "./plannen.js",
+        "./patronen.js",
+        "./proef.js",
+        "./mixer-melding.js",
+        "./stems.js",
+        "./tellen.js",
+        "../src/engine/tellen.js",
+        "../src/engine/beatgrid.js",
+        "../src/ui/instellingen-lijst.js",
+        "./backup.js",
+        "./kaart.js",
+        "./nacht.js",
+        "./standen.js",
+        "../src/standen/stand-model.js",
+        "./avondpakket-meet.js",
+        "./routes/index.js",
+        "../src/library/indeling.js"
+      ],
+      "tests": [
+        "test/server.test.mjs",
+        "test/upload.test.mjs",
+        "test/companion-server.test.mjs",
+        "test/server-poort.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Monoliet; schoonPad, vreemdVerzoek, statisch (Range, VIDEO_KNIP) en leesJson als losse kleine modules meenemen."
+    },
+    {
+      "pad": "server/routes/index.js",
+      "regels": 46,
+      "puur": false,
+      "imports": [
+        "./werkruimtes.js",
+        "./mapping-apparaat.js",
+        "./paneel.js",
+        "./sets.js",
+        "./sjablonen.js",
+        "./indeling.js"
+      ],
+      "tests": [
+        "test/aanhaakpunten.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Het idee (routes + witte-lijstregels per domein) wordt in v2 de hoofdvorm."
+    },
+    {
+      "pad": "test/alles.mjs",
+      "regels": 114,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "node:child_process",
+        "node:os",
+        "node:url",
+        "./node-versie.mjs"
+      ],
+      "tests": [],
+      "voorstel": "herschrijven",
+      "reden": "Pool en @alleen houden; op node:test overstappen of hem als runner daarvoor gebruiken."
+    },
+    {
+      "pad": "test/node-versie.mjs",
+      "regels": 34,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "node:url"
+      ],
+      "tests": [
+        "test/node-versie.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Klein en generiek."
+    },
+    {
+      "pad": "tools/varve-app/VARVE.applescript",
+      "regels": 210,
+      "puur": false,
+      "imports": [],
+      "tests": [
+        "test/draadpool.test.mjs",
+        "test/hub-nodig.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Logica (hub ja/nee) hoort in de server of config, niet in een gebouwde app."
+    },
+    {
+      "pad": "tools/varve-app/hub-nodig.mjs",
+      "regels": 38,
+      "puur": false,
+      "imports": [
+        "node:url",
+        "../../src/controle/stand-tegel.js"
+      ],
+      "tests": [
+        "test/hub-nodig.test.mjs"
+      ],
+      "voorstel": "weg",
+      "reden": "Hulpje voor de AppleScript; verdwijnt als de starter de server vraagt."
+    },
+    {
+      "pad": "tools/media-verhuis.mjs",
+      "regels": 283,
+      "puur": false,
+      "imports": [
+        "node:fs",
+        "node:child_process",
+        "node:net",
+        "node:os",
+        "node:path",
+        "node:url",
+        "../server/media-plek.js"
+      ],
+      "tests": [
+        "test/media-verhuis.test.mjs"
+      ],
+      "voorstel": "weg",
+      "reden": "Eenmalige verhuizing uit iCloud; v2 begint daarbuiten."
+    },
+    {
+      "pad": "src/ui/tabblad.js",
+      "regels": 61,
+      "puur": false,
+      "imports": [
+        "../lib/emitter.js"
+      ],
+      "tests": [
+        "test/tabblad.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Web Lock is per origin; in v2 de eigenaarschapsvraag via hub of server, met de lock als lokaal vangnet."
+    },
+    {
+      "pad": "src/ui/status-zender.js",
+      "regels": 146,
+      "puur": false,
+      "imports": [
+        "./beeld-weergave.js",
+        "../lib/antwoord.js"
+      ],
+      "tests": [
+        "test/status-zender.test.mjs",
+        "test/controle.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Het gedrag (nooit wachten, rust zonder kijker) houden; één kanaal via de server in plaats van BroadcastChannel plus POST."
+    },
+    {
+      "pad": "src/ui/vertrek.js",
+      "regels": 54,
+      "puur": false,
+      "imports": [],
+      "tests": [
+        "test/vertrek.test.mjs"
+      ],
+      "voorstel": "overnemen",
+      "reden": "Klein en nuttig; v2 voegt herstel toe."
+    },
+    {
+      "pad": "src/controle/controle.js",
+      "regels": 916,
+      "puur": false,
+      "imports": [
+        "./speellijst.js",
+        "./speellijst-weergave.js",
+        "../ui/status-zender.js",
+        "../ui/tabblad.js",
+        "../ui/stems-weergave.js",
+        "../ui/beeld-weergave.js",
+        "./backup-tegel.js",
+        "./server-tegel.js",
+        "./stand-tegel.js",
+        "./stand-bewerker.js",
+        "./avondpakket-tegel.js",
+        "./versie-tegel.js",
+        "../ui/vlag.js",
+        "./bedienen-tegel.js"
+      ],
+      "tests": [
+        "test/controle.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Tegels als pure functies (de *-tegel.js) zijn een goed patroon; de pagina zelf wordt een rol in de v2-schil."
+    },
+    {
+      "pad": "src/companion/companion.js",
+      "regels": 426,
+      "puur": false,
+      "imports": [
+        "../ui/dom.js",
+        "../ui/kaart-lijst.js",
+        "./companion-lijst.js"
+      ],
+      "tests": [
+        "test/companion-server.test.mjs",
+        "test/regels-companion.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Rol en grenzen houden; nooit op een echt toestel geproefd."
+    },
+    {
+      "pad": "src/companion/companion-lijst.js",
+      "regels": 389,
+      "puur": true,
+      "imports": [
+        "../ui/dom.js",
+        "../ui/kaart-lijst.js"
+      ],
+      "tests": [
+        "test/companion-lijst.test.mjs"
+      ],
+      "voorstel": "herschrijven",
+      "reden": "Puur rekenwerk is herbruikbaar, maar hangt aan de kaart-lijst van v1."
+    }
+  ]
+}

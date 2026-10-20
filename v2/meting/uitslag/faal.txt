@@ -1,0 +1,38 @@
+(node:13294) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{
+  "M7": {
+    "nummerMinuten": 31,
+    "geladen": true,
+    "extraMB": 36.3,
+    "inDeAudiothreadMB": 7.1,
+    "extraHeapPaginaMB": 0.7,
+    "verwachtZonderStreamenMB": 357,
+    "klinktNaStart": true,
+    "klinktNaSprong": true,
+    "plekNaSprong": 1503,
+    "grens": 50,
+    "geslaagd": true
+  },
+  "M8a": {
+    "plekNu": 100.15272727272728,
+    "voorbijGrens": true,
+    "tikkenVerborgen": 260,
+    "grootsteAfwijkingMs": 0,
+    "zichtbaarheid": "visible",
+    "secondenZonderPlanner": 65,
+    "geslaagd": true
+  },
+  "M8b": {
+    "meldingNaMs": 2,
+    "geslaagd": true
+  },
+  "M8c": {
+    "knopGeluidAanZichtbaar": true,
+    "meldingVanDeEngine": true,
+    "naEenHandeling": "running",
+    "naDeKnop": "running",
+    "geslaagd": true
+  },
+  "fouten": []
+}

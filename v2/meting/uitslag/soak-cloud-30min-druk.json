@@ -1,0 +1,2556 @@
+{
+ "rapport": {
+  "minuten": 30,
+  "metingen": 181,
+  "handelingen": 503,
+  "gemisteBlokken": 598,
+  "perUur": 1196,
+  "grootsteAchterstandMs": 460.9613333333584,
+  "renderCapacity": {
+   "gem": 0.14811758153072008,
+   "max": 0.9221251819505094
+  },
+  "geheugenMB": {
+   "begin": null,
+   "eind": 0,
+   "groeiPerUur": null
+  },
+  "fouten": []
+ },
+ "reeks": [
+  {
+   "t": 1792444046593,
+   "lag": 0,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 1,
+   "klok": 124.00000000000001,
+   "rt": {
+    "currentTime": 28.530666666666665,
+    "renderCapacity": 0.15185669719231157,
+    "callbackIntervalMean": 0.010018241930595837,
+    "callbackIntervalVariance": 3.4243997039426624e-7
+   }
+  },
+  {
+   "t": 1792444056625,
+   "lag": 0.000013833333319723806,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 3,
+   "klok": 124.00000000000001,
+   "rt": {
+    "currentTime": 38.562666666666665,
+    "renderCapacity": 0.14606171335769386,
+    "callbackIntervalMean": 0.010019455866401697,
+    "callbackIntervalVariance": 1.4237502941583164e-7
+   }
+  },
+  {
+   "t": 1792444066665,
+   "lag": 0.05009600000002479,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 6,
+   "klok": 118.67839041166008,
+   "rt": {
+    "currentTime": 48.552,
+    "renderCapacity": 0.07149990013980427,
+    "callbackIntervalMean": 0.010019026113771697,
+    "callbackIntervalVariance": 5.929994478936879e-7
+   }
+  },
+  {
+   "t": 1792444076716,
+   "lag": 0.05014616666668559,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 9,
+   "klok": 118.67839041166008,
+   "rt": {
+    "currentTime": 58.602666666666664,
+    "renderCapacity": 0.06767736821244551,
+    "callbackIntervalMean": 0.010020223535185535,
+    "callbackIntervalVariance": 1.76840521052812e-7
+   }
+  },
+  {
+   "t": 1792444086765,
+   "lag": 0.05009633333339991,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 12,
+   "klok": 118.67839041166008,
+   "rt": {
+    "currentTime": 68.65333333333334,
+    "renderCapacity": 0.12270733652312601,
+    "callbackIntervalMean": 0.01002127140791856,
+    "callbackIntervalVariance": 2.9434099256638505e-8
+   }
+  },
+  {
+   "t": 1792444096811,
+   "lag": 0.07013000000007708,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 14,
+   "klok": 118.67839041166008,
+   "rt": {
+    "currentTime": 78.67466666666667,
+    "renderCapacity": 0.07791044776119403,
+    "callbackIntervalMean": 0.010059877544413235,
+    "callbackIntervalVariance": 0.0000014540093803085632
+   }
+  },
+  {
+   "t": 1792444106852,
+   "lag": 0.09017966666675648,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 17,
+   "klok": 118.67839041166008,
+   "rt": {
+    "currentTime": 88.70666666666666,
+    "renderCapacity": 0.13664160401002506,
+    "callbackIntervalMean": 0.01006323034710185,
+    "callbackIntervalVariance": 0.000006134545823898389
+   }
+  },
+  {
+   "t": 1792444116911,
+   "lag": 0.09018999999999266,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 20,
+   "klok": 126.7135041775182,
+   "rt": {
+    "currentTime": 98.75733333333334,
+    "renderCapacity": 0.13185274109643857,
+    "callbackIntervalMean": 0.010019920864468143,
+    "callbackIntervalVariance": 9.882441499737295e-8
+   }
+  },
+  {
+   "t": 1792444126959,
+   "lag": 0.09017516666671099,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 23,
+   "klok": 123.39233730826527,
+   "rt": {
+    "currentTime": 108.808,
+    "renderCapacity": 0.10256666333766104,
+    "callbackIntervalMean": 0.010020287793969365,
+    "callbackIntervalVariance": 4.078305567964603e-8
+   }
+  },
+  {
+   "t": 1792444137000,
+   "lag": 0.09020116666668798,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 27,
+   "klok": 123.39233730826527,
+   "rt": {
+    "currentTime": 118.848,
+    "renderCapacity": 0.08048076923076923,
+    "callbackIntervalMean": 0.010023713807056897,
+    "callbackIntervalVariance": 3.3357681884184794e-7
+   }
+  },
+  {
+   "t": 1792444147045,
+   "lag": 0.09026516666668272,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 30,
+   "klok": 123.39233730826527,
+   "rt": {
+    "currentTime": 128.89333333333335,
+    "renderCapacity": 0.13260781942765013,
+    "callbackIntervalMean": 0.010019691696758632,
+    "callbackIntervalVariance": 1.68088874551294e-7
+   }
+  },
+  {
+   "t": 1792444157086,
+   "lag": 0.09028716666662717,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 32,
+   "klok": 123.39233730826527,
+   "rt": {
+    "currentTime": 138.93066666666667,
+    "renderCapacity": 0.1189178275792449,
+    "callbackIntervalMean": 0.010019818403862337,
+    "callbackIntervalVariance": 2.285793517564021e-7
+   }
+  },
+  {
+   "t": 1792444167131,
+   "lag": 0.09026316666674461,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 34,
+   "klok": 126.45171246677637,
+   "rt": {
+    "currentTime": 148.98133333333334,
+    "renderCapacity": 0.177007299270073,
+    "callbackIntervalMean": 0.010018380085905606,
+    "callbackIntervalVariance": 0.000002124803756082892
+   }
+  },
+  {
+   "t": 1792444177178,
+   "lag": 0.09019233333341958,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 37,
+   "klok": 126.45171246677637,
+   "rt": {
+    "currentTime": 159.02133333333333,
+    "renderCapacity": 0.1482961926651344,
+    "callbackIntervalMean": 0.01002018080441797,
+    "callbackIntervalVariance": 3.870022946574862e-7
+   }
+  },
+  {
+   "t": 1792444187224,
+   "lag": 0.09018550000004666,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 40,
+   "klok": 126.45171246677637,
+   "rt": {
+    "currentTime": 169.072,
+    "renderCapacity": 0.26058240768537977,
+    "callbackIntervalMean": 0.01001913339890293,
+    "callbackIntervalVariance": 0.0000016194179886818646
+   }
+  },
+  {
+   "t": 1792444197266,
+   "lag": 0.12024200000001883,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 43,
+   "klok": 126.45171246677637,
+   "rt": {
+    "currentTime": 179.08266666666665,
+    "renderCapacity": 0.10100707946953834,
+    "callbackIntervalMean": 0.01002731973804282,
+    "callbackIntervalVariance": 0.00000609591649139465
+   }
+  },
+  {
+   "t": 1792444207309,
+   "lag": 0.12023600000003398,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 46,
+   "klok": 126.45171246677637,
+   "rt": {
+    "currentTime": 189.12533333333334,
+    "renderCapacity": 0.1862913840234889,
+    "callbackIntervalMean": 0.010019225360603788,
+    "callbackIntervalVariance": 6.211245455206117e-8
+   }
+  },
+  {
+   "t": 1792444217348,
+   "lag": 0.12024100000002136,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 49,
+   "klok": 126.45171246677637,
+   "rt": {
+    "currentTime": 199.16533333333334,
+    "renderCapacity": 0.08792202572347266,
+    "callbackIntervalMean": 0.010019544820777281,
+    "callbackIntervalVariance": 7.987069626474361e-8
+   }
+  },
+  {
+   "t": 1792444227390,
+   "lag": 0.14030566666664868,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 51,
+   "klok": 126.45171246677637,
+   "rt": {
+    "currentTime": 209.18666666666667,
+    "renderCapacity": 0.17514628582763067,
+    "callbackIntervalMean": 0.010059016772334055,
+    "callbackIntervalVariance": 0.0000014980505565603103
+   }
+  },
+  {
+   "t": 1792444237447,
+   "lag": 0.15104233333337902,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 55,
+   "klok": 124.94912101142108,
+   "rt": {
+    "currentTime": 219.22666666666666,
+    "renderCapacity": 0.9221251819505094,
+    "callbackIntervalMean": 0.010198261288959893,
+    "callbackIntervalVariance": 0.0000023579311424544345
+   }
+  },
+  {
+   "t": 1792444247490,
+   "lag": 0.15037083333334067,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 58,
+   "klok": 125.45058492012322,
+   "rt": {
+    "currentTime": 229.27733333333333,
+    "renderCapacity": 0.0838185103392893,
+    "callbackIntervalMean": 0.010020244285694403,
+    "callbackIntervalVariance": 6.517990402589131e-8
+   }
+  },
+  {
+   "t": 1792444257523,
+   "lag": 0.15031666666669707,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 60,
+   "klok": 120.15477277338503,
+   "rt": {
+    "currentTime": 239.30933333333334,
+    "renderCapacity": 0.2566075949367088,
+    "callbackIntervalMean": 0.01001971271456158,
+    "callbackIntervalVariance": 4.1909900471900156e-7
+   }
+  },
+  {
+   "t": 1792444267560,
+   "lag": 0.6112780000000555,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 63,
+   "klok": 128.51925356127322,
+   "rt": {
+    "currentTime": 248.888,
+    "renderCapacity": 0.1471381480371591,
+    "callbackIntervalMean": 0.010054184330037309,
+    "callbackIntervalVariance": 0.0000051545206376268575
+   }
+  },
+  {
+   "t": 1792444277601,
+   "lag": 0.6113628333333452,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 66,
+   "klok": 128.51925356127322,
+   "rt": {
+    "currentTime": 258.93066666666664,
+    "renderCapacity": 0.15064488392089426,
+    "callbackIntervalMean": 0.010036751381500283,
+    "callbackIntervalVariance": 1.4892525456370682e-7
+   }
+  },
+  {
+   "t": 1792444287645,
+   "lag": 0.6113290000000404,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 68,
+   "klok": 128.51925356127322,
+   "rt": {
+    "currentTime": 268.97066666666666,
+    "renderCapacity": 0.11212151493954231,
+    "callbackIntervalMean": 0.01002052228517994,
+    "callbackIntervalVariance": 9.596254457636034e-8
+   }
+  },
+  {
+   "t": 1792444297689,
+   "lag": 0.6112730000000113,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 72,
+   "klok": 128.51925356127322,
+   "rt": {
+    "currentTime": 279.02133333333336,
+    "renderCapacity": 0.1120585874799358,
+    "callbackIntervalMean": 0.010018720088751017,
+    "callbackIntervalVariance": 0.0000011606496367374434
+   }
+  },
+  {
+   "t": 1792444307717,
+   "lag": 0.6112658333333627,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 74,
+   "klok": 128.51925356127322,
+   "rt": {
+    "currentTime": 289.04266666666666,
+    "renderCapacity": 0.12353757683918302,
+    "callbackIntervalMean": 0.010020266526338025,
+    "callbackIntervalVariance": 1.3558953959471754e-7
+   }
+  },
+  {
+   "t": 1792444317751,
+   "lag": 0.6313193333333231,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 77,
+   "klok": 124.23095845244826,
+   "rt": {
+    "currentTime": 299.064,
+    "renderCapacity": 0.09932912786622611,
+    "callbackIntervalMean": 0.010038983454312134,
+    "callbackIntervalVariance": 0.0000020636624868451906
+   }
+  },
+  {
+   "t": 1792444327783,
+   "lag": 0.631302166666643,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 79,
+   "klok": 124.23095845244826,
+   "rt": {
+    "currentTime": 309.0933333333333,
+    "renderCapacity": 0.08366813981518682,
+    "callbackIntervalMean": 0.010019453226872505,
+    "callbackIntervalVariance": 3.697236705093878e-7
+   }
+  },
+  {
+   "t": 1792444337832,
+   "lag": 0.6814345000000515,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 82,
+   "klok": 121.9845658056438,
+   "rt": {
+    "currentTime": 319.0853333333333,
+    "renderCapacity": 0.14369124195942604,
+    "callbackIntervalMean": 0.010037117970153234,
+    "callbackIntervalVariance": 3.070994695908869e-7
+   }
+  },
+  {
+   "t": 1792444347880,
+   "lag": 0.6914644999999666,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 84,
+   "klok": 121.9845658056438,
+   "rt": {
+    "currentTime": 329.12533333333334,
+    "renderCapacity": 0.10616404472148017,
+    "callbackIntervalMean": 0.010023509527772891,
+    "callbackIntervalVariance": 3.7254672961493817e-7
+   }
+  },
+  {
+   "t": 1792444357934,
+   "lag": 0.6914526666666632,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 87,
+   "klok": 126.72960517369211,
+   "rt": {
+    "currentTime": 339.1786666666667,
+    "renderCapacity": 0.13899151273090365,
+    "callbackIntervalMean": 0.010019827591644997,
+    "callbackIntervalVariance": 1.2636077050140194e-7
+   }
+  },
+  {
+   "t": 1792444367992,
+   "lag": 0.7114686666666046,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 90,
+   "klok": 126.72960517369211,
+   "rt": {
+    "currentTime": 349.21866666666665,
+    "renderCapacity": 0.09887572776550893,
+    "callbackIntervalMean": 0.010022601340172601,
+    "callbackIntervalVariance": 3.4190515356309084e-7
+   }
+  },
+  {
+   "t": 1792444378039,
+   "lag": 0.731522500000068,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 93,
+   "klok": 121.89209148939699,
+   "rt": {
+    "currentTime": 359.248,
+    "renderCapacity": 0.11061768268066209,
+    "callbackIntervalMean": 0.010035278365877719,
+    "callbackIntervalVariance": 4.819773520534907e-7
+   }
+  },
+  {
+   "t": 1792444388082,
+   "lag": 0.7315165000000263,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 96,
+   "klok": 128.5623005516827,
+   "rt": {
+    "currentTime": 369.288,
+    "renderCapacity": 0.08977181745396318,
+    "callbackIntervalMean": 0.01001965611951571,
+    "callbackIntervalVariance": 1.1805645402441476e-7
+   }
+  },
+  {
+   "t": 1792444398124,
+   "lag": 0.7315765000000454,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 99,
+   "klok": 128.5623005516827,
+   "rt": {
+    "currentTime": 379.3306666666667,
+    "renderCapacity": 0.23103205707969046,
+    "callbackIntervalMean": 0.010021218395976823,
+    "callbackIntervalVariance": 1.450144021733104e-8
+   }
+  },
+  {
+   "t": 1792444408164,
+   "lag": 0.73154150000002,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 101,
+   "klok": 128.5623005516827,
+   "rt": {
+    "currentTime": 389.3706666666667,
+    "renderCapacity": 0.21303433777154873,
+    "callbackIntervalMean": 0.010020283463050917,
+    "callbackIntervalVariance": 4.3097585531862274e-8
+   }
+  },
+  {
+   "t": 1792444418205,
+   "lag": 0.7315275000000554,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 104,
+   "klok": 124.78151863254607,
+   "rt": {
+    "currentTime": 399.41066666666666,
+    "renderCapacity": 0.11713147410358565,
+    "callbackIntervalMean": 0.010019691279262983,
+    "callbackIntervalVariance": 8.42985987738957e-8
+   }
+  },
+  {
+   "t": 1792444428240,
+   "lag": 0.7314993333333462,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 107,
+   "klok": 124.78151863254607,
+   "rt": {
+    "currentTime": 409.4533333333333,
+    "renderCapacity": 0.09923893450831163,
+    "callbackIntervalMean": 0.010019777242284977,
+    "callbackIntervalVariance": 9.566520307483008e-9
+   }
+  },
+  {
+   "t": 1792444438286,
+   "lag": 0.7415243333333876,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 109,
+   "klok": 124.78151863254607,
+   "rt": {
+    "currentTime": 419.48266666666666,
+    "renderCapacity": 0.09213362068965517,
+    "callbackIntervalMean": 0.010037052757030077,
+    "callbackIntervalVariance": 4.554921226073094e-7
+   }
+  },
+  {
+   "t": 1792444448326,
+   "lag": 0.7416111666667291,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 112,
+   "klok": 127.92830353509635,
+   "rt": {
+    "currentTime": 429.5253333333333,
+    "renderCapacity": 0.13213703099510604,
+    "callbackIntervalMean": 0.010019301509783465,
+    "callbackIntervalVariance": 1.8211588454928246e-7
+   }
+  },
+  {
+   "t": 1792444458368,
+   "lag": 0.7415743333333751,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 115,
+   "klok": 127.92830353509635,
+   "rt": {
+    "currentTime": 439.56533333333334,
+    "renderCapacity": 0.11603754743359297,
+    "callbackIntervalMean": 0.0100199639757038,
+    "callbackIntervalVariance": 3.348038932816413e-7
+   }
+  },
+  {
+   "t": 1792444468407,
+   "lag": 0.7515489999999829,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 118,
+   "klok": 120.90735820215197,
+   "rt": {
+    "currentTime": 449.5973333333333,
+    "renderCapacity": 0.0997307270370001,
+    "callbackIntervalMean": 0.010024884761091424,
+    "callbackIntervalVariance": 2.353604214082955e-7
+   }
+  },
+  {
+   "t": 1792444478446,
+   "lag": 0.7515850000000626,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 122,
+   "klok": 120.90735820215197,
+   "rt": {
+    "currentTime": 459.63733333333334,
+    "renderCapacity": 0.08872421389945924,
+    "callbackIntervalMean": 0.010019900191655842,
+    "callbackIntervalVariance": 4.189454952924929e-8
+   }
+  },
+  {
+   "t": 1792444488486,
+   "lag": 0.7515630000000613,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 124,
+   "klok": 120.90735820215197,
+   "rt": {
+    "currentTime": 469.6773333333333,
+    "renderCapacity": 0.07806393426195009,
+    "callbackIntervalMean": 0.010020054162245513,
+    "callbackIntervalVariance": 4.432553432042953e-8
+   }
+  },
+  {
+   "t": 1792444498523,
+   "lag": 0.7515499999999804,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 126,
+   "klok": 120.90735820215197,
+   "rt": {
+    "currentTime": 479.70933333333335,
+    "renderCapacity": 0.09612310151878498,
+    "callbackIntervalMean": 0.010019627891690589,
+    "callbackIntervalVariance": 5.373290475353142e-8
+   }
+  },
+  {
+   "t": 1792444508566,
+   "lag": 0.7515510000000916,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 128,
+   "klok": 121.46174505911769,
+   "rt": {
+    "currentTime": 489.7493333333333,
+    "renderCapacity": 0.07865802086270088,
+    "callbackIntervalMean": 0.010026898045017519,
+    "callbackIntervalVariance": 1.4561708737995063e-7
+   }
+  },
+  {
+   "t": 1792444518594,
+   "lag": 0.7515888333332725,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 131,
+   "klok": 119.93780764564872,
+   "rt": {
+    "currentTime": 499.78133333333335,
+    "renderCapacity": 0.41757800742450085,
+    "callbackIntervalMean": 0.010020082892279078,
+    "callbackIntervalVariance": 2.732989948879986e-8
+   }
+  },
+  {
+   "t": 1792444528627,
+   "lag": 0.7916370000000086,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 133,
+   "klok": 119.93780764564872,
+   "rt": {
+    "currentTime": 509.77066666666667,
+    "renderCapacity": 0.25754385964912285,
+    "callbackIntervalMean": 0.010036553004266568,
+    "callbackIntervalVariance": 0.000001019053238161637
+   }
+  },
+  {
+   "t": 1792444538669,
+   "lag": 0.7916570000001855,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 135,
+   "klok": 125.70965170767158,
+   "rt": {
+    "currentTime": 519.8133333333334,
+    "renderCapacity": 0.1075268817204301,
+    "callbackIntervalMean": 0.010020331761973289,
+    "callbackIntervalVariance": 2.2452939158026824e-8
+   }
+  },
+  {
+   "t": 1792444548709,
+   "lag": 0.7916340000001298,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 139,
+   "klok": 125.70965170767158,
+   "rt": {
+    "currentTime": 529.8533333333334,
+    "renderCapacity": 0.298998998998999,
+    "callbackIntervalMean": 0.010019786624762697,
+    "callbackIntervalVariance": 7.029147357539497e-8
+   }
+  },
+  {
+   "t": 1792444558746,
+   "lag": 0.8016668333333143,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 142,
+   "klok": 125.70965170767158,
+   "rt": {
+    "currentTime": 539.8826666666666,
+    "renderCapacity": 0.1321175278622087,
+    "callbackIntervalMean": 0.010041240472801834,
+    "callbackIntervalVariance": 4.7217716424656845e-7
+   }
+  },
+  {
+   "t": 1792444568784,
+   "lag": 0.8016766666666797,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 144,
+   "klok": 125.70965170767158,
+   "rt": {
+    "currentTime": 549.9253333333334,
+    "renderCapacity": 0.10828025477707005,
+    "callbackIntervalMean": 0.010019637405881791,
+    "callbackIntervalVariance": 1.449647675058497e-8
+   }
+  },
+  {
+   "t": 1792444578824,
+   "lag": 0.8016436666666493,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 148,
+   "klok": 125.70965170767158,
+   "rt": {
+    "currentTime": 559.9653333333333,
+    "renderCapacity": 0.09374375374775136,
+    "callbackIntervalMean": 0.010019265326593805,
+    "callbackIntervalVariance": 1.7429600415255874e-7
+   }
+  },
+  {
+   "t": 1792444588853,
+   "lag": 0.8417408333333185,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 150,
+   "klok": 125.70965170767158,
+   "rt": {
+    "currentTime": 569.9466666666667,
+    "renderCapacity": 0.10671187792959011,
+    "callbackIntervalMean": 0.010034567257764328,
+    "callbackIntervalVariance": 5.584442630528817e-7
+   }
+  },
+  {
+   "t": 1792444598896,
+   "lag": 0.8417538333333994,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 153,
+   "klok": 121.09148937836291,
+   "rt": {
+    "currentTime": 579.9946666666667,
+    "renderCapacity": 0.1371725654869026,
+    "callbackIntervalMean": 0.01002007316376033,
+    "callbackIntervalVariance": 3.3760311269597884e-8
+   }
+  },
+  {
+   "t": 1792444608924,
+   "lag": 0.8417746666666233,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 156,
+   "klok": 121.09148937836291,
+   "rt": {
+    "currentTime": 590.0186666666667,
+    "renderCapacity": 0.11760007986423081,
+    "callbackIntervalMean": 0.010020371067564275,
+    "callbackIntervalVariance": 7.216454925426946e-8
+   }
+  },
+  {
+   "t": 1792444618965,
+   "lag": 0.8417616666667698,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 159,
+   "klok": 127.73054567258806,
+   "rt": {
+    "currentTime": 600.0586666666667,
+    "renderCapacity": 0.09340332805071315,
+    "callbackIntervalMean": 0.010020603352115512,
+    "callbackIntervalVariance": 4.82750482379878e-8
+   }
+  },
+  {
+   "t": 1792444629011,
+   "lag": 0.8417988333335131,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 163,
+   "klok": 127.73054567258806,
+   "rt": {
+    "currentTime": 610.1093333333333,
+    "renderCapacity": 0.17818291700241742,
+    "callbackIntervalMean": 0.010020087438983995,
+    "callbackIntervalVariance": 1.792793809767157e-7
+   }
+  },
+  {
+   "t": 1792444639061,
+   "lag": 0.8417708333335838,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 165,
+   "klok": 122.28224478289486,
+   "rt": {
+    "currentTime": 620.16,
+    "renderCapacity": 0.19426204667138094,
+    "callbackIntervalMean": 0.01001935880302644,
+    "callbackIntervalVariance": 1.041255846119118e-7
+   }
+  },
+  {
+   "t": 1792444649106,
+   "lag": 0.8417900000000316,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 168,
+   "klok": 122.28224478289486,
+   "rt": {
+    "currentTime": 630.2026666666667,
+    "renderCapacity": 0.13660021604635178,
+    "callbackIntervalMean": 0.01002032941412535,
+    "callbackIntervalVariance": 4.969493675624336e-7
+   }
+  },
+  {
+   "t": 1792444659142,
+   "lag": 0.8417350000000567,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 171,
+   "klok": 122.28224478289486,
+   "rt": {
+    "currentTime": 640.2426666666667,
+    "renderCapacity": 0.08362508752625787,
+    "callbackIntervalMean": 0.010019762893953576,
+    "callbackIntervalVariance": 7.374525116298551e-8
+   }
+  },
+  {
+   "t": 1792444669174,
+   "lag": 0.8417408333334322,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 174,
+   "klok": 122.28224478289486,
+   "rt": {
+    "currentTime": 650.272,
+    "renderCapacity": 0.15644293965345546,
+    "callbackIntervalMean": 0.010020378524407769,
+    "callbackIntervalVariance": 1.3653778244168843e-7
+   }
+  },
+  {
+   "t": 1792444679217,
+   "lag": 0.8417458333335333,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 177,
+   "klok": 122.28224478289486,
+   "rt": {
+    "currentTime": 660.3146666666667,
+    "renderCapacity": 0.10320711359776201,
+    "callbackIntervalMean": 0.010019775678596517,
+    "callbackIntervalVariance": 1.9713644475407674e-7
+   }
+  },
+  {
+   "t": 1792444689270,
+   "lag": 0.8417518333332907,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 180,
+   "klok": 126.31837608199567,
+   "rt": {
+    "currentTime": 670.3653333333333,
+    "renderCapacity": 0.10293249360362135,
+    "callbackIntervalMean": 0.010021216259520764,
+    "callbackIntervalVariance": 4.630445355546083e-7
+   }
+  },
+  {
+   "t": 1792444699311,
+   "lag": 0.8417779999998345,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 182,
+   "klok": 126.31837608199567,
+   "rt": {
+    "currentTime": 680.4053333333334,
+    "renderCapacity": 0.1082154128066782,
+    "callbackIntervalMean": 0.010020039943409635,
+    "callbackIntervalVariance": 6.679595570833958e-8
+   }
+  },
+  {
+   "t": 1792444709359,
+   "lag": 0.8417561666666131,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 184,
+   "klok": 126.31837608199567,
+   "rt": {
+    "currentTime": 690.456,
+    "renderCapacity": 0.11136476426799007,
+    "callbackIntervalMean": 0.010020615373907362,
+    "callbackIntervalVariance": 1.4973436268725794e-7
+   }
+  },
+  {
+   "t": 1792444719402,
+   "lag": 0.8427971666665997,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 187,
+   "klok": 126.31837608199567,
+   "rt": {
+    "currentTime": 700.4986666666666,
+    "renderCapacity": 0.12573937981717154,
+    "callbackIntervalMean": 0.010030977172033495,
+    "callbackIntervalVariance": 1.3544018780239832e-7
+   }
+  },
+  {
+   "t": 1792444729443,
+   "lag": 0.8417521666668506,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 190,
+   "klok": 126.31837608199567,
+   "rt": {
+    "currentTime": 710.5386666666667,
+    "renderCapacity": 0.1168871116579514,
+    "callbackIntervalMean": 0.010020289931277092,
+    "callbackIntervalVariance": 1.1515338664870092e-7
+   }
+  },
+  {
+   "t": 1792444739492,
+   "lag": 0.8417293333335181,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 192,
+   "klok": 126.31837608199567,
+   "rt": {
+    "currentTime": 720.5893333333333,
+    "renderCapacity": 0.25347465253474655,
+    "callbackIntervalMean": 0.010019920954391703,
+    "callbackIntervalVariance": 4.2357091504556714e-8
+   }
+  },
+  {
+   "t": 1792444749544,
+   "lag": 0.8417775000000063,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 196,
+   "klok": 126.31837608199567,
+   "rt": {
+    "currentTime": 730.64,
+    "renderCapacity": 0.1345730853829234,
+    "callbackIntervalMean": 0.01001985797420417,
+    "callbackIntervalVariance": 1.2894189730096252e-7
+   }
+  },
+  {
+   "t": 1792444759586,
+   "lag": 0.841759499999938,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 198,
+   "klok": 126.31837608199567,
+   "rt": {
+    "currentTime": 740.68,
+    "renderCapacity": 0.1375990372079029,
+    "callbackIntervalMean": 0.01002043273845352,
+    "callbackIntervalVariance": 1.5245060946659703e-8
+   }
+  },
+  {
+   "t": 1792444769637,
+   "lag": 0.8618203333334975,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 201,
+   "klok": 125.34386041294783,
+   "rt": {
+    "currentTime": 750.712,
+    "renderCapacity": 0.08981314044605185,
+    "callbackIntervalMean": 0.010024140608025986,
+    "callbackIntervalVariance": 2.0560989586677108e-7
+   }
+  },
+  {
+   "t": 1792444779690,
+   "lag": 0.8718283333334682,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 204,
+   "klok": 125.34386041294783,
+   "rt": {
+    "currentTime": 760.7573333333333,
+    "renderCapacity": 0.39276045322370406,
+    "callbackIntervalMean": 0.01002370818903305,
+    "callbackIntervalVariance": 7.545391917005063e-8
+   }
+  },
+  {
+   "t": 1792444789735,
+   "lag": 0.8717915000000573,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 207,
+   "klok": 125.34386041294783,
+   "rt": {
+    "currentTime": 770.8026666666667,
+    "renderCapacity": 0.1057489716063008,
+    "callbackIntervalMean": 0.010019777913182495,
+    "callbackIntervalVariance": 1.837428192716246e-8
+   }
+  },
+  {
+   "t": 1792444799786,
+   "lag": 0.8718116666668436,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 209,
+   "klok": 125.34386041294783,
+   "rt": {
+    "currentTime": 780.856,
+    "renderCapacity": 0.276282632799113,
+    "callbackIntervalMean": 0.010020161633328289,
+    "callbackIntervalVariance": 4.32707220527032e-8
+   }
+  },
+  {
+   "t": 1792444809831,
+   "lag": 0.8818505000001267,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 212,
+   "klok": 125.34386041294783,
+   "rt": {
+    "currentTime": 790.8853333333333,
+    "renderCapacity": 0.0835651828298887,
+    "callbackIntervalMean": 0.010020298275613258,
+    "callbackIntervalVariance": 9.480394810109335e-8
+   }
+  },
+  {
+   "t": 1792444819869,
+   "lag": 0.8818305000000635,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 216,
+   "klok": 128.74699579365551,
+   "rt": {
+    "currentTime": 800.9253333333334,
+    "renderCapacity": 0.1087347591445133,
+    "callbackIntervalMean": 0.010020191110632622,
+    "callbackIntervalVariance": 4.3553777094771756e-8
+   }
+  },
+  {
+   "t": 1792444829913,
+   "lag": 0.9018771666667078,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 219,
+   "klok": 128.74699579365551,
+   "rt": {
+    "currentTime": 810.9466666666667,
+    "renderCapacity": 0.11828817118288172,
+    "callbackIntervalMean": 0.010022735115528904,
+    "callbackIntervalVariance": 1.4439053863295464e-7
+   }
+  },
+  {
+   "t": 1792444839951,
+   "lag": 0.9018601666667507,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 221,
+   "klok": 128.74699579365551,
+   "rt": {
+    "currentTime": 820.9893333333333,
+    "renderCapacity": 0.10409032385857186,
+    "callbackIntervalMean": 0.010020111738336671,
+    "callbackIntervalVariance": 2.3158764796517328e-7
+   }
+  },
+  {
+   "t": 1792444849984,
+   "lag": 0.9018700000001161,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 225,
+   "klok": 128.74699579365551,
+   "rt": {
+    "currentTime": 831.0186666666667,
+    "renderCapacity": 0.21497753369945083,
+    "callbackIntervalMean": 0.010019868797246825,
+    "callbackIntervalVariance": 2.698519819920403e-7
+   }
+  },
+  {
+   "t": 1792444860013,
+   "lag": 0.9118796666668629,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 227,
+   "klok": 118.65725017618388,
+   "rt": {
+    "currentTime": 841.04,
+    "renderCapacity": 0.09540494543998398,
+    "callbackIntervalMean": 0.01002136957566448,
+    "callbackIntervalVariance": 9.18748633898927e-8
+   }
+  },
+  {
+   "t": 1792444870052,
+   "lag": 0.9118786666667518,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 230,
+   "klok": 118.65725017618388,
+   "rt": {
+    "currentTime": 851.08,
+    "renderCapacity": 0.09990029910269192,
+    "callbackIntervalMean": 0.010019963139318988,
+    "callbackIntervalVariance": 4.571308720742799e-8
+   }
+  },
+  {
+   "t": 1792444880112,
+   "lag": 0.9119108333335078,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 232,
+   "klok": 118.65725017618388,
+   "rt": {
+    "currentTime": 861.1413333333334,
+    "renderCapacity": 0.07504746677325871,
+    "callbackIntervalMean": 0.010019978319594338,
+    "callbackIntervalVariance": 2.6633373263229465e-7
+   }
+  },
+  {
+   "t": 1792444890153,
+   "lag": 0.9219058333335113,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 235,
+   "klok": 118.65725017618388,
+   "rt": {
+    "currentTime": 871.1733333333333,
+    "renderCapacity": 0.36311268317331985,
+    "callbackIntervalMean": 0.0100203528687974,
+    "callbackIntervalVariance": 1.4893759329697545e-7
+   }
+  },
+  {
+   "t": 1792444900212,
+   "lag": 0.9219120000001055,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 237,
+   "klok": 118.65725017618388,
+   "rt": {
+    "currentTime": 881.2346666666666,
+    "renderCapacity": 0.09937332139659805,
+    "callbackIntervalMean": 0.010019807340699781,
+    "callbackIntervalVariance": 9.388960914744183e-7
+   }
+  },
+  {
+   "t": 1792444910260,
+   "lag": 0.9219411666667554,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 240,
+   "klok": 118.65725017618388,
+   "rt": {
+    "currentTime": 891.2746666666667,
+    "renderCapacity": 0.14272917288742906,
+    "callbackIntervalMean": 0.01002110398507639,
+    "callbackIntervalVariance": 3.893349941901634e-8
+   }
+  },
+  {
+   "t": 1792444920300,
+   "lag": 0.9620205000003068,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 242,
+   "klok": 121.47891861759126,
+   "rt": {
+    "currentTime": 901.2746666666667,
+    "renderCapacity": 0.09458921822160334,
+    "callbackIntervalMean": 0.010023547993567314,
+    "callbackIntervalVariance": 4.3675699472669164e-7
+   }
+  },
+  {
+   "t": 1792444930336,
+   "lag": 0.9619975000000238,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 245,
+   "klok": 121.47891861759126,
+   "rt": {
+    "currentTime": 911.3146666666667,
+    "renderCapacity": 0.1373446046742914,
+    "callbackIntervalMean": 0.010020212280248797,
+    "callbackIntervalVariance": 1.4808159981514564e-7
+   }
+  },
+  {
+   "t": 1792444940375,
+   "lag": 0.9619803333334573,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 248,
+   "klok": 121.47891861759126,
+   "rt": {
+    "currentTime": 921.3466666666667,
+    "renderCapacity": 0.34084960740889875,
+    "callbackIntervalMean": 0.010019885574408138,
+    "callbackIntervalVariance": 3.3602386751695534e-7
+   }
+  },
+  {
+   "t": 1792444950435,
+   "lag": 0.9619986666666307,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 251,
+   "klok": 127.65997443441303,
+   "rt": {
+    "currentTime": 931.408,
+    "renderCapacity": 0.11162140575079872,
+    "callbackIntervalMean": 0.010019548727364743,
+    "callbackIntervalVariance": 5.753892202686328e-7
+   }
+  },
+  {
+   "t": 1792444960485,
+   "lag": 0.9619928333334826,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 254,
+   "klok": 127.65997443441303,
+   "rt": {
+    "currentTime": 941.4586666666667,
+    "renderCapacity": 0.0986208949300526,
+    "callbackIntervalMean": 0.010020904601696799,
+    "callbackIntervalVariance": 1.0606628928833716e-7
+   }
+  },
+  {
+   "t": 1792444970545,
+   "lag": 1.0020775000001265,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 256,
+   "klok": 127.65997443441303,
+   "rt": {
+    "currentTime": 951.48,
+    "renderCapacity": 0.10839195482017239,
+    "callbackIntervalMean": 0.010020693773946819,
+    "callbackIntervalVariance": 1.0178178768582467e-7
+   }
+  },
+  {
+   "t": 1792444980597,
+   "lag": 1.0120995000001756,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 259,
+   "klok": 127.65997443441303,
+   "rt": {
+    "currentTime": 961.52,
+    "renderCapacity": 0.0818935384000799,
+    "callbackIntervalMean": 0.010019692079925516,
+    "callbackIntervalVariance": 4.881512118797493e-7
+   }
+  },
+  {
+   "t": 1792444990648,
+   "lag": 1.032160333333394,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 261,
+   "klok": 124.53326717112215,
+   "rt": {
+    "currentTime": 971.552,
+    "renderCapacity": 0.14741671653700378,
+    "callbackIntervalMean": 0.010021118620963812,
+    "callbackIntervalVariance": 1.583489539398453e-7
+   }
+  },
+  {
+   "t": 1792445000721,
+   "lag": 1.0421716666666896,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 264,
+   "klok": 124.53326717112215,
+   "rt": {
+    "currentTime": 981.6133333333333,
+    "renderCapacity": 0.10073315255599076,
+    "callbackIntervalMean": 0.010020513297840232,
+    "callbackIntervalVariance": 1.1771871410875991e-7
+   }
+  },
+  {
+   "t": 1792445010757,
+   "lag": 1.0421536666668487,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 267,
+   "klok": 127.53547550365329,
+   "rt": {
+    "currentTime": 991.6533333333333,
+    "renderCapacity": 0.13702187156696297,
+    "callbackIntervalMean": 0.010019610449583782,
+    "callbackIntervalVariance": 2.613070139441147e-7
+   }
+  },
+  {
+   "t": 1792445020802,
+   "lag": 1.0421696666668083,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 269,
+   "klok": 127.53547550365329,
+   "rt": {
+    "currentTime": 1001.7013333333333,
+    "renderCapacity": 0.10036021612967781,
+    "callbackIntervalMean": 0.010019482680013495,
+    "callbackIntervalVariance": 1.4111984040536235e-7
+   }
+  },
+  {
+   "t": 1792445030844,
+   "lag": 1.0421486666667477,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 272,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1011.744,
+    "renderCapacity": 0.09127261821453564,
+    "callbackIntervalMean": 0.010019934067135583,
+    "callbackIntervalVariance": 1.946940382774199e-8
+   }
+  },
+  {
+   "t": 1792445040881,
+   "lag": 1.0421616666668285,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 276,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1021.776,
+    "renderCapacity": 0.29862792574656977,
+    "callbackIntervalMean": 0.010020275048395238,
+    "callbackIntervalVariance": 3.932930062137327e-8
+   }
+  },
+  {
+   "t": 1792445050923,
+   "lag": 1.042174666666682,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 278,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1031.816,
+    "renderCapacity": 0.33189913948369026,
+    "callbackIntervalMean": 0.010019660566699269,
+    "callbackIntervalVariance": 9.728937752498154e-8
+   }
+  },
+  {
+   "t": 1792445060967,
+   "lag": 1.042171666666576,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 281,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1041.8666666666666,
+    "renderCapacity": 0.26298864435735103,
+    "callbackIntervalMean": 0.010020008521036789,
+    "callbackIntervalVariance": 3.285412505956789e-8
+   }
+  },
+  {
+   "t": 1792445071004,
+   "lag": 1.0521734999998387,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 283,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1051.888,
+    "renderCapacity": 0.20601413920143385,
+    "callbackIntervalMean": 0.010020692249955337,
+    "callbackIntervalVariance": 9.134156822608708e-8
+   }
+  },
+  {
+   "t": 1792445081033,
+   "lag": 1.0521833333330903,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 286,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1061.92,
+    "renderCapacity": 0.08990457056755399,
+    "callbackIntervalMean": 0.010019838493784423,
+    "callbackIntervalVariance": 2.2469822236735772e-7
+   }
+  },
+  {
+   "t": 1792445091058,
+   "lag": 1.0522201666666149,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 289,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1071.9493333333332,
+    "renderCapacity": 0.08712159056848837,
+    "callbackIntervalMean": 0.010020456930281486,
+    "callbackIntervalVariance": 8.726382985311336e-9
+   }
+  },
+  {
+   "t": 1792445101095,
+   "lag": 1.0923253333333776,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 292,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1081.9413333333334,
+    "renderCapacity": 0.09784444223701202,
+    "callbackIntervalMean": 0.0100224124671716,
+    "callbackIntervalVariance": 2.6001345250537536e-7
+   }
+  },
+  {
+   "t": 1792445111126,
+   "lag": 1.0922621666666998,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 294,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1091.9706666666666,
+    "renderCapacity": 0.27530283311642806,
+    "callbackIntervalMean": 0.010019805255424535,
+    "callbackIntervalVariance": 6.842605570852568e-8
+   }
+  },
+  {
+   "t": 1792445121164,
+   "lag": 1.0922631666665836,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 297,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1102.0133333333333,
+    "renderCapacity": 0.09615000997406742,
+    "callbackIntervalMean": 0.010020192107456723,
+    "callbackIntervalVariance": 2.22908627857551e-8
+   }
+  },
+  {
+   "t": 1792445131202,
+   "lag": 1.1123046666667449,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 301,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1112.024,
+    "renderCapacity": 0.2582253240279162,
+    "callbackIntervalMean": 0.010021235272965362,
+    "callbackIntervalVariance": 7.287392672528617e-8
+   }
+  },
+  {
+   "t": 1792445141240,
+   "lag": 1.1122946666665428,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 304,
+   "klok": 119.87881965283304,
+   "rt": {
+    "currentTime": 1122.064,
+    "renderCapacity": 0.43237561317449197,
+    "callbackIntervalMean": 0.010017632943874607,
+    "callbackIntervalVariance": 0.000003650202389439627
+   }
+  },
+  {
+   "t": 1792445151271,
+   "lag": 1.112308500000239,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 307,
+   "klok": 122.4871432390064,
+   "rt": {
+    "currentTime": 1132.096,
+    "renderCapacity": 0.2413481793560036,
+    "callbackIntervalMean": 0.010019882451952183,
+    "callbackIntervalVariance": 2.4697990948604603e-8
+   }
+  },
+  {
+   "t": 1792445161307,
+   "lag": 1.1123173333333796,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 310,
+   "klok": 122.4871432390064,
+   "rt": {
+    "currentTime": 1142.136,
+    "renderCapacity": 0.10013016921998599,
+    "callbackIntervalMean": 0.010019756723796005,
+    "callbackIntervalVariance": 3.550830636769658e-8
+   }
+  },
+  {
+   "t": 1792445171333,
+   "lag": 1.1123181666667676,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 312,
+   "klok": 122.4871432390064,
+   "rt": {
+    "currentTime": 1152.1573333333333,
+    "renderCapacity": 0.1077796593286184,
+    "callbackIntervalMean": 0.010019971389945205,
+    "callbackIntervalVariance": 1.022411135594477e-7
+   }
+  },
+  {
+   "t": 1792445181380,
+   "lag": 1.1028143333336118,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 316,
+   "klok": 122.4871432390064,
+   "rt": {
+    "currentTime": 1162.2186666666666,
+    "renderCapacity": 0.13045488165680474,
+    "callbackIntervalMean": 0.010025242181816591,
+    "callbackIntervalVariance": 2.575442250733682e-7
+   }
+  },
+  {
+   "t": 1792445191428,
+   "lag": 1.102747500000163,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 320,
+   "klok": 122.4871432390064,
+   "rt": {
+    "currentTime": 1172.2586666666666,
+    "renderCapacity": 0.15662078785002373,
+    "callbackIntervalMean": 0.010013713479843155,
+    "callbackIntervalVariance": 0.000002066253752930544
+   }
+  },
+  {
+   "t": 1792445201486,
+   "lag": 1.1029456666666135,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 322,
+   "klok": 122.4871432390064,
+   "rt": {
+    "currentTime": 1182.32,
+    "renderCapacity": 0.0815712085142137,
+    "callbackIntervalMean": 0.0100546904360951,
+    "callbackIntervalVariance": 0.000004167664885045249
+   }
+  },
+  {
+   "t": 1792445211524,
+   "lag": 1.1129426666664983,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 325,
+   "klok": 122.8115713475272,
+   "rt": {
+    "currentTime": 1192.3493333333333,
+    "renderCapacity": 0.13844011142061283,
+    "callbackIntervalMean": 0.01001592459778594,
+    "callbackIntervalVariance": 0.0000017570300770527642
+   }
+  },
+  {
+   "t": 1792445221565,
+   "lag": 1.1250153333331525,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 327,
+   "klok": 121.00256487634033,
+   "rt": {
+    "currentTime": 1202.3813333333333,
+    "renderCapacity": 0.11400198609731875,
+    "callbackIntervalMean": 0.010020642837764205,
+    "callbackIntervalVariance": 5.9303484425024954e-8
+   }
+  },
+  {
+   "t": 1792445231612,
+   "lag": 1.1250224999997442,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 330,
+   "klok": 121.00256487634033,
+   "rt": {
+    "currentTime": 1212.4213333333332,
+    "renderCapacity": 0.09903164620145753,
+    "callbackIntervalMean": 0.010020050153159493,
+    "callbackIntervalVariance": 6.24246807498567e-8
+   }
+  },
+  {
+   "t": 1792445241658,
+   "lag": 1.1250416666667604,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 333,
+   "klok": 121.00256487634033,
+   "rt": {
+    "currentTime": 1222.472,
+    "renderCapacity": 0.18723192019950127,
+    "callbackIntervalMean": 0.010020608731842118,
+    "callbackIntervalVariance": 5.212938656074547e-8
+   }
+  },
+  {
+   "t": 1792445251703,
+   "lag": 1.1250306666669019,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 336,
+   "klok": 127.57205066457391,
+   "rt": {
+    "currentTime": 1232.5146666666667,
+    "renderCapacity": 0.10188451073264133,
+    "callbackIntervalMean": 0.010020205908231954,
+    "callbackIntervalVariance": 6.60595325433083e-8
+   }
+  },
+  {
+   "t": 1792445261753,
+   "lag": 1.1250418333332561,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 338,
+   "klok": 127.57205066457391,
+   "rt": {
+    "currentTime": 1242.5653333333332,
+    "renderCapacity": 0.15936533280111764,
+    "callbackIntervalMean": 0.010020271884983337,
+    "callbackIntervalVariance": 5.995499753996928e-8
+   }
+  },
+  {
+   "t": 1792445271790,
+   "lag": 1.1250368333333824,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 341,
+   "klok": 121.77911025192589,
+   "rt": {
+    "currentTime": 1252.6053333333334,
+    "renderCapacity": 0.07653314779842957,
+    "callbackIntervalMean": 0.010020396107667372,
+    "callbackIntervalVariance": 1.1063020189875113e-7
+   }
+  },
+  {
+   "t": 1792445281826,
+   "lag": 1.1250126666662652,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 344,
+   "klok": 124.78309971652925,
+   "rt": {
+    "currentTime": 1262.6373333333333,
+    "renderCapacity": 0.09928936042438195,
+    "callbackIntervalMean": 0.010019831727870885,
+    "callbackIntervalVariance": 6.623788014979562e-8
+   }
+  },
+  {
+   "t": 1792445291873,
+   "lag": 1.125026833333635,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 347,
+   "klok": 121.47888044361024,
+   "rt": {
+    "currentTime": 1272.688,
+    "renderCapacity": 0.09713090257023312,
+    "callbackIntervalMean": 0.01002124148212283,
+    "callbackIntervalVariance": 9.228915142120044e-8
+   }
+  },
+  {
+   "t": 1792445301920,
+   "lag": 1.125036833333155,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 349,
+   "klok": 124.24085710849613,
+   "rt": {
+    "currentTime": 1282.7386666666666,
+    "renderCapacity": 0.11173128675371274,
+    "callbackIntervalMean": 0.010020578058325002,
+    "callbackIntervalVariance": 2.230907261857351e-8
+   }
+  },
+  {
+   "t": 1792445311969,
+   "lag": 1.1250290000001257,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 351,
+   "klok": 124.24085710849613,
+   "rt": {
+    "currentTime": 1292.7786666666666,
+    "renderCapacity": 0.07925057609457971,
+    "callbackIntervalMean": 0.010019460801210446,
+    "callbackIntervalVariance": 3.241065935828549e-7
+   }
+  },
+  {
+   "t": 1792445322016,
+   "lag": 1.125076166666389,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 354,
+   "klok": 129.93593851383775,
+   "rt": {
+    "currentTime": 1302.8293333333334,
+    "renderCapacity": 0.10009891196834819,
+    "callbackIntervalMean": 0.010020627847586411,
+    "callbackIntervalVariance": 2.931862506678599e-7
+   }
+  },
+  {
+   "t": 1792445332060,
+   "lag": 1.1250201666665305,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 356,
+   "klok": 128.07672205381095,
+   "rt": {
+    "currentTime": 1312.872,
+    "renderCapacity": 0.0921,
+    "callbackIntervalMean": 0.010020297788926272,
+    "callbackIntervalVariance": 5.31795713143058e-8
+   }
+  },
+  {
+   "t": 1792445342111,
+   "lag": 1.1551108333333957,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 359,
+   "klok": 128.07672205381095,
+   "rt": {
+    "currentTime": 1322.8906666666667,
+    "renderCapacity": 0.10247736543627502,
+    "callbackIntervalMean": 0.010021192851837411,
+    "callbackIntervalVariance": 1.0524382331394237e-7
+   }
+  },
+  {
+   "t": 1792445352152,
+   "lag": 1.1550988333331986,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 362,
+   "klok": 121.55434184335174,
+   "rt": {
+    "currentTime": 1332.9333333333334,
+    "renderCapacity": 0.2765656565656565,
+    "callbackIntervalMean": 0.010020881424445785,
+    "callbackIntervalVariance": 2.1948521558379825e-8
+   }
+  },
+  {
+   "t": 1792445362190,
+   "lag": 1.1550818333333552,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 365,
+   "klok": 121.55434184335174,
+   "rt": {
+    "currentTime": 1342.9733333333334,
+    "renderCapacity": 0.09356900339524665,
+    "callbackIntervalMean": 0.010020271139741074,
+    "callbackIntervalVariance": 3.360535198932441e-8
+   }
+  },
+  {
+   "t": 1792445372239,
+   "lag": 1.1951631666666742,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 368,
+   "klok": 121.55434184335174,
+   "rt": {
+    "currentTime": 1352.984,
+    "renderCapacity": 0.08234354726020561,
+    "callbackIntervalMean": 0.010020933857423949,
+    "callbackIntervalVariance": 1.3351210715461544e-7
+   }
+  },
+  {
+   "t": 1792445382302,
+   "lag": 1.1952496666666264,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 371,
+   "klok": 121.55434184335174,
+   "rt": {
+    "currentTime": 1363.0453333333332,
+    "renderCapacity": 0.1372783422992628,
+    "callbackIntervalMean": 0.01002080762561271,
+    "callbackIntervalVariance": 1.2441161676661712e-7
+   }
+  },
+  {
+   "t": 1792445392355,
+   "lag": 1.195189833333501,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 373,
+   "klok": 128.44158370327204,
+   "rt": {
+    "currentTime": 1373.096,
+    "renderCapacity": 0.1847510269512073,
+    "callbackIntervalMean": 0.010020293046314676,
+    "callbackIntervalVariance": 5.094728334130912e-8
+   }
+  },
+  {
+   "t": 1792445402384,
+   "lag": 1.195182666666227,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 377,
+   "klok": 122.79213548265399,
+   "rt": {
+    "currentTime": 1383.128,
+    "renderCapacity": 0.2900010069479408,
+    "callbackIntervalMean": 0.010020204746432724,
+    "callbackIntervalVariance": 2.1540026183310647e-8
+   }
+  },
+  {
+   "t": 1792445412431,
+   "lag": 1.1952106666663838,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 380,
+   "klok": 122.79213548265399,
+   "rt": {
+    "currentTime": 1393.1786666666667,
+    "renderCapacity": 0.10485728592889333,
+    "callbackIntervalMean": 0.010020174222976809,
+    "callbackIntervalVariance": 5.218439146654477e-8
+   }
+  },
+  {
+   "t": 1792445422482,
+   "lag": 1.1951888333333898,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 383,
+   "klok": 122.79213548265399,
+   "rt": {
+    "currentTime": 1403.2293333333334,
+    "renderCapacity": 0.13681543558760476,
+    "callbackIntervalMean": 0.010022616978367482,
+    "callbackIntervalVariance": 7.407893349738847e-8
+   }
+  },
+  {
+   "t": 1792445432511,
+   "lag": 1.2352449999997077,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 386,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1413.2186666666666,
+    "renderCapacity": 0.09939127831553736,
+    "callbackIntervalMean": 0.010020248791615954,
+    "callbackIntervalVariance": 9.237001072223272e-8
+   }
+  },
+  {
+   "t": 1792445442545,
+   "lag": 1.235254000000026,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 389,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1423.2506666666666,
+    "renderCapacity": 0.10475431077444433,
+    "callbackIntervalMean": 0.010019832012584872,
+    "callbackIntervalVariance": 7.273766242262725e-8
+   }
+  },
+  {
+   "t": 1792445452580,
+   "lag": 1.2352838333334546,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 392,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1433.28,
+    "renderCapacity": 0.3405659434056595,
+    "callbackIntervalMean": 0.010020677203940872,
+    "callbackIntervalVariance": 2.115315999935023e-8
+   }
+  },
+  {
+   "t": 1792445462615,
+   "lag": 1.2352636666665546,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 395,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1443.3226666666667,
+    "renderCapacity": 0.10519607843137253,
+    "callbackIntervalMean": 0.010021424335129484,
+    "callbackIntervalVariance": 5.495440229853492e-7
+   }
+  },
+  {
+   "t": 1792445472644,
+   "lag": 1.2352515000003166,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 397,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1453.352,
+    "renderCapacity": 0.09732824427480917,
+    "callbackIntervalMean": 0.010020025304485492,
+    "callbackIntervalVariance": 4.543491598358933e-8
+   }
+  },
+  {
+   "t": 1792445482674,
+   "lag": 1.2352763333334167,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 399,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1463.3733333333332,
+    "renderCapacity": 0.10276287020473067,
+    "callbackIntervalMean": 0.010020451920231831,
+    "callbackIntervalVariance": 8.216840008781026e-8
+   }
+  },
+  {
+   "t": 1792445492715,
+   "lag": 1.275400666666286,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 402,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1473.3733333333332,
+    "renderCapacity": 0.12423049752750027,
+    "callbackIntervalMean": 0.010020663253843074,
+    "callbackIntervalVariance": 1.226311211831972e-7
+   }
+  },
+  {
+   "t": 1792445502757,
+   "lag": 1.2753416666663213,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 406,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1483.4266666666667,
+    "renderCapacity": 0.10437306114279997,
+    "callbackIntervalMean": 0.010019385523905276,
+    "callbackIntervalVariance": 1.7028736637821773e-7
+   }
+  },
+  {
+   "t": 1792445512804,
+   "lag": 1.2753438333332667,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 408,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1493.4666666666667,
+    "renderCapacity": 0.2695035460992907,
+    "callbackIntervalMean": 0.010020274741245831,
+    "callbackIntervalVariance": 1.1747259300282779e-8
+   }
+  },
+  {
+   "t": 1792445522868,
+   "lag": 1.2953878333331375,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 412,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1503.5066666666667,
+    "renderCapacity": 0.10848303393213574,
+    "callbackIntervalMean": 0.01004720784483439,
+    "callbackIntervalVariance": 3.5766481754643323e-7
+   }
+  },
+  {
+   "t": 1792445532905,
+   "lag": 1.295372833333289,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 414,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1513.5466666666666,
+    "renderCapacity": 0.09878751739216857,
+    "callbackIntervalMean": 0.010020133530015287,
+    "callbackIntervalVariance": 1.4262997107131102e-7
+   }
+  },
+  {
+   "t": 1792445542959,
+   "lag": 1.295393000000189,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 417,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1523.6,
+    "renderCapacity": 0.10727697148076727,
+    "callbackIntervalMean": 0.010020390184587424,
+    "callbackIntervalVariance": 1.6276424802254143e-8
+   }
+  },
+  {
+   "t": 1792445553002,
+   "lag": 1.3054208333331587,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 420,
+   "klok": 121.46270354930311,
+   "rt": {
+    "currentTime": 1533.6293333333333,
+    "renderCapacity": 0.08346550356859635,
+    "callbackIntervalMean": 0.010020707603998225,
+    "callbackIntervalVariance": 6.605111012615459e-8
+   }
+  },
+  {
+   "t": 1792445563036,
+   "lag": 1.3053908333332345,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 423,
+   "klok": 123.67193389963359,
+   "rt": {
+    "currentTime": 1543.6693333333333,
+    "renderCapacity": 0.09191685912240186,
+    "callbackIntervalMean": 0.010028807529062026,
+    "callbackIntervalVariance": 1.1956437666450472e-7
+   }
+  },
+  {
+   "t": 1792445573077,
+   "lag": 1.3054158333330577,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 426,
+   "klok": 125.87205454334618,
+   "rt": {
+    "currentTime": 1553.712,
+    "renderCapacity": 0.09410589410589411,
+    "callbackIntervalMean": 0.010019460519145821,
+    "callbackIntervalVariance": 3.2980499717949485e-8
+   }
+  },
+  {
+   "t": 1792445583112,
+   "lag": 1.3254873333331432,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 429,
+   "klok": 125.87205454334618,
+   "rt": {
+    "currentTime": 1563.7226666666666,
+    "renderCapacity": 0.3532197924014915,
+    "callbackIntervalMean": 0.010019861109537431,
+    "callbackIntervalVariance": 6.380214454926309e-8
+   }
+  },
+  {
+   "t": 1792445593155,
+   "lag": 1.3254461666668647,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 432,
+   "klok": 125.87205454334618,
+   "rt": {
+    "currentTime": 1573.768,
+    "renderCapacity": 0.1101518309020542,
+    "callbackIntervalMean": 0.010020716697434104,
+    "callbackIntervalVariance": 2.55668181359246e-8
+   }
+  },
+  {
+   "t": 1792445603195,
+   "lag": 1.3255153333330725,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 435,
+   "klok": 125.87205454334618,
+   "rt": {
+    "currentTime": 1583.8106666666667,
+    "renderCapacity": 0.47823886639676116,
+    "callbackIntervalMean": 0.010019723608384844,
+    "callbackIntervalVariance": 2.9213378365749832e-8
+   }
+  },
+  {
+   "t": 1792445613240,
+   "lag": 1.3254514999997298,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 437,
+   "klok": 126.98494014795868,
+   "rt": {
+    "currentTime": 1593.856,
+    "renderCapacity": 0.09217513275222923,
+    "callbackIntervalMean": 0.010020248430370953,
+    "callbackIntervalVariance": 3.338899501953247e-8
+   }
+  },
+  {
+   "t": 1792445623277,
+   "lag": 1.3254453333332492,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 440,
+   "klok": 126.98494014795868,
+   "rt": {
+    "currentTime": 1603.896,
+    "renderCapacity": 0.09980883388670893,
+    "callbackIntervalMean": 0.010018893208089874,
+    "callbackIntervalVariance": 6.418649669927397e-8
+   }
+  },
+  {
+   "t": 1792445633313,
+   "lag": 1.3254403333331481,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 443,
+   "klok": 125.23687683511524,
+   "rt": {
+    "currentTime": 1613.928,
+    "renderCapacity": 0.1294234592445328,
+    "callbackIntervalMean": 0.010020279327391739,
+    "callbackIntervalVariance": 2.2310069708475683e-8
+   }
+  },
+  {
+   "t": 1792445643363,
+   "lag": 1.3454889999996738,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 445,
+   "klok": 125.23687683511524,
+   "rt": {
+    "currentTime": 1623.9573333333333,
+    "renderCapacity": 0.08570572370392568,
+    "callbackIntervalMean": 0.010020042917156729,
+    "callbackIntervalVariance": 1.0580701985140053e-7
+   }
+  },
+  {
+   "t": 1792445653413,
+   "lag": 1.3454833333333625,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 448,
+   "klok": 119.86760740168393,
+   "rt": {
+    "currentTime": 1634.008,
+    "renderCapacity": 0.12311483489403646,
+    "callbackIntervalMean": 0.01002114615534841,
+    "callbackIntervalVariance": 7.532528141726906e-8
+   }
+  },
+  {
+   "t": 1792445663451,
+   "lag": 1.345516166666897,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 451,
+   "klok": 119.86760740168393,
+   "rt": {
+    "currentTime": 1644.048,
+    "renderCapacity": 0.14750476955517622,
+    "callbackIntervalMean": 0.010020231826479374,
+    "callbackIntervalVariance": 2.213363999040179e-8
+   }
+  },
+  {
+   "t": 1792445673512,
+   "lag": 1.3655351666664899,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 454,
+   "klok": 121.20634763129057,
+   "rt": {
+    "currentTime": 1654.088,
+    "renderCapacity": 0.10330414012738855,
+    "callbackIntervalMean": 0.010020410869260504,
+    "callbackIntervalVariance": 1.2013674145554956e-7
+   }
+  },
+  {
+   "t": 1792445683559,
+   "lag": 1.3655983333331676,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 457,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1664.1306666666667,
+    "renderCapacity": 0.07914311216899732,
+    "callbackIntervalMean": 0.010020458003488511,
+    "callbackIntervalVariance": 5.1370335676283976e-8
+   }
+  },
+  {
+   "t": 1792445693600,
+   "lag": 1.3655923333331828,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 460,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1674.1706666666666,
+    "renderCapacity": 0.14306974898303404,
+    "callbackIntervalMean": 0.010021036849905565,
+    "callbackIntervalVariance": 1.2407273443115146e-8
+   }
+  },
+  {
+   "t": 1792445703637,
+   "lag": 1.3655623333334859,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 462,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1684.2133333333334,
+    "renderCapacity": 0.12782625942086476,
+    "callbackIntervalMean": 0.010020428317081161,
+    "callbackIntervalVariance": 7.926653001283557e-8
+   }
+  },
+  {
+   "t": 1792445713686,
+   "lag": 1.3655183333333696,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 466,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1694.264,
+    "renderCapacity": 0.236265385770039,
+    "callbackIntervalMean": 0.010019515233300434,
+    "callbackIntervalVariance": 1.839212783609452e-7
+   }
+  },
+  {
+   "t": 1792445723716,
+   "lag": 1.3655241666668587,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 468,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1704.2933333333333,
+    "renderCapacity": 0.10570803500397771,
+    "callbackIntervalMean": 0.010020266784566871,
+    "callbackIntervalVariance": 1.5466570235151425e-8
+   }
+  },
+  {
+   "t": 1792445733763,
+   "lag": 1.3855669999998952,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 471,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1714.3146666666667,
+    "renderCapacity": 0.1831070287539936,
+    "callbackIntervalMean": 0.01001974813807092,
+    "callbackIntervalVariance": 1.8530415178890904e-7
+   }
+  },
+  {
+   "t": 1792445743798,
+   "lag": 1.3855838333332429,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 474,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1724.3573333333334,
+    "renderCapacity": 0.17727865236137574,
+    "callbackIntervalMean": 0.01001954626030902,
+    "callbackIntervalVariance": 6.522440580289221e-8
+   }
+  },
+  {
+   "t": 1792445753836,
+   "lag": 1.3855668333329447,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 477,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1734.3866666666668,
+    "renderCapacity": 0.07578759659203486,
+    "callbackIntervalMean": 0.010020791234382546,
+    "callbackIntervalVariance": 3.056957726509484e-8
+   }
+  },
+  {
+   "t": 1792445763876,
+   "lag": 1.4256701666664355,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 479,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1744.3866666666668,
+    "renderCapacity": 0.10584707646176912,
+    "callbackIntervalMean": 0.010019862121344163,
+    "callbackIntervalVariance": 8.444175887225831e-8
+   }
+  },
+  {
+   "t": 1792445773916,
+   "lag": 1.4256711666665467,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 482,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1754.4293333333333,
+    "renderCapacity": 0.14661466146614663,
+    "callbackIntervalMean": 0.01001940988280472,
+    "callbackIntervalVariance": 1.2713422609641697e-7
+   }
+  },
+  {
+   "t": 1792445783956,
+   "lag": 1.425671166666774,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 485,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1764.4693333333332,
+    "renderCapacity": 0.26112729830201953,
+    "callbackIntervalMean": 0.010019924430862881,
+    "callbackIntervalVariance": 1.6785471155837045e-7
+   }
+  },
+  {
+   "t": 1792445794009,
+   "lag": 1.4457129999999268,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 488,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1774.5013333333334,
+    "renderCapacity": 0.24580838323353293,
+    "callbackIntervalMean": 0.010019882750150668,
+    "callbackIntervalVariance": 8.729192515930245e-7
+   }
+  },
+  {
+   "t": 1792445804051,
+   "lag": 1.4457409999996287,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 491,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1784.5413333333333,
+    "renderCapacity": 0.07118911457306251,
+    "callbackIntervalMean": 0.01002062821964752,
+    "callbackIntervalVariance": 1.612733920395342e-7
+   }
+  },
+  {
+   "t": 1792445814104,
+   "lag": 1.4457861666665792,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 493,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1794.592,
+    "renderCapacity": 0.15894625176803395,
+    "callbackIntervalMean": 0.01003414185963651,
+    "callbackIntervalVariance": 9.632376918334623e-8
+   }
+  },
+  {
+   "t": 1792445824142,
+   "lag": 1.5559253333336471,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 496,
+   "klok": 119.47166243102401,
+   "rt": {
+    "currentTime": 1804.5226666666667,
+    "renderCapacity": 0.08841751548881654,
+    "callbackIntervalMean": 0.010021260672676356,
+    "callbackIntervalVariance": 1.4945971764227625e-7
+   }
+  },
+  {
+   "t": 1792445834193,
+   "lag": 1.5559165000000519,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 498,
+   "klok": 121.48098203539848,
+   "rt": {
+    "currentTime": 1814.5733333333333,
+    "renderCapacity": 0.07917917917917917,
+    "callbackIntervalMean": 0.010019774466956535,
+    "callbackIntervalVariance": 4.3627714027617456e-8
+   }
+  },
+  {
+   "t": 1792445844258,
+   "lag": 1.5559778333336851,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 501,
+   "klok": 121.48098203539848,
+   "rt": {
+    "currentTime": 1824.6453333333334,
+    "renderCapacity": 0.10229083665338644,
+    "callbackIntervalMean": 0.010020975036270597,
+    "callbackIntervalVariance": 6.820342276166428e-8
+   }
+  },
+  {
+   "t": 1792445854300,
+   "lag": 1.5559949999997968,
+   "geheugen": null,
+   "js": 10000000,
+   "acties": 503,
+   "klok": 121.48098203539848,
+   "rt": {
+    "currentTime": 1834.6853333333333,
+    "renderCapacity": 0.21581153922938706,
+    "callbackIntervalMean": 0.010020680078593028,
+    "callbackIntervalVariance": 1.8979427499871937e-7
+   }
+  }
+ ]
+}

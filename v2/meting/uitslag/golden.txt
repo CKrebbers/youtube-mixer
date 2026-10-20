@@ -1,0 +1,20 @@
+(a0) zonder wachten vóór resume: herhaalbaar JA  (4 renders)
+(a) met 10 ms wachten vóór elke resume: herhaalbaar JA, bit voor bit  (4 renders, twee pagina's, 41.0 s samen)
+    hash 8a53b2a7ac27f9bb7e8e2bc6f17f6fbae177db1b8cb502f06fa793689a8b8233
+    piek -6,5 dBFS, rms -23,6 dBFS, limiter worklet, geweigerd: niets
+    tegen golden.json (2026-10-19): ANDERS — de uitvoer veranderde (bewust? dan --bewaar)
+
+(b) null-test tegen Chromes AudioBufferSourceNode (grens ≤ −50 dB)
+    geval                                                  | ons−Chrome |  <4 kHz  | verschuiving  | ons−sinc (<4k)     | Chrome−sinc (<4k)
+    R 124/128                                              |   -37,5 dB |  -64,0 dB |   0,0001 smp |  -31,1 ( -87,5) dB |  -28,9 ( -64,1) dB
+    R 1,0                                                  |  -266,2 dB | -274,1 dB |  -0,0000 smp | -134,5 (-141,6) dB | -134,5 (-141,6) dB
+    R 0,97                                                 |   -37,5 dB |  -64,4 dB |   0,0090 smp |  -31,0 ( -87,8) dB |  -28,9 ( -64,5) dB
+    R 1,03                                                 |   -37,2 dB |  -65,3 dB |  -0,0085 smp |  -30,7 ( -82,4) dB |  -28,6 ( -64,5) dB
+    R 124/128, demo-pad (geen hihat)                       |   -88,2 dB |  -88,9 dB |  -0,0000 smp |  -89,7 (-106,1) dB |  -85,6 ( -89,9) dB
+    R 0,97, demo-pad (geen hihat)                          |   -81,2 dB |  -81,3 dB |   0,0036 smp |  -89,7 (-106,1) dB |  -80,5 ( -81,5) dB
+    wissel R 1 → 128/124 (segmenten met de hand)           |   -39,3 dB |  -66,8 dB |  -0,0022 smp |  -32,8 ( -83,9) dB |  -30,7 ( -66,0) dB  na de wissel -36,6 dB
+    klok 124 → 128, engine.zetKlokTempo op een blokgrens   |   -39,9 dB |  -67,8 dB |  -0,0020 smp |  -33,6 ( -84,8) dB |  -31,4 ( -67,1) dB  na de wissel -37,1 dB  [Tw op een blokgrens]
+    klok 124 → 128 via de bus (klok.tempo)                 |   -39,9 dB |  -67,8 dB |  -0,0020 smp |  -33,6 ( -84,8) dB |  -31,4 ( -67,1) dB  na de wissel -37,1 dB  [Tw op een blokgrens]
+    klok 124 → 128, 16 samples naast een blokgrens         |   -19,6 dB |  -27,5 dB |  -0,0534 smp |  -33,4 ( -84,4) dB |  -19,0 ( -27,5) dB  na de wissel -16,9 dB  [Tw naast een blokgrens]
+
+M10: herhaalbaar ja; null-test vaste snelheid BUITEN de grens (zie hierboven: wie wijkt af van de sinc-referentie?)

@@ -1,0 +1,903 @@
+{
+  "soort": "varve-telling-nu",
+  "versie": 1,
+  "bronnen": {
+    "handen": "docs/HANDEN.md §4: 27 logs (set-20260930-001113.acties.jsonl … set-20261010-190959.acties.jsonl), top-40 + telling per groep",
+    "register": "tools/handen/register.mjs: 3251 actions (alleen wat src/control/actions.js bindt; de aanhakers van de werkruimte niet)",
+    "mappings": [
+      "apc40mk2.json",
+      "apc40mk2-vormen.json",
+      "maschine-mk2.json",
+      "xboard49.json"
+    ]
+  },
+  "grens": [
+    "27 logs, 20260930 t/m 20261010; alles van daarna (werkruimte S0–S11, 14 okt) zit er niet in.",
+    "Het log kent geen bron (MIDI, muis, toets, automaat, terugspelen): een \"handeling\" is een action op de bus, niet per se een hand.",
+    "De top-40 dekt 95.9% van de handelingen; van wat erbuiten viel (2576) weten we alleen de groep.",
+    "Een fader of knop die je draait geeft tientallen handelingen, een knop indrukken twee: aantallen vergelijken tussen soorten is appels en peren."
+  ],
+  "logs": {
+    "aantal": 27,
+    "eerste": "set-20260930-001113.acties.jsonl",
+    "laatste": "set-20261010-190959.acties.jsonl",
+    "handelingen": 62282,
+    "top40Handelingen": 59706,
+    "top40Aandeel": 0.95864
+  },
+  "register": {
+    "ruw": 3251,
+    "genormaliseerd": 325,
+    "inMapping": 177,
+    "inTop40": 40,
+    "ruwInTop40": 356,
+    "ruwNietInTop40": 2895,
+    "genormaliseerdNietInTop40": 285
+  },
+  "mappings": {
+    "apc40mk2.json": {
+      "regels": 710,
+      "acties": 156,
+      "inTop40": 19,
+      "regelsInTop40": 103
+    },
+    "apc40mk2-vormen.json": {
+      "regels": 14,
+      "acties": 9,
+      "inTop40": 3,
+      "regelsInTop40": 8
+    },
+    "maschine-mk2.json": {
+      "regels": 73,
+      "acties": 26,
+      "inTop40": 11,
+      "regelsInTop40": 56
+    },
+    "xboard49.json": {
+      "regels": 17,
+      "acties": 3,
+      "inTop40": 3,
+      "regelsInTop40": 17
+    }
+  },
+  "mappingSamen": {
+    "acties": 177,
+    "inTop40": 22,
+    "nietInTop40": 155
+  },
+  "groepen": [
+    {
+      "groep": "track (transport/mixer)",
+      "handelingen": 28089,
+      "aandeel": 0.451,
+      "register": 100,
+      "registerRuw": 1536,
+      "inMapping": 63,
+      "inTop40": 14,
+      "top40Handelingen": 27356
+    },
+    {
+      "groep": "effecten/sends",
+      "handelingen": 17359,
+      "aandeel": 0.27872,
+      "register": 42,
+      "registerRuw": 413,
+      "inMapping": 8,
+      "inTop40": 7,
+      "top40Handelingen": 16820
+    },
+    {
+      "groep": "video/vormen",
+      "handelingen": 10619,
+      "aandeel": 0.1705,
+      "register": 34,
+      "registerRuw": 42,
+      "inMapping": 21,
+      "inTop40": 10,
+      "top40Handelingen": 10159
+    },
+    {
+      "groep": "overig",
+      "handelingen": 2686,
+      "aandeel": 0.04313,
+      "register": 13,
+      "registerRuw": 27,
+      "inMapping": 10,
+      "inTop40": 2,
+      "top40Handelingen": 2680
+    },
+    {
+      "groep": "klankschaal",
+      "handelingen": 860,
+      "aandeel": 0.01381,
+      "register": 16,
+      "registerRuw": 23,
+      "inMapping": 0,
+      "inTop40": 2,
+      "top40Handelingen": 716
+    },
+    {
+      "groep": "sampler",
+      "handelingen": 838,
+      "aandeel": 0.01345,
+      "register": 8,
+      "registerRuw": 36,
+      "inMapping": 7,
+      "inTop40": 1,
+      "top40Handelingen": 719
+    },
+    {
+      "groep": "instrument",
+      "handelingen": 629,
+      "aandeel": 0.0101,
+      "register": 6,
+      "registerRuw": 104,
+      "inMapping": 4,
+      "inTop40": 1,
+      "top40Handelingen": 616
+    },
+    {
+      "groep": "stems",
+      "handelingen": 597,
+      "aandeel": 0.00959,
+      "register": 45,
+      "registerRuw": 360,
+      "inMapping": 10,
+      "inTop40": 2,
+      "top40Handelingen": 464
+    },
+    {
+      "groep": "library",
+      "handelingen": 195,
+      "aandeel": 0.00313,
+      "register": 5,
+      "registerRuw": 5,
+      "inMapping": 3,
+      "inTop40": 0,
+      "top40Handelingen": 0
+    },
+    {
+      "groep": "koptelefoon",
+      "handelingen": 178,
+      "aandeel": 0.00286,
+      "register": 3,
+      "registerRuw": 10,
+      "inMapping": 3,
+      "inTop40": 1,
+      "top40Handelingen": 176
+    },
+    {
+      "groep": "mapjes",
+      "handelingen": 128,
+      "aandeel": 0.00206,
+      "register": 16,
+      "registerRuw": 16,
+      "inMapping": 16,
+      "inTop40": 0,
+      "top40Handelingen": 0
+    },
+    {
+      "groep": "patronen",
+      "handelingen": 72,
+      "aandeel": 0.00116,
+      "register": 16,
+      "registerRuw": 658,
+      "inMapping": 11,
+      "inTop40": 0,
+      "top40Handelingen": 0
+    },
+    {
+      "groep": "auto-dj",
+      "handelingen": 32,
+      "aandeel": 0.00051,
+      "register": 5,
+      "registerRuw": 5,
+      "inMapping": 5,
+      "inTop40": 0,
+      "top40Handelingen": 0
+    },
+    {
+      "groep": "beeld (Stroommachine)",
+      "handelingen": 0,
+      "aandeel": 0,
+      "register": 14,
+      "registerRuw": 14,
+      "inMapping": 14,
+      "inTop40": 0,
+      "top40Handelingen": 0
+    },
+    {
+      "groep": "master",
+      "handelingen": 0,
+      "aandeel": 0,
+      "register": 2,
+      "registerRuw": 2,
+      "inMapping": 2,
+      "inTop40": 0,
+      "top40Handelingen": 0
+    }
+  ],
+  "top40": [
+    {
+      "nr": 1,
+      "actie": "track.N.fader",
+      "aantal": 11796,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: fader 1–8",
+        "Xboard: schuif"
+      ],
+      "aandeel": 0.1894,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "xboard49.json"
+      ]
+    },
+    {
+      "nr": 2,
+      "actie": "track.N.filter",
+      "aantal": 6452,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: track knop 1–8",
+        "Maschine: draaiknop 8 (± shift, pagina.strip)"
+      ],
+      "aandeel": 0.10359,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    },
+    {
+      "nr": 3,
+      "actie": "video.layer.knob.K",
+      "aantal": 5799,
+      "groep": "video/vormen",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 1–6 (device.vorm, ?vormen=1)"
+      ],
+      "aandeel": 0.09311,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2-vormen.json"
+      ]
+    },
+    {
+      "nr": 4,
+      "actie": "track.N.fx.knob.K",
+      "aantal": 5064,
+      "groep": "effecten/sends",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 1–8 (device.rack)",
+        "APC: device knop 8 (device.strip)",
+        "Maschine: draaiknop 1–8 (± shift, pagina.rack)",
+        "Xboard: knop 9–16"
+      ],
+      "aandeel": 0.08131,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json",
+        "xboard49.json"
+      ]
+    },
+    {
+      "nr": 5,
+      "actie": "track.N.send.a",
+      "aantal": 4765,
+      "groep": "effecten/sends",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 5 (device.strip)",
+        "Maschine: draaiknop 5 (± shift, pagina.strip)"
+      ],
+      "aandeel": 0.07651,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    },
+    {
+      "nr": 6,
+      "actie": "track.N.fx.mix",
+      "aantal": 3717,
+      "groep": "effecten/sends",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 7 (device.strip)",
+        "Maschine: draaiknop 7 (± shift, pagina.strip)"
+      ],
+      "aandeel": 0.05968,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    },
+    {
+      "nr": 7,
+      "actie": "track.N.send.b",
+      "aantal": 2280,
+      "groep": "effecten/sends",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 6 (device.strip)",
+        "Maschine: draaiknop 6 (± shift, pagina.strip)"
+      ],
+      "aandeel": 0.03661,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    },
+    {
+      "nr": 8,
+      "actie": "track.N.filter.glide",
+      "aantal": 1602,
+      "groep": "track (transport/mixer)",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `*.glide` hierboven)"
+      ],
+      "aandeel": 0.02572,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 9,
+      "actie": "track.N.low",
+      "aantal": 1560,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 4 (device.strip)",
+        "Maschine: draaiknop 4 (± shift, pagina.strip)"
+      ],
+      "aandeel": 0.02505,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    },
+    {
+      "nr": 10,
+      "actie": "mixer.xfader",
+      "aantal": 1518,
+      "groep": "overig",
+      "vastePlek": true,
+      "hand": [
+        "APC: crossfader"
+      ],
+      "aandeel": 0.02437,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json"
+      ]
+    },
+    {
+      "nr": 11,
+      "actie": "track.N.xfade.thru",
+      "aantal": 1306,
+      "groep": "track (transport/mixer)",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `track.N.xfade.*` hierboven)"
+      ],
+      "aandeel": 0.02097,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 12,
+      "actie": "track.N.fader.glide",
+      "aantal": 1208,
+      "groep": "track (transport/mixer)",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `*.glide` hierboven)"
+      ],
+      "aandeel": 0.0194,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 13,
+      "actie": "mixer.master",
+      "aantal": 1162,
+      "groep": "overig",
+      "vastePlek": true,
+      "hand": [
+        "APC: master fader"
+      ],
+      "aandeel": 0.01866,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json"
+      ]
+    },
+    {
+      "nr": 14,
+      "actie": "video.fx.pixel",
+      "aantal": 1117,
+      "groep": "video/vormen",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `video.fx.*` hierboven)"
+      ],
+      "aandeel": 0.01793,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 15,
+      "actie": "track.N.trim",
+      "aantal": 1012,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 1 (device.strip)",
+        "Maschine: draaiknop 1 (± shift, pagina.strip)"
+      ],
+      "aandeel": 0.01625,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    },
+    {
+      "nr": 16,
+      "actie": "track.N.hotcue.K",
+      "aantal": 876,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: 32 pads (grid.hotcues)"
+      ],
+      "aandeel": 0.01407,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json"
+      ]
+    },
+    {
+      "nr": 17,
+      "actie": "sampler.volume",
+      "aantal": 719,
+      "groep": "sampler",
+      "vastePlek": true,
+      "hand": [
+        "APC: cue level (shift, grid.sampler)",
+        "Maschine: draaiknop 5 (± shift, sampler)"
+      ],
+      "aandeel": 0.01154,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    },
+    {
+      "nr": 18,
+      "actie": "track.N.pitch",
+      "aantal": 658,
+      "groep": "track (transport/mixer)",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `track.N.pitch` hierboven)"
+      ],
+      "aandeel": 0.01056,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 19,
+      "actie": "video.layer.opacity",
+      "aantal": 655,
+      "groep": "video/vormen",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 7 (device.vorm, ?vormen=1)"
+      ],
+      "aandeel": 0.01052,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2-vormen.json"
+      ]
+    },
+    {
+      "nr": 20,
+      "actie": "track.N.inst.knob.K",
+      "aantal": 616,
+      "groep": "instrument",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 1–8 (device.inst)",
+        "Maschine: draaiknop 1–8 (± shift)",
+        "Xboard: knop 1–8"
+      ],
+      "aandeel": 0.00989,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json",
+        "xboard49.json"
+      ]
+    },
+    {
+      "nr": 21,
+      "actie": "video.fx.trails",
+      "aantal": 596,
+      "groep": "video/vormen",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `video.fx.*` hierboven)"
+      ],
+      "aandeel": 0.00957,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 22,
+      "actie": "video.fx.grain",
+      "aantal": 490,
+      "groep": "video/vormen",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `video.fx.*` hierboven)"
+      ],
+      "aandeel": 0.00787,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 23,
+      "actie": "track.N.send.a.glide",
+      "aantal": 427,
+      "groep": "effecten/sends",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `*.glide` hierboven)"
+      ],
+      "aandeel": 0.00686,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 24,
+      "actie": "klankschaal.veld.K",
+      "aantal": 426,
+      "groep": "klankschaal",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `klankschaal.*` hierboven)"
+      ],
+      "aandeel": 0.00684,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 25,
+      "actie": "video.layer.react",
+      "aantal": 418,
+      "groep": "video/vormen",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 8 (device.vorm, ?vormen=1)"
+      ],
+      "aandeel": 0.00671,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2-vormen.json"
+      ]
+    },
+    {
+      "nr": 26,
+      "actie": "video.fx.mirror",
+      "aantal": 369,
+      "groep": "video/vormen",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `video.fx.*` hierboven)"
+      ],
+      "aandeel": 0.00592,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 27,
+      "actie": "track.N.send.b.glide",
+      "aantal": 347,
+      "groep": "effecten/sends",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `*.glide` hierboven)"
+      ],
+      "aandeel": 0.00557,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 28,
+      "actie": "klankschaal.toon",
+      "aantal": 290,
+      "groep": "klankschaal",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `klankschaal.*` hierboven)"
+      ],
+      "aandeel": 0.00466,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 29,
+      "actie": "track.N.focus",
+      "aantal": 279,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: track select 1–8",
+        "APC: track select 1–8 (edit.aan)",
+        "Maschine: groep A, groep B, groep C, groep D, groep E, groep F, groep G, groep H"
+      ],
+      "aandeel": 0.00448,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    },
+    {
+      "nr": 30,
+      "actie": "video.fx.rgb",
+      "aantal": 257,
+      "groep": "video/vormen",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `video.fx.*` hierboven)"
+      ],
+      "aandeel": 0.00413,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 31,
+      "actie": "track.N.stem.drums",
+      "aantal": 248,
+      "groep": "stems",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `track.N.stem.*` hierboven)"
+      ],
+      "aandeel": 0.00398,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 32,
+      "actie": "video.fx.color",
+      "aantal": 239,
+      "groep": "video/vormen",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `video.fx.*` hierboven)"
+      ],
+      "aandeel": 0.00384,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 33,
+      "actie": "track.N.stem.drums.send.b",
+      "aantal": 220,
+      "groep": "effecten/sends",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `track.N.stem.*` hierboven)"
+      ],
+      "aandeel": 0.00353,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 34,
+      "actie": "video.pulse",
+      "aantal": 219,
+      "groep": "video/vormen",
+      "vastePlek": true,
+      "hand": [
+        "APC: cue level (shift, grid.video)",
+        "LPD8: K 4 (via de hub)"
+      ],
+      "aandeel": 0.00352,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json"
+      ]
+    },
+    {
+      "nr": 35,
+      "actie": "track.N.stem.other",
+      "aantal": 216,
+      "groep": "stems",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `track.N.stem.*` hierboven)"
+      ],
+      "aandeel": 0.00347,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 36,
+      "actie": "headphone.level",
+      "aantal": 176,
+      "groep": "koptelefoon",
+      "vastePlek": true,
+      "hand": [
+        "APC: cue level"
+      ],
+      "aandeel": 0.00283,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json"
+      ]
+    },
+    {
+      "nr": 37,
+      "actie": "track.N.play",
+      "aantal": 166,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: activator 1–8, play"
+      ],
+      "aandeel": 0.00267,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json"
+      ]
+    },
+    {
+      "nr": 38,
+      "actie": "track.N.seek",
+      "aantal": 154,
+      "groep": "track (transport/mixer)",
+      "vastePlek": false,
+      "hand": [
+        "geen vaste plek (zie `track.N.seek` hierboven)"
+      ],
+      "aandeel": 0.00247,
+      "inRegister": true,
+      "inMapping": []
+    },
+    {
+      "nr": 39,
+      "actie": "track.N.tempo",
+      "aantal": 152,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: tempo (± shift)"
+      ],
+      "aandeel": 0.00244,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json"
+      ]
+    },
+    {
+      "nr": 40,
+      "actie": "track.N.high",
+      "aantal": 135,
+      "groep": "track (transport/mixer)",
+      "vastePlek": true,
+      "hand": [
+        "APC: device knop 2 (device.strip)",
+        "Maschine: draaiknop 2 (± shift, pagina.strip)"
+      ],
+      "aandeel": 0.00217,
+      "inRegister": true,
+      "inMapping": [
+        "apc40mk2.json",
+        "maschine-mk2.json"
+      ]
+    }
+  ],
+  "kengetallen": {
+    "faderFilterFxKnoppen": {
+      "acties": [
+        "track.N.fader",
+        "track.N.filter",
+        "track.N.fx.knob.K"
+      ],
+      "handelingen": 23312,
+      "aandeel": 0.3743
+    },
+    "kanaalstrip": {
+      "acties": [
+        "track.N.fader",
+        "track.N.filter",
+        "track.N.fx.knob.K",
+        "track.N.fx.mix",
+        "track.N.send.a",
+        "track.N.send.b",
+        "track.N.low",
+        "track.N.high",
+        "track.N.trim",
+        "mixer.xfader",
+        "mixer.master"
+      ],
+      "handelingen": 39461,
+      "aandeel": 0.63359
+    },
+    "top10": {
+      "handelingen": 44553,
+      "aandeel": 0.71534
+    },
+    "automaat": {
+      "acties": [
+        "track.N.fader.glide",
+        "track.N.filter.glide",
+        "track.N.send.a.glide",
+        "track.N.send.b.glide",
+        "track.N.xfade.thru"
+      ],
+      "handelingen": 4890,
+      "noot": "glide en xfade.<kant> stuurt src/auto/automaat.js (regel 752, 1192, 614); geen vaste plek op een controller",
+      "aandeel": 0.07851
+    },
+    "geenVastePlek": {
+      "acties": [
+        "track.N.filter.glide",
+        "track.N.xfade.thru",
+        "track.N.fader.glide",
+        "video.fx.pixel",
+        "track.N.pitch",
+        "video.fx.trails",
+        "video.fx.grain",
+        "track.N.send.a.glide",
+        "klankschaal.veld.K",
+        "video.fx.mirror",
+        "track.N.send.b.glide",
+        "klankschaal.toon",
+        "video.fx.rgb",
+        "track.N.stem.drums",
+        "video.fx.color",
+        "track.N.stem.drums.send.b",
+        "track.N.stem.other",
+        "track.N.seek"
+      ],
+      "handelingen": 10170,
+      "aandeel": 0.16329
+    },
+    "videoFxZonderPlek": {
+      "handelingen": 3068,
+      "aandeel": 0.04926
+    },
+    "transportKnoppen": {
+      "acties": [
+        "track.N.play",
+        "track.N.hotcue.K",
+        "track.N.seek",
+        "track.N.focus"
+      ],
+      "handelingen": 1475,
+      "aandeel": 0.02368
+    },
+    "patronenEnAutoKnoppen": {
+      "handelingen": 104,
+      "aandeel": 0.00167
+    }
+  }
+}

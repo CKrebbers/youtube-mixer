@@ -1,0 +1,26 @@
+{
+  "play_ms": {
+    "n": 60,
+    "min": 5.374999999997243,
+    "mediaan": 5.375000000000796,
+    "p95": 10.708333333333542,
+    "max": 10.875000000000412,
+    "gem": 5.771874999999861,
+    "spreiding": 1.2424274386836256
+  },
+  "kill_ms": {
+    "n": 60,
+    "min": 0,
+    "mediaan": 2.333333333336185,
+    "p95": 4.666666666667041,
+    "max": 4.666666666668817,
+    "gem": 2.4111111111107375,
+    "spreiding": 1.4238272193694848
+  },
+  "apparaat_ms": {
+    "baseLatency": 10.020833333333332,
+    "outputLatency": 32
+  },
+  "let_op": "kill meet tot het geluid onder −50 dBFS zakt: de S-overgang van 5 ms zit erin. play meet tot het begin van de inloop (4 ms)."
+}
+M3 NIET GEHAALD

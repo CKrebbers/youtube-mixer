@@ -1,0 +1,452 @@
+<title>VarveDJ planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: een smalle kolom kaartjes onder een vaste balk met filters; de vier keuzes zijn verlichte pads zoals op de APC. */
+:root {
+  --bg: #f3f4f1;
+  --vlak: #ffffff;
+  --inkt: #1b1d1a;
+  --zacht: #5d625a;
+  --lijn: #d8dbd3;
+  --pad: #e6e8e2;
+  --groen: #1f8a3c;
+  --amber: #c27a00;
+  --rood: #c2372b;
+  --blauw: #3b62a8;
+  --accent: #1f8a3c;
+  --f-kop: "Archivo Narrow", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-tekst: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141513; --vlak: #1d1f1c; --inkt: #e8eae4; --zacht: #9ea397; --lijn: #33362f; --pad: #2a2d27;
+    --groen: #4cc46a; --amber: #e8a436; --rood: #ec6a5c; --blauw: #7c9fe0; --accent: #4cc46a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141513; --vlak: #1d1f1c; --inkt: #e8eae4; --zacht: #9ea397; --lijn: #33362f; --pad: #2a2d27;
+  --groen: #4cc46a; --amber: #e8a436; --rood: #ec6a5c; --blauw: #7c9fe0; --accent: #4cc46a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--inkt); font: 15px/1.5 var(--f-tekst); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--vlak); }
+.wrap { max-width: 920px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.kop { padding-block: 28px 12px; display: grid; gap: 6px; }
+h1 { font: 700 34px/1.05 var(--f-kop); letter-spacing: .01em; margin: 0; text-wrap: balance; }
+.sub { color: var(--zacht); margin: 0; max-width: 65ch; }
+.meter { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 500 13px var(--f-data); color: var(--zacht); font-variant-numeric: tabular-nums; }
+.meter b { color: var(--inkt); font-weight: 500; }
+.voortgang { height: 6px; background: var(--pad); border-radius: 3px; overflow: hidden; display: flex; }
+.voortgang span { display: block; height: 100%; }
+
+.balk { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--vlak); border-bottom: 1px solid var(--lijn); }
+.balk .wrap { padding-block: 10px; display: grid; gap: 8px; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin; }
+.tab { font: 700 14px var(--f-kop); letter-spacing: .03em; text-transform: uppercase; border: 1px solid var(--lijn); background: transparent; color: var(--zacht); padding: 6px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.tab[aria-pressed="true"] { background: var(--inkt); color: var(--vlak); border-color: var(--inkt); }
+.tab small { font: 400 11px var(--f-data); margin-left: 4px; opacity: .8; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+select, input[type="search"] { font: 14px var(--f-tekst); color: var(--inkt); background: var(--bg); border: 1px solid var(--lijn); border-radius: 4px; padding: 5px 8px; }
+input[type="search"] { flex: 1 1 180px; min-width: 0; }
+:focus-visible { outline: 2px solid var(--blauw); outline-offset: 2px; }
+
+main { padding-block: 16px 64px; display: grid; gap: 14px; }
+.samenvatting { background: var(--vlak); border: 1px solid var(--lijn); border-radius: 6px; padding: 14px 16px; display: grid; gap: 8px; }
+.samenvatting h2 { font: 700 20px var(--f-kop); margin: 0; text-transform: uppercase; letter-spacing: .03em; }
+.samenvatting p { margin: 0; max-width: 72ch; }
+details.onderdelen summary { cursor: pointer; color: var(--zacht); font-size: 14px; }
+.tabel { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 13px; width: 100%; }
+th, td { text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--lijn); vertical-align: top; }
+th { font: 500 11px var(--f-data); text-transform: uppercase; letter-spacing: .06em; color: var(--zacht); }
+td.num { font-family: var(--f-data); font-variant-numeric: tabular-nums; text-align: right; }
+code, .mono { font-family: var(--f-data); font-size: .88em; }
+
+.kaart { background: var(--vlak); border: 1px solid var(--lijn); border-left: 4px solid var(--lijn); border-radius: 6px; padding: 12px 14px; display: grid; gap: 8px; min-width: 0; }
+.kaart.k-houden { border-left-color: var(--groen); }
+.kaart.k-anders { border-left-color: var(--amber); }
+.kaart.k-weg { border-left-color: var(--rood); }
+.kaart.k-open { border-left-color: var(--blauw); }
+.kaart-kop { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.kaart h3 { font: 700 18px/1.2 var(--f-kop); margin: 0; flex: 1 1 260px; min-width: 0; text-wrap: balance; }
+.id { font: 400 11px var(--f-data); color: var(--zacht); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font: 500 11px var(--f-data); letter-spacing: .04em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: var(--pad); color: var(--zacht); }
+.chip.kern { background: var(--inkt); color: var(--vlak); }
+.chip.s-pijn, .chip.s-valkuil { color: var(--rood); }
+.chip.s-open { color: var(--blauw); }
+.chip.s-meting { color: var(--groen); }
+.wat { margin: 0; max-width: 72ch; }
+.waarom { margin: 0; color: var(--zacht); font-size: 14px; max-width: 72ch; }
+.bron { font: 12px var(--f-data); color: var(--zacht); overflow-wrap: anywhere; }
+.voorstel { font-size: 14px; margin: 0; }
+.voorstel b { text-transform: uppercase; font: 700 13px var(--f-kop); letter-spacing: .04em; }
+
+.keuze { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pad { font: 700 13px var(--f-kop); letter-spacing: .05em; text-transform: uppercase; width: 84px; height: 34px; border-radius: 4px; border: 1px solid var(--lijn); background: var(--pad); color: var(--zacht); cursor: pointer; position: relative; }
+.pad::after { content: ""; position: absolute; top: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .35; }
+.pad.voorgesteld::after { opacity: 1; }
+.pad[aria-pressed="true"] { color: #fff; border-color: transparent; }
+.pad[aria-pressed="true"]::after { background: #fff; opacity: .9; }
+.pad.houden[aria-pressed="true"] { background: var(--groen); }
+.pad.anders[aria-pressed="true"] { background: var(--amber); }
+.pad.weg[aria-pressed="true"] { background: var(--rood); }
+.pad.open[aria-pressed="true"] { background: var(--blauw); }
+.pad:disabled { cursor: default; opacity: .6; }
+.status { font: 12px var(--f-data); color: var(--zacht); }
+textarea { width: 100%; font: 14px/1.4 var(--f-tekst); color: var(--inkt); background: var(--bg); border: 1px solid var(--lijn); border-radius: 4px; padding: 6px 8px; resize: vertical; min-height: 34px; }
+
+.scen { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 2px 10px; margin: 0; }
+.scen dt { font: 500 11px var(--f-data); text-transform: uppercase; letter-spacing: .06em; color: var(--zacht); padding-top: 3px; }
+.scen dd { margin: 0; max-width: 68ch; }
+.scen dd.dan { font-weight: 700; }
+.begrippen { display: grid; gap: 8px; margin: 0; }
+.begrippen dt { font: 700 15px var(--f-kop); text-transform: uppercase; letter-spacing: .03em; }
+.begrippen dd { margin: 0 0 4px; max-width: 72ch; color: var(--zacht); }
+.citaat { margin: 0; padding-left: 12px; border-left: 3px solid var(--accent); font-style: italic; max-width: 72ch; }
+.citaat span { font: 400 12px var(--f-data); font-style: normal; color: var(--zacht); margin-right: 6px; }
+pre.contract { margin: 0; padding: 12px; background: var(--bg); border: 1px solid var(--lijn); border-radius: 4px; overflow-x: auto; font: 12.5px/1.5 var(--f-data); }
+.optie { text-align: left; font: 14px/1.35 var(--f-tekst); width: 100%; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--lijn); background: var(--pad); color: var(--inkt); cursor: pointer; }
+.optie[aria-pressed="true"] { background: var(--blauw); color: #fff; border-color: transparent; }
+.optie:disabled { cursor: default; opacity: .6; }
+.opties { display: grid; gap: 6px; }
+h2.deel { font: 700 22px var(--f-kop); text-transform: uppercase; letter-spacing: .03em; margin: 12px 0 0; }
+.leeg { color: var(--zacht); padding: 24px 0; text-align: center; }
+.melding { background: var(--vlak); border: 1px solid var(--amber); border-radius: 6px; padding: 10px 14px; font-size: 14px; }
+.staaf { display: grid; grid-template-columns: minmax(0, 220px) 1fr 70px; gap: 8px; align-items: center; font-size: 13px; }
+.staaf .naam { font-family: var(--f-data); overflow-wrap: anywhere; }
+.staaf .lat { height: 10px; background: var(--pad); border-radius: 2px; overflow: hidden; }
+.staaf .lat span { display: block; height: 100%; background: var(--accent); }
+.staaf .getal { font-family: var(--f-data); text-align: right; font-variant-numeric: tabular-nums; }
+.staven { display: grid; gap: 4px; }
+.tekst-md { max-width: 72ch; }
+.tekst-md li { margin-bottom: 4px; }
+@media (max-width: 520px) {
+  h1 { font-size: 28px; }
+  .pad { width: calc(25% - 5px); }
+  .staaf { grid-template-columns: minmax(0, 1fr) 70px; }
+  .staaf .lat { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (prefers-reduced-motion: no-preference) { .pad { transition: background .12s, color .12s; } }
+</style>
+
+<header class="wrap kop">
+  <h1>VarveDJ planner</h1>
+  <p class="sub">Hier werken we v2 uit voordat er gebouwd wordt. Per onderdeel het <b>ontwerp</b>: besluiten, scenario's (zo moet het zich gedragen, later één test per scenario) en open vragen. Daaronder de <b>oogst</b>: alles wat v1 heeft geleerd, als kaartjes met houden, anders, weg of open. Het lampje rechtsboven een knop is het voorstel. Je keuzes worden bewaard en Claude leest ze terug.</p>
+  <div class="meter" id="meter"></div>
+  <div class="voortgang" id="voortgang" aria-hidden="true"></div>
+</header>
+
+<div class="balk">
+  <div class="wrap">
+    <div class="tabs" id="tabs" role="toolbar" aria-label="Onderwerp"></div>
+    <div class="filters">
+      <input type="search" id="zoek" placeholder="Zoek in titel, tekst, bron" aria-label="Zoeken">
+      <select id="f-soort" aria-label="Soort"><option value="">alle soorten</option></select>
+      <select id="f-gewicht" aria-label="Gewicht"><option value="">elk gewicht</option><option>kern</option><option>belangrijk</option><option>detail</option></select>
+      <select id="f-stand" aria-label="Stand">
+        <option value="">alles</option>
+        <option value="onbeslist">nog niet gekozen</option>
+        <option value="beslist">gekozen</option>
+        <option value="anders-dan-voorstel">anders dan het voorstel</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<main class="wrap" id="inhoud">
+  <p class="leeg">Kaartjes laden…</p>
+</main>
+
+<script>
+(() => {
+  const KEUZES = ['houden', 'anders', 'weg', 'open'];
+  const staat = { data: null, keuzes: {}, tab: 'alles', db: null, kanSchrijven: false, dbStatus: 'laden' };
+  try { staat.tab = localStorage.getItem('v2.tab') || 'ontwerp:klok'; } catch {}
+
+  const $ = (s) => document.querySelector(s);
+  const el = (tag, attrs = {}, ...kids) => {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat()) if (kid != null) e.append(kid instanceof Node ? kid : String(kid));
+    return e;
+  };
+
+  function alleKaartjes() {
+    return staat.data ? staat.data.onderwerpen.flatMap((o) => o.kaartjes.map((k) => ({ ...k, onderwerp: o.onderwerp }))) : [];
+  }
+  const keuzeVan = (id) => staat.keuzes[id]?.keuze || null;
+
+  function tekenMeter() {
+    const alle = alleKaartjes();
+    const tel = { houden: 0, anders: 0, weg: 0, open: 0 };
+    let gekozen = 0;
+    for (const k of alle) { const c = keuzeVan(k.id); if (c) { tel[c]++; gekozen++; } }
+    const kern = alle.filter((k) => k.gewicht === 'kern');
+    const kernGekozen = kern.filter((k) => keuzeVan(k.id) && keuzeVan(k.id) !== 'open').length;
+    const opslag = { laden: 'opslag: verbinden…', aan: 'opslag: aan', alleen: 'opslag: alleen lezen', uit: 'opslag: niet beschikbaar (keuzes blijven niet bewaard)' }[staat.dbStatus];
+    $('#meter').replaceChildren(
+      el('span', {}, el('b', {}, alle.length), ' kaartjes'),
+      el('span', {}, el('b', {}, gekozen), ' gekozen'),
+      el('span', {}, 'kern ', el('b', {}, `${kernGekozen}/${kern.length}`), ' besloten'),
+      el('span', {}, `houden ${tel.houden} · anders ${tel.anders} · weg ${tel.weg} · open ${tel.open}`),
+      el('span', {}, opslag),
+    );
+    const n = alle.length || 1;
+    const kleur = { houden: 'var(--groen)', anders: 'var(--amber)', weg: 'var(--rood)', open: 'var(--blauw)' };
+    $('#voortgang').replaceChildren(...KEUZES.map((c) => { const s = el('span'); s.style.width = `${(tel[c] / n) * 100}%`; s.style.background = kleur[c]; return s; }));
+  }
+
+  function tekenTabs() {
+    const o = staat.data.onderwerpen;
+    const knop = (id, label, n) => el('button', { class: 'tab', 'aria-pressed': String(staat.tab === id), onclick: () => { staat.tab = id; try { localStorage.setItem('v2.tab', id); } catch {} tekenTabs(); tekenInhoud(); } }, label, n != null ? el('small', {}, n) : null);
+    const tabs = [
+      ...(staat.data.ontwerp || []).map((x) => knop(`ontwerp:${x.id}`, `${x.nr} · ${x.titel}`)),
+      knop('alles', 'oogst', alleKaartjes().length), ...o.map((x) => knop(x.onderwerp, x.onderwerp, x.kaartjes.length)),
+    ];
+    if (staat.data.telling) tabs.push(knop('telling', 'telling'));
+    $('#tabs').replaceChildren(...tabs);
+    $('.filters').hidden = staat.tab === 'telling' || staat.tab.startsWith('ontwerp:');
+  }
+
+  function filter(k) {
+    const z = $('#zoek').value.trim().toLowerCase();
+    const soort = $('#f-soort').value, gewicht = $('#f-gewicht').value, stand = $('#f-stand').value;
+    if (soort && k.soort !== soort) return false;
+    if (gewicht && k.gewicht !== gewicht) return false;
+    const c = keuzeVan(k.id);
+    if (stand === 'onbeslist' && c) return false;
+    if (stand === 'beslist' && !c) return false;
+    if (stand === 'anders-dan-voorstel' && (!c || c === k.voorstel)) return false;
+    if (z) {
+      const hooi = [k.id, k.titel, k.wat, k.waarom, k.reden, ...(k.bron || []).map((b) => `${b.pad} ${b.waar || ''}`), ...(k.code || []), staat.keuzes[k.id]?.notitie || ''].join(' ').toLowerCase();
+      if (!z.split(/\s+/).every((w) => hooi.includes(w))) return false;
+    }
+    return true;
+  }
+
+  const GEWICHT = { kern: 0, belangrijk: 1, detail: 2 };
+  function tekenInhoud() {
+    const main = $('#inhoud');
+    if (staat.tab === 'telling') { main.replaceChildren(...tekenTelling()); return; }
+    if (staat.tab.startsWith('ontwerp:')) {
+      const od = (staat.data.ontwerp || []).find((x) => `ontwerp:${x.id}` === staat.tab);
+      if (od) { main.replaceChildren(...tekenOntwerp(od)); return; }
+      staat.tab = 'alles';
+    }
+    const delen = [];
+    const ow = staat.data.onderwerpen.find((o) => o.onderwerp === staat.tab);
+    if (ow) delen.push(tekenSamenvatting(ow));
+    else if (staat.data.wensen?.length) {
+      delen.push(el('section', { class: 'samenvatting' }, el('h2', {}, 'jouw woorden'),
+        el('p', { class: 'waarom' }, 'Deze gaan voor de oogst: een kaartje dat ermee botst, verliest.'),
+        el('ul', { class: 'tekst-md' }, staat.data.wensen.map((w) => el('li', {}, el('span', { class: 'mono' }, w.datum), ' — ', w.tekst)))));
+    }
+    const lijst = (ow ? ow.kaartjes.map((k) => ({ ...k, onderwerp: ow.onderwerp })) : alleKaartjes())
+      .filter(filter)
+      .sort((a, b) => (GEWICHT[a.gewicht] ?? 3) - (GEWICHT[b.gewicht] ?? 3));
+    if (!lijst.length) delen.push(el('p', { class: 'leeg' }, 'Geen kaartjes met deze filters.'));
+    for (const k of lijst) delen.push(tekenKaart(k, !ow));
+    main.replaceChildren(...delen);
+  }
+
+  function tekenSamenvatting(o) {
+    const doos = el('section', { class: 'samenvatting' }, el('h2', {}, o.onderwerp), el('p', {}, o.samenvatting));
+    if (o.tijdlijn?.length) {
+      doos.append(el('details', { class: 'onderdelen' }, el('summary', {}, `Tijdlijn van v1 (${o.tijdlijn.length})`),
+        el('div', { class: 'tabel' }, el('table', {}, el('tbody', {}, o.tijdlijn.map((t) => el('tr', {}, el('td', { class: 'mono' }, t.datum), el('td', {}, t.wat))))))));
+    }
+    if (o.onderdelen?.length) {
+      doos.append(el('details', { class: 'onderdelen' }, el('summary', {}, `Code die misschien zo mee kan (${o.onderdelen.length})`),
+        el('div', { class: 'tabel' }, el('table', {},
+          el('thead', {}, el('tr', {}, el('th', {}, 'bestand'), el('th', {}, 'regels'), el('th', {}, 'puur'), el('th', {}, 'voorstel'), el('th', {}, 'waarom'))),
+          el('tbody', {}, o.onderdelen.map((d) => el('tr', {}, el('td', { class: 'mono' }, d.pad), el('td', { class: 'num' }, d.regels ?? ''), el('td', {}, d.puur ? 'ja' : 'nee'), el('td', {}, d.voorstel), el('td', {}, d.reden ?? ''))))))));
+    }
+    return doos;
+  }
+
+  function tekenKaart(k, metOnderwerp) {
+    const eigen = staat.keuzes[k.id] || {};
+    const c = eigen.keuze || null;
+    const kaart = el('article', { class: `kaart${c ? ' k-' + c : ''}`, id: `k-${k.id}` });
+    kaart.append(
+      el('div', { class: 'kaart-kop' }, el('h3', {}, k.titel), el('span', { class: 'id' }, k.id)),
+      el('div', { class: 'chips' },
+        el('span', { class: `chip s-${k.soort}` }, k.soort),
+        el('span', { class: `chip${k.gewicht === 'kern' ? ' kern' : ''}` }, k.gewicht),
+        k.pijler ? el('span', { class: 'chip' }, k.pijler) : null,
+        metOnderwerp ? el('span', { class: 'chip' }, k.onderwerp) : null),
+      el('p', { class: 'wat' }, k.wat),
+      k.waarom ? el('p', { class: 'waarom' }, k.waarom) : null,
+      (k.bron?.length || k.code?.length) ? el('div', { class: 'bron' }, [...(k.bron || []).map((b) => b.waar ? `${b.pad} (${b.waar})` : b.pad), ...(k.code || [])].join(' · ')) : null,
+      el('p', { class: 'voorstel' }, 'Voorstel: ', el('b', {}, k.voorstel), k.reden ? ` — ${k.reden}` : ''),
+    );
+    const pads = KEUZES.map((x) => el('button', {
+      class: `pad ${x}${k.voorstel === x ? ' voorgesteld' : ''}`, 'aria-pressed': String(c === x), disabled: !staat.kanSchrijven,
+      title: k.voorstel === x ? 'het voorstel van de oogst' : null,
+      onclick: () => kies(k.id, c === x ? null : x),
+    }, x));
+    const status = el('span', { class: 'status' }, eigen.t ? `gekozen ${new Date(eigen.t).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}` : '');
+    kaart.append(el('div', { class: 'keuze' }, pads, status));
+    const notitie = el('textarea', { id: `n-${k.id}`, rows: '1', placeholder: 'Notitie (waarom, of hoe dan anders)', disabled: !staat.kanSchrijven, 'aria-label': `Notitie bij ${k.id}` });
+    notitie.value = eigen.notitie || '';
+    notitie.addEventListener('change', () => bewaar(k.id, { notitie: notitie.value.trim() }));
+    kaart.append(notitie);
+    return kaart;
+  }
+
+  const bezig = new Map();
+  async function bewaar(id, wijziging) {
+    if (!staat.db) return;
+    const nieuw = { ...(staat.keuzes[id] || {}), ...wijziging, t: Date.now() };
+    staat.keuzes[id] = nieuw;
+    const vorige = bezig.get(id) || Promise.resolve();
+    const deze = vorige.then(() => staat.db.doc(`keuzes/${id}`).set({ keuze: nieuw.keuze ?? null, notitie: nieuw.notitie ?? '', t: nieuw.t })).catch((e) => {
+      toonMelding(`Bewaren mislukt (${e?.code || 'fout'}): ${e?.message || ''}`);
+    });
+    bezig.set(id, deze);
+    await deze;
+  }
+  function kies(id, keuze) {
+    bewaar(id, { keuze });
+    tekenMeter(); tekenInhoud();
+  }
+
+  function toonMelding(tekst) {
+    let m = $('#melding');
+    if (!m) { m = el('div', { class: 'melding', id: 'melding', role: 'status' }); $('#inhoud').prepend(m); }
+    m.textContent = tekst;
+  }
+
+  // Keuzeknoppen en notitie voor een besluit of scenario (zelfde opslag als de kaartjes).
+  const LABELS = { besluit: { houden: 'klopt', anders: 'anders', weg: 'weg', open: 'open' }, scenario: { houden: 'klopt', anders: 'anders', weg: 'weg', open: 'open' } };
+  function keuzeBlok(id, soort, voorstel) {
+    const eigen = staat.keuzes[id] || {};
+    const c = eigen.keuze || null;
+    const pads = KEUZES.map((x) => el('button', {
+      class: `pad ${x}${voorstel === x ? ' voorgesteld' : ''}`, 'aria-pressed': String(c === x), disabled: !staat.kanSchrijven,
+      onclick: () => kies(id, c === x ? null : x),
+    }, LABELS[soort][x]));
+    const notitie = el('textarea', { id: `n-${id}`, rows: '1', placeholder: 'Notitie (wat klopt er niet, of hoe dan)', disabled: !staat.kanSchrijven, 'aria-label': `Notitie bij ${id}` });
+    notitie.value = eigen.notitie || '';
+    notitie.addEventListener('change', () => bewaar(id, { notitie: notitie.value.trim() }));
+    return [el('div', { class: 'keuze' }, pads), notitie];
+  }
+
+  function tekenOntwerp(o) {
+    const kaartjeTitel = new Map(alleKaartjes().map((k) => [k.id, k.titel]));
+    const delen = [];
+    delen.push(el('section', { class: 'samenvatting' }, el('h2', {}, `${o.nr} · ${o.titel}`), el('p', {}, o.doel),
+      ...(o.woorden || []).map((w) => el('p', { class: 'citaat' }, el('span', {}, w.datum), w.tekst))));
+    delen.push(el('section', { class: 'samenvatting' }, el('h2', {}, 'begrippen'),
+      el('dl', { class: 'begrippen' }, (o.begrippen || []).flatMap((b) => [el('dt', {}, b.naam), el('dd', {}, b.uitleg)]))));
+
+    delen.push(el('h2', { class: 'deel' }, `besluiten (${o.besluiten.length})`));
+    for (const b of o.besluiten) {
+      const c = staat.keuzes[b.id]?.keuze;
+      delen.push(el('article', { class: `kaart${c ? ' k-' + c : (b.status === 'besloten' ? ' k-houden' : '')}` },
+        el('div', { class: 'kaart-kop' }, el('h3', {}, b.titel), el('span', { class: 'id' }, b.id)),
+        el('div', { class: 'chips' }, el('span', { class: `chip${b.status === 'besloten' ? ' kern' : ''}` }, b.status === 'besloten' ? 'besloten door jou' : 'voorstel')),
+        el('p', { class: 'wat' }, b.tekst),
+        el('p', { class: 'waarom' }, b.waarom),
+        b.kaartjes?.length ? el('div', { class: 'bron' }, 'uit v1: ', b.kaartjes.map((id) => `${id}${kaartjeTitel.has(id) ? ' (' + kaartjeTitel.get(id) + ')' : ''}`).join(' · ')) : null,
+        ...(b.status === 'besloten' ? [] : keuzeBlok(b.id, 'besluit', 'houden'))));
+    }
+
+    delen.push(el('h2', { class: 'deel' }, `scenario's (${o.scenarios.length})`),
+      el('p', { class: 'waarom' }, 'Zo moet het zich gedragen. Elk scenario wordt later één test. Klopt het niet, kies "anders" en zeg in de notitie hoe het wel moet.'));
+    for (const s of o.scenarios) {
+      const c = staat.keuzes[s.id]?.keuze;
+      delen.push(el('article', { class: `kaart${c ? ' k-' + c : (s.open ? ' k-open' : '')}` },
+        el('div', { class: 'kaart-kop' }, el('h3', {}, s.wanneer), el('span', { class: 'id' }, s.id)),
+        el('dl', { class: 'scen' }, el('dt', {}, 'gegeven'), el('dd', {}, s.gegeven), el('dt', {}, 'wanneer'), el('dd', {}, s.wanneer), el('dt', {}, 'dan'), el('dd', { class: 'dan' }, s.dan)),
+        s.besluiten?.length ? el('div', { class: 'bron' }, s.besluiten.join(' · ')) : null,
+        ...keuzeBlok(s.id, 'scenario', s.open ? 'open' : 'houden')));
+    }
+
+    delen.push(el('h2', { class: 'deel' }, `open vragen (${o.open.length})`));
+    for (const v of o.open) {
+      const eigen = staat.keuzes[v.id] || {};
+      const letters = v.opties.map((t, i) => String.fromCharCode(97 + i));
+      const kn = v.opties.map((t, i) => el('button', { class: 'optie', 'aria-pressed': String(eigen.keuze === letters[i]), disabled: !staat.kanSchrijven, onclick: () => kies(v.id, eigen.keuze === letters[i] ? null : letters[i]) }, t));
+      const notitie = el('textarea', { id: `n-${v.id}`, rows: '1', placeholder: 'Of in je eigen woorden', disabled: !staat.kanSchrijven, 'aria-label': `Antwoord op ${v.id}` });
+      notitie.value = eigen.notitie || '';
+      notitie.addEventListener('change', () => bewaar(v.id, { notitie: notitie.value.trim() }));
+      delen.push(el('article', { class: `kaart${eigen.keuze || eigen.notitie ? ' k-houden' : ' k-open'}` },
+        el('div', { class: 'kaart-kop' }, el('h3', {}, v.vraag), el('span', { class: 'id' }, v.id)),
+        el('div', { class: 'opties' }, kn),
+        el('p', { class: 'voorstel' }, 'Advies: ', v.advies),
+        notitie));
+    }
+
+    if (o.uitV1?.length) {
+      delen.push(el('section', { class: 'samenvatting' }, el('h2', {}, 'wat uit v1 meekomt'),
+        el('div', { class: 'tabel' }, el('table', {},
+          el('thead', {}, el('tr', {}, el('th', {}, 'waar'), el('th', {}, 'wat'), el('th', {}, 'voorstel'))),
+          el('tbody', {}, o.uitV1.map((u) => el('tr', {}, el('td', { class: 'mono' }, u.pad), el('td', {}, u.wat), el('td', {}, u.voorstel))))))));
+    }
+    if (o.contract) delen.push(el('section', { class: 'samenvatting' }, el('h2', {}, 'contract (schets)'), el('pre', { class: 'contract' }, o.contract)));
+    const djay = [el('h2', {}, 'djay en beter dan djay'), el('p', {}, o.djay || '')];
+    if (o.beter?.length) {
+      djay.push(el('div', { class: 'tabel' }, el('table', {},
+        el('thead', {}, el('tr', {}, el('th', {}, 'djay doet'), el('th', {}, 'nadeel'), el('th', {}, 'Varve v2 doet'))),
+        el('tbody', {}, o.beter.map((r) => el('tr', {}, el('td', {}, r.djay), el('td', {}, r.nadeel), el('td', {}, r.varve)))))));
+    }
+    delen.push(el('section', { class: 'samenvatting' }, ...djay));
+    return delen;
+  }
+
+  // De telling: wat Clay's handen echt doen (v2/telling/nu.json).
+  function tekenTelling() {
+    const t = staat.data.telling;
+    const delen = [el('section', { class: 'samenvatting' }, el('h2', {}, 'telling'), el('p', {}, t.bron || ''))];
+    const staven = (rijen, kop) => {
+      const max = Math.max(...rijen.map((r) => r.aantal), 1);
+      return el('section', { class: 'samenvatting' }, el('h2', {}, kop),
+        el('div', { class: 'staven' }, rijen.map((r) => {
+          const lat = el('span'); lat.style.width = `${(r.aantal / max) * 100}%`;
+          return el('div', { class: 'staaf' }, el('span', { class: 'naam' }, r.naam), el('span', { class: 'lat' }, lat), el('span', { class: 'getal' }, r.aantal.toLocaleString('nl-NL')));
+        })));
+    };
+    if (t.conclusies?.length) delen.push(el('section', { class: 'samenvatting' }, el('h2', {}, 'conclusies'), el('ol', { class: 'tekst-md' }, t.conclusies.map((c) => el('li', {}, c)))));
+    if (t.groepen?.length) delen.push(staven(t.groepen, 'per groep'));
+    if (t.top?.length) delen.push(staven(t.top, 'top van de handelingen'));
+    if (t.grenzen?.length) delen.push(el('section', { class: 'samenvatting' }, el('h2', {}, 'wat dit niet zegt'), el('ul', { class: 'tekst-md' }, t.grenzen.map((c) => el('li', {}, c)))));
+    return delen;
+  }
+
+  ['#zoek', '#f-soort', '#f-gewicht', '#f-stand'].forEach((s) => $(s).addEventListener('input', tekenInhoud));
+
+  fetch('kaartjes.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((d) => {
+    staat.data = d;
+    const soorten = [...new Set(alleKaartjes().map((k) => k.soort))].sort();
+    $('#f-soort').append(...soorten.map((s) => el('option', {}, s)));
+    const bekend = ['alles', 'telling', ...d.onderwerpen.map((o) => o.onderwerp), ...(d.ontwerp || []).map((o) => `ontwerp:${o.id}`)];
+    if (!bekend.includes(staat.tab)) staat.tab = d.ontwerp?.length ? `ontwerp:${d.ontwerp[0].id}` : 'alles';
+    tekenTabs(); tekenMeter(); tekenInhoud();
+  }).catch((e) => { $('#inhoud').replaceChildren(el('p', { class: 'leeg' }, `De kaartjes konden niet laden (${e.message}). Herlaad de pagina.`)); });
+
+  (async () => {
+    const db = await window.claude?.use?.('db').catch(() => null);
+    if (!db) { staat.dbStatus = 'uit'; if (staat.data) { tekenMeter(); } return; }
+    staat.db = db;
+    const user = await window.claude.use('user').catch(() => null);
+    const mag = user ? await user.can('data.write').catch(() => null) : null;
+    staat.kanSchrijven = mag !== false;
+    staat.dbStatus = staat.kanSchrijven ? 'aan' : 'alleen';
+    db.collection('keuzes').onSnapshot((snap) => {
+      const nieuw = {};
+      for (const d of snap.docs) nieuw[d.id] = d.data();
+      staat.keuzes = nieuw;
+      if (staat.data) { tekenMeter(); if (!document.activeElement?.matches('textarea')) tekenInhoud(); }
+    }, (e) => { staat.dbStatus = 'uit'; toonMelding(`Opslag weggevallen (${e?.code || 'fout'}). Herlaad de pagina.`); tekenMeter(); });
+    if (staat.data) { tekenMeter(); tekenInhoud(); }
+  })();
+})();
+</script>

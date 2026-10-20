@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ABX overgangen</title>
+<!--
+  M9 (gehoor): hoor je een overgang van VarveDJ v2 tegen een referentie?
+  Open dit bestand gewoon in Chrome (dubbelklik; file:// werkt). De geluiden staan in abx/
+  (gemaakt door abx-maak.mjs), de lijst in abx/paren.js. Geen afhankelijkheden, niets naar buiten.
+  Toetsen: A, B, X = afspelen · 1 = "X is A" · 2 = "X is B" · spatie = stil.
+  16 proeven per paar. Grens (BUDGET M9): minder dan 12 van 16 goed = niet te onderscheiden.
+-->
+<style>
+  :root {
+    --achter: #111214; --vlak: #1c1e22; --lijn: #33363c; --tekst: #ecebe6; --zacht: #9a9a94;
+    --a: #e8b04a; --b: #6fb3d9; --x: #c9a3f0; --goed: #7cc47c; --fout: #e07a6a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--achter); color: var(--tekst); font: 18px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .uitleg { color: var(--zacht); margin: 0 0 20px; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  nav button { background: var(--vlak); color: var(--tekst); border: 1px solid var(--lijn); padding: 8px 12px; font-size: 16px; cursor: pointer; }
+  nav button[aria-current="true"] { border-color: var(--tekst); }
+  nav button .st { color: var(--zacht); margin-left: 6px; }
+  section.paar { background: var(--vlak); border: 1px solid var(--lijn); padding: 20px; }
+  .paar h2 { margin: 0 0 6px; font-size: 24px; }
+  .paar .wat { color: var(--zacht); margin: 0 0 16px; }
+  .teller { font-size: 22px; margin-bottom: 16px; }
+  .rij { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+  .rij.twee { grid-template-columns: repeat(2, 1fr); }
+  .speel { font-size: 40px; font-weight: 700; padding: 22px 0; border: 2px solid var(--lijn); background: var(--achter); color: var(--tekst); cursor: pointer; }
+  .speel[data-k="A"] { border-color: var(--a); } .speel[data-k="B"] { border-color: var(--b); } .speel[data-k="X"] { border-color: var(--x); }
+  .speel.aan { background: #2a2c31; }
+  .kies { font-size: 22px; padding: 18px 0; border: 2px solid var(--lijn); background: var(--achter); color: var(--tekst); cursor: pointer; }
+  .kies:disabled, .speel:disabled { opacity: .35; cursor: default; }
+  .melding { min-height: 1.5em; color: var(--zacht); }
+  .uitslag { font-size: 22px; margin: 12px 0 0; }
+  .uitslag .goed { color: var(--goed); } .uitslag .fout { color: var(--fout); }
+  .klein { font-size: 15px; color: var(--zacht); }
+  textarea { width: 100%; min-height: 160px; background: var(--achter); color: var(--tekst); border: 1px solid var(--lijn); font: 13px/1.4 ui-monospace, Menlo, monospace; padding: 8px; }
+  .knop { background: var(--vlak); color: var(--tekst); border: 1px solid var(--lijn); padding: 8px 14px; font-size: 16px; cursor: pointer; margin-right: 8px; }
+  kbd { border: 1px solid var(--lijn); padding: 0 5px; font: 14px ui-monospace, monospace; }
+  @media (max-width: 560px) { .speel { font-size: 30px; padding: 16px 0; } .kies { font-size: 18px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>ABX: hoor je de overgang?</h1>
+  <p class="uitleg">A is VarveDJ v2, B is de referentie. X is een van de twee, elke proef opnieuw geloot. Luister zo vaak je wilt en kies.
+    <kbd>A</kbd> <kbd>B</kbd> <kbd>X</kbd> afspelen · <kbd>1</kbd> X is A · <kbd>2</kbd> X is B · <kbd>spatie</kbd> stil. 16 proeven per paar; minder dan 12 goed telt als niet te onderscheiden.</p>
+  <nav id="paren" aria-label="paren"></nav>
+  <section class="paar" id="paar">
+    <h2 id="naam">laden…</h2>
+    <p class="wat" id="wat"></p>
+    <div class="teller" id="teller"></div>
+    <div class="rij">
+      <button class="speel" data-k="A" id="sA">A</button>
+      <button class="speel" data-k="B" id="sB">B</button>
+      <button class="speel" data-k="X" id="sX">X</button>
+    </div>
+    <div class="rij twee">
+      <button class="kies" id="kA">X is A <span class="klein">(1)</span></button>
+      <button class="kies" id="kB">X is B <span class="klein">(2)</span></button>
+    </div>
+    <div class="melding" id="melding"></div>
+    <div class="uitslag" id="uitslag"></div>
+    <p><button class="knop" id="opnieuw" hidden>dit paar opnieuw</button></p>
+  </section>
+  <h2 style="font-size:20px;margin:28px 0 8px">Uitslag (kopieer dit naar Claude)</h2>
+  <textarea id="json" readonly></textarea>
+  <p><button class="knop" id="kopie">kopieer</button><span class="klein" id="kopieMelding"></span></p>
+</main>
+<script src="abx/paren.js"></script>
+<script>
+(() => {
+  'use strict';
+  const N = 16, GRENS = 12;
+  const PAREN = window.ABX_PAREN || [];
+  const $ = (id) => document.getElementById(id);
+  const toets = new URLSearchParams(location.search).has('toets');
+
+  /** P(minstens k goed van n | gokken), eenzijdige binomiale toets. */
+  function pWaarde(k, n = N) {
+    let som = 0, c = 1;                        // c = C(n, i)
+    for (let i = 0; i <= n; i++) { if (i >= k) som += c; c = c * (n - i) / (i + 1); }
+    return som / 2 ** n;
+  }
+  const loot = () => { const u = new Uint8Array(1); crypto.getRandomValues(u); return u[0] & 1 ? 'A' : 'B'; };
+
+  // ---- geluid: één <audio> per bestand (werkt ook op file://) ----------------------------
+  const spelers = PAREN.map((p) => ({ A: new Audio(p.a), B: new Audio(p.b) }));
+  for (const s of spelers) for (const a of [s.A, s.B]) { a.preload = 'auto'; a.addEventListener('ended', () => toonSpelen(null)); a.addEventListener('error', () => meld(`kan ${a.src} niet laden`)); }
+  let speelt = null;                            // { audio, knop }
+  function stil() { for (const s of spelers) for (const a of [s.A, s.B]) { a.pause(); } speelt = null; toonSpelen(null); }
+  function speel(k) {
+    const st = staat[huidig];
+    if (!st || st.klaar) return;
+    const s = spelers[huidig];
+    const welk = k === 'X' ? st.x : k;
+    stil();
+    const a = s[welk];
+    a.currentTime = 0;
+    const p = a.play();
+    if (p && p.catch) p.catch((e) => meld(`afspelen lukte niet: ${e.message}`));
+    speelt = { audio: a, knop: k };
+    if (k === 'X') st.xGehoord = true;
+    st.gespeeld[k]++;
+    toonSpelen(k);
+  }
+  function toonSpelen(k) { for (const x of ['A', 'B', 'X']) $('s' + x).classList.toggle('aan', x === k); }
+
+  // ---- de proeven ------------------------------------------------------------------------
+  const staat = PAREN.map(() => nieuwPaar());
+  function nieuwPaar() { return { proeven: [], x: loot(), xGehoord: false, gespeeld: { A: 0, B: 0, X: 0 }, t0: performance.now(), klaar: false }; }
+  let huidig = 0;
+
+  function kies(antwoord) {
+    const st = staat[huidig];
+    if (!st || st.klaar) return;
+    if (!st.xGehoord) { meld('luister eerst naar X'); return; }
+    stil();
+    const nu = performance.now();
+    st.proeven.push({ x: st.x, antwoord, goed: st.x === antwoord, ms: Math.round(nu - st.t0), gespeeld: st.gespeeld });
+    if (st.proeven.length >= N) st.klaar = true;
+    else { st.x = loot(); st.xGehoord = false; st.gespeeld = { A: 0, B: 0, X: 0 }; st.t0 = nu; }
+    meld('');
+    if (st.klaar) { const v = staat.findIndex((s) => !s.klaar); toon(); if (v >= 0 && v !== huidig) setTimeout(() => { huidig = v; toon(); }, 1500); return; }
+    toon();
+  }
+
+  function goed(st) { return st.proeven.filter((p) => p.goed).length; }
+
+  function uitslag() {
+    return {
+      meting: 'M9 ABX', datum: new Date().toISOString(), browser: navigator.userAgent,
+      paren: PAREN.map((p, i) => {
+        const st = staat[i], k = goed(st), n = st.proeven.length;
+        return { id: p.id, naam: p.naam, n, goed: k, p: n === N ? pWaarde(k) : null, teOnderscheiden: n === N ? k >= GRENS : null, proeven: st.proeven };
+      }),
+    };
+  }
+
+  function meld(t) { $('melding').textContent = t; }
+
+  function toon() {
+    const nav = $('paren');
+    nav.textContent = '';
+    PAREN.forEach((p, i) => {
+      const b = document.createElement('button');
+      const st = staat[i];
+      b.textContent = `${i + 1}. ${p.naam}`;
+      const s = document.createElement('span'); s.className = 'st';
+      s.textContent = st.klaar ? `${goed(st)}/${N}` : st.proeven.length ? `${st.proeven.length}/${N}` : '';
+      b.append(s);
+      b.setAttribute('aria-current', String(i === huidig));
+      b.onclick = () => { stil(); huidig = i; toon(); };
+      nav.append(b);
+    });
+    const p = PAREN[huidig], st = staat[huidig];
+    if (!p) { $('naam').textContent = 'geen paren gevonden (abx/paren.js ontbreekt: draai abx-maak.mjs)'; return; }
+    $('naam').textContent = p.naam;
+    $('wat').textContent = p.uitleg;
+    $('teller').textContent = st.klaar ? `klaar: ${goed(st)} van ${N} goed` : `proef ${st.proeven.length + 1} van ${N}`;
+    for (const id of ['sA', 'sB', 'sX', 'kA', 'kB']) $(id).disabled = st.klaar;
+    const u = $('uitslag');
+    if (st.klaar) {
+      const k = goed(st), pw = pWaarde(k);
+      u.innerHTML = '';
+      const sp = document.createElement('span');
+      sp.className = k >= GRENS ? 'fout' : 'goed';
+      sp.textContent = `${k}/${N} goed, p = ${pw.toPrecision(3)} — ${k >= GRENS ? 'te onderscheiden' : 'niet te onderscheiden'}`;
+      u.append(sp);
+    } else u.textContent = '';
+    $('opnieuw').hidden = !st.proeven.length;
+    $('json').value = JSON.stringify(uitslag(), null, 1);
+  }
+
+  $('sA').onclick = () => speel('A'); $('sB').onclick = () => speel('B'); $('sX').onclick = () => speel('X');
+  $('kA').onclick = () => kies('A'); $('kB').onclick = () => kies('B');
+  $('opnieuw').onclick = () => { stil(); staat[huidig] = nieuwPaar(); toon(); };
+  $('kopie').onclick = async () => {
+    const t = $('json');
+    try { await navigator.clipboard.writeText(t.value); $('kopieMelding').textContent = ' gekopieerd'; }
+    catch { t.select(); document.execCommand?.('copy'); $('kopieMelding').textContent = ' geselecteerd: Cmd+C'; }
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    const k = e.key.toLowerCase();
+    if (k === 'a' || k === 'b' || k === 'x') { speel(k.toUpperCase()); e.preventDefault(); }
+    else if (k === '1') { kies('A'); e.preventDefault(); }
+    else if (k === '2') { kies('B'); e.preventDefault(); }
+    else if (k === ' ') { stil(); e.preventDefault(); }
+  });
+
+  // Alleen voor de headless toets (?toets=1): de stand lezen. Niet voor het luisteren.
+  if (toets) window.__abx = { stand: () => ({ huidig, x: staat[huidig]?.x, proef: staat[huidig]?.proeven.length, speelt: speelt && !speelt.audio.paused ? speelt.knop : null, tijd: speelt ? speelt.audio.currentTime : 0 }), uitslag, pWaarde };
+  toon();
+})();
+</script>
+</body>
+</html>

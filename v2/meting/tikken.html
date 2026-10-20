@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tellen tikken</title>
+<style>
+  :root {
+    --bg: #0d0f12; --paneel: #15181d; --lijn: #262b33; --tekst: #e8eaee; --zacht: #8a93a1;
+    --tel: #4fc3f7; --een: #ffb74d; --keuze: #ffffff; --kop: #ef5350; --goed: #81c784; --golf: #3a4250; --aanslag: #6d5aa8;
+  }
+  :root[data-theme="light"] { --bg: #f4f5f7; --paneel: #ffffff; --lijn: #d6d9de; --tekst: #15181d; --zacht: #5b6370; --golf: #b8bec8; --keuze: #000; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--tekst); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
+  header { grid-column: 1 / -1; display: flex; gap: 24px; align-items: baseline; padding: 14px 20px; border-bottom: 1px solid var(--lijn); flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; font-weight: 650; }
+  header .kal { color: var(--zacht); }
+  header .kal b { color: var(--tekst); }
+  aside { border-right: 1px solid var(--lijn); display: flex; flex-direction: column; min-height: 0; }
+  aside input[type=search] { margin: 12px; padding: 10px 12px; font: inherit; background: var(--paneel); color: var(--tekst); border: 1px solid var(--lijn); border-radius: 4px; }
+  #lijst { overflow: auto; flex: 1; }
+  #lijst button { display: block; width: 100%; text-align: left; padding: 10px 14px; background: none; color: inherit; border: 0; border-bottom: 1px solid var(--lijn); font: inherit; cursor: pointer; }
+  #lijst button:hover { background: var(--paneel); }
+  #lijst button.actief { background: var(--paneel); box-shadow: inset 3px 0 0 var(--een); }
+  #lijst .t { display: block; font-weight: 600; }
+  #lijst .s { display: block; color: var(--zacht); font-size: 14px; }
+  #lijst .n { float: right; color: var(--goed); font-size: 14px; }
+  main { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  #titel { font-size: 26px; font-weight: 700; margin: 0; }
+  .rij { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .groot { font-size: 40px; font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: .02em; }
+  .tal { font-size: 18px; color: var(--zacht); font-variant-numeric: tabular-nums; }
+  .tal b { color: var(--tekst); }
+  #flits { width: 56px; height: 56px; border-radius: 4px; background: var(--paneel); border: 1px solid var(--lijn); transition: background .12s; }
+  #flits.tel { background: var(--tel); transition: none; }
+  #flits.een { background: var(--een); transition: none; }
+  canvas { width: 100%; display: block; background: var(--paneel); border: 1px solid var(--lijn); border-radius: 4px; }
+  #golf { height: 260px; cursor: crosshair; }
+  #overzicht { height: 46px; cursor: pointer; }
+  button.k { font: inherit; font-size: 15px; padding: 9px 14px; background: var(--paneel); color: var(--tekst); border: 1px solid var(--lijn); border-radius: 4px; cursor: pointer; }
+  button.k:hover { border-color: var(--zacht); }
+  button.k.aan { border-color: var(--een); color: var(--een); }
+  button.k kbd { color: var(--zacht); font: 12px ui-monospace, monospace; margin-left: 6px; }
+  #melding { min-height: 1.4em; color: var(--een); font-size: 17px; }
+  #melding.goed { color: var(--goed); }
+  #hulp { color: var(--zacht); font-size: 14px; columns: 2 320px; margin: 0; padding: 0; list-style: none; }
+  #hulp li { break-inside: avoid; padding: 2px 0; }
+  #hulp kbd { color: var(--tekst); font: 13px ui-monospace, monospace; background: var(--paneel); border: 1px solid var(--lijn); border-radius: 3px; padding: 0 5px; }
+  #leeg { color: var(--zacht); font-size: 18px; }
+  @media (max-width: 760px) { html, body { height: auto; } body { display: block; } aside { display: block; border-right: 0; border-bottom: 1px solid var(--lijn); } aside input[type=search] { width: calc(100% - 24px); } #lijst { max-height: 30vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tellen tikken — meetpunt M12</h1>
+  <span class="kal" id="kalTekst">nog niet gekalibreerd</span>
+  <span class="kal" id="serverTekst"></span>
+</header>
+<aside>
+  <input type="search" id="zoek" placeholder="zoek een nummer (/)">
+  <div id="lijst"></div>
+</aside>
+<main>
+  <p id="leeg">Kies links een nummer. Kalibreer eerst één keer (C).</p>
+  <h2 id="titel" hidden></h2>
+  <div class="rij">
+    <span class="groot" id="tijd">0:00.0</span>
+    <span id="flits" title="licht op bij elke tik"></span>
+    <span class="tal" id="tellingen"></span>
+  </div>
+  <canvas id="golf" width="1200" height="260"></canvas>
+  <canvas id="overzicht" width="1200" height="46"></canvas>
+  <div class="rij" id="knoppen">
+    <button class="k" data-doe="speel">▶ / ❚❚<kbd>Enter</kbd></button>
+    <button class="k" data-doe="terug">−5 s<kbd>←</kbd></button>
+    <button class="k" data-doe="begin">begin<kbd>Home</kbd></button>
+    <button class="k" data-doe="kalibreer">kalibreer<kbd>C</kbd></button>
+    <button class="k" data-doe="autosnap" id="knopSnap">snap bij tikken<kbd>A</kbd></button>
+    <button class="k" data-doe="snapAlles">snap alle<kbd>⇧S</kbd></button>
+    <button class="k" data-doe="ongedaan">ongedaan<kbd>Z</kbd></button>
+    <button class="k" data-doe="wisVanaf">wis vanaf hier<kbd>X X</kbd></button>
+    <button class="k" data-doe="snelheid" id="knopSnelheid">snelheid 1×<kbd>1 2 3</kbd></button>
+    <button class="k" data-doe="bewaar">bewaar dit nummer<kbd>D</kbd></button>
+    <button class="k" data-doe="bewaarAlles">bewaar alles<kbd>⇧D</kbd></button>
+    <button class="k" data-doe="laadBestand">laad tikbestand</button>
+    <input type="file" id="bestand" accept=".json,application/json" multiple hidden>
+  </div>
+  <div id="melding" role="status"></div>
+  <ul id="hulp">
+    <li><kbd>Spatie</kbd> een tel tikken (tijdens het spelen)</li>
+    <li><kbd>⇧ Spatie</kbd> de "1" tikken</li>
+    <li><kbd>Enter</kbd> afspelen / pauze</li>
+    <li><kbd>←</kbd> <kbd>→</kbd> 5 s terug / verder (<kbd>⇧</kbd> 1 s)</li>
+    <li>opnieuw tikken over een stuk vervangt de oude tikken daar</li>
+    <li><kbd>[</kbd> <kbd>]</kbd> vorige / volgende tik kiezen; klik of sleep in de golfvorm</li>
+    <li><kbd>,</kbd> <kbd>.</kbd> gekozen tik 1 ms eerder / later (<kbd>⇧</kbd> 10 ms)</li>
+    <li><kbd>E</kbd> gekozen tik wel/geen "1" · <kbd>Del</kbd> weg · dubbelklik = tik erbij</li>
+    <li><kbd>S</kbd> gekozen tik snappen (±30 ms naar de aanslag) · <kbd>⇧S</kbd> alle</li>
+    <li><kbd>−</kbd> <kbd>=</kbd> golfvorm uit/in zoomen · wiel = schuiven (in pauze)</li>
+    <li><kbd>C</kbd> kalibreren: 16× tikken op een klik · <kbd>Esc</kbd> stop</li>
+    <li><kbd>D</kbd> JSON van dit nummer · <kbd>⇧D</kbd> alles in één bestand</li>
+  </ul>
+</main>
+<script>
+'use strict';
+/*
+ * De tikpagina van meetpunt M12 (v2/meting/BUDGET.md, LEESMIJ-TIKKEN.md). Geen afhankelijkheden.
+ *
+ * Tijd: een tik krijgt de tijd van zijn toetsaanslag (event.timeStamp, performance.now()), omgerekend naar
+ * de audioklok die je op dat moment HOORT (getOutputTimestamp: welk frame er nu uit de speaker komt), min de
+ * kalibratie (mediaan van 16 tikken op een klik: je hand, het toetsenbord en wat de uitgang niet meldt). Dat
+ * wordt een plek in het nummer via het segment van de bron (vanaf t0 staat het nummer op p0, snelheid rate).
+ * Het grid van VarveDJ wordt hier bewust NIET getoond: de tikken moeten onafhankelijk zijn.
+ */
+const SNAP_MS = 30;
+const KAL_NODIG = 16;
+const KAL_INTERVAL = 0.6, KAL_KLIKS = 28;
+const HOP = 24;                    // aanslagfunctie: één waarde per 24 samples (0,5 ms bij 48 kHz)
+const RAAM = 20;                   // energie over 20 hops (10 ms) ervoor en erna
+const AANSLAG_MIN = Math.log(2);   // minstens 2× zoveel energie erna als ervoor
+const $ = (id) => document.getElementById(id);
+
+const opslag = {
+  lees(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } },
+  zet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
+  sleutels() { try { return Object.keys(localStorage); } catch { return []; } },
+};
+const SLEUTEL = (id) => 'varve.tik.n.' + id;
+
+const st = {
+  ctx: null, lib: [], nummer: null, buffer: null, aanslag: null, overzicht: null,
+  tikken: [], kies: -1, undo: [],
+  speelt: false, bron: null, t0: 0, p0: 0, pos: 0, rate: 1, zicht: 0, venster: 4,
+  kal: opslag.lees('varve.tik.kal'), kalibratie: null, autosnap: opslag.lees('varve.tik.autosnap') ?? true,
+  wisVraag: 0, laadNr: 0,
+};
+
+function ctx() {
+  if (!st.ctx) { st.ctx = new AudioContext({ latencyHint: 'interactive' }); st.uit = st.ctx.createGain(); st.uit.connect(st.ctx.destination); }
+  return st.ctx;
+}
+
+/** De audiokloktijd die je HOORT op performance-tijd `ms`. */
+function hoorbaarCtx(ms) {
+  const c = ctx();
+  const ts = c.getOutputTimestamp ? c.getOutputTimestamp() : null;
+  if (ts && ts.contextTime > 0 && ts.performanceTime > 0) return ts.contextTime + (ms - ts.performanceTime) / 1000;
+  return c.currentTime - (c.outputLatency || 0) - (c.baseLatency || 0) + (ms - performance.now()) / 1000;
+}
+/** Plek in het nummer op audiokloktijd T (een tik vóór het begin van de bron telt op p0). */
+function plekOp(T) { return st.speelt ? st.p0 + Math.max(0, T - st.t0) * st.rate : st.pos; }
+function plekNu() { return st.speelt ? plekOp(hoorbaarCtx(performance.now())) : st.pos; }
+
+// ---- meldingen ----------------------------------------------------------------------------------
+let meldTimer = 0;
+function meld(tekst, goed = false) {
+  const m = $('melding'); m.textContent = tekst; m.className = goed ? 'goed' : '';
+  clearTimeout(meldTimer); meldTimer = setTimeout(() => { m.textContent = ''; }, 6000);
+}
+function tekstKal() {
+  $('kalTekst').innerHTML = st.kal
+    ? `kalibratie <b>${st.kal.ms.toFixed(1)} ms</b> (± ${st.kal.spreiding_ms.toFixed(1)} ms, ${st.kal.n} tikken)`
+    : 'nog niet gekalibreerd: druk <b>C</b>';
+}
+
+// ---- library ------------------------------------------------------------------------------------
+const fmt = (s) => { if (!(s >= 0)) s = 0; const m = Math.floor(s / 60); const r = s - 60 * m; return `${m}:${r.toFixed(1).padStart(4, '0')}`; };
+const fmtKort = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+async function laadLijst() {
+  try {
+    const res = await fetch('/api/library');
+    const j = await res.json();
+    st.lib = j.nummers || [];
+    $('serverTekst').textContent = j.bron ? `library: ${st.lib.length} nummers (alleen lezen)` : 'geen library gevonden (VARVE_MEDIA)';
+  } catch (e) { $('serverTekst').textContent = 'de server antwoordt niet'; }
+  tekenLijst();
+}
+function tekenLijst() {
+  const q = $('zoek').value.trim().toLowerCase();
+  const l = $('lijst'); l.textContent = '';
+  for (const n of st.lib) {
+    if (q && !(`${n.titel} ${n.artiest}`.toLowerCase().includes(q))) continue;
+    const b = document.createElement('button');
+    b.dataset.id = n.id;
+    if (st.nummer && st.nummer.id === n.id) b.className = 'actief';
+    const opg = opslag.lees(SLEUTEL(n.id));
+    const aantal = opg ? (opg.tikken || []).length : 0;
+    b.innerHTML = `<span class="n"></span><span class="t"></span><span class="s"></span>`;
+    b.querySelector('.n').textContent = aantal ? `${aantal} tikken` : '';
+    b.querySelector('.t').textContent = n.titel || n.id;
+    b.querySelector('.s').textContent = `${n.artiest ? n.artiest + ' · ' : ''}${fmtKort(n.duur || 0)}`;
+    b.onmousedown = (e) => e.preventDefault();
+    b.onclick = () => laad(n.id);
+    l.append(b);
+  }
+}
+
+async function laad(id) {
+  const n = st.lib.find((x) => x.id === id);
+  if (!n) return meld('dat nummer staat niet in de library');
+  stop();
+  const nr = ++st.laadNr;
+  st.nummer = n; st.buffer = null; st.aanslag = null; st.tikken = []; st.kies = -1; st.undo = [];
+  $('leeg').hidden = true; $('titel').hidden = false; $('titel').textContent = `${n.titel || n.id}${n.artiest ? ' — ' + n.artiest : ''}`;
+  tekenLijst();
+  if ((n.duur || 0) > 15 * 60) meld(`${fmtKort(n.duur)} lang: laden kost even (het hele nummer gaat in het geheugen)`);
+  else meld('laden…');
+  try {
+    const res = await fetch(`/api/library/${encodeURIComponent(id)}/audio`);
+    if (!res.ok) throw new Error(`audio: HTTP ${res.status}`);
+    const buf = await ctx().decodeAudioData(await res.arrayBuffer());
+    if (nr !== st.laadNr) return;
+    st.buffer = buf;
+    st.aanslag = maakAanslag(buf);
+    st.overzicht = maakOverzicht(buf);
+  } catch (e) { if (nr === st.laadNr) meld(`kon het nummer niet laden: ${e.message}`); return; }
+  const opg = opslag.lees(SLEUTEL(id));
+  st.tikken = opg && Array.isArray(opg.tikken) ? opg.tikken.filter((t) => Number.isFinite(t.t)).map((t) => ({ t: t.t, een: !!t.een, s: !!t.s })) : [];
+  st.tikken.sort((a, b) => a.t - b.t);
+  st.pos = 0; st.zicht = 0;
+  meld(st.tikken.length ? `${st.tikken.length} tikken van eerder teruggezet` : 'klaar: Enter om te spelen, dan spatie op elke tel', true);
+}
+
+// ---- afspelen -----------------------------------------------------------------------------------
+async function speel() {
+  if (!st.buffer) return meld('kies eerst een nummer');
+  if (st.kalibratie) stopKalibratie('gestopt');
+  const c = ctx(); await c.resume();
+  if (st.speelt) return stop();
+  if (st.pos >= st.buffer.duration - 0.05) st.pos = 0;
+  const b = c.createBufferSource();
+  b.buffer = st.buffer; b.playbackRate.value = st.rate; b.connect(st.uit);
+  st.t0 = c.currentTime + 0.03; st.p0 = st.pos;
+  b.start(st.t0, st.pos);
+  b.onended = () => { if (st.bron === b) { st.pos = Math.min(st.buffer.duration, st.p0 + (c.currentTime - st.t0) * st.rate); st.speelt = false; st.bron = null; } };
+  st.bron = b; st.speelt = true;
+}
+function stop() {
+  if (!st.speelt) return;
+  const c = ctx();
+  st.pos = Math.max(0, Math.min(st.buffer ? st.buffer.duration : 0, st.p0 + Math.max(0, c.currentTime - st.t0) * st.rate));
+  const b = st.bron; st.bron = null; st.speelt = false;
+  try { b.stop(); } catch {}
+  st.zicht = st.pos;
+}
+function naar(p) {
+  if (!st.buffer) return;
+  const was = st.speelt; stop();
+  st.pos = Math.max(0, Math.min(st.buffer.duration, p)); st.zicht = st.pos;
+  if (was) speel();
+}
+function zetSnelheid(r) {
+  const was = st.speelt; const p = plekNu(); stop(); st.pos = p; st.rate = r;
+  $('knopSnelheid').firstChild.textContent = `snelheid ${String(r).replace('.', ',')}× `;
+  if (was) speel();
+}
+
+// ---- de aanslagfunctie (voor snappen) -------------------------------------------------------------
+/*
+ * Per hop van 0,5 ms: ln(energie in de 10 ms erna / energie in de 10 ms ervoor). Bij een aanslag is dat het
+ * grootst precies op de aanslag zelf (ervoor stil of zachter, erna de klap); bij een aanhoudende klank ~0.
+ */
+function maakAanslag(buf) {
+  const n = buf.length, k = buf.numberOfChannels;
+  const ch = []; for (let i = 0; i < k; i++) ch.push(buf.getChannelData(i));
+  const blokken = Math.floor(n / HOP);
+  const som = new Float64Array(blokken + 1);
+  for (let j = 0; j < blokken; j++) {
+    let e = 0;
+    for (let i = j * HOP, eind = i + HOP; i < eind; i++) { let x = 0; for (let c = 0; c < k; c++) x += ch[c][i]; e += x * x; }
+    som[j + 1] = som[j] + e;
+  }
+  const eps = (som[blokken] / Math.max(1, blokken)) * RAAM * 1e-3 + 1e-12;
+  const a = new Float32Array(blokken);
+  for (let j = RAAM; j + RAAM <= blokken; j++) {
+    const na = som[j + RAAM] - som[j], voor = som[j] - som[j - RAAM];
+    a[j] = Math.log((na + eps) / (voor + eps));
+  }
+  return { a, sr: buf.sampleRate };
+}
+/**
+ * De aanslag binnen ±SNAP_MS van t (seconden): de dichtstbijzijnde sterke (≥ ½ van de sterkste daar), of null.
+ * Een aanslag is een piek die binnen ±RAAM (10 ms) de hoogste is: vlak vóór een klap stijgt de functie met
+ * hobbels (de golf van de kick, ruis), en zo'n hobbel is geen eigen aanslag.
+ */
+function snapTijd(t) {
+  const A = st.aanslag; if (!A) return null;
+  const h = A.sr / HOP, j0 = Math.round(t * h), w = Math.round(SNAP_MS / 1000 * h);
+  const lo = Math.max(1, j0 - w), hi = Math.min(A.a.length - 2, j0 + w);
+  const pieken = [];
+  let max = 0;
+  for (let j = lo; j <= hi; j++) {
+    const v = A.a[j];
+    if (v < AANSLAG_MIN) continue;
+    let hoogste = true;
+    for (let i = Math.max(0, j - RAAM); i <= Math.min(A.a.length - 1, j + RAAM); i++) if (A.a[i] > v || (A.a[i] === v && i < j)) { hoogste = false; break; }
+    if (hoogste) { pieken.push(j); if (v > max) max = v; }
+  }
+  let beste = null;
+  for (const j of pieken) if (A.a[j] >= 0.5 * max && (beste === null || Math.abs(j - j0) < Math.abs(beste - j0))) beste = j;
+  return beste === null ? null : beste / h;
+}
+function maakOverzicht(buf) {
+  const N = 1200, d = buf.getChannelData(0), per = Math.max(1, Math.floor(d.length / N));
+  const o = new Float32Array(N);
+  for (let i = 0; i < N; i++) { let m = 0; for (let j = i * per, e = Math.min(d.length, j + per); j < e; j += 4) { const v = Math.abs(d[j]); if (v > m) m = v; } o[i] = m; }
+  return o;
+}
+
+// ---- tikken -------------------------------------------------------------------------------------
+function bewaarUndo() { st.undo.push(JSON.stringify(st.tikken)); if (st.undo.length > 300) st.undo.shift(); }
+function ioi() {
+  const t = st.tikken; if (t.length < 4) return 0.5;
+  const d = []; for (let i = 1; i < t.length; i++) d.push(t[i].t - t[i - 1].t);
+  d.sort((a, b) => a - b); return d[d.length >> 1];
+}
+let bewaarTimer = 0;
+function gewijzigd() {
+  clearTimeout(bewaarTimer);
+  bewaarTimer = setTimeout(bewaarLokaal, 300);
+}
+function bewaarLokaal() {
+  if (!st.nummer) return;
+  const ok = opslag.zet(SLEUTEL(st.nummer.id), {
+    id: st.nummer.id, titel: st.nummer.titel, artiest: st.nummer.artiest, duur: st.nummer.duur,
+    kalibratie_ms: st.kal ? st.kal.ms : 0, tikken: st.tikken, gewijzigd: new Date().toISOString(),
+  });
+  if (!ok) meld('bewaren in de browser lukt niet: bewaar het bestand (D)');
+  tekenLijst();
+}
+
+/** Een tik op performance-tijd `ms`. */
+function tikIn(ms, een) {
+  if (!st.buffer) return meld('kies eerst een nummer');
+  if (!st.speelt) return meld('druk eerst Enter (afspelen), dan spatie op de tel');
+  if (!st.kal) meld('nog niet gekalibreerd: de tikken liggen nu te laat (C om te kalibreren)');
+  const kal = st.kal ? st.kal.ms / 1000 : 0;
+  const ruw = plekOp(hoorbaarCtx(ms) - kal);
+  voegToe(ruw, een, st.autosnap);
+  flits(een);
+}
+function voegToe(ruw, een, snap) {
+  bewaarUndo();
+  const w = Math.min(0.15, 0.4 * ioi());
+  let t = ruw, s = false;
+  if (snap) { const g = snapTijd(ruw); if (g !== null) { t = g; s = true; } }
+  // Opnieuw tikken over een stuk: de oude tik op dezelfde tel gaat weg.
+  st.tikken = st.tikken.filter((x) => Math.abs(x.t - t) >= w);
+  const nieuw = { t, een, s };
+  st.tikken.push(nieuw); st.tikken.sort((a, b) => a.t - b.t);
+  st.kies = st.tikken.indexOf(nieuw);
+  gewijzigd();
+}
+function flits(een) {
+  const f = $('flits'); f.className = een ? 'een' : 'tel';
+  requestAnimationFrame(() => requestAnimationFrame(() => { f.className = ''; }));
+}
+function kies(i) {
+  if (!st.tikken.length) return;
+  st.kies = Math.max(0, Math.min(st.tikken.length - 1, i));
+  if (!st.speelt) st.zicht = st.tikken[st.kies].t;
+}
+function schuif(ms) {
+  const k = st.tikken[st.kies]; if (!k) return;
+  bewaarUndo(); k.t += ms / 1000; k.s = false; st.tikken.sort((a, b) => a.t - b.t); st.kies = st.tikken.indexOf(k); gewijzigd();
+}
+function snapEen(i) {
+  const k = st.tikken[i]; if (!k) return false;
+  const g = snapTijd(k.t); if (g === null) return false;
+  k.t = g; k.s = true; return true;
+}
+function snapAlles() {
+  if (!st.aanslag) return;
+  bewaarUndo();
+  let n = 0; for (let i = 0; i < st.tikken.length; i++) if (snapEen(i)) n++;
+  // Twee tikken op dezelfde aanslag: één blijft (de "1" wint).
+  const uit = [];
+  for (const k of st.tikken.sort((a, b) => a.t - b.t)) {
+    const v = uit[uit.length - 1];
+    if (v && Math.abs(v.t - k.t) < 1e-4) { v.een = v.een || k.een; continue; }
+    uit.push(k);
+  }
+  st.tikken = uit; st.kies = -1; gewijzigd();
+  meld(`${n} van de ${st.tikken.length} tikken gesnapt (±${SNAP_MS} ms); de rest had geen duidelijke aanslag`, true);
+}
+function wisVanaf() {
+  const nu = performance.now();
+  if (nu - st.wisVraag > 3000) { st.wisVraag = nu; return meld('nog een keer X: alle tikken vanaf hier weg'); }
+  st.wisVraag = 0;
+  const p = plekNu(); bewaarUndo();
+  const voor = st.tikken.length;
+  st.tikken = st.tikken.filter((k) => k.t < p); st.kies = -1; gewijzigd();
+  meld(`${voor - st.tikken.length} tikken vanaf ${fmt(p)} weg (Z = terug)`);
+}
+function ongedaan() {
+  const v = st.undo.pop(); if (!v) return meld('niets om ongedaan te maken');
+  st.tikken = JSON.parse(v); st.kies = -1; gewijzigd();
+}
+
+// ---- kalibreren ---------------------------------------------------------------------------------
+async function kalibreer() {
+  if (st.kalibratie) return stopKalibratie('gestopt');
+  stop();
+  const c = ctx(); await c.resume();
+  const sr = c.sampleRate, lengte = Math.ceil((0.5 + KAL_KLIKS * KAL_INTERVAL + 0.5) * sr);
+  const buf = c.createBuffer(1, lengte, sr), d = buf.getChannelData(0);
+  const kliks = [];
+  for (let k = 0; k < KAL_KLIKS; k++) {
+    const s = Math.round((0.5 + k * KAL_INTERVAL) * sr);
+    for (let i = 0; i < 0.03 * sr && s + i < lengte; i++) d[s + i] = Math.sin(2 * Math.PI * 1500 * i / sr) * Math.exp(-i / (0.005 * sr)) * 0.8;
+    kliks.push(s / sr);
+  }
+  const b = c.createBufferSource(); b.buffer = buf; b.connect(st.uit);
+  const T0 = c.currentTime + 0.1; b.start(T0);
+  st.kalibratie = { bron: b, kliks: kliks.map((x) => T0 + x), verschil: [] };
+  b.onended = () => { if (st.kalibratie && st.kalibratie.bron === b) stopKalibratie(`te weinig tikken (${st.kalibratie.verschil.length} van ${KAL_NODIG}): opnieuw met C`); };
+  meld(`kalibreren: tik op elke klik met spatie (${KAL_NODIG}×)`);
+}
+function kalTik(ms) {
+  const K = st.kalibratie, T = hoorbaarCtx(ms);
+  let d = Infinity; for (const k of K.kliks) if (Math.abs(T - k) < Math.abs(d)) d = T - k;
+  if (Math.abs(d) > 0.25) return meld('die tik lag ver van een klik af (telt niet)');
+  K.verschil.push(d * 1000); flits(false);
+  meld(`kalibreren: ${K.verschil.length} / ${KAL_NODIG}`);
+  if (K.verschil.length >= KAL_NODIG) {
+    const s = [...K.verschil].sort((a, b) => a - b);
+    const med = (s[7] + s[8]) / 2;
+    const afw = s.map((x) => Math.abs(x - med)).sort((a, b) => a - b);
+    const mad = 1.4826 * (afw[7] + afw[8]) / 2;
+    st.kal = { ms: med, spreiding_ms: mad, n: s.length, gemaakt: new Date().toISOString() };
+    opslag.zet('varve.tik.kal', st.kal);
+    stopKalibratie(`kalibratie: ${med.toFixed(1)} ms (± ${mad.toFixed(1)} ms) gaat van elke tik af`, true);
+    tekstKal();
+  }
+}
+function stopKalibratie(tekst, goed = false) {
+  const K = st.kalibratie; if (!K) return;
+  st.kalibratie = null;
+  try { K.bron.stop(); } catch {}
+  meld(tekst, goed);
+}
+
+// ---- bewaren als bestand ------------------------------------------------------------------------
+function export1(opg) {
+  const tikken = (opg.tikken || []).slice().sort((a, b) => a.t - b.t);
+  const r = (x) => Math.round(x * 1e6) / 1e6;
+  return {
+    id: opg.id, titel: opg.titel || '', artiest: opg.artiest || '', duur: opg.duur ?? null,
+    tellen: tikken.map((k) => r(k.t)), enen: tikken.filter((k) => k.een).map((k) => r(k.t)),
+    kalibratie_ms: opg.kalibratie_ms ?? 0, snap_ms: SNAP_MS, gesnapt: tikken.filter((k) => k.s).length,
+    gemaakt: new Date().toISOString(), versie: 1,
+  };
+}
+function download(naam, data) {
+  const blob = new Blob([JSON.stringify(data, null, 1) + '\n'], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = naam;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+const bestandsnaam = (id) => `tikken-${String(id).replace(/[^\w.-]+/g, '_')}.json`;
+function bewaar() {
+  if (!st.nummer) return meld('kies eerst een nummer');
+  clearTimeout(bewaarTimer); bewaarLokaal();
+  const opg = opslag.lees(SLEUTEL(st.nummer.id)) || { id: st.nummer.id, titel: st.nummer.titel, tikken: st.tikken, kalibratie_ms: st.kal ? st.kal.ms : 0 };
+  download(bestandsnaam(st.nummer.id), export1(opg));
+  meld(`${bestandsnaam(st.nummer.id)} staat in je downloads (en blijft in de browser bewaard)`, true);
+}
+function bewaarAlles() {
+  clearTimeout(bewaarTimer); bewaarLokaal();
+  const alle = opslag.sleutels().filter((k) => k.startsWith('varve.tik.n.')).map((k) => opslag.lees(k)).filter((o) => o && o.tikken && o.tikken.length);
+  if (!alle.length) return meld('nog niets getikt');
+  download(`tikken-alle-${new Date().toISOString().slice(0, 10)}.json`, alle.map(export1));
+  meld(`${alle.length} nummers in één bestand`, true);
+}
+async function laadBestanden(files) {
+  let n = 0;
+  for (const f of files) {
+    try {
+      const j = JSON.parse(await f.text());
+      for (const o of Array.isArray(j) ? j : [j]) {
+        if (!o || !o.id || !Array.isArray(o.tellen)) continue;
+        const enen = new Set((o.enen || []).map((x) => Math.round(x * 1e6)));
+        opslag.zet(SLEUTEL(o.id), {
+          id: o.id, titel: o.titel, artiest: o.artiest, duur: o.duur, kalibratie_ms: o.kalibratie_ms ?? 0,
+          tikken: o.tellen.map((t) => ({ t, een: enen.has(Math.round(t * 1e6)), s: false })), gewijzigd: new Date().toISOString(),
+        });
+        n++;
+        if (st.nummer && st.nummer.id === o.id) { st.tikken = opslag.lees(SLEUTEL(o.id)).tikken; st.kies = -1; }
+      }
+    } catch (e) { meld(`${f.name}: geen tikbestand (${e.message})`); }
+  }
+  tekenLijst();
+  if (n) meld(`${n} nummers ingelezen`, true);
+}
+
+// ---- tekenen ------------------------------------------------------------------------------------
+function css(naam) { return getComputedStyle(document.documentElement).getPropertyValue(naam).trim(); }
+let kleur = null;
+function kleuren() { kleur = { golf: css('--golf'), tel: css('--tel'), een: css('--een'), keuze: css('--keuze'), kop: css('--kop'), aanslag: css('--aanslag'), zacht: css('--zacht') }; }
+function maat(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  return { w, h, dpr };
+}
+function venster() { const m = st.speelt ? plekNu() : st.zicht; return { lo: m - st.venster / 2, hi: m + st.venster / 2, midden: m }; }
+
+function teken() {
+  requestAnimationFrame(teken);
+  if (!kleur) kleuren();
+  const p = plekNu();
+  $('tijd').textContent = fmt(p) + (st.buffer ? ` / ${fmtKort(st.buffer.duration)}` : '');
+  const n = st.tikken.length, e = st.tikken.filter((k) => k.een).length;
+  $('tellingen').innerHTML = st.nummer ? `<b>${n}</b> tikken · <b>${e}</b> enen${n > 3 ? ` · getikt <b>${(60 / ioi()).toFixed(1)}</b> bpm` : ''}${st.kies >= 0 ? ` · gekozen ${fmt(st.tikken[st.kies]?.t ?? 0)}` : ''}` : '';
+  $('knopSnap').classList.toggle('aan', !!st.autosnap);
+  const cv = $('golf'), g = cv.getContext('2d'), { w, h, dpr } = maat(cv);
+  g.clearRect(0, 0, w, h);
+  if (st.buffer) {
+    const { lo, hi } = venster(), sr = st.buffer.sampleRate, d0 = st.buffer.getChannelData(0), d1 = st.buffer.numberOfChannels > 1 ? st.buffer.getChannelData(1) : d0;
+    const perPx = (hi - lo) * sr / w;
+    g.fillStyle = kleur.golf;
+    for (let x = 0; x < w; x++) {
+      const a = Math.floor((lo * sr) + x * perPx), b = Math.floor(a + perPx);
+      if (b < 0 || a >= d0.length) continue;
+      let mn = 0, mx = 0;
+      const stap = perPx > 64 ? Math.floor(perPx / 64) : 1;
+      for (let i = Math.max(0, a); i < Math.min(d0.length, b + 1); i += stap) { const v = (d0[i] + d1[i]) / 2; if (v < mn) mn = v; if (v > mx) mx = v; }
+      g.fillRect(x, h * 0.5 - mx * h * 0.45, 1, Math.max(1, (mx - mn) * h * 0.45));
+    }
+    // De aanslagfunctie onderin: waar snappen naartoe gaat.
+    if (st.aanslag) {
+      const A = st.aanslag, hps = A.sr / HOP;
+      g.strokeStyle = kleur.aanslag; g.lineWidth = dpr; g.beginPath();
+      for (let x = 0; x < w; x += 1) {
+        const j = Math.round((lo + (x / w) * (hi - lo)) * hps);
+        const v = j >= 0 && j < A.a.length ? Math.max(0, A.a[j]) : 0;
+        const y = h - 2 - Math.min(1, v / 6) * h * 0.22;
+        if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+    // Tikken.
+    for (let i = 0; i < st.tikken.length; i++) {
+      const k = st.tikken[i]; if (k.t < lo || k.t > hi) continue;
+      const x = ((k.t - lo) / (hi - lo)) * w;
+      g.fillStyle = i === st.kies ? kleur.keuze : k.een ? kleur.een : kleur.tel;
+      const bw = (k.een ? 3 : 2) * dpr;
+      g.fillRect(x - bw / 2, k.een ? 0 : h * 0.12, bw, k.een ? h : h * 0.76);
+      if (i === st.kies) { g.fillRect(x - 5 * dpr, 0, 10 * dpr, 6 * dpr); }
+      if (k.s) { g.fillRect(x - 3 * dpr, h - 8 * dpr, 6 * dpr, 6 * dpr); }
+    }
+    // Afspeelpunt.
+    const xm = ((p - lo) / (hi - lo)) * w;
+    g.fillStyle = kleur.kop; g.fillRect(xm - dpr, 0, 2 * dpr, h);
+  }
+  const ov = $('overzicht'), o = ov.getContext('2d'), m = maat(ov);
+  o.clearRect(0, 0, m.w, m.h);
+  if (st.buffer && st.overzicht) {
+    const N = st.overzicht.length, D = st.buffer.duration;
+    o.fillStyle = kleur.golf;
+    for (let i = 0; i < N; i++) { const v = st.overzicht[i]; o.fillRect((i / N) * m.w, m.h / 2 - v * m.h * 0.45, Math.max(1, m.w / N), Math.max(1, v * m.h * 0.9)); }
+    o.fillStyle = kleur.tel;
+    for (const k of st.tikken) o.fillRect((k.t / D) * m.w, 0, 1, 5 * m.dpr);
+    o.fillStyle = kleur.kop; o.fillRect((p / D) * m.w - m.dpr, 0, 2 * m.dpr, m.h);
+  }
+}
+
+// ---- muis ---------------------------------------------------------------------------------------
+let sleep = null;
+function tijdBijX(cv, clientX) { const r = cv.getBoundingClientRect(); const { lo, hi } = venster(); return lo + ((clientX - r.left) / r.width) * (hi - lo); }
+function tikBijX(cv, clientX) {
+  const r = cv.getBoundingClientRect(), { lo, hi } = venster();
+  let beste = -1, bd = 10;
+  st.tikken.forEach((k, i) => { const x = ((k.t - lo) / (hi - lo)) * r.width + r.left; const d = Math.abs(x - clientX); if (d < bd) { bd = d; beste = i; } });
+  return beste;
+}
+$('golf').addEventListener('mousedown', (e) => {
+  const i = tikBijX(e.currentTarget, e.clientX);
+  if (i >= 0) { st.kies = i; bewaarUndo(); sleep = { k: st.tikken[i], t: tijdBijX(e.currentTarget, e.clientX), van: st.tikken[i].t }; return; }
+  st.kies = -1;
+  if (!st.speelt) naar(tijdBijX(e.currentTarget, e.clientX));
+});
+window.addEventListener('mousemove', (e) => {
+  if (!sleep) return;
+  const t = tijdBijX($('golf'), e.clientX);
+  sleep.k.t = sleep.van + (t - sleep.t); sleep.k.s = false;
+});
+window.addEventListener('mouseup', () => {
+  if (!sleep) return;
+  const k = sleep.k, van = sleep.van; sleep = null;
+  if (Math.abs(k.t - van) < 1e-9) { st.undo.pop(); return; }  // alleen gekozen, niet verschoven
+  st.tikken.sort((a, b) => a.t - b.t); st.kies = st.tikken.indexOf(k); gewijzigd();
+});
+$('golf').addEventListener('dblclick', (e) => {
+  if (!st.buffer || tikBijX(e.currentTarget, e.clientX) >= 0) return;
+  voegToe(tijdBijX(e.currentTarget, e.clientX), false, st.autosnap);
+});
+$('golf').addEventListener('wheel', (e) => {
+  if (st.speelt || !st.buffer) return;
+  e.preventDefault();
+  st.zicht += (e.deltaY + e.deltaX) / 800 * st.venster;
+}, { passive: false });
+$('overzicht').addEventListener('mousedown', (e) => {
+  if (!st.buffer) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  naar(((e.clientX - r.left) / r.width) * st.buffer.duration);
+});
+
+// ---- toetsenbord --------------------------------------------------------------------------------
+const DOE = {
+  speel, terug: () => naar(plekNu() - 5), begin: () => naar(0), kalibreer,
+  autosnap: () => { st.autosnap = !st.autosnap; opslag.zet('varve.tik.autosnap', st.autosnap); meld(st.autosnap ? 'snappen bij het tikken: aan' : 'snappen bij het tikken: uit (snap later met ⇧S)'); },
+  snapAlles, ongedaan, wisVanaf, bewaar, bewaarAlles,
+  snelheid: () => zetSnelheid(st.rate === 1 ? 0.85 : st.rate === 0.85 ? 0.7 : 1),
+  laadBestand: () => $('bestand').click(),
+};
+for (const b of document.querySelectorAll('[data-doe]')) {
+  b.addEventListener('mousedown', (e) => e.preventDefault());  // knoppen nemen geen focus: spatie blijft tikken
+  b.addEventListener('click', () => DOE[b.dataset.doe]());
+}
+$('bestand').addEventListener('change', (e) => { laadBestanden([...e.target.files]); e.target.value = ''; });
+$('zoek').addEventListener('input', tekenLijst);
+
+const typt = (e) => e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
+document.addEventListener('keydown', (e) => {
+  if (typt(e)) { if (e.key === 'Escape' || e.key === 'Enter') e.target.blur(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const ms = e.timeStamp;
+  const k = e.code;
+  if (k === 'Space') {
+    e.preventDefault();
+    if (e.repeat) return;
+    if (st.kalibratie) return kalTik(ms);
+    return tikIn(ms, e.shiftKey);
+  }
+  const doe = {
+    Enter: () => speel(),
+    ArrowLeft: () => naar(plekNu() - (e.shiftKey ? 1 : 5)),
+    ArrowRight: () => naar(plekNu() + (e.shiftKey ? 1 : 5)),
+    Home: () => naar(0),
+    BracketLeft: () => kies(st.kies < 0 ? st.tikken.findLastIndex((x) => x.t <= plekNu()) : st.kies - 1),
+    BracketRight: () => kies(st.kies < 0 ? st.tikken.findIndex((x) => x.t >= plekNu()) : st.kies + 1),
+    Comma: () => schuif(e.shiftKey ? -10 : -1),
+    Period: () => schuif(e.shiftKey ? 10 : 1),
+    KeyE: () => { const t = st.tikken[st.kies]; if (t) { bewaarUndo(); t.een = !t.een; gewijzigd(); } },
+    KeyS: () => { if (e.shiftKey) return snapAlles(); if (st.kies >= 0) { bewaarUndo(); if (!snapEen(st.kies)) meld('geen duidelijke aanslag binnen ±30 ms'); st.tikken.sort((a, b) => a.t - b.t); gewijzigd(); } },
+    KeyA: DOE.autosnap,
+    Delete: () => { if (st.kies >= 0) { bewaarUndo(); st.tikken.splice(st.kies, 1); st.kies = Math.min(st.kies, st.tikken.length - 1); gewijzigd(); } },
+    KeyX: wisVanaf, KeyZ: ongedaan, KeyC: kalibreer,
+    KeyD: () => (e.shiftKey ? bewaarAlles() : bewaar()),
+    Minus: () => { st.venster = Math.min(30, st.venster * 1.5); },
+    Equal: () => { st.venster = Math.max(0.5, st.venster / 1.5); },
+    Digit1: () => zetSnelheid(1), Digit2: () => zetSnelheid(0.85), Digit3: () => zetSnelheid(0.7),
+    Slash: () => $('zoek').focus(),
+    Escape: () => { if (st.kalibratie) stopKalibratie('kalibratie gestopt'); st.kies = -1; },
+  };
+  doe.Backspace = doe.Delete;
+  if (doe[k]) { e.preventDefault(); doe[k](); }
+});
+document.addEventListener('keyup', (e) => { if (e.code === 'Space' && !typt(e)) e.preventDefault(); });
+window.addEventListener('beforeunload', () => { clearTimeout(bewaarTimer); bewaarLokaal(); });
+
+// Voor de proef (tikken.test.mjs) en om in de console te kijken.
+window.tik = { st, hoorbaarCtx, plekNu, laad, snapTijd, export1, get kliks() { return st.kalibratie ? st.kalibratie.kliks : null; } };
+
+tekstKal();
+laadLijst();
+requestAnimationFrame(teken);
+</script>
+</body>
+</html>
