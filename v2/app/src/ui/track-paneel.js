@@ -84,3 +84,42 @@ export function instrumentSectie({ engine, bus, maakKnop }) {
     },
   };
 }
+
+/**
+ * De sectie Effect: het rack van de focus-track (naam, ‹ aan ›) met zijn acht knoppen; de naam
+ * van elke knop komt uit het rack (een plek die het rack niet heeft leest null en staat grijs).
+ * MIX, ECHO en GALM staan in de kolom zelf.
+ */
+export function effectSectie({ engine, bus, maakKnop }) {
+  return {
+    naam: 'effect',
+    sleutel: (t) => t.strip?.fx?.rackNaam ?? '',
+    maak(n, el, t) {
+      const fx = t.strip?.fx;
+      if (!fx) return null;
+      const kop = document.createElement('div');
+      kop.className = 'tp-kop';
+      kop.innerHTML = `<strong>EFFECT</strong><button data-actie="track.${n}.fx.vorig" title="vorig rack">‹</button><button class="b-fx" data-actie="track.${n}.fx.aan" data-lamp title="effect aan/uit">${engine.fx.rackNaam(n) ?? '—'}</button><button data-actie="track.${n}.fx.volgend" title="volgend rack">›</button>`;
+      const knoppen = document.createElement('div');
+      knoppen.className = 'knoppen tp-knoppen';
+      const lijst = [];
+      for (let k = 1; k <= 8; k++) {
+        const d = document.createElement('div');
+        d.className = 'knop';
+        d.dataset.waarde = `track.${n}.fx.knop.${k}`;
+        d.dataset.label = fx.plekNaam?.(k) ?? `${k}`;
+        knoppen.append(d);
+        lijst.push(maakKnop(d, bus));
+      }
+      el.append(kop, knoppen);
+      const b = kop.querySelector('.b-fx');
+      return {
+        teken() {
+          for (const k of lijst) k.teken();
+          const s = bus.lees(`track.${n}.fx.aan`);
+          b.classList.toggle('aan', s === 1);
+        },
+      };
+    },
+  };
+}

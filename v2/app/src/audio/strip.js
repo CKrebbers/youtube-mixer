@@ -1,8 +1,15 @@
 // De kanaalstrip van één track (ARCHITECTUUR.md, contract "Strip en mixer").
 //
-//   in -> trim -> eq laag -> eq mid -> eq hoog -+-> droog ----------------+-> naFilter -> fader -> kant -> mixer.in
-//                                               `-> hpf -> lpf -> nat ----'      |
-//                                                                                `-> meter (vóór de fader)
+//   in -> trim -> eq laag -> eq mid -> eq hoog -+-> droog ----------------+-> naFilter ----------+-> fader -+-> kant -> mixer.in
+//                                               `-> hpf -> lpf -> nat ----'      |                   |          |
+//                                                                                |  (insert-slot) ---'          +-> send A -> mixer.sendIn('A')
+//                                                                                `-> meter (vóór de fader)     `-> send B -> mixer.sendIn('B')
+//
+// De insert-slot (fx/fx.js, BOUWPLAN "Effecten") zit ná het filter en vóór de fader: dicht is ook
+// stil. naFilter is zijn DROGE weg (zijn gain = het droge deel van de mix) en de fader de plek waar
+// droog en nat samenkomen; de natte weg (droog + nat van het filter -> keten -> gain -> fader) en
+// de sends bestaan pas als ze iets doen. Zonder effect en met de sends dicht staat er dus geen enkele
+// node extra in het pad: bit voor bit plak 1 (meting/golden.mjs).
 //
 // Formules uit v1 (src/engine/audio-graph.js en deck.js @ 6a640ac) waar ze
 // bewezen zijn; afwijkingen staan erbij met de reden. Alles wat binnenkomt is
@@ -13,6 +20,10 @@
 // lineaire hellingen langs een zachte S na startDrempel. Nooit setValueCurveAtTime.
 import { clamp, dbToGain, expMap } from '../kern/emitter.js';
 import { houdVast, startDrempel, zetHellingen } from './overgang.js';
+import { InsertSlot } from './fx/fx.js';
+import { rackVanEffect } from './fx/rack.js';
+import { effectVan } from './fx/fx.js';
+import { sendGain, BUSSEN } from './fx/sends.js';
 
 /** Trim: 0..1 -> −12..+12 dB, 0,5 = 0 dB. (v1 deed u·2, lineair tot +6 dB; het contract vraagt ±12 dB.) */
 export const TRIM_DB = 12;
@@ -46,7 +57,7 @@ export const FILTER_OPEN = Object.freeze([20, 0.7, 22050, 0.7]);
 /** Fader (v1 faderGain): (1 − v) × −45 dB. */
 export const FADER_DB = -45;
 /** Tijdconstanten van setTargetAtTime (v1: trim/EQ/filter 10 ms, fader en crossfader 8 ms, master 20 ms). */
-export const TAU = Object.freeze({ trim: 0.01, eq: 0.01, filter: 0.01, fader: 0.008, kant: 0.008, master: 0.02 });
+export const TAU = Object.freeze({ trim: 0.01, eq: 0.01, filter: 0.01, fader: 0.008, kant: 0.008, master: 0.02, send: 0.01 });
 
 export const BANDEN = Object.freeze(['laag', 'mid', 'hoog']);
 export const KANTEN = Object.freeze(['A', 'B', 'thru']);
@@ -168,9 +179,12 @@ export function maakMeter(ctx, bron, n = METER_N) {
   split.connect(aR, 1);
   const bL = new Float32Array(n), bR = new Float32Array(n);
   const uit = { piek: 0, rms: 0 };
+  const extra = [];
   let los = false;
   return {
     uit,
+    /** Nog een bron op dezelfde tap (de natte weg van de insert-slot): de meter leest de som. */
+    voeg(b) { if (los) return; b.connect(split); extra.push(b); },
     lees() {
       if (los) { uit.piek = 0; uit.rms = 0; return uit; }
       aL.getFloatTimeDomainData(bL);
@@ -192,6 +206,7 @@ export function maakMeter(ctx, bron, n = METER_N) {
       if (los) return;
       los = true;
       try { bron.disconnect(split); } catch (_) {}
+      for (const b of extra) { try { b.disconnect(split); } catch (_) {} }
       split.disconnect(); aL.disconnect(); aR.disconnect();
     },
   };
@@ -254,6 +269,18 @@ class Strip {
     // De meter vóór de fader, zoals op een DJ-mixer: je stelt de trim in op wat
     // het kanaal geeft, ook met de fader dicht.
     this._meter = maakMeter(ctx, naFilter);
+
+    // De insert-slot: lui (de keten pas bij mix > 0 en aan), met het delay-rack van v1 als begin.
+    // naFilter is de droge weg, de fader de uitgang; de natte weg tapt droog + nat van het filter.
+    this.fx = new InsertSlot(ctx, {
+      droog: naFilter, uit: fader, lui: 'mix',
+      bijIngang: (fxIn) => { droog.connect(fxIn); nat.connect(fxIn); },
+      bijKeten: (g) => this._meter.voeg(g),
+    });
+    this.fx.zetRack(rackVanEffect(effectVan('delay')));
+    /** Sends A (echo) en B (galm): na de fader, vóór de kant. Pas een node als hij voor het eerst open gaat. */
+    this._send = { A: 0, B: 0 };
+    this._sendNode = { A: null, B: null };
 
     this._stand = { trim: 0.5, laag: 0.5, mid: 0.5, hoog: 0.5, filter: 0.5, fader: 1 };
     this._kill = { laag: false, mid: false, hoog: false };
@@ -321,6 +348,31 @@ class Strip {
     return true;
   }
 
+  /**
+   * Een send zetten, 0..1 (kwadratisch, v1). 'A' = echo, 'B' = galm (ook 'a'/'b'). De eerste keer
+   * open: een gain na de fader, en de bus van de mixer wordt wakker (mixer.sendIn). Op 0 gaat er
+   * niets meer in; de staart van de bus sterft vanzelf uit.
+   */
+  send(bus, v) {
+    const b = typeof bus === 'string' ? bus.toUpperCase() : bus;
+    if (!BUSSEN.includes(b)) throw new TypeError(`strip.send: onbekende bus '${bus}'`);
+    if (this._weg || typeof v !== 'number' || Number.isNaN(v)) return false;
+    const w = clamp(v);
+    if (w === this._send[b]) return true;
+    this._send[b] = w;
+    let g = this._sendNode[b];
+    if (!g) {
+      if (w === 0 || typeof this._mixer.sendIn !== 'function') return true;
+      g = this.ctx.createGain();
+      g.gain.value = 0;
+      this.nodes.fader.connect(g);
+      g.connect(this._mixer.sendIn(b));
+      this._sendNode[b] = g;
+    }
+    zetDoel(g.gain, sendGain(w), this.ctx.currentTime, TAU.send);
+    return true;
+  }
+
   /** Zonder argument: de kant van nu. Met 'A', 'B' of 'thru': zetten (iets anders wordt genegeerd). */
   kant(k) {
     if (k === undefined) return this._kant;
@@ -339,6 +391,8 @@ class Strip {
   lees(naam) {
     if (naam in this._stand) return this._stand[naam];
     if (naam.startsWith?.('kill.') && BANDEN.includes(naam.slice(5))) return this._kill[naam.slice(5)] ? 1 : 0;
+    if (naam === 'send.a' || naam === 'send.A') return this._send.A;
+    if (naam === 'send.b' || naam === 'send.B') return this._send.B;
     return undefined;
   }
 
@@ -352,9 +406,16 @@ class Strip {
     const ctx = this.ctx;
     this._mixer._vergeet(this);
     const nu = ctx.currentTime, wacht = startDrempel(ctx);
-    if (ctx.state === 'running') killVersterking(this.nodes.kant.gain, 0, nu, wacht);
+    const sends = Object.values(this._sendNode).filter(Boolean);
+    if (ctx.state === 'running') {
+      killVersterking(this.nodes.kant.gain, 0, nu, wacht);
+      // De sends tappen vóór de kant: die gaan net zo dicht (de staart op de bus sterft vanzelf uit).
+      for (const g of sends) killVersterking(g.gain, 0, nu, wacht);
+    }
     this._weg = naAudioklok(ctx, nu + wacht + KILL_FADE + 0.005, () => {
       this._meter.los();
+      this.fx.vernietig();
+      for (const g of sends) g.disconnect();
       for (const node of Object.values(this.nodes)) node.disconnect();
     });
     return this._weg;

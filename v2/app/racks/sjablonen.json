@@ -1,0 +1,2979 @@
+{
+  "versie": 1,
+  "uitleg": "Kant-en-klare racks voor elk nummer. Data, geen code: aanpassen mag, de app leest dit bestand bij het opstarten. Een sjabloon wordt nooit overschreven; bewaren maakt er een eigen rack van het nummer van. Sinds spoor S10 (14 okt) heeft elk sjabloon een uitleg, en zegt `xy` welke twee knoppen samen op een XY-pad passen.",
+  "racks": [
+    {
+      "schema": 1,
+      "name": "Oplossen",
+      "tags": [
+        "overgang",
+        "ambient",
+        "galm"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.15
+          }
+        },
+        {
+          "slot": "b",
+          "type": "delay",
+          "params": {
+            "tijd": 0.75,
+            "feedback": 0.25,
+            "toon": 0.55
+          }
+        },
+        {
+          "slot": "d",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.6,
+            "toon": 0.45,
+            "meng": 0.3,
+            "freeze": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "phaser",
+          "params": {
+            "snelheid": 0.15,
+            "diepte": 0,
+            "feedback": 0.3
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Oplossen",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0.5,
+              "to": 0.22
+            },
+            {
+              "target": "b.feedback",
+              "from": 0.25,
+              "to": 0.85,
+              "curve": "exp"
+            },
+            {
+              "target": "d.meng",
+              "from": 0.3,
+              "to": 0.85
+            },
+            {
+              "target": "c.diepte",
+              "from": 0,
+              "to": 0.6,
+              "in": [
+                0.4,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Afstand",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.tijd",
+              "from": 0.55,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Glans",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "c.snelheid",
+              "from": 0.05,
+              "to": 0.5
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Kleur",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "b.toon",
+              "from": 0.2,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Vasthouden",
+          "default": 0,
+          "links": [
+            {
+              "target": "d.freeze",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 6,
+          "label": "Ruimte",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "d.grootte",
+              "from": 0.4,
+              "to": 0.95
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Dub-worp",
+      "tags": [
+        "dub",
+        "echo"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "delay",
+          "params": {
+            "tijd": 0.72,
+            "feedback": 0.15,
+            "toon": 0.6
+          }
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.35
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Worp",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.feedback",
+              "from": 0.15,
+              "to": 0.9,
+              "curve": "exp"
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Maat",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "a.tijd",
+              "from": 0.6,
+              "to": 0.85
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Kleur",
+          "default": 0.5,
+          "bipolar": true,
+          "links": [
+            {
+              "target": "b.freq",
+              "from": 0.1,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Donker",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.toon",
+              "from": 0.9,
+              "to": 0.25
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Getij",
+      "tags": [
+        "lang",
+        "beweging"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.25
+          }
+        },
+        {
+          "slot": "b",
+          "type": "gate",
+          "params": {
+            "deling": 0.4,
+            "vorm": 0.6,
+            "diepte": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "ringmod",
+          "params": {
+            "toon": 0.25,
+            "meng": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Getij",
+          "default": 0.5,
+          "bipolar": true,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0.08,
+              "to": 0.92
+            }
+          ],
+          "glide": 20
+        },
+        {
+          "place": 2,
+          "label": "Adem",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.diepte",
+              "from": 0,
+              "to": 0.6
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Metaal",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.meng",
+              "from": 0,
+              "to": 0.3,
+              "curve": "exp"
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Klank",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "c.toon",
+              "from": 0.1,
+              "to": 0.6
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Draaikolk",
+      "tags": [
+        "beweging",
+        "op de maat"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "autopan",
+          "params": {
+            "snelheid": 0.45,
+            "diepte": 0,
+            "vorm": 0,
+            "sync": 1
+          }
+        },
+        {
+          "slot": "b",
+          "type": "flanger",
+          "params": {
+            "snelheid": 0.3,
+            "diepte": 0.8,
+            "vertraging": 0.35,
+            "feedback": 0.7,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.2
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Draai",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.diepte",
+              "from": 0,
+              "to": 1
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.5,
+              "in": [
+                0.3,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Tempo",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.snelheid",
+              "from": 0.33,
+              "to": 0.78
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Straal",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.feedback",
+              "from": 0.55,
+              "to": 0.97,
+              "curve": "exp"
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Kleur",
+          "default": 0.5,
+          "bipolar": true,
+          "links": [
+            {
+              "target": "c.freq",
+              "from": 0.15,
+              "to": 0.85
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Oude band",
+      "tags": [
+        "lo-fi",
+        "warm"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "vibrato",
+          "params": {
+            "snelheid": 0.4,
+            "diepte": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "distortion",
+          "params": {
+            "drive": 0.45,
+            "soort": 0,
+            "toon": 0.7,
+            "niveau": 0.5,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "chorus",
+          "params": {
+            "snelheid": 0.35,
+            "diepte": 0.3,
+            "vertraging": 0.6,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "d",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.1
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Slijtage",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.diepte",
+              "from": 0,
+              "to": 0.3
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.8
+            },
+            {
+              "target": "d.freq",
+              "from": 0.5,
+              "to": 0.3,
+              "curve": "log"
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Wiebel",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.snelheid",
+              "from": 0.2,
+              "to": 0.6
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Zweef",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.meng",
+              "from": 0,
+              "to": 0.5
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Vuil",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.drive",
+              "from": 0.25,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Dof",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.toon",
+              "from": 0.9,
+              "to": 0.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Hakker",
+      "tags": [
+        "ritme",
+        "op de maat"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "tremolo",
+          "params": {
+            "snelheid": 0.5,
+            "diepte": 0,
+            "vorm": 0.67,
+            "sync": 1
+          }
+        },
+        {
+          "slot": "b",
+          "type": "autopan",
+          "params": {
+            "snelheid": 0.45,
+            "diepte": 0,
+            "vorm": 0,
+            "sync": 1
+          }
+        },
+        {
+          "slot": "c",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.25
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Hakken",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.diepte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Deling",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.snelheid",
+              "from": 0.45,
+              "to": 0.78
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Zwaai",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.diepte",
+              "from": 0,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Vorm",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.vorm",
+              "from": 0.67,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Dun",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.freq",
+              "from": 0.5,
+              "to": 0.8,
+              "curve": "exp"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Koor",
+      "tags": [
+        "zang",
+        "stems",
+        "ruimte"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "pitch",
+          "params": {
+            "interval": 0.75,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "chorus",
+          "params": {
+            "snelheid": 0.45,
+            "diepte": 0.4,
+            "vertraging": 0.65,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.55,
+            "toon": 0.5,
+            "meng": 0,
+            "freeze": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Koor",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 0.4
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.35
+            },
+            {
+              "target": "c.meng",
+              "from": 0,
+              "to": 0.3,
+              "in": [
+                0.2,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Interval",
+          "default": 1,
+          "links": [
+            {
+              "target": "a.interval",
+              "in": [
+                0.5,
+                0.5
+              ],
+              "from": 0.645833,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Ruimte",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "c.grootte",
+              "from": 0.4,
+              "to": 0.85
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Glans",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "b.diepte",
+              "from": 0.2,
+              "to": 0.7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Kwaak",
+      "tags": [
+        "funk",
+        "bas",
+        "stems"
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "autowah",
+          "params": {
+            "gevoel": 0.6,
+            "basis": 0.35,
+            "bereik": 0.6,
+            "reso": 0.65,
+            "aanzet": 0.4,
+            "verval": 0.55,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "distortion",
+          "params": {
+            "drive": 0.5,
+            "soort": 0,
+            "toon": 0.65,
+            "niveau": 0.5,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "widener",
+          "params": {
+            "breedte": 0.5,
+            "haas": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Kwaak",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 1
+            },
+            {
+              "target": "a.gevoel",
+              "from": 0.35,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Toon",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.basis",
+              "from": 0.25,
+              "to": 0.6
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Vuil",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.7
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Breed",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.breedte",
+              "from": 0.5,
+              "to": 0.85
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Dub-echo",
+      "tags": [
+        "dub",
+        "echo",
+        "op de maat"
+      ],
+      "uitleg": "Echo op 3/16 die je erin gooit en laat doorrollen. Knop 1 gooit (eerst de echo erin, dan pas de feedback omhoog), knop 3 maakt hem dof zoals een bandecho, knop 5 is het DJ-filter. In de beginstand droog.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "delay",
+          "params": {
+            "tijd": 0.2857,
+            "feedback": 0.45,
+            "toon": 0.6,
+            "sync": 1
+          },
+          "meng": 0
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.2
+          }
+        },
+        {
+          "slot": "c",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.5,
+            "toon": 0.4,
+            "meng": 0,
+            "freeze": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Gooi",
+          "default": 0,
+          "links": [
+            {
+              "target": "a._nat",
+              "from": 0,
+              "to": 1,
+              "curve": "log"
+            },
+            {
+              "target": "a.feedback",
+              "from": 0.45,
+              "to": 0.85,
+              "in": [
+                0.3,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Tijd",
+          "default": 0.2857,
+          "links": [
+            {
+              "target": "a.tijd",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Dof",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.toon",
+              "from": 0.6,
+              "to": 0.2
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Ruimte",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.meng",
+              "from": 0,
+              "to": 0.45
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Filter",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "b.freq",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        }
+      ],
+      "xy": [
+        1,
+        3
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Wegspoelen",
+      "tags": [
+        "overgang",
+        "ambient",
+        "galm"
+      ],
+      "uitleg": "Het nummer lost op in galm en echo terwijl de bas wegzakt (highpass). Knop 1 doet alles tegelijk, knop 2 maakt de ruimte langer, knop 3 bevriest de galm: zet hem aan met knop 1 open en de wolk blijft hangen, ook als je in het nummer springt (een hotcue, een loop). Het rack zit vóór de fader: fader en crossfader van deze track nemen de wolk mee, en knop 1 terug haalt hem weg.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.15
+          }
+        },
+        {
+          "slot": "b",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.5,
+            "toon": 0.45,
+            "meng": 0,
+            "freeze": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "delay",
+          "params": {
+            "tijd": 0.4286,
+            "feedback": 0.3,
+            "toon": 0.5,
+            "sync": 1
+          },
+          "meng": 0
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Wegspoelen",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0.5,
+              "to": 0.82,
+              "curve": "exp"
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.85
+            },
+            {
+              "target": "c._nat",
+              "from": 0,
+              "to": 0.6,
+              "in": [
+                0.2,
+                1
+              ]
+            },
+            {
+              "target": "c.feedback",
+              "from": 0.3,
+              "to": 0.7
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Lengte",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "b.grootte",
+              "from": 0.4,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Bevries",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.freeze",
+              "from": 0,
+              "to": 1,
+              "steps": 2
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Opbouw",
+      "tags": [
+        "opbouw",
+        "house",
+        "riser"
+      ],
+      "uitleg": "Een riser over een paar maten: highpass omhoog, flanger erin, galm erbij, en een flanger die elke halve maat versnelt (modulator op de maat; knop 1 zet hem erin). Knop 2 = spanning (resonantie), knop 3 = ruimte. Na de drop knop 1 in één beweging terug.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.1
+          }
+        },
+        {
+          "slot": "b",
+          "type": "flanger",
+          "params": {
+            "snelheid": 0.35,
+            "diepte": 0.6,
+            "vertraging": 0.5,
+            "feedback": 0.5,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.45,
+            "toon": 0.6,
+            "meng": 0,
+            "freeze": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Opbouw",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0.5,
+              "to": 0.8,
+              "curve": "exp"
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.6
+            },
+            {
+              "target": "b.feedback",
+              "from": 0.5,
+              "to": 0.85,
+              "in": [
+                0.4,
+                1
+              ]
+            },
+            {
+              "target": "c.meng",
+              "from": 0,
+              "to": 0.5,
+              "in": [
+                0.5,
+                1
+              ]
+            },
+            {
+              "target": "mod.1.diepte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Spanning",
+          "default": 0.2,
+          "links": [
+            {
+              "target": "a.reso",
+              "from": 0.1,
+              "to": 0.7
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Ruimte",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "c.grootte",
+              "from": 0.3,
+              "to": 0.8
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ],
+      "mods": [
+        {
+          "soort": "lfo",
+          "sync": true,
+          "deling": "1/2",
+          "vorm": "omlaag",
+          "diepte": 0,
+          "doelen": [
+            {
+              "target": "b.snelheid",
+              "diepte": 0.3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Band zakt weg",
+      "tags": [
+        "lo-fi",
+        "tape",
+        "overgang"
+      ],
+      "uitleg": "Een bandmachine die het opgeeft: zwalken (wow), trillen (flutter), dof en vuil, en een lowpass die dichtgaat. In de beginstand droog; het eerste stukje van knop 1 zet de band erin (een paar ms later dan droog: halverwege dat stukje een zachte kam).",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "band",
+          "params": {
+            "drive": 0.15,
+            "wow": 0,
+            "snelheid": 0.35,
+            "flutter": 0.1,
+            "toon": 0.9,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.2
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Wegzakken",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 1,
+              "in": [
+                0,
+                0.1
+              ]
+            },
+            {
+              "target": "a.wow",
+              "from": 0,
+              "to": 1,
+              "curve": "exp"
+            },
+            {
+              "target": "a.flutter",
+              "from": 0.1,
+              "to": 0.8
+            },
+            {
+              "target": "a.toon",
+              "from": 0.9,
+              "to": 0.3
+            },
+            {
+              "target": "a.drive",
+              "from": 0.15,
+              "to": 0.55
+            },
+            {
+              "target": "b.freq",
+              "from": 0.5,
+              "to": 0.2,
+              "curve": "exp"
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Zwalk",
+          "default": 0.35,
+          "links": [
+            {
+              "target": "a.snelheid",
+              "from": 0.1,
+              "to": 0.8
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Tel-gate 1/8",
+      "tags": [
+        "ritme",
+        "op de maat",
+        "house"
+      ],
+      "uitleg": "De klassieke hakker op achtsten (Beat FX \"trans\"). Knop 1 = hoe diep, knop 2 = hoe lang open, knop 3 = de deling (1/1 … 1/16), knop 4 dunt de bas uit.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "gate",
+          "params": {
+            "deling": 0.6,
+            "vorm": 0.5,
+            "diepte": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.15
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Hakken",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.diepte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Open",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.vorm",
+              "from": 0.15,
+              "to": 0.85
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Deling",
+          "default": 0.6,
+          "links": [
+            {
+              "target": "a.deling",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Dun",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.freq",
+              "from": 0.5,
+              "to": 0.75
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Kleur: filter",
+      "tags": [
+        "color fx",
+        "één knop",
+        "master"
+      ],
+      "uitleg": "Eén knop, zoals Color FX: links lowpass, rechts highpass, in het midden open. Knop 2 zet de resonantie (hoe \"scherp\" de sweep klinkt).",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.15
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Filter",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 2,
+          "label": "Reso",
+          "default": 0.35,
+          "links": [
+            {
+              "target": "a.reso",
+              "from": 0.05,
+              "to": 0.7
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Kleur: dub",
+      "tags": [
+        "color fx",
+        "één knop",
+        "dub"
+      ],
+      "uitleg": "Color FX \"dub echo\": één knop. Links lowpass met echo, rechts highpass met echo, in het midden niets. De echo komt erbij naar beide kanten (eigen kromme: een V).",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.05
+          }
+        },
+        {
+          "slot": "b",
+          "type": "delay",
+          "params": {
+            "tijd": 0.4286,
+            "feedback": 0.5,
+            "toon": 0.5,
+            "sync": 1
+          },
+          "meng": 0
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Dub",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0,
+              "to": 1
+            },
+            {
+              "target": "b._nat",
+              "from": 0,
+              "to": 0.35,
+              "kromme": [
+                1,
+                0.55,
+                0,
+                0.55,
+                1
+              ]
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 2,
+          "label": "Echo",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "b.feedback",
+              "from": 0.3,
+              "to": 0.8
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Kleur: ruimte",
+      "tags": [
+        "color fx",
+        "één knop",
+        "ambient"
+      ],
+      "uitleg": "Color FX \"space\": één knop. Links dof en ver, rechts dun en ver; galm naar beide kanten (V-kromme).",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.1
+          }
+        },
+        {
+          "slot": "b",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.55,
+            "toon": 0.5,
+            "meng": 0,
+            "freeze": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Ruimte",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0.15,
+              "to": 0.85
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.8,
+              "kromme": [
+                1,
+                0.55,
+                0,
+                0.55,
+                1
+              ]
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 2,
+          "label": "Lengte",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "b.grootte",
+              "from": 0.35,
+              "to": 0.85
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Kleur: crush",
+      "tags": [
+        "color fx",
+        "één knop",
+        "lo-fi"
+      ],
+      "uitleg": "Color FX \"crush\": één knop. Naar beide kanten minder bits (V-kromme op hoeveel crush je hoort), links met een lowpass, rechts met een highpass.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "crush",
+          "params": {
+            "bits": 0.4,
+            "toon": 0.8
+          },
+          "meng": 0
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.1
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Crush",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a._nat",
+              "from": 0,
+              "to": 1,
+              "kromme": [
+                1,
+                0.8,
+                0,
+                0.8,
+                1
+              ]
+            },
+            {
+              "target": "b.freq",
+              "from": 0.2,
+              "to": 0.8
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 2,
+          "label": "Bits",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "a.bits",
+              "from": 0.8,
+              "to": 0.1
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Klinker-zweep",
+      "tags": [
+        "zang",
+        "funk",
+        "filter"
+      ],
+      "uitleg": "Een vocaalfilter dat door a-e-i-o-u schuift: het nummer gaat \"praten\". Knop 1 schuift (en zet hem meteen helemaal aan), knop 2 = hoe scherp, knop 3 schuift de stem hoger of lager.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "klinker",
+          "params": {
+            "klinker": 0,
+            "reso": 0.4,
+            "schuif": 0.5,
+            "meng": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Klinker",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.klinker",
+              "from": 0,
+              "to": 1
+            },
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 1,
+              "in": [
+                0,
+                0.12
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Scherp",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "a.reso",
+              "from": 0.1,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Stem",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.schuif",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Ruimte bevriezen",
+      "tags": [
+        "ambient",
+        "galm",
+        "live"
+      ],
+      "uitleg": "Galm als instrument: knop 1 zet hem erin, knop 3 bevriest hem (de invoer gaat dicht, de wolk blijft), ook als je in het nummer springt. Het rack zit vóór de fader: fader en crossfader van deze track nemen de wolk mee.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.5,
+            "toon": 0.5,
+            "meng": 0,
+            "freeze": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.1
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Ruimte",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Groot",
+          "default": 0.35,
+          "links": [
+            {
+              "target": "a.grootte",
+              "from": 0.3,
+              "to": 0.95
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Bevries",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.freeze",
+              "from": 0,
+              "to": 1,
+              "steps": 2
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Glans",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.toon",
+              "from": 0.25,
+              "to": 0.85
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Filter",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "b.freq",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        }
+      ],
+      "xy": [
+        1,
+        4
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Zangband",
+      "tags": [
+        "stems",
+        "zang",
+        "filter"
+      ],
+      "uitleg": "Voor de zang-stem: knop 1 snijdt bas en hoog weg tot alleen de stem overblijft, knop 2 kantelt warmer of helderder, knop 3 maakt medeklinkers scherper (aanslag).",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.1
+          }
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.1
+          }
+        },
+        {
+          "slot": "c",
+          "type": "kanteling",
+          "params": {
+            "kanteling": 0.5,
+            "midden": 0.55
+          }
+        },
+        {
+          "slot": "d",
+          "type": "aanslag",
+          "params": {
+            "aanval": 0.5,
+            "sustain": 0.5
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Smal",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0.5,
+              "to": 0.66
+            },
+            {
+              "target": "b.freq",
+              "from": 0.5,
+              "to": 0.32
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Helder",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "c.kanteling",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 3,
+          "label": "Scherp",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "d.aanval",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Drum-punch",
+      "tags": [
+        "stems",
+        "drums",
+        "jungle"
+      ],
+      "uitleg": "Voor de drum-stem of een break: knop 1 = de klap harder, knop 2 = de staart korter (links) of langer (rechts), knop 3 = warm of helder, knop 4 = het DJ-filter.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "aanslag",
+          "params": {
+            "aanval": 0.5,
+            "sustain": 0.5
+          }
+        },
+        {
+          "slot": "b",
+          "type": "kanteling",
+          "params": {
+            "kanteling": 0.5,
+            "midden": 0.5
+          }
+        },
+        {
+          "slot": "c",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.15
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Punch",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.aanval",
+              "from": 0.5,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Staart",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.sustain",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 3,
+          "label": "Kleur",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "b.kanteling",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 4,
+          "label": "Filter",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "c.freq",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Master-lijm",
+      "tags": [
+        "master",
+        "lijm",
+        "compressor"
+      ],
+      "uitleg": "Voor de master: een rustige compressor (2:1, 30 ms) die de mix samenbindt, een kanteling en wat breedte. Knop 1 = hoeveel lijm (de drempel van −9 naar −24 dB), knop 2 = make-up (0 tot +6 dB). In de beginstand pakt hij alleen pieken boven −9 dB. Niet voor een track: de compressor van Chrome kijkt 6 ms vooruit, dan loopt die track 6 ms achter de rest.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "compressor",
+          "params": {
+            "drempel": 0.85,
+            "ratio": 0.2314,
+            "aanzet": 0.4924,
+            "verval": 0.6505,
+            "makeup": 0.5,
+            "meng": 1
+          }
+        },
+        {
+          "slot": "b",
+          "type": "kanteling",
+          "params": {
+            "kanteling": 0.5,
+            "midden": 0.5
+          }
+        },
+        {
+          "slot": "c",
+          "type": "widener",
+          "params": {
+            "breedte": 0.5,
+            "haas": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Lijm",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.drempel",
+              "from": 0.85,
+              "to": 0.6
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Make-up",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.makeup",
+              "from": 0.5,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Kleur",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "b.kanteling",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 4,
+          "label": "Breedte",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.breedte",
+              "from": 0.5,
+              "to": 0.7
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        3
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Break-kraker",
+      "tags": [
+        "jungle",
+        "dnb",
+        "drums"
+      ],
+      "uitleg": "Voor een amen of een andere break: knop 1 vervormt hard (en mengt het erbij), knop 2 = punch, knop 3 = het DJ-filter, knop 4 laat de break pompen op achtsten.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "aanslag",
+          "params": {
+            "aanval": 0.5,
+            "sustain": 0.5
+          }
+        },
+        {
+          "slot": "b",
+          "type": "distortion",
+          "params": {
+            "drive": 0.2,
+            "soort": 0.3333,
+            "toon": 0.6,
+            "niveau": 0.5,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "duiker",
+          "params": {
+            "diepte": 0,
+            "deling": 0.75,
+            "herstel": 0
+          }
+        },
+        {
+          "slot": "d",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.2
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Kraak",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.drive",
+              "from": 0.2,
+              "to": 0.8
+            },
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.55
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Punch",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.aanval",
+              "from": 0.5,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Filter",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "d.freq",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 4,
+          "label": "Pomp",
+          "default": 0,
+          "links": [
+            {
+              "target": "c.diepte",
+              "from": 0,
+              "to": 0.7
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        3
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Reese",
+      "tags": [
+        "dnb",
+        "bas",
+        "breed"
+      ],
+      "uitleg": "De reese-bas: twee zwevende stemmen (chorus) en wat vervorming, met een lowpass. Knop 1 maakt breder en zweveriger, knop 2 vuiler, knop 3 is het filter (links dicht).",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "chorus",
+          "params": {
+            "snelheid": 0.3,
+            "diepte": 0.3,
+            "vertraging": 0.55,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "distortion",
+          "params": {
+            "drive": 0.35,
+            "soort": 0,
+            "toon": 0.55,
+            "niveau": 0.5,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "c",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.3
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Zweef",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 0.7
+            },
+            {
+              "target": "a.diepte",
+              "from": 0.3,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Vuil",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.5
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Filter",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "c.freq",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        }
+      ],
+      "xy": [
+        1,
+        3
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Pomp",
+      "tags": [
+        "house",
+        "op de maat",
+        "sidechain"
+      ],
+      "uitleg": "Het pompen van een sidechain, op de klok: de track duikt op elke tel en komt terug. Knop 1 = hoe diep, knop 2 = de deling, knop 3 = hoe snel hij herstelt, knop 4 = filter.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "duiker",
+          "params": {
+            "diepte": 0,
+            "deling": 0.5,
+            "herstel": 0.5
+          }
+        },
+        {
+          "slot": "b",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.15
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Pomp",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.diepte",
+              "from": 0,
+              "to": 0.85
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Deling",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.deling",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Herstel",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.herstel",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Filter",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "b.freq",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        }
+      ],
+      "xy": [
+        1,
+        4
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Kam-zweep",
+      "tags": [
+        "ambient",
+        "resonantie",
+        "drone"
+      ],
+      "uitleg": "Een resonerende kam: het nummer gaat zingen op één toon en zijn boventonen. Knop 1 = hoeveel, knop 2 = welke toon, knop 3 = dof of helder, knop 4 laat de toon over vier maten zweven (modulator).",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "kam",
+          "params": {
+            "toon": 0.45,
+            "feedback": 0.75,
+            "demping": 0.3,
+            "meng": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Zingen",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 0.7
+            },
+            {
+              "target": "a.feedback",
+              "from": 0.75,
+              "to": 0.97,
+              "in": [
+                0.3,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Toon",
+          "default": 0.45,
+          "links": [
+            {
+              "target": "a.toon",
+              "from": 0.2,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Dof",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.demping",
+              "from": 0.05,
+              "to": 0.8
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Zweef",
+          "default": 0,
+          "links": [
+            {
+              "target": "mod.1.diepte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ],
+      "mods": [
+        {
+          "soort": "lfo",
+          "sync": true,
+          "deling": "4/1",
+          "vorm": "sinus",
+          "diepte": 0,
+          "doelen": [
+            {
+              "target": "a.toon",
+              "diepte": 0.15
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Schaduw",
+      "tags": [
+        "ambient",
+        "vreemd",
+        "frequentieschuif"
+      ],
+      "uitleg": "Een frequentieschuif: alles schuift een paar Hz tot honderden Hz op, de harmonie valt uit elkaar. Klein (knop 2 vlak bij het midden) = een draaiende zweving; groot = metaal. Knop 3 = galm erachter.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "freqschuif",
+          "params": {
+            "schuif": 0.55,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.6,
+            "toon": 0.5,
+            "meng": 0,
+            "freeze": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Schaduw",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 0.6
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Schuif",
+          "default": 0.55,
+          "links": [
+            {
+              "target": "a.schuif",
+              "from": 0.25,
+              "to": 0.75
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 3,
+          "label": "Ruimte",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.45
+            }
+          ]
+        }
+      ],
+      "xy": [
+        2,
+        1
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Stappenfilter",
+      "tags": [
+        "live",
+        "op de maat",
+        "ritme"
+      ],
+      "uitleg": "Een lowpass die op zestienden een patroon speelt (stappen-modulator op de maat). Knop 1 = hoe diep het patroon, knop 2 = resonantie, knop 3 = het filter zelf. In de beginstand speelt er niets.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "filter",
+          "params": {
+            "freq": 0.5,
+            "reso": 0.35
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Stappen",
+          "default": 0,
+          "links": [
+            {
+              "target": "mod.1.diepte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Reso",
+          "default": 0.35,
+          "links": [
+            {
+              "target": "a.reso",
+              "from": 0.1,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Filter",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.freq",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ],
+      "mods": [
+        {
+          "soort": "stap",
+          "deling": "1/16",
+          "stappen": [
+            1,
+            0,
+            0.6,
+            0,
+            1,
+            0.3,
+            0.8,
+            0,
+            1,
+            0,
+            0.5,
+            0.2,
+            1,
+            0,
+            0.7,
+            0.4
+          ],
+          "glad": 0.25,
+          "diepte": 0,
+          "doelen": [
+            {
+              "target": "a.freq",
+              "diepte": -0.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Droedel",
+      "tags": [
+        "live",
+        "toeval",
+        "zang"
+      ],
+      "uitleg": "Toeval op de maat: elke achtste een andere klinker (zaad 7: elke keer hetzelfde patroon). Knop 1 = hoeveel toeval, knop 2 = hoeveel van het vocaalfilter je hoort, knop 3 = hoe scherp.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "klinker",
+          "params": {
+            "klinker": 0.5,
+            "reso": 0.45,
+            "schuif": 0.5,
+            "meng": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Droedel",
+          "default": 0,
+          "links": [
+            {
+              "target": "mod.1.diepte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Klinker",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Scherp",
+          "default": 0.45,
+          "links": [
+            {
+              "target": "a.reso",
+              "from": 0.1,
+              "to": 0.9
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ],
+      "mods": [
+        {
+          "soort": "toeval",
+          "deling": "1/8",
+          "zaad": 7,
+          "glad": 0.3,
+          "diepte": 0,
+          "doelen": [
+            {
+              "target": "a.klinker",
+              "diepte": 0.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Ademende galm",
+      "tags": [
+        "ambient",
+        "galm",
+        "volger"
+      ],
+      "uitleg": "Galm die wijkt als het nummer luid is en opbloeit in de stiltes (volger op de ingang, omgekeerd). Knop 1 = hoeveel galm, knop 2 = hoe sterk hij ademt, knop 3 = de lengte.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.6,
+            "toon": 0.5,
+            "meng": 0,
+            "freeze": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Galm",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 0.7
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Adem",
+          "default": 0,
+          "links": [
+            {
+              "target": "mod.1.diepte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Lengte",
+          "default": 0.6,
+          "links": [
+            {
+              "target": "a.grootte",
+              "from": 0.35,
+              "to": 0.9
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ],
+      "mods": [
+        {
+          "soort": "volger",
+          "aanzet": 0.05,
+          "verval": 0.6,
+          "gevoel": 0.5,
+          "diepte": 0,
+          "doelen": [
+            {
+              "target": "a.meng",
+              "diepte": -0.6
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "XY: wah en vuil",
+      "tags": [
+        "xy",
+        "funk",
+        "bas"
+      ],
+      "uitleg": "Voor de XY-pad: links-rechts zet de auto-wah erin, onder-boven vervormt. Samen een funk-bas die gaat praten.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "autowah",
+          "params": {
+            "gevoel": 0.5,
+            "basis": 0.35,
+            "bereik": 0.6,
+            "reso": 0.5,
+            "aanzet": 0.3,
+            "verval": 0.5,
+            "meng": 0
+          }
+        },
+        {
+          "slot": "b",
+          "type": "distortion",
+          "params": {
+            "drive": 0.3,
+            "soort": 0,
+            "toon": 0.6,
+            "niveau": 0.5,
+            "meng": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Wah",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 1
+            },
+            {
+              "target": "a.bereik",
+              "from": 0.3,
+              "to": 0.8
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Vuil",
+          "default": 0,
+          "links": [
+            {
+              "target": "b.meng",
+              "from": 0,
+              "to": 0.6
+            },
+            {
+              "target": "b.drive",
+              "from": 0.3,
+              "to": 0.75
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "XY: galm en lengte",
+      "tags": [
+        "xy",
+        "ambient",
+        "galm"
+      ],
+      "uitleg": "Voor de XY-pad: links-rechts hoeveel galm, onder-boven hoe lang en hoe helder. Met de vinger erop speel je de ruimte.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "reverb",
+          "params": {
+            "grootte": 0.45,
+            "toon": 0.5,
+            "meng": 0,
+            "freeze": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Galm",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 0.8
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Lengte",
+          "default": 0.3,
+          "links": [
+            {
+              "target": "a.grootte",
+              "from": 0.3,
+              "to": 0.95
+            },
+            {
+              "target": "a.toon",
+              "from": 0.35,
+              "to": 0.75
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    },
+    {
+      "schema": 1,
+      "name": "Kanteling",
+      "tags": [
+        "master",
+        "één knop",
+        "eq"
+      ],
+      "uitleg": "Eén knop die de hele mix warmer (links) of helderder (rechts) maakt, rond een midden dat je met knop 2 kiest. Ook goed op de master.",
+      "chain": [
+        {
+          "slot": "a",
+          "type": "kanteling",
+          "params": {
+            "kanteling": 0.5,
+            "midden": 0.5
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Toon",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.kanteling",
+              "from": 0,
+              "to": 1
+            }
+          ],
+          "bipolar": true
+        },
+        {
+          "place": 2,
+          "label": "Midden",
+          "default": 0.5,
+          "links": [
+            {
+              "target": "a.midden",
+              "from": 0.2,
+              "to": 0.8
+            }
+          ]
+        }
+      ],
+      "xy": [
+        1,
+        2
+      ]
+    }
+  ]
+}

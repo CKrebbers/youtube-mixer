@@ -223,3 +223,10 @@ button[disabled] { opacity: .35; cursor: default; }
 .tp-kop strong { font-size: 11px; letter-spacing: .08em; color: var(--dim); margin-right: 6px; }
 .tp-kop button.aan { background: var(--klok); color: var(--bg); border-color: var(--klok); }
 .tp-knoppen { display: grid; grid-template-columns: repeat(8, 64px); gap: 6px; }
+
+/* ---- effect en sends in de kolom --------------------------------------------- */
+.t-fx { display: grid; grid-template-columns: 22px 1fr 22px; gap: 3px; align-items: center; }
+.t-fx > button { min-height: 22px; padding: 0; }
+.t-fx .b-fx[data-stand="aan"], .tp-kop .b-fx.aan { background: var(--sync); border-color: var(--sync); color: var(--bg); }
+.t-fx .knop.klein { grid-column: 1 / -1; display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 4px; }
+.t-fx .knop.klein canvas { width: 30px; height: 30px; }

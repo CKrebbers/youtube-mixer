@@ -18,8 +18,10 @@ import { Bus, TRACKS } from '../kern/bus.js';
 import { Beatgrid, TapTempo } from '../kern/grid.js';
 import { Track } from './track.js';
 import { definieerActies } from './acties.js';
+import { definieerFx } from './acties-fx.js';
 import { Handelingenlog, setId } from './log.js';
 import { Sampler } from './sampler.js';
+import { Patronen } from './patronen.js';
 
 /** Elke zoveel ms plannen de gekoppelde tracks hun lijn opnieuw vooruit. */
 export const TIK_MS = 250;
@@ -44,7 +46,7 @@ export class Engine extends Emitter {
   /**
    * @param {{ ctx: BaseAudioContext, audio: object, tracks?: number, timer?: boolean }} opties
    */
-  constructor({ ctx, audio, tracks = TRACKS, timer = true }) {
+  constructor({ ctx, audio, tracks = TRACKS, timer = true, patronenTimers = undefined }) {
     super();
     this.ctx = ctx;
     this.audio = audio;
@@ -60,6 +62,7 @@ export class Engine extends Emitter {
     this._instNr = new Array(tracks + 1).fill(0);
     this._speelTrack = null;   // de laatste track die een instrument kreeg (waar een keyboard heen speelt)
     this.sampler = new Sampler(this, audio.sampler ? audio.sampler(ctx, this.mixer) : null);
+    this.patronen = new Patronen(this, patronenTimers ? { timers: patronenTimers } : undefined);
     // Verandert de klok door iets anders dan de pitchfader van een track, dan staat die fader
     // niet meer op de stand van de klok: eerst weer erlangs (soft-takeover, modeltest K4c).
     this.klokBron = null;
@@ -82,6 +85,7 @@ export class Engine extends Emitter {
     this.bus.on('geweigerd', ({ id, reden }) => this.meld(`${id}: ${reden}`, 'fout', `geweigerd:${id}`));
     this._bewaakContext();
     definieerActies(this);
+    this.fx = definieerFx(this);
     this.klaar = Promise.all(this.tracks.map(async (t) => {
       t.speler = await audio.speler(ctx);
       t.speler.onfout = (bericht, kapot = true) => this.meld(kapot
@@ -138,7 +142,7 @@ export class Engine extends Emitter {
   }
 
   /** Mag de klok stoppen? Niet zolang een track hem nodig heeft (speelt gekoppeld, wacht op de maat; K3). */
-  klokNodig() { const nu = this.nu(); return this.sampler.speelt || this.tracks.some((t) => t.heeftKlokNodig(nu) || t.speelt); }
+  klokNodig() { const nu = this.nu(); return this.sampler.speelt || this.patronen.speelt || this.tracks.some((t) => t.heeftKlokNodig(nu) || t.speelt); }
 
   // ---- mixer ------------------------------------------------------------------
 

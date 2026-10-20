@@ -283,6 +283,66 @@ class NepAnalyser extends NepNode {
   }
 }
 
+// ---- additief voor de effectlaag (src/audio/fx/, plak 2) ------------------------------------
+// Zoals de echte waar het ertoe doet: delayTime begrensd door maxDelayTime, een bron start en
+// stopt hooguit één keer (InvalidStateError), onended komt ASYNCHROON (zoals de browser).
+
+class NepDelay extends NepNode {
+  constructor(ctx, max = 1) {
+    if (!(max > 0 && max < 180)) throw new RangeError(`createDelay: maxDelayTime ${max}`);
+    super(ctx, 'delay');
+    this.maxDelayTime = max;
+    this.delayTime = this._param(0, 0, max);
+  }
+}
+
+class NepBron extends NepNode {
+  constructor(ctx, soort) {
+    super(ctx, soort, 0, 1);
+    this.gestart = null; this.gestopt = null; this.onended = null;
+    ctx._omg.bronnen.push(this);
+  }
+  start(t = 0, offset = 0) {
+    if (this.gestart !== null) throw fout('InvalidStateError', `${this.soort}.start: al gestart`);
+    if (!(t >= 0) || !Number.isFinite(t)) throw new RangeError(`${this.soort}.start: tijd ${t}`);
+    this.gestart = t; this.offset = offset;
+  }
+  stop(t = 0) {
+    if (this.gestart === null) throw fout('InvalidStateError', `${this.soort}.stop: niet gestart`);
+    if (!(t >= 0) || !Number.isFinite(t)) throw new RangeError(`${this.soort}.stop: tijd ${t}`);
+    this.gestopt = t;
+    queueMicrotask(() => this.onended?.());
+  }
+}
+
+class NepOscillator extends NepBron {
+  constructor(ctx) {
+    super(ctx, 'oscillator');
+    this.type = 'sine';
+    this.frequency = this._param(440);
+    this.detune = this._param(0);
+  }
+}
+
+class NepBufferSource extends NepBron {
+  constructor(ctx) {
+    super(ctx, 'buffersource');
+    this.buffer = null; this.loop = false; this.loopStart = 0; this.loopEnd = 0;
+    this.playbackRate = this._param(1);
+    this.detune = this._param(0);
+  }
+}
+
+class NepWaveShaper extends NepNode {
+  constructor(ctx) { super(ctx, 'waveshaper'); this.curve = null; this._os = 'none'; }
+  get oversample() { return this._os; }
+  set oversample(x) { if (!['none', '2x', '4x'].includes(x)) throw new TypeError(`oversample '${x}'`); this._os = x; }
+}
+
+class NepPanner extends NepNode {
+  constructor(ctx) { super(ctx, 'stereopanner'); this.pan = this._param(0, -1, 1); }
+}
+
 class NepPort {
   constructor() { this.berichten = []; this.dicht = false; this.onmessage = null; }
   postMessage(m) { if (!this.dicht) this.berichten.push(m); }
@@ -339,6 +399,17 @@ export class NepAudioContext extends EventTarget {
     return s;
   }
   createChannelMerger(n = 6) { return new NepNode(this, 'merger', n, 1); }
+  // ---- additief (effectlaag) ----
+  createDelay(max = 1) { return new NepDelay(this, max); }
+  createOscillator() { return new NepOscillator(this); }
+  createBufferSource() { return new NepBufferSource(this); }
+  createWaveShaper() { return new NepWaveShaper(this); }
+  createStereoPanner() { return new NepPanner(this); }
+  createBuffer(kanalen, lengte, sr) {
+    if (!(kanalen >= 1 && lengte >= 1 && sr >= 3000)) throw fout('NotSupportedError', `createBuffer(${kanalen}, ${lengte}, ${sr})`);
+    const d = Array.from({ length: kanalen }, () => new Float32Array(lengte));
+    return { numberOfChannels: kanalen, length: lengte, sampleRate: sr, duration: lengte / sr, getChannelData: (i) => d[i] };
+  }
   resume() { if (this._omg.staat !== 'closed') this._omg.staat = 'running'; return Promise.resolve(); }
   suspend() { if (this._omg.staat !== 'closed') this._omg.staat = 'suspended'; return Promise.resolve(); }
   close() { this._omg.staat = 'closed'; return Promise.resolve(); }
@@ -358,6 +429,7 @@ export class NepOmgeving {
     this.worklets = [];
     this.modules = [];
     this.processors = new Set();
+    this.bronnen = [];      // oscillatoren en bufferbronnen (effectlaag): wie liep, wie stopte
     this.laad = async () => {};
     this.ctx = new NepAudioContext(this, sampleRate, baseLatency);
   }

@@ -131,6 +131,14 @@
           <div class="fader vol" data-waarde="track.{n}.fader" data-label="VOL"></div>
         </div>
       </div>
+      <div class="t-fx" aria-label="Effect en sends">
+        <button data-actie="track.{n}.fx.vorig" title="Vorig effect-rack">‹</button>
+        <button class="b-fx" data-actie="track.{n}.fx.aan" data-lamp title="Effect aan/uit (het rack en zijn knoppen: tabblad Track)">FX</button>
+        <button data-actie="track.{n}.fx.volgend" title="Volgend effect-rack">›</button>
+        <div class="knop klein" data-waarde="track.{n}.fx.mix" data-label="MIX"></div>
+        <div class="knop klein" data-waarde="track.{n}.send.a" data-label="ECHO"></div>
+        <div class="knop klein" data-waarde="track.{n}.send.b" data-label="GALM"></div>
+      </div>
       <button class="t-kant" data-actie="track.{n}.kant" title="Crossfaderkant: A → B → thru">thru</button>
     </article>
   </template>

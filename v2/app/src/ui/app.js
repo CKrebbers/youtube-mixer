@@ -13,7 +13,7 @@ import { schrijversVoor } from './schrijver.js';
 import { opzetLibrary } from './library.js';
 import { opzetControllers } from './controllers.js';
 import { opzetIndelingPaneel } from './indeling-paneel.js';
-import { opzetTrackPaneel, instrumentSectie } from './track-paneel.js';
+import { opzetTrackPaneel, instrumentSectie, effectSectie } from './track-paneel.js';
 
 const $ = (s, w = document) => w.querySelector(s);
 const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; };
@@ -24,6 +24,7 @@ const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
 const audio = { ...maakAudio(), opnemer: (c, mixer) => new Opnemer(c, mixer.analyser), sampler: (c, mixer) => maakSamplerUitgang(c, mixer) };
 const engine = new Engine({ ctx, audio });
 window.varve = engine;   // voor de console en de headless proeven
+audio.sjablonen?.().then((lijst) => { if (lijst) engine.fx.zetSjablonen(lijst); }).catch(() => engine.meld('de effect-sjablonen kwamen niet binnen: ‹ › loopt per effect', 'fout', 'fx'));
 const bus = engine.bus;
 const overzichten = new Map();   // n -> Float32Array
 
@@ -192,6 +193,7 @@ for (const b of document.querySelectorAll('.tabs [data-tab]')) b.addEventListene
 try { const t = localStorage.getItem('varve.v2.tab'); if (t) kiesTab(t); } catch { /* geen opslag */ }
 const tabTrackN = $('#tab-track-n');
 const trackPaneel = opzetTrackPaneel({ engine, paneel: $('#paneel-track') });
+trackPaneel.sectie(effectSectie({ engine, bus, maakKnop }));
 trackPaneel.sectie(instrumentSectie({ engine, bus, maakKnop }));
 
 // ---- tekenen ------------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 // De mixer: crossfader, master en limiter (ARCHITECTUUR.md, contract "Strip en mixer").
 //
 //   strips (kant) -> in (master gain) -+-> compressor -> compUit -+-> limiter (uitgang van de limiterstap)
+//   send-bussen A/B ---^
 //                                      `-> worklet -> wlUit ------'        -> analyser -> uit (ctx.destination)
 //                                                 `-> (uitgang 1: gain) -> grAnalyser       `-> meter
 //
@@ -14,10 +15,15 @@
 //     twee complete paden, en het oude pas los als de audioklok voorbij de fade is.
 // Lukt laden niet, dan blijft de compressor (met de reden in limiterStand()).
 // Gooit de worklet later een fout, dan komt de compressor terug.
+//
+// De send-bussen (fx/sends.js, BOUWPLAN "Effecten"): echo (A) en galm (B), gedeeld door alle
+// tracks, helemaal nat, op de ingang van de master (vóór de limiter, na niets anders). Lui: een bus
+// staat pas op de master als een track hem voor het eerst iets instuurt (sendIn).
 import { clamp } from '../kern/emitter.js';
 import { startDrempel, zetHellingen } from './overgang.js';
 import { faderGain, zetDoel, killVersterking, naAudioklok, maakMeter, KILL_FADE, TAU } from './strip.js';
 import { PLAFOND_DB, VOORUIT, RELEASE, MARGE_DB, vertragingFrames } from './limiter-kern.js';
+import { maakSendBus, BUSSEN } from './fx/sends.js';
 
 /** De vertraging van Chrome's DynamicsCompressor (zijn vooruitblik): 288 samples, gemeten in v1 (5 okt). */
 export const COMPRESSOR_VERTRAGING = 0.006;
@@ -104,6 +110,39 @@ class Mixer {
     this._grBuf = null;
     /** Waar als de worklet erin zit, onwaar als het de compressor blijft. */
     this.klaar = limiter ? this._laad() : Promise.resolve(false);
+
+    this._bussen = { A: null, B: null };
+    this._busKlok = null;
+    const mixer = this;
+    /** De twee send-bussen als insert-slots (knoppen: sends.A.setPlek(k, v)). Pas bij het eerste gebruik gemaakt. */
+    this.sends = Object.freeze({ get A() { return mixer._bus('A').slot; }, get B() { return mixer._bus('B').slot; } });
+  }
+
+  // ---- sends ----------------------------------------------------------------------
+
+  _bus(b) {
+    if (!this._bussen[b]) {
+      const bus = maakSendBus(this.ctx, b, this.in);
+      if (this._busKlok) bus.slot.setKlok(this._busKlok.klok, this._busKlok.opties);
+      this._bussen[b] = bus;
+    }
+    return this._bussen[b];
+  }
+
+  /** De ingang van bus 'A' (echo) of 'B' (galm) voor een track: de bus wordt wakker en komt op de master. */
+  sendIn(bus) {
+    const b = typeof bus === 'string' ? bus.toUpperCase() : bus;
+    if (!BUSSEN.includes(b)) throw new TypeError(`mixer.sendIn: onbekende bus '${bus}'`);
+    return this._bus(b).aansluiten();
+  }
+
+  /** Staat bus b op de master (heeft iemand er ooit iets in gestuurd)? */
+  sendAan(bus) { return !!this._bussen[String(bus).toUpperCase()]?.aangesloten; }
+
+  /** De maatklok voor de bussen (de echo op de maat), zie fx/klok.js. */
+  zetKlok(klok, opties = {}) {
+    this._busKlok = { klok, opties };
+    for (const bus of Object.values(this._bussen)) bus?.slot.setKlok(klok, opties);
   }
 
   // ---- bediening ----------------------------------------------------------------
@@ -285,6 +324,7 @@ class Mixer {
         this.limiterNode = null;
       }
       this._meter.los();
+      for (const bus of Object.values(this._bussen)) bus?.vernietig();
       for (const n of [this.in, this.compressor, this._compUit, this._wl, this._gr, this.limiter, this.analyser]) {
         try { n?.disconnect(); } catch (_) {}
       }
