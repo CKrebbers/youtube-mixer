@@ -59,3 +59,15 @@ Schrijf het in een zin per stap in `v2/meting/uitslag/verstoring.md`.
 Twee uur spelen met v2 en tegelijk `node v2/meting/soak.mjs 120 --uit v2/meting/uitslag/set.json`
 is te veel tegelijk; neem in plaats daarvan de set op (komt in plak 2) of draai na de set de soak
 van 2 uur. Je oordeel in een paar zinnen in `v2/meting/uitslag/set.md`.
+
+## 8. De APC40 en de indeling (plak 3, 20 min)
+Open de mixer (`node v2/app/server.mjs`, http://localhost:8780) met de APC aangesloten, v1 dicht.
+1. Gaan alle lampjes en ringen aan na het openen? Trek de USB eruit en steek hem terug: komen ze terug (de APC valt na een replug in 0x40; wij sturen dan opnieuw 0x42)?
+2. Speel een kwartier en typ dan in de console `varveCtl.hub.status().echos`. Is dat 0, dan kaatst de APC niets terug en mag het echofilter uit.
+3. Wissel van focus en draai meteen aan een device knob: springt de waarde, of draait hij door vanaf de ring?
+4. Brandt Clip Stop (lus) als de lus aan staat?
+5. De tempo-encoder en Cue Level: hoeveel tikken geeft een draai, en is 1/64 per tik voor de koptelefoon prettig?
+6. In het donker: hotcues 1–4 (geel) tegen 5–8 (oranje), de klank-laag (magenta). Zie je het knipperen op de tel?
+7. Hapert of crasht Chrome bij het openen (~141 berichten bij de init)?
+8. De indeling onder je handen: rij 1 als bas weg per kolom, laag-EQ op device knob 4, het toetsenbord naast het scherm. Wat zit in de weg?
+Schrijf het per punt in één zin in `v2/meting/uitslag/apc.md`.

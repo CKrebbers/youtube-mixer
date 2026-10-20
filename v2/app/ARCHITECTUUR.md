@@ -125,3 +125,53 @@ Klok, koppeling, bus, speler, strip en mixer; acht tracks met een nummer (uit de
 demonummer); sync aan/uit, jog, nudge, pitchfader = klok-tempo (alleen hoorbaar), tempoknop van de
 klok, Shift + Sync = klok naar dit nummer, starten op de maat. Scenario's klok-S01 … klok-S21 als
 tests. Nog niet: sends, cue, stems, effecten, sampler, instrumenten, MIDI.
+
+## Plak 2 — het DJ-instrument (deels; effecten en koptelefoon volgen)
+
+- **Lus** (`speler-kern.js`, `track.js`):
+  - Een segment mag `la`/`lb` hebben (seconden). De kern vouwt terug en vloeit de laatste 10 ms
+    (`LOOP_NAAD`) lineair over naar wat vlak vóór `la` staat.
+  - Op de track ligt een lus in tellen, vanaf de tel onder de plek, binnen één stuk van de
+    tempokaart.
+  - Gekoppeld rekent de motor in de tellengte van de lus.
+  - Lus uit = hele lussen terug in de verschuiving: geen sprong, de fase blijft.
+  - Sprong buiten de lus = lus eraf; beatjump in een lus = de lus schuift mee.
+- **Hotcues en cue** horen bij het nummer. De engine meldt `hotcue` en `cue`, de app bewaart ze op
+  `/api/v2/nummer/<id>`, en ze komen terug bij het laden. Cue en hotcues staan vast in de
+  pagina-cache.
+- **Log** (`engine/log.js`):
+  - Altijd aan zodra de context loopt.
+  - Eerst een beginstand, dan `[t, id, v, {bron}]` op de audioklok, en laden als regel.
+  - ASCII; per seconde een stuk op zijn byte.
+- **Opname** (`audio/opnemer.js`):
+  - Tapt de master ná de limiter via een SharedArrayBuffer-ring, zodat de audiothread geen afval
+    maakt.
+  - Elk stuk gaat op zijn frame; een gat is stilte.
+  - De opname krijgt de id van het log en zet een regel `{ opname, vanaf }` in het log.
+- **Schrijven** (`ui/schrijver.js`): opnieuw proberen zolang de server weg is (`kern/herhaal.js`,
+  uit v1), met een begrensde rij en één melding.
+- **Eigen data** (`server/data.mjs`):
+  - Staat in `VARVE_V2_DATA`, standaard `~/.varve/v2`: `nummers/`, `opnames/` en `instellingen/`.
+  - Een proefserver schrijft altijd in een tijdelijke map.
+- **Library** (`ui/library-lijst.js` puur, `ui/library.js` scherm):
+  - Een virtuele lijst, met sorteren en zoeken zonder accenten.
+  - `library.volgende/.vorige/.laad` op de bus; laden gaat naar de focus-track, met de tweede druk
+    over een spelende track.
+  - Streamen van audio en het overzicht uit v1's `peaks.bin`.
+
+## Plak 3 — controllers (`src/control/`, `ui/controllers.js`, `indelingen/*.json`)
+
+- **Laag:** `control/` leest alleen `kern/`. MIDI, de Web Lock en het venster komen van buiten
+  (`ui/controllers.js`).
+- **Een indeling is data:** `{ schema: 1, naam, apparaat, regels: [{ control, actie, gedrag, shift?, laag?, led? }] }`.
+  - Het gedrag is `absoluut` (soft-takeover), `eindeloos` (alleen het verschil), `trigger` of
+    `schakelaar`.
+  - Een actie mag `{k}` (kolom) en `{focus}` bevatten.
+  - Eerst de laag, dan shift daarbinnen.
+  - Loslaten gaat altijd naar de actie van het indrukken.
+- **Per nummer:** `ctl.kiesVoorNummer(id)` bij elke focuswissel en elke laad op de focus-track.
+  Geleerde indelingen en de koppeling per nummer staan in `instellingen/`.
+- **Lampjes** lezen de bus volgens de actieve indeling, met diffing:
+  - `null` = uit, 0 = leeg, gevuld = de donkere kleur, 1 = aan;
+  - knipperen op de tel van de klok zoals je hem hoort (`klok.fase`);
+  - wachtrij van 16 berichten per 4 ms.
