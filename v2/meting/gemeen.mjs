@@ -9,10 +9,14 @@ import { dirname, join } from 'node:path';
 
 export const APP = join(dirname(fileURLToPath(import.meta.url)), '..', 'app');
 
-export async function opzet({ poort, media = '/geen-media', viewport = { width: 1440, height: 900 }, args = [] } = {}) {
+export async function opzet({ poort, media = '/geen-media', data = null, viewport = { width: 1440, height: 900 }, args = [] } = {}) {
   process.env.VARVE_V2_POORT = String(poort);
   const { maakServer } = await import(join(APP, 'server.mjs'));
-  const server = maakServer({ media });
+  // Een proef schrijft nooit in de echte data (~/.varve/v2): een eigen tijdelijke map.
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  data ??= mkdtempSync(join(tmpdir(), 'varve-v2-proef-'));
+  const server = maakServer({ media, data });
   await new Promise((r) => server.listen(poort, '127.0.0.1', r));
   const require = createRequire(process.env.PLAYWRIGHT_MODULE ?? '/opt/node22/lib/node_modules/');
   const { chromium } = require('playwright');
@@ -26,7 +30,7 @@ export async function opzet({ poort, media = '/geen-media', viewport = { width: 
   await page.evaluate(async () => { await window.varve.ctx.resume(); await window.varve.klaar; await window.varve.mixer.klaar; });
   const cdp = await page.context().newCDPSession(page);
   return {
-    server, browser, page, cdp, fouten,
+    server, browser, page, cdp, fouten, data,
     async sluit() { await browser.close(); server.close(); },
   };
 }

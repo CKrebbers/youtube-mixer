@@ -5,7 +5,10 @@
  */
 import { Engine } from '../engine/engine.js';
 import { maakAudio } from '../audio/index.js';
-import { maakKnop, maakFader, maakJog, bindKnoppen, bindSchuiven } from './bediening.js';
+import { maakKnop, maakFader, maakJog, bindKnoppen, bindSchuiven, bindLampjes } from './bediening.js';
+import { Opnemer } from '../audio/opnemer.js';
+import { setId } from '../engine/log.js';
+import { schrijversVoor } from './schrijver.js';
 import { overzicht, overzichtUitPeaks, maakDemo, DEMOS, stroomVanWav } from './bronnen.js';
 
 const $ = (s, w = document) => w.querySelector(s);
@@ -14,7 +17,7 @@ const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floo
 // ---- opzet ----------------------------------------------------------------------
 
 const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
-const audio = maakAudio();
+const audio = { ...maakAudio(), opnemer: (c, mixer) => new Opnemer(c, mixer.analyser) };
 const engine = new Engine({ ctx, audio });
 window.varve = engine;   // voor de console en de headless proeven
 const bus = engine.bus;
@@ -30,8 +33,8 @@ for (const t of engine.tracks) {
   const frag = tpl.content.cloneNode(true);
   const el = frag.querySelector('.track');
   el.dataset.n = n;
-  for (const x of el.querySelectorAll('[data-actie], [data-waarde], [data-kill], [data-jog]')) {
-    for (const k of ['actie', 'waarde', 'kill', 'jog']) if (x.dataset[k]) x.dataset[k] = x.dataset[k].replace('{n}', n);
+  for (const x of el.querySelectorAll('[data-actie], [data-actie-shift], [data-waarde], [data-kill], [data-jog]')) {
+    for (const k of ['actie', 'actieShift', 'waarde', 'kill', 'jog']) if (x.dataset[k]) x.dataset[k] = x.dataset[k].replace('{n}', n);
   }
   el.querySelector('.t-nr').textContent = n;
   tracksEl.append(el);
@@ -58,6 +61,33 @@ for (const t of engine.tracks) {
 }
 bindKnoppen(document.body, bus);
 const schuiven = bindSchuiven(document.body, bus);
+const lampjes = bindLampjes(document.body, bus);
+
+// ---- log (altijd aan), opname en wat bij een nummer hoort -------------------------------
+
+const schrijvers = schrijversVoor({ meld: (t, soort, sleutel) => engine.meld(t, soort, sleutel) });
+// Het log begint zodra de klok van de context loopt (eerder staat zijn tijd stil), één keer per pagina (v1 J18).
+const startLog = () => { if (ctx.state === 'running' && !engine.log.loopt && !startLog.gedaan) { startLog.gedaan = true; engine.log.start(setId()); } };
+ctx.addEventListener('statechange', startLog);
+setInterval(() => { const st = engine.log.stuk(); if (st) schrijvers.log.zet(st); }, 1000);
+addEventListener('pagehide', () => { const st = engine.log.stuk(); if (st) navigator.sendBeacon?.(`/api/v2/log/${st.id}?van=${st.van}`, new Blob([st.tekst], { type: 'text/plain' })); });
+if (engine.opnemer) {
+  engine.opnemer.on('stuk', ({ frame, data }) => schrijvers.opname.zet({ id: engine._opnameId, frame, data }));
+  engine.opnemer.on('fout', (t) => engine.meld(`opname: ${t}`, 'fout', 'opname'));
+}
+engine.on('opname', async ({ stand, id, frames }) => {
+  if (stand === 'aan') { engine.meld(`opname loopt: ${id}`, 'info', 'opname'); return; }
+  await schrijvers.opname.leeg();
+  await fetch(`/api/v2/opname/${id}/klaar?frames=${frames}`, { method: 'POST' }).then((r) => r.arrayBuffer()).catch(() => {});
+  engine.meld(`opname bewaard: ${id} (${tijd(frames / ctx.sampleRate)})`, 'info', 'opname');
+});
+// Hotcues en het cuepunt horen bij het nummer: bewaren op de server (~/.varve/v2/nummers).
+const bewaarNummer = (id, data) => fetch(`/api/v2/nummer/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) })
+  .then((r) => { r.arrayBuffer().catch(() => {}); if (!r.ok) engine.meld(`bewaren van ${id} lukte niet (${r.status})`, 'fout', `nummer:${id}`); })
+  .catch(() => engine.meld(`bewaren van ${id}: server niet bereikbaar`, 'fout', `nummer:${id}`));
+engine.on('hotcue', ({ id, hotcues }) => { if (!id.startsWith('demo')) bewaarNummer(id, { hotcues }); });
+engine.on('cue', ({ id, P }) => { if (!id.startsWith('demo')) bewaarNummer(id, { cue: P }); });
+const recTijd = $('#rec-tijd');
 
 // ---- meldingen ----------------------------------------------------------------------
 
@@ -161,10 +191,16 @@ function laadOp(n, id) {
         pcm = await stroomVanWav(`/api/library/${encodeURIComponent(x.id)}/audio`);
       }
       nummer.grid = grid;
+      if (!x.demo) {
+        // Wat bij dit nummer bewaard is (hotcues, cue). Lukt het niet, dan laden we zonder.
+        const d = await fetch(`/api/v2/nummer/${encodeURIComponent(x.id)}`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+        nummer.hotcues = d.hotcues ?? null;
+        nummer.cue = d.cue ?? 0;
+      }
       overzichten.set(n, pcm.paginas ? overzicht(pcm) : null);
       if (!pcm.paginas) {
         fetch(`/api/library/${encodeURIComponent(x.id)}/peaks`)
-          .then((r) => (r.ok ? r.arrayBuffer() : null))
+          .then((r) => (r.status === 200 ? r.arrayBuffer() : null))
           .then((b) => { if (b && engine.track(n).nummer?.id === x.id) overzichten.set(n, overzichtUitPeaks(b)); })
           .catch(() => { /* geen overzicht: niet erg */ });
       }
@@ -281,6 +317,16 @@ function teken() {
     tekenOverzicht(v, nu);
   }
   schuiven.teken();
+  lampjes.teken();
+  for (const v of vakken) {
+    const l = v.knop('.lus-lengte'), n = v.t.lus?.n ?? v.t.lusLengte;
+    const tekst = n >= 1 ? String(n) : `1/${Math.round(1 / n)}`;
+    if (l.textContent !== tekst) l.textContent = tekst;
+    v.el.classList.toggle('focus', engine.focus === v.n);
+  }
+  const op = engine.opnemer;
+  const rec = op?.loopt ? tijd(op.frames / ctx.sampleRate) : '';
+  if (recTijd.textContent !== rec) recTijd.textContent = rec;
   const m = engine.mixer.meterMaster?.();
   if (m) {
     const h = `${Math.min(100, Math.max(0, (20 * Math.log10(m.piek + 1e-9) + 48) / 48 * 100))}%`;

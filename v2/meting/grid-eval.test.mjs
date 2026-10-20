@@ -187,7 +187,7 @@ test('de CLI tegen de echte v2-server (maakServer, tijdelijke library.db, alleen
     db.close();
     const tmap = join(map, 'tikken'); mkdirSync(tmap);
     for (const t of tikken) writeFileSync(join(tmap, `tikken-${t.id}.json`), JSON.stringify(t));
-    const srv = maakServer({ media: map });
+    const srv = maakServer({ media: map, data: join(map, 'v2-data') });
     await new Promise((r) => srv.listen(poort, '127.0.0.1', r));
     try {
       const a = await cli(['--tikken', tmap, '--server', `http://localhost:${poort}`]);

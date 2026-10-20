@@ -152,7 +152,8 @@ export function bindKnoppen(wortel, bus) {
   wortel.addEventListener('pointerdown', (e) => {
     const b = e.target.closest('button[data-actie]');
     if (!b || b.disabled) return;
-    const id = b.dataset.actie;
+    // Met shift (of alt) de tweede betekenis, als de knop die heeft (hotcue wissen).
+    const id = (e.shiftKey || e.altKey) && b.dataset.actieShift ? b.dataset.actieShift : b.dataset.actie;
     bus.doe(id, true);
     const los = () => { bus.doe(id, false); window.removeEventListener('pointerup', los); window.removeEventListener('pointercancel', los); };
     window.addEventListener('pointerup', los);
@@ -169,4 +170,22 @@ export function bindSchuiven(wortel, bus) {
   const lijst = [...wortel.querySelectorAll('input[type=range][data-waarde]')];
   for (const s of lijst) s.addEventListener('input', () => bus.doe(s.dataset.waarde, Number(s.value)));
   return { teken() { for (const s of lijst) { const v = bus.lees(s.dataset.waarde); if (v !== null && document.activeElement !== s && Number(s.value) !== v) s.value = v; } } };
+}
+
+/**
+ * Lampjes op het scherm zoals op een controller: elke knop met data-actie krijgt data-stand uit
+ * bus.lees() (null = uit en niet te drukken, 0 = leeg, 0,5 = gevuld, 1 = aan). Alleen wat
+ * verandert wordt geschreven (v1: geen werk per beeld dat niets doet).
+ */
+export function bindLampjes(wortel, bus) {
+  const lijst = [...wortel.querySelectorAll('button[data-actie][data-lamp]')];
+  const stand = (v) => (v === null || v === undefined ? 'uit' : v >= 1 ? 'aan' : v > 0 ? 'gevuld' : 'leeg');
+  return {
+    teken() {
+      for (const b of lijst) {
+        const s = stand(bus.lees(b.dataset.actie));
+        if (b.dataset.stand !== s) { b.dataset.stand = s; b.disabled = s === 'uit'; }
+      }
+    },
+  };
 }

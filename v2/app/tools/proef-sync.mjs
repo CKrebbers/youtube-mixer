@@ -19,7 +19,7 @@ const schermPad = process.argv.includes('--scherm') ? process.argv[process.argv.
 
 process.env.VARVE_V2_POORT = String(POORT);   // vóór het laden: de server leest zijn poort bij het importeren
 const { maakServer } = await import('../server.mjs');
-const server = maakServer({ media: '/geen-media' });
+const server = maakServer({ media: '/geen-media', data: (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'varve-v2-proef-')) });
 await new Promise((r) => server.listen(POORT, '127.0.0.1', r));
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });

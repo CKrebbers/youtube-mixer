@@ -40,7 +40,7 @@ export const SR = 48000;
 export async function opzetOffline({ poort }) {
   process.env.VARVE_V2_POORT = String(poort);   // vóór de import: de server leest zijn poort bij het laden
   const { maakServer } = await import(join(APP, 'server.mjs'));
-  const server = maakServer({ media: '/geen-media' });
+  const server = maakServer({ media: '/geen-media', data: (await import('node:fs')).mkdtempSync(join((await import('node:os')).tmpdir(), 'varve-v2-golden-')) });
   await new Promise((r) => server.listen(poort, '127.0.0.1', r));
   const require = createRequire(process.env.PLAYWRIGHT_MODULE ?? '/opt/node22/lib/node_modules/');
   const { chromium } = require('playwright');

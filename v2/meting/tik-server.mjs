@@ -10,6 +10,8 @@
  * Alleen GET/HEAD, alleen van deze machine (Host en Origin, dezelfde regels als server.mjs). Hij serveert
  * niets anders uit v2/meting dan tikken.html, en van de app alleen /api.
  */
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -39,7 +41,7 @@ function vreemd(req) {
 }
 
 export function maakTikServer({ media = kiesMedia() } = {}) {
-  const api = maakServer({ media });
+  const api = maakServer({ media, data: mkdtempSync(join(tmpdir(), 'varve-v2-tik-')) });
   const apiDoe = api.listeners('request')[0];
   return createServer((req, res) => {
     try {

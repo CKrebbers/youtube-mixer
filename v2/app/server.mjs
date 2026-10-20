@@ -10,14 +10,18 @@
  *   /api/library         de nummers van v1 met grid (alleen lezen, de database gaat nooit open om te schrijven)
  *   /api/library/<id>/audio   audio.wav van dat nummer, met Range (de app streamt hem per pagina)
  *   /api/library/<id>/peaks   peaks.bin naast audio.wav (v1: per vakje min en max als float32), voor het overzicht
+ *   /api/v2/nummer/<id>       GET/PUT: wat bij een nummer hoort (hotcues, cue), in de eigen data van v2
+ *   /api/v2/opname/<set>?frame=N   POST een stuk audio op zijn frame; …/klaar?frames=N; GET /api/v2/opnames
+ *   /api/v2/log/<set>?van=B   POST een stuk handelingenlog op zijn byte
  * Alleen van deze machine (Host en Origin), zoals v1. COOP/COEP staan aan voor
- * SharedArrayBuffer later.
+ * SharedArrayBuffer later. De eigen data staat in VARVE_V2_DATA (server/data.mjs).
  */
 import { createServer } from 'node:http';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { join, normalize, extname, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
+import { Data, kiesData, MAX_STUK, MAX_NUMMER } from './server/data.mjs';
 
 const HIER = dirname(fileURLToPath(import.meta.url));
 const POORT = Number(process.env.VARVE_V2_POORT || 8780);
@@ -46,16 +50,25 @@ function kop(res, status, soort, extra = {}) {
 
 function vreemd(req) {
   const host = req.headers.host || '';
-  const ok = [`localhost:${POORT}`, `127.0.0.1:${POORT}`, `[::1]:${POORT}`];
+  // De poort waarop hij echt luistert (een testserver op een andere poort, in hetzelfde proces).
+  const poort = req.socket?.localPort || POORT;
+  const ok = [`localhost:${poort}`, `127.0.0.1:${poort}`, `[::1]:${poort}`];
   if (!ok.includes(host)) return true;
   const o = req.headers.origin;
   if (o && !ok.some((h) => o === `http://${h}`)) return true;
   return false;
 }
 
-let lib = null;
+// Eén library per mediamap (een testserver in hetzelfde proces heeft zijn eigen).
+const libs = new Map();
 async function library(media) {
-  if (lib) return lib;
+  if (libs.has(media)) return libs.get(media);
+  const lib = await maakLibrary(media);
+  libs.set(media, lib);
+  return lib;
+}
+async function maakLibrary(media) {
+  let lib;
   const pad = join(media, 'library.db');
   if (!existsSync(pad)) return (lib = { nummers: () => [], audio: () => null, bron: null });
   const { DatabaseSync } = await import('node:sqlite');
@@ -93,10 +106,34 @@ function stuurBestand(req, res, pad, soort) {
   createReadStream(pad).pipe(res);
 }
 
-export function maakServer({ media = kiesMedia() } = {}) {
+/** De body als Buffer, hooguit `max` bytes (anders null). */
+function leesBody(req, max) {
+  return new Promise((ok, mis) => {
+    const stukken = [];
+    let n = 0;
+    req.on('data', (d) => { n += d.length; if (n > max) { req.destroy(); ok(null); } else stukken.push(d); });
+    req.on('end', () => ok(Buffer.concat(stukken)));
+    req.on('error', mis);
+  });
+}
+
+// Een antwoord vóór de body gelezen is: de verbinding dicht, anders leest de volgende vraag op
+// dezelfde (keep-alive) verbinding de rest van deze body als zijn begin.
+const json = (res, status, data) => {
+  const req = res.req;
+  kop(res, status, 'application/json; charset=utf-8', req && !req.complete ? { connection: 'close' } : {});
+  res.end(JSON.stringify(data));
+};
+const antwoord = (res, r) => (r.fout ? json(res, r.fout, { fout: r.reden }) : json(res, 200, r.data));
+
+export function maakServer({ media = kiesMedia(), data = kiesData() } = {}) {
+  const eigen = new Data(data);
   return createServer(async (req, res) => {
     try {
-      if (vreemd(req)) { kop(res, 403, 'text/plain'); return res.end('alleen van deze machine'); }
+      if (vreemd(req)) { kop(res, 403, 'text/plain', req.complete ? {} : { connection: 'close' }); return res.end('alleen van deze machine'); }
+      const url0 = new URL(req.url, 'http://x');
+      const pad0 = decodeURIComponent(url0.pathname);
+      if (pad0.startsWith('/api/v2/')) return await v2Api(req, res, url0, pad0, eigen);
       if (req.method !== 'GET' && req.method !== 'HEAD') { kop(res, 405, 'text/plain'); return res.end(); }
       const url = new URL(req.url, 'http://x');
       const pad = decodeURIComponent(url.pathname);
@@ -111,6 +148,8 @@ export function maakServer({ media = kiesMedia() } = {}) {
       if (a) {
         const audio = (await library(media)).audio(a[1]);
         const bestand = audio && (a[2] === 'audio' ? audio : join(dirname(audio), 'peaks.bin'));
+        // Geen peaks bij een nummer is gewoon (v1 maakt ze bij de ingest): 204, geen fout in de console.
+        if (a[2] === 'peaks' && audio && !existsSync(bestand)) { kop(res, 204, 'application/octet-stream'); return res.end(); }
         if (!bestand || !existsSync(bestand)) { kop(res, 404, 'text/plain'); return res.end(`geen ${a[2]}`); }
         return stuurBestand(req, res, bestand, a[2] === 'audio' ? 'audio/wav' : 'application/octet-stream');
       }
@@ -131,4 +170,40 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   maakServer({ media }).listen(POORT, '127.0.0.1', () => {
     console.log(`VarveDJ v2 op http://localhost:${POORT}  (library: ${join(media, 'library.db')})`);
   });
+}
+
+/** De schrijfroutes van v2 (alleen van deze machine; vreemd() is al gecontroleerd). */
+async function v2Api(req, res, url, pad, eigen) {
+  let m;
+  if (pad.includes('..') || pad.includes('\\') || pad.includes('\0')) { kop(res, 400, 'text/plain'); return res.end(); }
+  if ((m = /^\/api\/v2\/nummer\/([\w.:-]{1,128})$/.exec(pad))) {
+    if (req.method === 'GET') return antwoord(res, eigen.leesNummer(m[1]));
+    if (req.method !== 'PUT') { kop(res, 405, 'text/plain'); return res.end(); }
+    if ((req.headers['content-type'] || '').split(';')[0].trim() !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+    const b = await leesBody(req, MAX_NUMMER);
+    if (!b) return json(res, 413, { fout: 'te groot' });
+    let v; try { v = JSON.parse(b.toString('utf8')); } catch { return json(res, 400, { fout: 'geen JSON' }); }
+    return antwoord(res, eigen.schrijfNummer(m[1], v));
+  }
+  if (pad === '/api/v2/opnames' && req.method === 'GET') return json(res, 200, { opnames: eigen.lijst() });
+  if (!/^\/api\/v2\/(opname|log)\/[^/]+(\/klaar)?$/.test(pad)) { kop(res, 404, 'text/plain'); return res.end(); }
+  if (req.method !== 'POST') { kop(res, 405, 'text/plain'); return res.end(); }
+  const soort = (req.headers['content-type'] || '').split(';')[0].trim();
+  if ((m = /^\/api\/v2\/opname\/(set-\d{8}-\d{6})\/klaar$/.exec(pad))) {
+    await leesBody(req, 1024);
+    return antwoord(res, eigen.opnameKlaar(m[1], Number(url.searchParams.get('frames'))));
+  }
+  if ((m = /^\/api\/v2\/opname\/(set-\d{8}-\d{6})$/.exec(pad))) {
+    if (soort !== 'application/octet-stream') return json(res, 415, { fout: 'alleen application/octet-stream' });
+    const b = await leesBody(req, MAX_STUK);
+    if (!b) return json(res, 413, { fout: 'te groot' });
+    return antwoord(res, eigen.opnameStuk(m[1], Number(url.searchParams.get('frame')), b));
+  }
+  if ((m = /^\/api\/v2\/log\/(set-\d{8}-\d{6})$/.exec(pad))) {
+    if (soort !== 'text/plain') return json(res, 415, { fout: 'alleen text/plain' });
+    const b = await leesBody(req, MAX_STUK);
+    if (!b) return json(res, 413, { fout: 'te groot' });
+    return antwoord(res, eigen.logStuk(m[1], Number(url.searchParams.get('van')), b));
+  }
+  kop(res, 404, 'text/plain'); res.end();
 }

@@ -15,7 +15,8 @@ const HIER = dirname(fileURLToPath(import.meta.url));
 const POORT = Number(process.env.VARVE_METING_POORT || 8790);
 process.env.VARVE_V2_POORT = String(POORT);   // vóór het laden: de app-server leest zijn poort bij het importeren
 const { maakServer } = await import('../app/server.mjs');
-const app = maakServer();
+// Meten schrijft niet in je echte data (~/.varve/v2): logs en opnames van een meting gaan naar een tijdelijke map.
+const app = maakServer({ data: (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'varve-v2-meting-')) });
 const SOORT = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.wav': 'audio/wav', '.json': 'application/json' };
 
 createServer((req, res) => {

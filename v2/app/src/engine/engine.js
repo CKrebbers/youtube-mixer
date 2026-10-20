@@ -18,6 +18,7 @@ import { Bus, TRACKS } from '../kern/bus.js';
 import { Beatgrid, TapTempo } from '../kern/grid.js';
 import { Track } from './track.js';
 import { definieerActies } from './acties.js';
+import { Handelingenlog, setId } from './log.js';
 
 /** Elke zoveel ms plannen de gekoppelde tracks hun lijn opnieuw vooruit. */
 export const TIK_MS = 250;
@@ -66,6 +67,8 @@ export class Engine extends Emitter {
       this.emit('klok');
     });
     this.focus = 1;            // de track met focus (de device-knoppen, het scherm)
+    this.log = new Handelingenlog(this);
+    this.opnemer = audio.opnemer ? audio.opnemer(ctx, this.mixer) : null;   // een opname heeft de id van het log
     for (const t of this.tracks) {
       t.strip.kant?.(t.kant);
       t.on('verander', () => this.emit('track', t.n));
@@ -104,7 +107,7 @@ export class Engine extends Emitter {
     for (const t of this.tracks) if (t.gekoppeldOp(nu) || t.wacht !== null) t.plan();
     // Streamen (M7): de pagina's volgen het plan, ook van een track die vrij speelt; het cuepunt
     // staat er altijd (cue moet direct klinken).
-    for (const t of this.tracks) t.speler?.bijvullen?.(t.geladen ? [t.cue] : []);
+    for (const t of this.tracks) t.speler?.bijvullen?.(t.geladen ? [t.cue, ...t.hotcues.filter((h) => h !== null)] : []);
   }
 
   // ---- de klok ----------------------------------------------------------------
@@ -179,6 +182,22 @@ export class Engine extends Emitter {
   // ---- meldingen ----------------------------------------------------------------
 
   meld(tekst, soort = 'info', sleutel = null) { this.emit('melding', { tekst, soort, sleutel }); }
+
+  /**
+   * Opnemen aan/uit (de master ná de limiter). De stukken gaan via this.opnemer.on('stuk') naar
+   * wie ze bewaart (de schermlaag); het log krijgt een regel op het moment dat frame 0 klinkt,
+   * zodat WAV en log op één lijn liggen.
+   */
+  async opname(aan) {
+    if (!this.opnemer) return { geweigerd: 'opnemen kan hier niet' };
+    if (aan === this.opnemer.loopt) return;
+    if (!aan) { const frames = await this.opnemer.stop(); this.emit('opname', { stand: 'uit', id: this._opnameId, frames }); return; }
+    if (this.ctx.state && this.ctx.state !== 'running') return { geweigerd: 'het geluid staat stil: eerst geluid aan' };
+    this._opnameId = this.log.id ?? setId();
+    try { await this.opnemer.start(); } catch (e) { return { geweigerd: e.message }; }
+    this.log.merk({ opname: this._opnameId, vanaf: this.nu() - this.log.T0 });
+    this.emit('opname', { stand: 'aan', id: this._opnameId });
+  }
 
   /** Focus op track n (de device-knoppen van een controller, het grote deel van het scherm). */
   zetFocus(n) {

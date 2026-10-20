@@ -151,3 +151,19 @@ button[disabled] { opacity: .35; cursor: default; }
   .knop { min-height: 24px; }
   .knop canvas { width: 22px; height: 22px; }
 }
+
+/* ---- plak 2: hotcues, lus, focus, opname ----------------------------------- */
+:root { --hotcue: #f5d33d; --lus: #3fc2b3; --rec: #ef4b4f; }
+.t-nr { min-height: 22px; padding: 0 6px; font: 700 12px var(--f-cijfer); }
+.track.focus { border-color: var(--klok); }
+.track.focus .t-nr { background: var(--klok); color: var(--bg); }
+.t-cues { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
+.t-cues button { min-height: 24px; padding: 0; font-family: var(--f-cijfer); }
+.t-cues button[data-stand="gevuld"] { background: color-mix(in srgb, var(--hotcue) 30%, var(--vlak2)); border-color: var(--hotcue); color: var(--hotcue); }
+.t-lus { display: grid; grid-template-columns: 28px 28px 1fr 28px 28px; gap: 3px; }
+.t-lus button { min-height: 24px; padding: 0; }
+.t-lus .b-lus { font-family: var(--f-cijfer); }
+.t-lus .b-lus[data-stand="aan"] { background: var(--lus); border-color: var(--lus); color: var(--bg); }
+.rec { font-family: var(--f-cijfer); }
+.rec[data-stand="aan"] { background: var(--rec); border-color: var(--rec); color: #fff; }
+.rec span:empty { display: none; }

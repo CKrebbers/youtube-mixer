@@ -37,7 +37,8 @@ export function definieerActies(engine) {
     doe: (v, n) => {
       const t = T(n);
       if (!v || !t.geladen) return;
-      if (t.speelt) { t.zoek(t.cue); t.pauze(); } else { t.cue = t.plek(engine.nu()); }
+      if (t.speelt) { t.zoek(t.cue); t.pauze(); }
+      else { t.cue = t.plek(engine.nu()); engine.emit('cue', { n, id: t.nummer.id, P: t.cue }); }   // het cuepunt hoort bij het nummer
     },
     lees: (n) => (T(n).geladen ? 0 : null),
   });
@@ -169,6 +170,13 @@ export function definieerActies(engine) {
   });
   bus.defineer({ id: 'mixer.xfader', soort: 'waarde', label: 'crossfader', doe: (v) => engine.mixer.zet('xfader', v), lees: () => engine.mixer.lees('xfader') });
   bus.defineer({ id: 'mixer.master', soort: 'waarde', label: 'master', doe: (v) => engine.mixer.zet('master', v), lees: () => engine.mixer.lees('master') });
+
+  // ---- opnemen -------------------------------------------------------------------------
+  bus.defineer({
+    id: 'opname', soort: 'trigger', label: 'opnemen aan/uit', meta: { log: 'overslaan', beginstand: false },
+    doe: (v) => (v ? engine.opname(!engine.opnemer?.loopt) : undefined),
+    lees: () => (engine.opnemer ? (engine.opnemer.loopt ? 1 : 0) : null),
+  });
 
   // ---- laden (een commando, track-B05) -----------------------------------------------
   bus.defineer({
