@@ -59,6 +59,7 @@ export class Track extends Emitter {
     this.lus = null;
     this.lusLengte = LUS_BEGIN;
     this.hotcues = new Array(HOTCUES).fill(null);
+    this.instrument = null;    // { inst, soort, weg() } als de track een instrument draagt (plak 5)
   }
 
   // ---- lezen -----------------------------------------------------------------

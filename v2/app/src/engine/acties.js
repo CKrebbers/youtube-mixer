@@ -171,6 +171,37 @@ export function definieerActies(engine) {
   bus.defineer({ id: 'mixer.xfader', soort: 'waarde', label: 'crossfader', doe: (v) => engine.mixer.zet('xfader', v), lees: () => engine.mixer.lees('xfader') });
   bus.defineer({ id: 'mixer.master', soort: 'waarde', label: 'master', doe: (v) => engine.mixer.zet('master', v), lees: () => engine.mixer.lees('master') });
 
+  // ---- instrumenten (plak 5) -------------------------------------------------------------
+  // Rondlopen: geen -> elk instrument -> geen. Over een spelend, hoorbaar nummer pas bij een
+  // tweede druk binnen 3 s (v1, zoals laden).
+  const instDruk = new Map();
+  bus.defineer({
+    id: 'track.{n}.inst', soort: 'trigger', label: 'instrument op deze track (rondlopen)',
+    doe: (v, n) => {
+      if (!v) return;
+      const t = T(n), lijst = engine.instrumenten.map((d) => d.soort);
+      if (!lijst.length) return { geweigerd: 'geen instrumenten' };
+      const nu = engine.nu();
+      if (t.speelt && engine.hoorbaar(n) && !(instDruk.get(n) > nu - 3)) { instDruk.set(n, nu); return { geweigerd: `track ${n} speelt: druk nog eens om het nummer te vervangen` }; }
+      instDruk.delete(n);
+      const i = t.instrument ? lijst.indexOf(t.instrument.soort) : -1;
+      engine.zetInstrument(n, i + 1 < lijst.length ? lijst[i + 1] : null);
+    },
+    lees: (n) => (T(n).instrument ? 1 : 0),
+  });
+  for (let k = 1; k <= 8; k++) {
+    bus.defineer({
+      id: `track.{n}.inst.knop.${k}`, soort: 'waarde', label: `instrument knop ${k}`,
+      doe: (v, n) => { T(n).instrument?.inst.zetParam?.(k, v); },
+      lees: (n) => T(n).instrument?.inst.leesParam?.(k) ?? null,
+    });
+  }
+  bus.defineer({
+    id: 'track.{n}.inst.stil', soort: 'trigger', label: 'instrument stil (paniek)', meta: { beginstand: false },
+    doe: (v, n) => { if (v) T(n).instrument?.inst.stil?.(); },
+    lees: (n) => (T(n).instrument ? 0 : null),
+  });
+
   // ---- opnemen -------------------------------------------------------------------------
   bus.defineer({
     id: 'opname', soort: 'trigger', label: 'opnemen aan/uit', meta: { log: 'overslaan', beginstand: false },

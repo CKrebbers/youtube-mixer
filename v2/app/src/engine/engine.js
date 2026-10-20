@@ -56,6 +56,8 @@ export class Engine extends Emitter {
     }
     this.tap = new TapTempo();
     this._laadNr = new Array(tracks + 1).fill(0);
+    this._instNr = new Array(tracks + 1).fill(0);
+    this._speelTrack = null;   // de laatste track die een instrument kreeg (waar een keyboard heen speelt)
     // Verandert de klok door iets anders dan de pitchfader van een track, dan staat die fader
     // niet meer op de stand van de klok: eerst weer erlangs (soft-takeover, modeltest K4c).
     this.klokBron = null;
@@ -163,6 +165,8 @@ export class Engine extends Emitter {
     this.emit('laad', { n, stand: 'laadt', nummer });
     try {
       await this.klaar;
+      // Een track draagt een nummer óf een instrument (v1 ST7): het instrument eerst weg.
+      if (t.instrument) await this.zetInstrument(n, null);
       const pcm = await nummer.haal();
       if (nr !== this._laadNr[n]) return false;
       t.speler.laad(pcm);
@@ -177,6 +181,56 @@ export class Engine extends Emitter {
       }
       return false;
     }
+  }
+
+  // ---- instrumenten (plak 5) -----------------------------------------------------
+
+  /** De soorten instrumenten die de audiolaag kent: [{ soort, naam }]. */
+  get instrumenten() { return this.audio.instrumenten ?? []; }
+
+  /**
+   * Een instrument op track n (soort), of weg (null). Een nummer op die track gaat eraf; het
+   * instrument sluit aan op de strip (alles erna werkt vanzelf). Een latere keuze wint.
+   */
+  async zetInstrument(n, soort) {
+    const t = this.track(n);
+    const nr = ++this._instNr[n];
+    if (soort && !this.audio.instrument) return { geweigerd: 'instrumenten kunnen hier niet' };
+    if (soort && !this.instrumenten.some((d) => d.soort === soort)) return { geweigerd: `onbekend instrument ${soort}` };
+    const oud = t.instrument;
+    if (oud) {
+      t.instrument = null;
+      this.emit('instrument', { n, soort: null });
+      await oud.weg();
+    }
+    if (!soort || nr !== this._instNr[n]) { this.emit('track', n); return; }
+    if (t.nummer) { this._laadNr[n]++; t.leeg(); }        // een lopende laad op deze track telt niet meer
+    const a = this.audio.instrument(this.ctx, soort, t.strip, { klok: this.klok, toon: () => null });
+    a.soort = soort;
+    try { await a.inst.start?.(); } catch (e) { this.meld(`instrument ${soort}: ${e.message}`, 'fout', `inst:${n}`); }
+    if (nr !== this._instNr[n]) { await a.weg(); return; }
+    t.instrument = a;
+    this._speelTrack = n;
+    this.emit('instrument', { n, soort });
+    this.emit('track', n);
+  }
+
+  /** Waar een keyboard heen speelt: de focus-track als die een instrument heeft, anders de laatste. */
+  speeltrack() {
+    if (this.track(this.focus)?.instrument) return this.focus;
+    if (this._speelTrack && this.track(this._speelTrack)?.instrument) return this._speelTrack;
+    return this.tracks.find((t) => t.instrument)?.n ?? null;
+  }
+
+  /**
+   * Een noot (gaat NIET over de bus, v1: anders loopt het log vol met elke noot; patronen en
+   * keyboards roepen dit rechtstreeks aan). snelheid 0 = los. t = audiokloktijd (of nu).
+   */
+  noot(noot, snelheid, { n = this.speeltrack(), t } = {}) {
+    const inst = n ? this.track(n).instrument?.inst : null;
+    if (!inst) return false;
+    if (snelheid > 0) inst.noteOn(noot, Math.min(1, snelheid), t); else inst.noteOff(noot, t);
+    return true;
   }
 
   // ---- meldingen ----------------------------------------------------------------
