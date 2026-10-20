@@ -207,3 +207,11 @@ button[disabled] { opacity: .35; cursor: default; }
 .ind-paneel .leer.aan { background: var(--cue); color: var(--bg); border-color: var(--cue); }
 .ind-uitleg { flex-basis: 100%; color: var(--dim); font-size: 11px; }
 .ind-uitleg:empty { display: none; }
+
+/* ---- tabbladen onder ---------------------------------------------------------- */
+.tabs { display: flex; gap: 4px; }
+.tabs button { min-height: 24px; padding: 2px 12px; background: none; color: var(--dim); }
+.tabs button.aan { background: var(--vlak); color: var(--tekst); border-color: var(--zwak); }
+.paneel { background: var(--vlak); border: 1px solid var(--lijn); border-radius: 6px; height: 196px; overflow: auto; }
+.paneel[hidden] { display: none; }
+.leeg-paneel { color: var(--dim); padding: 12px; margin: 0; }

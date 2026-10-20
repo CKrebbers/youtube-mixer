@@ -180,6 +180,17 @@ ctl.geladen.then(() => opzetIndelingPaneel({
 engine.on('focus', (n) => ctl.kiesVoorNummer(engine.track(n).nummer?.id));
 engine.on('laad', ({ n, stand }) => { if (stand === 'klaar' && n === engine.focus) ctl.kiesVoorNummer(engine.track(n).nummer?.id); });
 
+// ---- tabbladen onder (library, focus-track, beeld) -------------------------------------
+
+function kiesTab(naam) {
+  for (const b of document.querySelectorAll('.tabs [data-tab]')) b.classList.toggle('aan', b.dataset.tab === naam);
+  for (const p of document.querySelectorAll('[data-paneel]')) p.hidden = p.dataset.paneel !== naam;
+  try { localStorage.setItem('varve.v2.tab', naam); } catch { /* geen opslag: niet erg */ }
+}
+for (const b of document.querySelectorAll('.tabs [data-tab]')) b.addEventListener('click', () => kiesTab(b.dataset.tab));
+try { const t = localStorage.getItem('varve.v2.tab'); if (t) kiesTab(t); } catch { /* geen opslag */ }
+const tabTrackN = $('#tab-track-n');
+
 // ---- tekenen ------------------------------------------------------------------------------
 
 const klokEl = $('#klok'), klokBpm = $('#klok-bpm'), klokMaat = $('#klok-maat');
@@ -287,6 +298,7 @@ function teken() {
   }
   const st = `${engine.sampler.tellen} ${engine.sampler.tellen === 1 ? 'tel' : 'tellen'}`;
   if (samplerTellen.textContent !== st) samplerTellen.textContent = st;
+  if (tabTrackN.textContent !== String(engine.focus)) tabTrackN.textContent = engine.focus;
   const op = engine.opnemer;
   const rec = op?.loopt ? tijd(op.frames / ctx.sampleRate) : '';
   if (recTijd.textContent !== rec) recTijd.textContent = rec;

@@ -56,7 +56,14 @@
       <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.xfader" aria-label="Crossfader">
       <span>B</span>
     </div>
-    <div class="bieb">
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="library" class="aan">Library</button>
+      <button role="tab" data-tab="track" title="Effecten, sends, instrument en patronen van de focus-track">Track <span id="tab-track-n"></span></button>
+      <button role="tab" data-tab="beeld">Beeld</button>
+    </nav>
+    <div class="paneel" id="paneel-track" data-paneel="track" hidden><p class="leeg-paneel">Hier komen de effecten, sends, het instrument en de patronen van de focus-track.</p></div>
+    <div class="paneel" id="paneel-beeld" data-paneel="beeld" hidden><p class="leeg-paneel">Hier komt het beeld.</p></div>
+    <div class="bieb paneel" data-paneel="library">
       <div class="bieb-kop">
         <strong>Library</strong>
         <input type="search" id="zoek" placeholder="zoek titel of artiest" aria-label="Zoek in de library">
