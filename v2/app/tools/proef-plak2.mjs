@@ -90,11 +90,11 @@ try {
   uit.log = { regels: log.length, beginstand: !!log[0]?.stand, lus: log.some((r) => Array.isArray(r) && r[1] === 'track.2.loop'), sync: log.some((r) => Array.isArray(r) && r[1] === 'track.2.sync'), opname: log.some((r) => r.opname === opn.id), laden: log.filter((r) => r.laad).length };
   eis(uit.log.beginstand && uit.log.lus && uit.log.sync && uit.log.opname && uit.log.laden === 2, `log: ${JSON.stringify(uit.log)}`);
   // 4. Hotcues op een library-nummer: zetten, bewaard, terug na opnieuw laden.
-  await p.waitForSelector('#bieb-lijst li');
+  await p.waitForSelector('.bieb-rij');
   uit.hotcue = await p.evaluate(async () => {
     const e = window.varve;
-    const li = [...document.querySelectorAll('#bieb-lijst li')].find((x) => x.textContent.includes('Proefnummer'));
-    li.querySelector('.laad button:nth-child(3)').click();                 // laad op track 3
+    const rij = () => [...document.querySelectorAll('.bieb-rij')].find((x) => x.textContent.includes('Proefnummer'));
+    rij().querySelector('.laad button:nth-child(3)').click();              // laad op track 3
     for (let i = 0; i < 100 && !e.track(3).geladen; i++) await new Promise((r) => setTimeout(r, 50));
     e.bus.doe('track.3.seek', 5.2 / 20);
     e.bus.doe('track.3.hotcue.1', true);
@@ -102,11 +102,30 @@ try {
     await new Promise((r) => setTimeout(r, 500));
     const opServer = await fetch('/api/v2/nummer/yt:proef').then((r) => r.json());
     e.bus.doe('track.4.focus', true);
-    li.querySelector('.laad button:nth-child(4)').click();                 // opnieuw, op track 4
+    rij().querySelector('.laad button:nth-child(4)').click();              // opnieuw, op track 4
     for (let i = 0; i < 100 && !e.track(4).geladen; i++) await new Promise((r) => setTimeout(r, 50));
     return { gezet, opServer: opServer.hotcues?.[0] ?? null, terug: e.track(4).hotcues[0], lampje: e.bus.lees('track.4.hotcue.1') };
   });
   eis(Math.abs(uit.hotcue.gezet - 5) < 1e-9 && uit.hotcue.opServer === uit.hotcue.gezet && uit.hotcue.terug === uit.hotcue.gezet && uit.hotcue.lampje === 0.5, `hotcue: ${JSON.stringify(uit.hotcue)}`);
+  // 5. Een grote library: 20.000 nummers. Zoeken en tekenen blijven snel, en er bestaan maar een
+  //    paar tientallen rijen (virtuele lijst). Bladeren via de bus houdt de keuze in beeld.
+  uit.groot = await p.evaluate(async () => {
+    const lib = window.varveLibrary;
+    const veel = Array.from({ length: 20000 }, (_, i) => ({ id: `n${i}`, titel: `Nummer ${i} ${i % 7 ? 'house' : 'ambient'}`, artiest: `Artiest ${i % 300}`, duur: 200 + (i % 300), toegevoegd: i, grid: { stukken: [{ bpm: 90 + (i % 60) }] } }));
+    let t0 = performance.now();
+    lib.lijst.zet(veel); lib.teken(true);
+    const zetMs = performance.now() - t0;
+    t0 = performance.now();
+    lib.lijst.zoeken('house 12'); lib.lijst.sorteer('bpm'); lib.teken(true);
+    const zoekMs = performance.now() - t0;
+    const vak = document.querySelector('#bieb-lijst');
+    vak.scrollTop = 5000; await new Promise((r) => setTimeout(r, 50));
+    return { zetMs: +zetMs.toFixed(1), zoekMs: +zoekMs.toFixed(1), treffers: lib.lijst.rijen.length, rijenInDeDom: document.querySelectorAll('.bieb-rij').length };
+  });
+  eis(uit.groot.zoekMs < 100 && uit.groot.rijenInDeDom < 60 && uit.groot.treffers > 100, `grote library: ${JSON.stringify(uit.groot)}`);
+  await p.evaluate(() => { const b = window.varve.bus; for (let i = 0; i < 4; i++) { b.doe('library.volgende', true); b.doe('library.volgende', false); } });
+  uit.bladeren = await p.evaluate(() => ({ gekozen: !!document.querySelector('.bieb-rij.gekozen'), lees: window.varve.bus.lees('library.laad') }));
+  eis(uit.bladeren.gekozen && uit.bladeren.lees === 1, `bladeren: ${JSON.stringify(uit.bladeren)}`);
   if (schermPad) { await p.waitForTimeout(300); await p.screenshot({ path: schermPad }); }
   uit.fouten = o.fouten;
   eis(o.fouten.length === 0, `fouten in de pagina: ${o.fouten.join('; ')}`);

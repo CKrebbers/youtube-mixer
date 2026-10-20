@@ -32,8 +32,8 @@ try {
   await page.waitForFunction(() => window.varve);
   // Laden, starten en syncen zoals Clay het doet: met de muis, via het scherm.
   await page.evaluate(() => window.varve.ctx.resume());
-  await page.click('#bieb-lijst li:nth-child(1) .laad button:nth-child(1)');   // Klokwerk 124 -> track 1
-  await page.click('#bieb-lijst li:nth-child(2) .laad button:nth-child(2)');   // Rechte lijn 128 -> track 2
+  await page.locator('.bieb-rij', { hasText: 'Klokwerk 124' }).locator('.laad button').nth(0).click();      // -> track 1
+  await page.locator('.bieb-rij', { hasText: 'Rechte lijn 128' }).locator('.laad button').nth(1).click();   // -> track 2
   await page.waitForFunction(() => window.varve.track(1).geladen && window.varve.track(2).geladen);
   await page.click('.track[data-n="1"] .b-play');
   await page.waitForTimeout(800);

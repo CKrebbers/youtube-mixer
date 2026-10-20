@@ -72,6 +72,25 @@ export class Data {
     return { data: { ...oud, ...uit } };
   }
 
+  // ---- instellingen (geleerde indelingen, indeling per nummer) ---------------------
+
+  leesInstelling(naam) {
+    if (!/^[\w-]{1,64}$/.test(naam)) return { fout: 400, reden: 'naam klopt niet' };
+    const p = join(this.map, 'instellingen', `${naam}.json`);
+    if (!existsSync(p)) return { data: null };
+    try { return { data: JSON.parse(readFileSync(p, 'utf8')) }; } catch { return { data: null }; }
+  }
+
+  schrijfInstelling(naam, waarde) {
+    if (!/^[\w-]{1,64}$/.test(naam)) return { fout: 400, reden: 'naam klopt niet' };
+    if (waarde === undefined) return { fout: 400, reden: 'leeg' };
+    this._zeker('instellingen');
+    const p = join(this.map, 'instellingen', `${naam}.json`);
+    writeFileSync(p + '.tmp', JSON.stringify(waarde));
+    renameSync(p + '.tmp', p);
+    return { data: { ok: true } };
+  }
+
   // ---- opnames ----------------------------------------------------------------
 
   _pad(id, soort) { return join(this.map, 'opnames', soort === 'wav' ? `${id}.wav` : `${id}.acties.jsonl`); }

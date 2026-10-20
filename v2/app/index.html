@@ -26,6 +26,7 @@
       <div class="meter" id="meter-master"><i></i><i></i></div>
       <label class="mini">MASTER <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.master"></label>
     </section>
+    <span class="ctl-status" id="ctl-status" title="Controller en indeling"></span>
     <button class="rec" data-actie="opname" data-lamp title="Opnemen: de master, zoals de zaal hem hoort, naar ~/.varve/v2/opnames">● REC <span id="rec-tijd"></span></button>
     <button class="start" id="start">Geluid aan</button>
   </header>
@@ -44,7 +45,12 @@
         <input type="search" id="zoek" placeholder="zoek titel of artiest" aria-label="Zoek in de library">
         <span class="bieb-bron" id="bieb-bron"></span>
       </div>
-      <ol class="bieb-lijst" id="bieb-lijst"></ol>
+      <div class="bieb-koppen" role="row">
+        <button data-sorteer="titel">titel</button><button data-sorteer="artiest">artiest</button>
+        <button data-sorteer="bpm">bpm</button><button data-sorteer="toon">toon</button>
+        <button data-sorteer="duur">duur</button><button data-sorteer="toegevoegd">nieuw</button>
+      </div>
+      <div class="bieb-lijst" id="bieb-lijst" role="list"></div>
     </div>
   </section>
 

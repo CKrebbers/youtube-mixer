@@ -9,7 +9,8 @@ import { maakKnop, maakFader, maakJog, bindKnoppen, bindSchuiven, bindLampjes } 
 import { Opnemer } from '../audio/opnemer.js';
 import { setId } from '../engine/log.js';
 import { schrijversVoor } from './schrijver.js';
-import { overzicht, overzichtUitPeaks, maakDemo, DEMOS, stroomVanWav } from './bronnen.js';
+import { opzetLibrary } from './library.js';
+import { opzetControllers } from './controllers.js';
 
 const $ = (s, w = document) => w.querySelector(s);
 const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; };
@@ -123,101 +124,41 @@ zetStart();
 
 // ---- de library -------------------------------------------------------------------------
 
-const nummers = new Map();
-for (const d of DEMOS) {
-  // Het grid van een demo staat pas vast als hij gemaakt is; voor de lijst volstaat het tempo.
-  nummers.set(d.id, { ...d, titel: d.titel, artiest: 'demo', demo: true, duur: d.duur ?? 120, gridLijst: d.pad ? null : { slot: true, stukken: [{ bpm: d.bpm }] } });
-}
+const library = opzetLibrary({ engine, bus, wortel: document, overzichten });
+const { laadOp } = library;
+window.varveLibrary = library;   // voor de headless proeven
 
-async function haalLibrary() {
-  try {
-    const r = await fetch('/api/library');
-    const j = await r.json();
-    for (const x of j.nummers) nummers.set(x.id, { ...x, demo: false });
-    $('#bieb-bron').textContent = j.bron ? `v1-library: ${j.nummers.length} nummers (alleen lezen)` : 'geen v1-library gevonden: alleen demonummers';
-  } catch {
-    $('#bieb-bron').textContent = 'server niet bereikbaar: alleen demonummers';
-  }
-  toonLibrary();
-}
+// ---- controllers (APC40 en toetsenbord): de indeling als module, per nummer te kiezen ----------
 
-function gridTekst(x) {
-  const g = x.grid ?? x.gridLijst;
-  const s = g?.stukken?.[0];
-  if (!s) return { bpm: '—', onzeker: true };
-  const z = g.slot || s.zekerheid === undefined || s.zekerheid >= 0.65;
-  return { bpm: s.bpm.toFixed(1).replace('.', ','), onzeker: !z };
-}
-
-function toonLibrary() {
-  const q = $('#zoek').value.trim().toLowerCase();
-  const lijst = $('#bieb-lijst');
-  lijst.replaceChildren();
-  for (const x of nummers.values()) {
-    if (q && !`${x.titel} ${x.artiest}`.toLowerCase().includes(q)) continue;
-    const li = document.createElement('li');
-    li.draggable = true;
-    li.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/varve-nummer', x.id));
-    const g = gridTekst(x);
-    li.innerHTML = '<span class="titel"></span><span class="cijfer bpm"></span><span class="cijfer duur"></span><span class="laad"></span>';
-    li.querySelector('.titel').textContent = x.titel;
-    if (x.artiest) li.querySelector('.titel').insertAdjacentHTML('beforeend', `<small></small>`), li.querySelector('.titel small').textContent = x.artiest;
-    if (x.demo) li.querySelector('.titel').insertAdjacentHTML('beforeend', '<span class="demo">DEMO</span>');
-    const b = li.querySelector('.bpm'); b.textContent = g.bpm; if (g.onzeker) { b.classList.add('grid-onzeker'); b.title = 'grid onzeker of ontbreekt: sync weigert'; }
-    li.querySelector('.duur').textContent = tijd(x.duur);
-    const laad = li.querySelector('.laad');
-    for (let n = 1; n <= 8; n++) {
-      const k = document.createElement('button');
-      k.textContent = n; k.title = `laad op track ${n}`;
-      k.onclick = () => laadOp(n, x.id);
-      laad.append(k);
-    }
-    lijst.append(li);
-  }
-}
-$('#zoek').addEventListener('input', toonLibrary);
-
-const laatsteDruk = new Map();
-function laadOp(n, id) {
-  const x = nummers.get(id);
-  if (!x) return;
-  const nummer = {
-    id: x.id, titel: x.titel, artiest: x.artiest, duur: x.duur, grid: null,
-    haal: async () => {
-      let pcm, grid = x.grid ?? null;
-      if (x.demo) { const d = maakDemo(x); pcm = d.maakPcm(); grid = d.grid; }
-      else {
-        // Uit de library: streamen (M7), niet het hele bestand in het geheugen.
-        pcm = await stroomVanWav(`/api/library/${encodeURIComponent(x.id)}/audio`);
-      }
-      nummer.grid = grid;
-      if (!x.demo) {
-        // Wat bij dit nummer bewaard is (hotcues, cue). Lukt het niet, dan laden we zonder.
-        const d = await fetch(`/api/v2/nummer/${encodeURIComponent(x.id)}`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
-        nummer.hotcues = d.hotcues ?? null;
-        nummer.cue = d.cue ?? 0;
-      }
-      overzichten.set(n, pcm.paginas ? overzicht(pcm) : null);
-      if (!pcm.paginas) {
-        fetch(`/api/library/${encodeURIComponent(x.id)}/peaks`)
-          .then((r) => (r.status === 200 ? r.arrayBuffer() : null))
-          .then((b) => { if (b && engine.track(n).nummer?.id === x.id) overzichten.set(n, overzichtUitPeaks(b)); })
-          .catch(() => { /* geen overzicht: niet erg */ });
-      }
-      return pcm;
-    },
-  };
-  // Een spelende, hoorbare track vervang je pas bij een tweede druk binnen 3 s (v1).
-  const nu = performance.now();
-  if (engine.track(n).speelt && engine.hoorbaar(n) && !(laatsteDruk.get(n) > nu - 3000)) {
-    laatsteDruk.set(n, nu);
-    engine.meld(`track ${n} speelt: druk nog eens om te vervangen`, 'info', `laad:${n}`);
-    return;
-  }
-  laatsteDruk.delete(n);
-  nummer.zeker = true;
-  bus.doe(`track.${n}.laad`, nummer);
-}
+const ctl = opzetControllers({
+  bus,
+  vars: { focus: () => engine.focus ?? 1 },
+  tel: () => { const t = engine.hoorbareTel(); return t === null ? null : { fase: t - Math.floor(t), een: Math.floor(t) % engine.klok.perMaat === 0 }; },
+  meld: (tekst, soort, sleutel) => engine.meld(tekst, soort, sleutel),
+  statusEl: $('#ctl-status'),
+});
+window.varveCtl = ctl;
+// Wat je zelf leerde, en welke indeling bij welk nummer hoort, staat op de server (~/.varve/v2/instellingen).
+const instelling = (naam) => fetch(`/api/v2/instelling/${naam}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const bewaarInstelling = (naam, v) => fetch(`/api/v2/instelling/${naam}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) })
+  .then((r) => { r.arrayBuffer().catch(() => {}); if (!r.ok) engine.meld(`${naam} bewaren lukte niet (${r.status})`, 'fout', `instelling:${naam}`); })
+  .catch(() => engine.meld(`${naam} bewaren: server niet bereikbaar`, 'fout', `instelling:${naam}`));
+ctl.geladen.then(async () => {
+  const eigen = (await instelling('indelingen-eigen')) ?? {};
+  for (const [app, docs] of Object.entries(eigen)) for (const d of docs ?? []) { try { (app === 'apc' ? ctl.apc : ctl.toetsen).voegToe(d); } catch { /* oud formaat: overslaan */ } }
+  const per = await instelling('indeling-per-nummer');
+  if (per?.apc) ctl.apc.laadPerNummer(per.apc);
+  if (per?.toetsen) ctl.toetsen.laadPerNummer(per.toetsen);
+  ctl.kiesVoorNummer(engine.track(engine.focus).nummer?.id);
+});
+ctl.on('geleerd', async ({ apparaat, indeling }) => {
+  const eigen = (await instelling('indelingen-eigen')) ?? {};
+  eigen[apparaat] = [...(eigen[apparaat] ?? []).filter((d) => d.naam !== indeling.naam), indeling];
+  bewaarInstelling('indelingen-eigen', eigen);
+});
+// De indeling volgt het nummer op de focus-track (WENSEN: "per nummer een andere layout").
+engine.on('focus', (n) => ctl.kiesVoorNummer(engine.track(n).nummer?.id));
+engine.on('laad', ({ n, stand }) => { if (stand === 'klaar' && n === engine.focus) ctl.kiesVoorNummer(engine.track(n).nummer?.id); });
 
 // ---- tekenen ------------------------------------------------------------------------------
 
@@ -335,5 +276,4 @@ function teken() {
   requestAnimationFrame(teken);
 }
 
-haalLibrary();
 requestAnimationFrame(teken);

@@ -102,3 +102,13 @@ test('na een crash: een kop zonder lengte krijgt die uit de bestandsgrootte', ()
     new Data(map);
   } finally { rmSync(map, { recursive: true, force: true }); }
 });
+
+test('instellingen: bewaren en terug, alleen geldige namen', async () => {
+  await metServer(async ({ url }) => {
+    assert.equal(await (await fetch(url('/api/v2/instelling/indeling-apc40mk2'))).json(), null);
+    const put = (naam, b) => fetch(url(`/api/v2/instelling/${naam}`), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+    assert.equal((await put('indeling-apc40mk2', { schema: 1, regels: [] })).status, 200);
+    assert.deepEqual(await (await fetch(url('/api/v2/instelling/indeling-apc40mk2'))).json(), { schema: 1, regels: [] });
+    assert.equal((await put('a.b', {})).status, 404);
+  });
+});

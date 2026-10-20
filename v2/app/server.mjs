@@ -38,7 +38,7 @@ const SOORTEN = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.wav': 'audio/wav',
 };
 // Alleen wat de app nodig heeft; nooit test/, tools/ of iets erbuiten.
-const WITTE_LIJST = [/^\/$/, /^\/index\.html$/, /^\/src\/[\w/.-]+\.(js|css|svg)$/, /^\/styles\.css$/];
+const WITTE_LIJST = [/^\/$/, /^\/index\.html$/, /^\/src\/[\w/.-]+\.(js|css|svg)$/, /^\/styles\.css$/, /^\/indelingen\/[\w-]+\.json$/, /^\/racks\/[\w-]+\.json$/];
 
 function kop(res, status, soort, extra = {}) {
   res.writeHead(status, {
@@ -75,7 +75,8 @@ async function maakLibrary(media) {
   const db = new DatabaseSync(pad, { readOnly: true });
   const kolommen = new Set(db.prepare('PRAGMA table_info(tracks)').all().map((k) => k.name));
   const gridKolom = kolommen.has('grid_json') ? 'grid_json' : 'NULL';
-  const lijst = db.prepare(`SELECT id, titel, uploader, duur, audio, ${gridKolom} AS grid FROM tracks ORDER BY toegevoegd DESC`);
+  const toonKolom = kolommen.has('toon_json') ? 'toon_json' : 'NULL';
+  const lijst = db.prepare(`SELECT id, titel, uploader, duur, audio, toegevoegd, ${gridKolom} AS grid, ${toonKolom} AS toon FROM tracks ORDER BY toegevoegd DESC`);
   const een = db.prepare('SELECT audio FROM tracks WHERE id = ?');
   const opSchijf = (rel) => {
     const p = normalize(join(media, String(rel).replace(/^media[\\/]/, '')));
@@ -84,12 +85,33 @@ async function maakLibrary(media) {
   lib = {
     bron: pad,
     nummers: () => lijst.all().map((r) => ({
-      id: r.id, titel: r.titel, artiest: r.uploader || '', duur: r.duur,
+      id: r.id, titel: r.titel, artiest: r.uploader || '', duur: r.duur, toegevoegd: r.toegevoegd ?? null,
       grid: r.grid ? JSON.parse(r.grid) : null,
+      toon: hoofdToon(r.toon),
     })),
     audio: (id) => { const r = een.get(id); return r ? opSchijf(r.audio) : null; },
   };
   return lib;
+}
+
+/**
+ * De toonsoort van de plaat uit v1's toon_json (een kaart per stuk): de toonsoort die het langst
+ * klinkt, alleen als hij zeker genoeg is (v1: ≥ 0,15; daaronder "~": geen duidelijke toonsoort).
+ */
+export function hoofdToon(json) {
+  if (!json) return null;
+  let k; try { k = JSON.parse(json); } catch { return null; }
+  const st = Array.isArray(k?.stukken) ? k.stukken : [];
+  const duur = new Map();
+  for (let i = 0; i < st.length; i++) {
+    const s = st[i];
+    if (!s?.toonsoort || (s.zekerheid ?? 1) < 0.15) continue;
+    const lengte = (st[i + 1]?.van ?? s.van + 60) - s.van;
+    duur.set(s.toonsoort, (duur.get(s.toonsoort) ?? 0) + Math.max(0, lengte));
+  }
+  let beste = null, max = 0;
+  for (const [t, d] of duur) if (d > max) { max = d; beste = t; }
+  return beste;
 }
 
 function stuurBestand(req, res, pad, soort) {
@@ -184,6 +206,15 @@ async function v2Api(req, res, url, pad, eigen) {
     if (!b) return json(res, 413, { fout: 'te groot' });
     let v; try { v = JSON.parse(b.toString('utf8')); } catch { return json(res, 400, { fout: 'geen JSON' }); }
     return antwoord(res, eigen.schrijfNummer(m[1], v));
+  }
+  if ((m = /^\/api\/v2\/instelling\/([\w-]{1,64})$/.exec(pad))) {
+    if (req.method === 'GET') return antwoord(res, eigen.leesInstelling(m[1]));
+    if (req.method !== 'PUT') { kop(res, 405, 'text/plain'); return res.end(); }
+    if ((req.headers['content-type'] || '').split(';')[0].trim() !== 'application/json') return json(res, 415, { fout: 'alleen application/json' });
+    const b = await leesBody(req, 1024 * 1024);
+    if (!b) return json(res, 413, { fout: 'te groot' });
+    let v; try { v = JSON.parse(b.toString('utf8')); } catch { return json(res, 400, { fout: 'geen JSON' }); }
+    return antwoord(res, eigen.schrijfInstelling(m[1], v));
   }
   if (pad === '/api/v2/opnames' && req.method === 'GET') return json(res, 200, { opnames: eigen.lijst() });
   if (!/^\/api\/v2\/(opname|log)\/[^/]+(\/klaar)?$/.test(pad)) { kop(res, 404, 'text/plain'); return res.end(); }

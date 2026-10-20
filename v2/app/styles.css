@@ -167,3 +167,24 @@ button[disabled] { opacity: .35; cursor: default; }
 .rec { font-family: var(--f-cijfer); }
 .rec[data-stand="aan"] { background: var(--rec); border-color: var(--rec); color: #fff; }
 .rec span:empty { display: none; }
+
+/* ---- library (virtuele lijst) ------------------------------------------------ */
+.bieb { grid-template-rows: auto auto minmax(0, 1fr); }
+.bieb-koppen { display: flex; gap: 4px; padding: 4px 10px; border-bottom: 1px solid var(--lijn); }
+.bieb-koppen button { min-height: 20px; padding: 1px 8px; font-size: 10px; background: none; color: var(--dim); }
+.bieb-koppen button.aan { color: var(--tekst); border-color: var(--zwak); }
+.bieb-koppen button.aan::after { content: attr(data-richting); margin-left: 4px; }
+.bieb-lijst { position: relative; overflow-y: auto; }
+.bieb-binnen { position: relative; }
+.bieb-rij { position: absolute; left: 0; right: 0; height: 26px; display: grid; grid-template-columns: minmax(0, 1fr) 56px 40px 52px auto; gap: 10px; align-items: center; padding: 0 10px; border-bottom: 1px solid #1a1d21; cursor: grab; }
+.bieb-rij:hover { background: var(--vlak2); }
+.bieb-rij.gekozen { background: color-mix(in srgb, var(--sync) 18%, var(--vlak)); }
+.bieb-rij .titel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bieb-rij .titel small { color: var(--dim); margin-left: 6px; }
+.bieb-rij .cijfer { color: var(--dim); text-align: right; font-size: 12px; }
+.bieb-rij .grid-onzeker { color: var(--cue); }
+.bieb-rij .laad { display: flex; gap: 2px; }
+.bieb-rij .laad button { min-height: 20px; padding: 1px 6px; font-family: var(--f-cijfer); }
+.bieb-rij .demo { color: var(--sync); font-size: 10px; letter-spacing: .06em; margin-left: 6px; }
+
+.ctl-status { color: var(--dim); font: 11px var(--f-cijfer); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
