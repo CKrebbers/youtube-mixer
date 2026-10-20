@@ -10,6 +10,7 @@ import { maakMixer } from './mixer.js';
 import { maakStrip } from './strip.js';
 import { Speler } from './speler.js';
 import { laadSjablonen } from './fx/sjablonen.js';
+import { sluitAan, instrumentSoorten } from './instrumenten/aansluiting.js';
 
 /** @param opties.omgewisseld  de koptelefoon op 1/2 en de zaal op 3/4 (alleen bij het maken: het is bedrading) */
 export function maakAudio({ omgewisseld = false } = {}) {
@@ -19,5 +20,8 @@ export function maakAudio({ omgewisseld = false } = {}) {
     speler: (ctx) => Speler.maak(ctx),
     /** De kant-en-klare racks (racks/sjablonen.json) voor track.{n}.fx.volgend/.vorig; null als het bestand er niet is. */
     sjablonen: () => laadSjablonen(),
+    /** De instrumenten (instrumenten/index.js): poly, fm, schaal, drums. Een track draagt een nummer óf een instrument. */
+    instrumenten: instrumentSoorten(),
+    instrument: sluitAan,
   };
 }
