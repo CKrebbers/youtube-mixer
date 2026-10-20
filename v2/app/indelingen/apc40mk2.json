@@ -3,7 +3,7 @@
   "naam": "standaard",
   "apparaat": "apc40mk2",
   "shift": "shift",
-  "uitleg": "Eén kolom = één track (knop boven: filter, fader onder). Rechts de track met focus. Drie grid-standen op scene 1-3, drie knoppenstanden op Clip/Device View en Detail View. {k} = kolom 1-8, {focus} = de track met focus.",
+  "uitleg": "Eén kolom = één track (knop boven: filter, fader onder). Rechts de track met focus. Vijf grid-standen op scene 1-5 (hotcues 1-4, hotcues 5-8, kills en beatjump, stems, patronen), drie knoppenstanden op Clip/Device View en Detail View. {k} = kolom 1-8, {focus} = de track met focus.",
   "regels": [
     { "control": "fader{k}", "actie": "track.{k}.fader", "gedrag": "absoluut", "label": "volume" },
     { "control": "tk{k}", "actie": "track.{k}.filter", "gedrag": "eindeloos", "led": { "ring": "pan" }, "label": "filter" },
@@ -47,6 +47,8 @@
     { "control": "scene1", "actie": "laag:grid", "gedrag": "trigger", "led": { "kleur": "geel" }, "label": "grid: hotcues 1-4" },
     { "control": "scene2", "actie": "laag:grid.cue58", "gedrag": "trigger", "led": { "kleur": "oranje" }, "label": "grid: hotcues 5-8" },
     { "control": "scene3", "actie": "laag:grid.klank", "gedrag": "trigger", "led": { "kleur": "magenta" }, "label": "grid: kills en beatjump" },
+    { "control": "scene4", "actie": "laag:grid.stems", "gedrag": "trigger", "led": { "kleur": "zeegroen" }, "label": "grid: stems weg" },
+    { "control": "scene5", "actie": "laag:grid.patronen", "gedrag": "trigger", "led": { "kleur": "violet" }, "label": "grid: patronen" },
 
     { "control": "dk1", "actie": "track.{focus}.trim", "gedrag": "eindeloos", "led": { "ring": "pan" }, "label": "trim" },
     { "control": "dk2", "actie": "track.{focus}.hoog", "gedrag": "eindeloos", "led": { "ring": "pan" }, "label": "hoog" },
@@ -88,6 +90,24 @@
     { "control": "up", "actie": "library.vorige", "gedrag": "trigger", "label": "library omhoog" },
     { "control": "down", "actie": "library.volgende", "gedrag": "trigger", "label": "library omlaag" },
     { "control": "right", "actie": "library.laad", "gedrag": "trigger", "label": "laad op de focus-track" },
-    { "control": "record", "actie": "opname", "gedrag": "trigger", "led": { "kleur": "rood" }, "label": "opname" }
+    { "control": "record", "actie": "opname", "gedrag": "trigger", "led": { "kleur": "rood" }, "label": "opname" },
+
+    { "control": "pad5-{k}", "laag": "grid.stems", "actie": "track.{k}.stem.vocals.kill.hold", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "zang weg zolang je drukt" },
+    { "control": "pad5-{k}", "laag": "grid.stems", "shift": true, "actie": "track.{k}.stem.vocals.kill", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "zang weg/terug (vast)" },
+    { "control": "pad4-{k}", "laag": "grid.stems", "actie": "track.{k}.stem.inst.kill.hold", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "rest weg zolang je drukt" },
+    { "control": "pad4-{k}", "laag": "grid.stems", "shift": true, "actie": "track.{k}.stem.inst.kill", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "rest weg/terug (vast)" },
+    { "control": "pad3-{k}", "laag": "grid.stems", "actie": "track.{k}.stem.drums.kill.hold", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "drums weg zolang je drukt" },
+    { "control": "pad3-{k}", "laag": "grid.stems", "shift": true, "actie": "track.{k}.stem.drums.kill", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "drums weg/terug (vast)" },
+    { "control": "pad2-{k}", "laag": "grid.stems", "actie": "track.{k}.stem.bass.kill.hold", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "bas weg zolang je drukt" },
+    { "control": "pad2-{k}", "laag": "grid.stems", "shift": true, "actie": "track.{k}.stem.bass.kill", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "bas weg/terug (vast)" },
+    { "control": "pad1-{k}", "laag": "grid.stems", "actie": "track.{k}.stem.other.kill.hold", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "overig weg zolang je drukt" },
+    { "control": "pad1-{k}", "laag": "grid.stems", "shift": true, "actie": "track.{k}.stem.other.kill", "gedrag": "trigger", "led": { "kleur": { "aan": "rood", "uit": "zeegroendonker" } }, "label": "overig weg/terug (vast)" },
+
+    { "control": "pad5-{k}", "laag": "grid.patronen", "actie": "track.{k}.patroon.1", "gedrag": "trigger", "led": { "kleur": "violet" }, "label": "patroon 1" },
+    { "control": "pad4-{k}", "laag": "grid.patronen", "actie": "track.{k}.patroon.2", "gedrag": "trigger", "led": { "kleur": "violet" }, "label": "patroon 2" },
+    { "control": "pad3-{k}", "laag": "grid.patronen", "actie": "track.{k}.patroon.3", "gedrag": "trigger", "led": { "kleur": "violet" }, "label": "patroon 3" },
+    { "control": "pad2-{k}", "laag": "grid.patronen", "actie": "track.{k}.patroon.4", "gedrag": "trigger", "led": { "kleur": "violet" }, "label": "patroon 4" },
+    { "control": "pad1-{k}", "laag": "grid.patronen", "actie": "track.{k}.patroon.5", "gedrag": "trigger", "led": { "kleur": "violet" }, "label": "patroon 5" },
+    { "control": "stopall", "laag": "grid.patronen", "actie": "patronen.stop", "gedrag": "trigger", "led": { "kleur": "violet" }, "label": "alle patronen stoppen op de 1" }
   ]
 }

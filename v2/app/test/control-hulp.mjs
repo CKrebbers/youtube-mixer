@@ -37,6 +37,10 @@ export const BEKEND = Object.freeze({
   'koptelefoon.volume': 'waarde', 'koptelefoon.mix': 'waarde',
   'track.{n}.focus': 'trigger', 'opname': 'trigger',
   'library.volgende': 'trigger', 'library.vorige': 'trigger', 'library.laad': 'trigger',
+  ...Object.fromEntries(['vocals', 'inst', 'drums', 'bass', 'other'].flatMap((s) => [
+    [`track.{n}.stem.${s}`, 'waarde'], [`track.{n}.stem.${s}.kill`, 'trigger'], [`track.{n}.stem.${s}.kill.hold`, 'trigger']])),
+  ...Object.fromEntries([1, 2, 3, 4, 5].map((k) => [`track.{n}.patroon.${k}`, 'trigger'])),
+  'patronen.stop': 'trigger',
 });
 
 /** Het sjabloon van een concrete id: 'track.3.fader' -> 'track.{n}.fader'. */
