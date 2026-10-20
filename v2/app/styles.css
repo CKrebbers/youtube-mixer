@@ -116,6 +116,11 @@ button[disabled] { opacity: .35; cursor: default; }
 .fader.pitch .midden { position: absolute; left: -4px; right: -4px; top: 50%; height: 1px; background: var(--zwak); }
 .fader .naam { font: 600 9px var(--f-tekst); letter-spacing: .08em; color: var(--dim); }
 .fader .waarde { font: 10px var(--f-cijfer); }
+.t-onder { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.t-pfl[data-stand="aan"] { background: var(--klok); color: var(--bg); border-color: var(--klok); }
+body:not(.koptelefoon) .t-pfl, body:not(.koptelefoon) .kop-groep { display: none; }
+body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
+.kop-groep { display: flex; gap: 10px; padding-left: 10px; border-left: 1px solid var(--lijn); }
 .t-kant { font-family: var(--f-cijfer); }
 .t-kant.A { color: var(--kant-a); border-color: var(--kant-a); }
 .t-kant.B { color: var(--kant-b); border-color: var(--kant-b); }

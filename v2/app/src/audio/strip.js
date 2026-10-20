@@ -269,13 +269,17 @@ class Strip {
     // De meter vóór de fader, zoals op een DJ-mixer: je stelt de trim in op wat
     // het kanaal geeft, ook met de fader dicht.
     this._meter = maakMeter(ctx, naFilter);
+    /** De uitgangen van de natte weg van de insert-slot (de cue tapt ze ook), en de cue zelf (lui). */
+    this._natten = [];
+    this._pflIn = null;
+    this._pfl = false;
 
     // De insert-slot: lui (de keten pas bij mix > 0 en aan), met het delay-rack van v1 als begin.
     // naFilter is de droge weg, de fader de uitgang; de natte weg tapt droog + nat van het filter.
     this.fx = new InsertSlot(ctx, {
       droog: naFilter, uit: fader, lui: 'mix',
       bijIngang: (fxIn) => { droog.connect(fxIn); nat.connect(fxIn); },
-      bijKeten: (g) => this._meter.voeg(g),
+      bijKeten: (g) => { this._meter.voeg(g); this._natten.push(g); this._pflIn?.voeg(g); },
     });
     this.fx.zetRack(rackVanEffect(effectVan('delay')));
     /** Sends A (echo) en B (galm): na de fader, vóór de kant. Pas een node als hij voor het eerst open gaat. */
@@ -373,6 +377,26 @@ class Strip {
     return true;
   }
 
+  /**
+   * Voorbeluisteren (koptelefoon.js): de tap vóór de fader naar de koptelefoon, aan of uit. De
+   * ingang bestaat pas bij de eerste keer aan. Zonder koptelefoon (twee kanalen): false, niets erbij.
+   */
+  pfl(aan) {
+    const kop = this._mixer.koptelefoon;
+    if (this._weg || !kop?.beschikbaar) return false;
+    const w = !!aan;
+    if (w === this._pfl) return true;
+    if (!this._pflIn) {
+      if (!w) return true;
+      const g = kop.ingang(), lijst = [this.naFilter, ...this._natten];
+      for (const b of lijst) b.connect(g);
+      this._pflIn = { g, voeg: (b) => b.connect(g), lijst };
+    }
+    this._pfl = w;
+    kop.zet(this._pflIn.g, w);
+    return true;
+  }
+
   /** Zonder argument: de kant van nu. Met 'A', 'B' of 'thru': zetten (iets anders wordt genegeerd). */
   kant(k) {
     if (k === undefined) return this._kant;
@@ -393,6 +417,7 @@ class Strip {
     if (naam.startsWith?.('kill.') && BANDEN.includes(naam.slice(5))) return this._kill[naam.slice(5)] ? 1 : 0;
     if (naam === 'send.a' || naam === 'send.A') return this._send.A;
     if (naam === 'send.b' || naam === 'send.B') return this._send.B;
+    if (naam === 'pfl') return this._mixer.koptelefoon?.beschikbaar ? (this._pfl ? 1 : 0) : null;
     return undefined;
   }
 
@@ -412,10 +437,12 @@ class Strip {
       // De sends tappen vóór de kant: die gaan net zo dicht (de staart op de bus sterft vanzelf uit).
       for (const g of sends) killVersterking(g.gain, 0, nu, wacht);
     }
+    if (this._pfl) this._mixer.koptelefoon.zet(this._pflIn.g, false);
     this._weg = naAudioklok(ctx, nu + wacht + KILL_FADE + 0.005, () => {
       this._meter.los();
       this.fx.vernietig();
       for (const g of sends) g.disconnect();
+      this._pflIn?.g.disconnect();
       for (const node of Object.values(this.nodes)) node.disconnect();
     });
     return this._weg;

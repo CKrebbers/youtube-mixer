@@ -21,8 +21,18 @@ const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floo
 // ---- opzet ----------------------------------------------------------------------
 
 const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
-const audio = { ...maakAudio(), opnemer: (c, mixer) => new Opnemer(c, mixer.analyser), sampler: (c, mixer) => maakSamplerUitgang(c, mixer) };
+const OMGEWISSELD = 'varve.v2.koptelefoon.omgewisseld';
+const omgewisseld = (() => { try { return localStorage.getItem(OMGEWISSELD) === '1'; } catch (_) { return false; } })();
+const audio = { ...maakAudio({ omgewisseld }), opnemer: (c, mixer) => new Opnemer(c, mixer.analyser), sampler: (c, mixer) => maakSamplerUitgang(c, mixer) };
 const engine = new Engine({ ctx, audio });
+// De koptelefoon bestaat alleen met een uitgang van vier kanalen (zaal 1/2, koptelefoon 3/4).
+document.body.classList.toggle('koptelefoon', !!engine.mixer.koptelefoon?.beschikbaar);
+document.getElementById('kop-wissel')?.addEventListener('click', (ev) => {
+  const nieuw = !omgewisseld;
+  try { localStorage.setItem(OMGEWISSELD, nieuw ? '1' : '0'); } catch (_) {}
+  ev.currentTarget.classList.toggle('wacht', nieuw !== omgewisseld);
+  engine.meld(nieuw ? 'na herladen: de zaal op 3/4, de koptelefoon op 1/2' : 'na herladen: de zaal op 1/2, de koptelefoon op 3/4', 'info', 'koptelefoon');
+});
 window.varve = engine;   // voor de console en de headless proeven
 audio.sjablonen?.().then((lijst) => { if (lijst) engine.fx.zetSjablonen(lijst); }).catch(() => engine.meld('de effect-sjablonen kwamen niet binnen: ‹ › loopt per effect', 'fout', 'fx'));
 const bus = engine.bus;

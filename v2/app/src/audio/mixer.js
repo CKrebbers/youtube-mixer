@@ -24,6 +24,7 @@ import { startDrempel, zetHellingen } from './overgang.js';
 import { faderGain, zetDoel, killVersterking, naAudioklok, maakMeter, KILL_FADE, TAU } from './strip.js';
 import { PLAFOND_DB, VOORUIT, RELEASE, MARGE_DB, vertragingFrames } from './limiter-kern.js';
 import { maakSendBus, BUSSEN } from './fx/sends.js';
+import { Koptelefoon } from './koptelefoon.js';
 
 /** De vertraging van Chrome's DynamicsCompressor (zijn vooruitblik): 288 samples, gemeten in v1 (5 okt). */
 export const COMPRESSOR_VERTRAGING = 0.006;
@@ -64,7 +65,7 @@ function meldWorkletFout(ctx, wat, reden, hint) {
 const los = (van, naar) => { try { van.disconnect(naar); } catch (_) { /* was al los */ } };
 
 class Mixer {
-  constructor(ctx, { limiter = true, uit = ctx.destination } = {}) {
+  constructor(ctx, { limiter = true, uit = ctx.destination, koptelefoon = true, omgewisseld = false } = {}) {
     this.ctx = ctx;
     this._strips = new Set();
     this._stand = { xfader: 0.5, master: MASTER_BEGIN };
@@ -97,6 +98,13 @@ class Mixer {
     c.connect(this._compUit);
     this._compUit.connect(this.limiter);
     this.limiter.connect(an);
+    // De koptelefoon (koptelefoon.js): alleen met een uitgang van vier kanalen; anders is zaalIn de
+    // uitgang zelf en verandert er niets.
+    this.koptelefoon = koptelefoon ? new Koptelefoon(ctx, { uit, omgewisseld }) : null;
+    if (this.koptelefoon?.beschikbaar) {
+      uit = this.koptelefoon.zaalIn;
+      this.koptelefoon.hoorZaal(an);
+    }
     an.connect(uit);
     this._uit = uit;
     this._meter = maakMeter(ctx, an);
@@ -110,6 +118,7 @@ class Mixer {
     this._grBuf = null;
     /** Waar als de worklet erin zit, onwaar als het de compressor blijft. */
     this.klaar = limiter ? this._laad() : Promise.resolve(false);
+    this.koptelefoon?.zetVertraging(this.vertraging);
 
     this._bussen = { A: null, B: null };
     this._busKlok = null;
@@ -226,6 +235,7 @@ class Mixer {
     this._gr = gr;
     this._grBuf = new Float32Array(GR_N);
     this.soort = 'worklet';
+    this.koptelefoon?.zetVertraging(this.vertraging);
     if (!loopt) { this._compressorWeg(); return; }
 
     const nu = ctx.currentTime, wacht = startDrempel(ctx);
@@ -270,6 +280,7 @@ class Mixer {
     }
     const reden = e?.message || e?.error?.message || '';
     this.soort = 'compressor';
+    this.koptelefoon?.zetVertraging(this.vertraging);
     this.fout = `de limiter-worklet liep vast${reden ? ` (${reden})` : ''}`;
     meldWorkletFout(ctx, 'de master-limiter', reden, 'de compressor doet het werk weer');
   }
@@ -328,6 +339,7 @@ class Mixer {
       for (const n of [this.in, this.compressor, this._compUit, this._wl, this._gr, this.limiter, this.analyser]) {
         try { n?.disconnect(); } catch (_) {}
       }
+      this.koptelefoon?.vernietig();
       this._strips.clear();
     });
     return this._weg;

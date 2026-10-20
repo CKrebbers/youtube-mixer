@@ -11,9 +11,10 @@ import { maakStrip } from './strip.js';
 import { Speler } from './speler.js';
 import { laadSjablonen } from './fx/sjablonen.js';
 
-export function maakAudio() {
+/** @param opties.omgewisseld  de koptelefoon op 1/2 en de zaal op 3/4 (alleen bij het maken: het is bedrading) */
+export function maakAudio({ omgewisseld = false } = {}) {
   return {
-    mixer: (ctx) => maakMixer(ctx),
+    mixer: (ctx) => maakMixer(ctx, { omgewisseld }),
     strip: (ctx, mixer) => maakStrip(ctx, mixer),
     speler: (ctx) => Speler.maak(ctx),
     /** De kant-en-klare racks (racks/sjablonen.json) voor track.{n}.fx.volgend/.vorig; null als het bestand er niet is. */

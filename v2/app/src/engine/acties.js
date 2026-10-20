@@ -230,6 +230,33 @@ export function definieerActies(engine) {
     lees: () => (engine.opnemer ? (engine.opnemer.loopt ? 1 : 0) : null),
   });
 
+  // ---- de koptelefoon (audio/koptelefoon.js) ---------------------------------------
+  // Wat je in de koptelefoon hoort is niet wat de zaal hoort: niet in het log (v1 OVERSLAAN).
+  // Zonder uitgang van vier kanalen bestaat hij niet: elke lees null, doe niets.
+  const kop = () => (engine.mixer.koptelefoon?.beschikbaar ? engine.mixer.koptelefoon : null);
+  const NIET_IN_LOG = { log: 'overslaan', beginstand: false };
+  bus.defineer({
+    id: 'track.{n}.pfl', soort: 'trigger', label: 'koptelefoon (voorbeluisteren)', meta: NIET_IN_LOG,
+    doe: (v, n) => {
+      if (!v) return;
+      if (!kop()) return { geweigerd: 'geen koptelefoon: de uitgang heeft geen vier kanalen' };
+      const st = T(n).strip;
+      st.pfl(st.lees('pfl') !== 1);
+      engine.emit('track', n);
+    },
+    lees: (n) => (kop() ? T(n).strip.lees('pfl') : null),
+  });
+  bus.defineer({
+    id: 'koptelefoon.volume', soort: 'waarde', label: 'koptelefoon volume', meta: NIET_IN_LOG,
+    doe: (v) => { kop()?.zetVolume(v); },
+    lees: () => kop()?.volume ?? null,
+  });
+  bus.defineer({
+    id: 'koptelefoon.mix', soort: 'waarde', label: 'koptelefoon mix (cue ↔ zaal)', meta: NIET_IN_LOG,
+    doe: (v) => { kop()?.zetMix(v); },
+    lees: () => kop()?.mix ?? null,
+  });
+
   // ---- laden (een commando, track-B05) -----------------------------------------------
   bus.defineer({
     id: 'track.{n}.laad', soort: 'commando', label: 'nummer laden',

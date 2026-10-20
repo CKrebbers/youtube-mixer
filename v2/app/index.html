@@ -25,6 +25,11 @@
     <section class="master" aria-label="Master">
       <div class="meter" id="meter-master"><i></i><i></i></div>
       <label class="mini">MASTER <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.master"></label>
+      <span class="kop-groep" id="kop-groep" title="Koptelefoon op kanaal 3/4 van de uitgang">
+        <label class="mini">KOP <input type="range" min="0" max="1" step="0.001" data-waarde="koptelefoon.volume"></label>
+        <label class="mini" title="Mix: links alleen wat je voorbeluistert, rechts alleen de zaal">CUE↔ZAAL <input type="range" min="0" max="1" step="0.001" data-waarde="koptelefoon.mix"></label>
+        <button id="kop-wissel" title="Zaal en koptelefoon omwisselen (1/2 ↔ 3/4); geldt na herladen">⇄</button>
+      </span>
     </section>
     <span class="ctl-status" id="ctl-status" title="Controller en indeling"></span>
     <button class="ind-knop" id="ind-knop" title="Indeling: wisselen, kopiëren, per nummer, leren">⌨</button>
@@ -139,7 +144,10 @@
         <div class="knop klein" data-waarde="track.{n}.send.a" data-label="ECHO"></div>
         <div class="knop klein" data-waarde="track.{n}.send.b" data-label="GALM"></div>
       </div>
-      <button class="t-kant" data-actie="track.{n}.kant" title="Crossfaderkant: A → B → thru">thru</button>
+      <div class="t-onder">
+        <button class="t-pfl" data-actie="track.{n}.pfl" data-lamp title="Koptelefoon: deze track voorbeluisteren (vóór de fader, de zaal hoort hem niet)">CUE</button>
+        <button class="t-kant" data-actie="track.{n}.kant" title="Crossfaderkant: A → B → thru">thru</button>
+      </div>
     </article>
   </template>
 
