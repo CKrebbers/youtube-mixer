@@ -143,6 +143,18 @@ try {
   await page.waitForTimeout(100);
   stap('toets Q: play/pauze op de focus-track', !(await page.evaluate(() => window.varve.track(1).speelt)));
 
+  // Leren door aanwijzen (indelingspaneel): leren aan, klik de lus-knop van track 1 op het scherm,
+  // druk Pan op de APC; daarna doet Pan de lus van track 1.
+  await page.click('#ind-knop');
+  await page.click('#ind-paneel .leer');
+  await page.click('.track[data-n="1"] .b-lus');
+  const lusVoor = await page.evaluate(() => window.varve.track(1).lus !== null);
+  await doe([0x90, 0x57, 127], 60); await doe([0x80, 0x57, 0], 60);
+  await page.click('#ind-paneel .leer');                 // leren uit
+  await doe([0x90, 0x57, 127], 60); await doe([0x80, 0x57, 0], 60);
+  const lusNa = await page.evaluate(() => window.varve.track(1).lus !== null);
+  stap('leren door aanwijzen: Pan doet daarna de lus van track 1', lusVoor === false && lusNa === true, { lusVoor, lusNa });
+
   // 8. kabel eruit (met nudge ingedrukt) en erin.
   await doe([0x90, 101, 127], 20);
   await page.evaluate(() => window.__apc.kabel(false));

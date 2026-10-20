@@ -12,6 +12,7 @@ import { setId } from '../engine/log.js';
 import { schrijversVoor } from './schrijver.js';
 import { opzetLibrary } from './library.js';
 import { opzetControllers } from './controllers.js';
+import { opzetIndelingPaneel } from './indeling-paneel.js';
 
 const $ = (s, w = document) => w.querySelector(s);
 const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; };
@@ -166,6 +167,15 @@ ctl.on('geleerd', async ({ apparaat, indeling }) => {
   eigen[apparaat] = [...(eigen[apparaat] ?? []).filter((d) => d.naam !== indeling.naam), indeling];
   bewaarInstelling('indelingen-eigen', eigen);
 });
+ctl.geladen.then(() => opzetIndelingPaneel({
+  ctl, engine, knop: $('#ind-knop'), paneel: $('#ind-paneel'), meld: (t, s, k) => engine.meld(t, s, k),
+  bewaarEigen: async (app, doc) => {
+    const eigen = (await instelling('indelingen-eigen')) ?? {};
+    eigen[app] = [...(eigen[app] ?? []).filter((d) => d.naam !== doc.naam), doc];
+    bewaarInstelling('indelingen-eigen', eigen);
+  },
+  bewaarPerNummer: async (deel) => bewaarInstelling('indeling-per-nummer', { ...((await instelling('indeling-per-nummer')) ?? {}), ...deel }),
+}));
 // De indeling volgt het nummer op de focus-track (WENSEN: "per nummer een andere layout").
 engine.on('focus', (n) => ctl.kiesVoorNummer(engine.track(n).nummer?.id));
 engine.on('laad', ({ n, stand }) => { if (stand === 'klaar' && n === engine.focus) ctl.kiesVoorNummer(engine.track(n).nummer?.id); });

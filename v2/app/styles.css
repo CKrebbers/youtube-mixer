@@ -197,3 +197,13 @@ button[disabled] { opacity: .35; cursor: default; }
 .sampler button[data-stand="gevuld"] { border-color: var(--pad); color: var(--pad); }
 .sampler button[data-stand="aan"] { background: var(--pad); border-color: var(--pad); color: var(--bg); }
 .sampler-tellen { font: 11px var(--f-cijfer); color: var(--dim); min-width: 60px; text-align: center; }
+
+/* ---- indelingspaneel --------------------------------------------------------- */
+.kop { position: relative; }
+.ind-knop { font-family: var(--f-cijfer); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ind-paneel { position: absolute; right: 10px; top: 100%; z-index: 20; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 560px;
+  background: var(--vlak); border: 1px solid var(--lijn); border-radius: 6px; padding: 8px 10px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.ind-paneel select { background: var(--bg); color: var(--tekst); border: 1px solid var(--lijn); border-radius: var(--r); padding: 4px; }
+.ind-paneel .leer.aan { background: var(--cue); color: var(--bg); border-color: var(--cue); }
+.ind-uitleg { flex-basis: 100%; color: var(--dim); font-size: 11px; }
+.ind-uitleg:empty { display: none; }
