@@ -138,6 +138,14 @@ const ctl = opzetControllers({
   tel: () => { const t = engine.hoorbareTel(); return t === null ? null : { fase: t - Math.floor(t), een: Math.floor(t) % engine.klok.perMaat === 0 }; },
   meld: (tekst, soort, sleutel) => engine.meld(tekst, soort, sleutel),
   statusEl: $('#ctl-status'),
+  // Noten van een keyboard naar het instrument van de speeltrack (niet over de bus).
+  noten: {
+    aan: (noot, v) => { const n = engine.speeltrack(); return n && engine.noot(noot, v, { n }) ? n : null; },
+    uit: (noot, n) => { engine.noot(noot, 0, { n }); },
+    houd: (aan, n = engine.speeltrack()) => { engine.track(n ?? 1)?.instrument?.inst.houd?.(aan); return n; },
+    buig: (w) => { const n = engine.speeltrack(); if (n) engine.track(n).instrument?.inst.buig?.(w); },
+    mod: (w) => { const n = engine.speeltrack(); if (n) engine.track(n).instrument?.inst.mod?.(w); },
+  },
 });
 window.varveCtl = ctl;
 // Wat je zelf leerde, en welke indeling bij welk nummer hoort, staat op de server (~/.varve/v2/instellingen).

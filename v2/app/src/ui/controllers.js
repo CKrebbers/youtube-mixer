@@ -21,6 +21,7 @@ import { Lampjes } from '../control/lampjes.js';
 import { Toetsen, isTypenVeld } from '../control/toetsen.js';
 import { Leren } from '../control/leren.js';
 import { bewaakTabblad, LOCK_NAAM } from '../control/tabblad.js';
+import { Noten } from '../control/noten.js';
 
 /**
  * @param bus        de bus van de engine
@@ -31,7 +32,7 @@ import { bewaakTabblad, LOCK_NAAM } from '../control/tabblad.js';
  * @param basis      waar de standaardindelingen staan ('/indelingen/')
  * @param statusEl   een element waar de status als tekst in komt (optioneel)
  */
-export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () => {}, indelingen = null, basis = '/indelingen/',
+export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () => {}, indelingen = null, basis = '/indelingen/', noten = null,
   statusEl = null, nav = globalThis.navigator, venster = globalThis.window, doc = globalThis.document, haal = globalThis.fetch?.bind(globalThis) } = {}) {
   const uit = new Emitter();
   const apc = new Indeling({ bus, apparaat: apc40mk2, vars, bron: 'apc' });
@@ -39,6 +40,7 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
   const leren = { apc: new Leren({ indeling: apc }), toetsen: new Leren({ indeling: toetsInd }) };
   const stand = { tabblad: 'wacht', midi: 'uit', controller: null };
   let hub = null;
+  let notenLaag = null;
   let lampjes = null;
 
   const status = () => ({
@@ -132,6 +134,12 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
       if (!g) return;
       if (leren.apc.bezig) leren.apc.voer(g); else apc.verwerk(g);
     });
+    // Keyboards (elke ingang behalve de controller): noten naar de ontvanger (de engine).
+    if (noten) {
+      const isApc = (p) => (apc40mk2.zoek instanceof RegExp ? apc40mk2.zoek.test(p?.name ?? '') : !!apc40mk2.zoek?.(p?.name ?? ''));
+      notenLaag = new Noten({ toegang, ontvanger: noten, isController: isApc });
+      notenLaag.start();
+    }
     stand.midi = 'aan';
     lampjes.start();
     hub.start();
@@ -164,6 +172,7 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
       losToetsen();
       venster?.removeEventListener?.('pagehide', opPagehide);
       lampjes?.stop();
+      notenLaag?.stop();
       hub?.stop();
     },
   });
