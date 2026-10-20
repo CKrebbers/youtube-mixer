@@ -13,8 +13,9 @@ import { schrijversVoor } from './schrijver.js';
 import { opzetLibrary } from './library.js';
 import { opzetControllers } from './controllers.js';
 import { opzetIndelingPaneel } from './indeling-paneel.js';
-import { opzetTrackPaneel, instrumentSectie, effectSectie } from './track-paneel.js';
+import { opzetTrackPaneel, instrumentSectie, effectSectie, stemsSectie } from './track-paneel.js';
 import { Automaat } from '../auto/automaat.js';
+import { opzetBeeld } from '../beeld/opzet.js';
 import { definieerAuto } from '../engine/acties-auto.js';
 import { opzetAutoPaneel, maakLaad } from './auto-paneel.js';
 
@@ -218,7 +219,11 @@ try { const t = localStorage.getItem('varve.v2.tab'); if (t) kiesTab(t); } catch
 const tabTrackN = $('#tab-track-n');
 const trackPaneel = opzetTrackPaneel({ engine, paneel: $('#paneel-track') });
 trackPaneel.sectie(effectSectie({ engine, bus, maakKnop }));
+trackPaneel.sectie(stemsSectie({ bus, maakKnop }));
 trackPaneel.sectie(instrumentSectie({ engine, bus, maakKnop }));
+// Beeld (plak 4, src/beeld/): video per track als slaaf van wat je hoort, vormlagen, het losse venster.
+const beeld = opzetBeeld({ engine, bus, paneel: $('#paneel-beeld'), analyser: engine.mixer.analyser });
+void beeld;
 
 // ---- tekenen ------------------------------------------------------------------------------
 

@@ -283,7 +283,8 @@ try {
       const M = window.M;
       const { definieerFx } = await import('/src/engine/acties-fx.js');
       const nieuw = M.nieuweEngine, script = M.goldenScript;
-      M.nieuweEngine = async (...a) => { const x = await nieuw(...a); definieerFx(x.engine); return x; };
+      // De engine definieert de effectacties sinds de integratie zelf; alleen een oudere niet.
+      M.nieuweEngine = async (...a) => { const x = await nieuw(...a); if (!x.engine.fx) definieerFx(x.engine); return x; };
       const doe = (id, v) => (e) => { e.bus.doe(id, v); };
       const metKnoppen = () => [...script(),
         { t: 3.0, doe: doe('track.1.fx.knop.1', 0.8) }, { t: 3.0, doe: doe('track.2.fx.knop.2', 0.1) },

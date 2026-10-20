@@ -86,6 +86,14 @@ export const STEMMEN = 4;               // zoveel lijnen kunnen tegelijk klinken
  * bij de sprong (OVERVLOEI_SPRONG).
  */
 export const LOOP_NAAD = 0.010;
+/**
+ * STEMS (docs/STEMS.md in v1): een bron mag 4 of 8 kanalen hebben = 2 of 4 stereoparen (stems,
+ * vooraf gesplitst door Demucs). Paar 0 gaat naar L/R, paar 1..3 naar `k.extra` (de andere
+ * uitgangen van de worklet; daar zit per uitgang een gain voor niveau en kill). Zonder extra
+ * (een toets, een sampler) worden de paren opgeteld: de som van de stems is het nummer. Een
+ * stereobron gaat door het oude pad, bit voor bit.
+ */
+export const KANALEN = Object.freeze([2, 4, 8]);
 
 const HALF_PI = Math.PI / 2;
 const SCHAAL = 1 / 32768;
@@ -116,6 +124,8 @@ export function maakKern(ctxSr, { overvloei = OVERVLOEI, sprong = OVERVLOEI_SPRO
     bronSr: new Float64Array(2),
     bronFrames: new Float64Array(2),
     bronId: new Float64Array(2),             // het laadnummer van de speler (streamen: een pagina hoort bij één laad)
+    bronK: new Uint8Array([2, 2]),           // kanalen van de bron: 2 (stereo), 4 of 8 (stems)
+    extra: null,                             // [L1, R1, L2, R2, L3, R3]: de uitgangen voor paar 1..3, of null
     bron: 0,
     // De stemmen.
     vAan: new Uint8Array(STEMMEN),
@@ -133,6 +143,8 @@ export function maakKern(ctxSr, { overvloei = OVERVLOEI, sprong = OVERVLOEI_SPRO
     // Kladblok voor de vier buren van een sample (ruwe Int16-waarden).
     bl: new Int32Array(4),
     br: new Int32Array(4),
+    bm: new Int32Array(32),                  // de vier buren van elk van de acht kanalen: [q * 8 + c]
+    bn: new Int32Array(32),                  // idem voor de naad van een lus
   };
 }
 
@@ -163,7 +175,8 @@ function laatUitvloeien(k) {
  * `paginas`: array van Int16Array (PAGINA frames, interleaved stereo) of
  * undefined/null voor een pagina die (nog) ontbreekt.
  */
-export function laadBron(k, sr, frames, paginas, id = 0) {
+export function laadBron(k, sr, frames, paginas, id = 0, kanalen = 2) {
+  if (KANALEN.indexOf(kanalen) < 0) throw new RangeError(`laadBron: ${kanalen} kanalen (2, 4 of 8)`);
   const nieuw = k.bron ^ 1;
   kapBron(k, nieuw);                      // laad twee keer binnen 4 ms: die stemmen houden op
   laatUitvloeien(k);
@@ -177,6 +190,7 @@ export function laadBron(k, sr, frames, paginas, id = 0) {
   k.bronSr[nieuw] = sr;
   k.bronFrames[nieuw] = frames;
   k.bronId[nieuw] = id;
+  k.bronK[nieuw] = kanalen;
   k.bron = nieuw;
 }
 
@@ -189,7 +203,8 @@ export function zetPagina(k, id, i, data) {
   for (let b = 0; b < 2; b++) {
     const pag = k.bronPag[b];
     if (pag === null || k.bronId[b] !== id || !(i >= 0 && i < pag.length)) continue;
-    if (!(data instanceof Int16Array) || data.length > PAGINA * 2 || data.length % 2 !== 0) return false;
+    const kc = k.bronK[b];
+    if (!(data instanceof Int16Array) || data.length > PAGINA * kc || data.length % kc !== 0) return false;
     pag[i] = data;
     return true;
   }
@@ -211,6 +226,7 @@ export function leegBron(k) {
   k.bronPag[nieuw] = null;
   k.bronSr[nieuw] = 0;
   k.bronFrames[nieuw] = 0;
+  k.bronK[nieuw] = 2;
   k.bron = nieuw;
 }
 
@@ -276,6 +292,7 @@ function buren(k, pag, n) {
  */
 function stemBlok(k, v, L, R, van, tot) {
   const b = k.vBron[v];
+  if (k.bronK[b] !== 2) { stemBlokMeer(k, v, L, R, van, tot); return; }
   const pag = k.bronPag[b];
   const np = pag === null ? 0 : pag.length;
   const sr = k.bronSr[b], frames = k.bronFrames[b];
@@ -354,6 +371,100 @@ function stemBlok(k, v, L, R, van, tot) {
 }
 
 /**
+ * De buren n−1..n+2 van alle `kc` kanalen naar `uit` ([q * 8 + c]), ruw; ontbreekt een pagina: 0.
+ * Hele getallen in en uit (zie buren).
+ */
+function burenMeer(pag, n, kc, uit) {
+  const np = pag === null ? 0 : pag.length;
+  for (let q = 0; q < 4; q++) {
+    const m = n - 1 + q;
+    const o = q * 8;
+    for (let c = 0; c < kc; c++) uit[o + c] = 0;
+    if (m < 0) continue;
+    const pk = m >> PAGINA_SHIFT;
+    if (pk >= np) continue;
+    const p = pag[pk];
+    if (p === undefined) continue;
+    const j = (m & PAGINA_MASK) * kc;
+    if (j + kc - 1 < p.length) for (let c = 0; c < kc; c++) uit[o + c] = p[j + c];
+  }
+}
+
+/**
+ * Een stem van een bron met stems (4 of 8 kanalen): dezelfde lijn, lus, naad, gaten en
+ * overvloei als stemBlok, per sample voor elk paar. Paar 0 naar L/R, de andere naar k.extra
+ * (of, zonder extra, ook naar L/R: de som). Een eigen functie, zodat het stereopad niet
+ * verandert (de gouden hash, meting/golden.mjs).
+ */
+function stemBlokMeer(k, v, L, R, van, tot) {
+  const b = k.vBron[v];
+  const pag = k.bronPag[b];
+  const np = pag === null ? 0 : pag.length;
+  const kc = k.bronK[b];
+  const sr = k.bronSr[b], frames = k.bronFrames[b];
+  const f0 = k.klok[0], csr = k.ctxSr;
+  const T = k.vT[v], P = k.vP[v], Rr = k.vR[v];
+  const la = k.vLA[v], lb = k.vLB[v], lus = lb > 0, lL = lb - la;
+  const naad = lus && la >= LOOP_NAAD ? LOOP_NAAD : 0;
+  const laF = Math.floor(la * sr), lbF = Math.floor(lb * sr), lF = lbF - laF;
+  const dw = k.vDw[v], de = k.de;
+  const bm = k.bm, bn = k.bn;
+  const ex = k.extra;
+  let w = k.vW[v], richt = k.vRicht[v], env = k.vEnv[v];
+  const lin = k.lin === 1;
+  const vooruit = Math.ceil(GAT_FADE * sr * (Rr > 0.5 ? Rr : 0.5)) + 2;
+  let klaar = false;
+  for (let i = van; i < tot && !klaar; i++) {
+    const g = w >= 1 ? 1 : lin ? w : Math.sin(w * HALF_PI);
+    if (richt !== 0) {
+      w += richt * dw;
+      if (w >= 1) { w = 1; richt = 0; }
+      else if (w <= 0) { w = 0; klaar = true; }
+    }
+    let pos = P + ((f0 + i) / csr - T) * Rr;
+    if (lus && pos >= lb) pos = la + ((pos - la) % lL);
+    const f = pos * sr;
+    if (!(f >= 0) || f >= frames) continue;
+    const n = Math.floor(f);
+    const x = f - n;
+    let ok = true;
+    let m = n - 1;
+    if (m >= 0) { const q = m >> PAGINA_SHIFT; ok = q < np && pag[q] !== undefined; }
+    m = n + 2;
+    if (ok && m < frames) { const q = m >> PAGINA_SHIFT; ok = q < np && pag[q] !== undefined; }
+    m = n + vooruit;
+    if (lus && m >= lbF && lF > 0) m = laF + ((m - laF) % lF);
+    if (ok && m < frames) { const q = m >> PAGINA_SHIFT; ok = q < np && pag[q] !== undefined; }
+    if (ok) { if (env < 1) { env += de; if (env > 1) env = 1; } }
+    else if (env > 0) { env -= de; if (env < 0) env = 0; }
+    if (env === 0) continue;
+    burenMeer(pag, n, kc, bm);
+    let wn = 0;
+    if (naad > 0 && pos > lb - naad) {
+      wn = (pos - (lb - naad)) / naad;
+      burenMeer(pag, Math.floor((pos - lL) * sr), kc, bn);
+    }
+    const x2 = wn > 0 ? (pos - lL) * sr - Math.floor((pos - lL) * sr) : 0;
+    const a = g * env * SCHAAL;
+    for (let c = 0; c < kc; c++) {
+      const y0 = bm[c], y1 = bm[8 + c], y2 = bm[16 + c], y3 = bm[24 + c];
+      let y = y1 + 0.5 * x * (y2 - y0 + x * (2 * y0 - 5 * y1 + 4 * y2 - y3 + x * (3 * (y1 - y2) + y3 - y0)));
+      if (wn > 0) {
+        const z0 = bn[c], z1 = bn[8 + c], z2 = bn[16 + c], z3 = bn[24 + c];
+        const z = z1 + 0.5 * x2 * (z2 - z0 + x2 * (2 * z0 - 5 * z1 + 4 * z2 - z3 + x2 * (3 * (z1 - z2) + z3 - z0)));
+        y += wn * (z - y);
+      }
+      const paar = c >> 1;
+      if (paar === 0 || ex === null) {
+        if ((c & 1) === 0) L[i] += a * y; else R[i] += a * y;
+      } else ex[2 * (paar - 1) + (c & 1)][i] += a * y;
+    }
+  }
+  k.vW[v] = w; k.vRicht[v] = richt; k.vEnv[v] = env;
+  if (klaar) k.vAan[v] = 0;
+}
+
+/**
  * Eén blok van `frames` samples naar L en R (Float32Array's). De klok van het
  * blok staat in k.klok[0] (currentFrame). Segmenten gaan in op hun sample;
  * daartussen speelt elke stem zijn stuk.
@@ -367,6 +478,8 @@ function stemBlok(k, v, L, R, van, tot) {
 export function renderBlok(k, L, R, frames) {
   L.fill(0, 0, frames);
   R.fill(0, 0, frames);
+  const ex = k.extra;
+  if (ex !== null) for (let c = 0; c < ex.length; c++) ex[c].fill(0, 0, frames);
   const f0 = k.klok[0], csr = k.ctxSr;
   let i = 0;
   while (i < frames) {

@@ -123,3 +123,34 @@ export function effectSectie({ engine, bus, maakKnop }) {
     },
   };
 }
+
+/**
+ * De sectie Stems: alleen als het nummer op de focus-track met stems speelt (v1 STEMS-rij). Per stem
+ * een niveauknop met KILL (klik = weg/terug; shift op een controller: zolang je drukt). Bij vier
+ * stems ook REST (drums + bas + overig samen).
+ */
+export function stemsSectie({ bus, maakKnop }) {
+  const LABEL = { vocals: 'ZANG', inst: 'REST', drums: 'DRUMS', bass: 'BAS', other: 'OVERIG' };
+  return {
+    naam: 'stems',
+    sleutel: (t) => t.stems?.namen.join(',') ?? '',
+    maak(n, el, t) {
+      if (!t.stems) return null;
+      const namen = t.stems.namen.length === 4 ? ['vocals', 'drums', 'bass', 'other', 'inst'] : ['vocals', 'inst'];
+      el.innerHTML = '<div class="tp-kop"><strong>STEMS</strong></div>';
+      const knoppen = document.createElement('div');
+      knoppen.className = 'knoppen tp-knoppen';
+      const lijst = namen.map((s) => {
+        const k = document.createElement('div');
+        k.className = 'knop';
+        k.dataset.waarde = `track.${n}.stem.${s}`;
+        k.dataset.label = LABEL[s];
+        k.dataset.kill = `track.${n}.stem.${s}.kill`;
+        knoppen.append(k);
+        return maakKnop(k, bus, { tekst: (v) => `${Math.round(v * 100)}%` });
+      });
+      el.append(knoppen);
+      return { teken() { for (const k of lijst) k.teken(); } };
+    },
+  };
+}

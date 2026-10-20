@@ -10,7 +10,7 @@
  * BERICHT (dat object maakt de browser al) of bij een fout (één keer).
  *
  * Berichten erin:
- *   { type: 'laad', sr, frames, paginas }   paginas overgedragen (transfer)
+ *   { type: 'laad', sr, frames, paginas, kanalen? }   paginas overgedragen (transfer); kanalen 2, 4 of 8 (stems)
  *   { type: 'plan', segmenten }             [{ T, P, R, speelt }]
  *   { type: 'leeg' }                        stil, bron weg (na het uitvloeien)
  *   { type: 'stop' }                        daarna geeft process() false: de
@@ -30,6 +30,8 @@ class VarveSpeler extends AudioWorkletProcessor {
     this.gestopt = false;
     this.kapot = false;                   // na een fout: stilte, tot laad/leeg
     this.reserve = null;                  // alleen als de uitgang ooit geen twee kanalen heeft
+    // De uitgangen 1..3 (stems: paar 1..3). Eén vaste array; per blok alleen de verwijzingen.
+    this.extra = new Array(6).fill(null);
     this.port.onmessage = (e) => this._bericht(e.data);
   }
 
@@ -47,7 +49,7 @@ class VarveSpeler extends AudioWorkletProcessor {
       }
       else if (m.type === 'laad') {
         this.kapot = false;
-        laadBron(this.kern, m.sr, m.frames, m.paginas, m.id ?? 0);
+        laadBron(this.kern, m.sr, m.frames, m.paginas, m.id ?? 0, m.kanalen ?? 2);
       } else if (m.type === 'pagina') {
         if (!this.kapot) zetPagina(this.kern, m.id, m.i, m.data);
       } else if (m.type === 'weg') {
@@ -87,12 +89,22 @@ class VarveSpeler extends AudioWorkletProcessor {
       if (this.reserve === null || this.reserve.length !== L.length) this.reserve = new Float32Array(L.length);
       R = this.reserve;
     }
-    if (this.kapot) { L.fill(0); R.fill(0); return true; }
+    // Vier stereo-uitgangen (speler.js maakt hem zo): de stems van paar 1..3. Anders: alles op uitgang 0.
+    let extra = outputs.length >= 4;
+    for (let o = 1; o < 4 && extra; o++) extra = outputs[o].length >= 2;
+    if (extra) for (let o = 1; o < 4; o++) { this.extra[2 * o - 2] = outputs[o][0]; this.extra[2 * o - 1] = outputs[o][1]; }
+    if (this.kapot) {
+      L.fill(0); R.fill(0);
+      if (extra) for (let c = 0; c < 6; c++) this.extra[c].fill(0);
+      return true;
+    }
     try {
+      this.kern.extra = extra ? this.extra : null;
       this.kern.klok[0] = currentFrame;
       renderBlok(this.kern, L, R, L.length);
     } catch (e) {
       L.fill(0); R.fill(0);
+      if (extra) for (let c = 0; c < 6; c++) this.extra[c].fill(0);
       this._fout(e);
     }
     if (uit.length === 1) for (let i = 0; i < L.length; i++) L[i] = 0.5 * (L[i] + R[i]);

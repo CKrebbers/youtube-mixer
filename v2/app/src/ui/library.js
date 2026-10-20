@@ -109,11 +109,22 @@ export function opzetLibrary({ engine, bus, wortel, overzichten }) {
     }
     laatsteDruk.delete(n);
     const nummer = {
-      id: x.id, titel: x.titel, artiest: x.artiest, duur: x.duur, grid: null, zeker: true,
+      id: x.id, titel: x.titel, artiest: x.artiest, duur: x.duur, grid: null, zeker: true, toon: x.toon ?? null,
+      // false = de library zegt: geen beeld (dan vraagt beeld/ niets op); undefined = onbekend.
+      video: x.video === false ? false : undefined,
+      stems: x.stems ? { namen: x.stems.namen, schaal: x.stems.schaal } : null,
       haal: async () => {
         let pcm, grid = x.grid ?? null;
         if (x.demo) { const d = maakDemo(x); pcm = d.maakPcm(); grid = d.grid; }
-        else pcm = await stroomVanWav(`/api/library/${encodeURIComponent(x.id)}/audio`);   // streamen (M7)
+        else if (x.stems) {
+          // Met stems speelt de track stems.wav (de som is het nummer); lukt dat niet, dan audio.wav.
+          try { pcm = await stroomVanWav(`/api/library/${encodeURIComponent(x.id)}/stems`, { alle: true }); }
+          catch (e) {
+            nummer.stems = null;
+            engine.meld(`${x.titel}: stems niet te lezen (${e.message}); het nummer speelt zonder`, 'info', `stems:${n}`);
+            pcm = await stroomVanWav(`/api/library/${encodeURIComponent(x.id)}/audio`);
+          }
+        } else pcm = await stroomVanWav(`/api/library/${encodeURIComponent(x.id)}/audio`);   // streamen (M7)
         nummer.grid = grid;
         if (!x.demo) {
           // Wat bij dit nummer bewaard is (hotcues, cue). Lukt het niet, dan laden we zonder.

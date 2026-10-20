@@ -24,7 +24,7 @@
 html, body { height: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--tekst); font: 13px/1.35 var(--f-tekst);
-  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; overflow: hidden;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden;
   -webkit-user-select: none; user-select: none;
 }
 button {
@@ -56,6 +56,8 @@ button[disabled] { opacity: .35; cursor: default; }
 .mini { font: 600 10px var(--f-tekst); color: var(--dim); letter-spacing: .08em; display: flex; align-items: center; gap: 6px; }
 .start { background: var(--play); color: #04130a; border-color: transparent; }
 .start[hidden] { display: none; }
+/* `hidden` wint altijd: een paneel met een eigen display (#paneel-track, .ind-paneel) bleef anders open staan. */
+[hidden] { display: none !important; }
 
 .meter { display: flex; gap: 2px; height: 28px; }
 .meter i { width: 6px; background: var(--vlak2); position: relative; overflow: hidden; border-radius: 1px; }
@@ -86,8 +88,8 @@ button[disabled] { opacity: .35; cursor: default; }
 .track.gekoppeld .t-fase i { display: block; background: var(--sync); }
 .track.vrij-grid .t-fase i { display: block; background: var(--zwak); }
 
-.t-transport { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.t-transport .b-play { grid-column: span 1; }
+.t-transport { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+.t-transport .b-play { grid-column: span 2; }
 .b-sync.aan { background: var(--sync); border-color: var(--sync); color: #fff; }
 .b-play.aan { background: var(--play); border-color: var(--play); color: #04130a; }
 .b-play.wacht, .b-quant.wacht { background: var(--play); border-color: var(--play); color: #04130a; animation: knipper .5s steps(2) infinite; }
@@ -100,7 +102,7 @@ button[disabled] { opacity: .35; cursor: default; }
 .jog { border: 1px solid var(--lijn); border-radius: 14px; background: radial-gradient(circle at 50% 50%, var(--vlak2) 0 60%, var(--bg) 61%); position: relative; cursor: ew-resize; min-height: 28px; touch-action: none; }
 .jog span { position: absolute; top: 4px; bottom: 4px; width: 2px; left: calc(50% + var(--jog, 0) * 1px); background: var(--dim); }
 
-.t-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; flex: 1; min-height: 0; }
+.t-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; flex: 1 1 auto; min-height: 156px; }
 .knoppen { display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 4px; min-height: 0; }
 .knop { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 5px; cursor: ns-resize; touch-action: none; min-height: 28px; min-width: 0; }
 .knop canvas { width: 26px; height: 26px; }
@@ -127,7 +129,9 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 
 /* ---- onder ---------------------------------------------------------------- */
 .onder { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 0 10px 10px; }
-.xfader { display: flex; align-items: center; justify-content: center; gap: 10px; font: 700 12px var(--f-cijfer); }
+.onder-rij { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.onder-rij #auto-rij { flex: 1; min-width: 0; }
+.xfader { display: flex; align-items: center; justify-content: center; gap: 10px; font: 700 12px var(--f-cijfer); flex: 1; margin-right: 200px; }
 .xfader input { width: min(420px, 60vw); }
 .xfader span:first-child { color: var(--kant-a); }
 .xfader span:last-child { color: var(--kant-b); }
@@ -152,7 +156,9 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .melding button { min-height: 0; padding: 0 6px; background: none; border: 0; color: var(--dim); }
 
 @media (max-height: 860px) {
-  .bieb { height: 150px; }
+  /* Een laag scherm (1440×790 met de balk van de browser): het paneel onderin geeft hoogte af, de tracks niet. */
+  .onder .paneel { height: 104px; }
+  .track { gap: 5px; }
   .knop { min-height: 24px; }
   .knop canvas { width: 22px; height: 22px; }
 }
@@ -230,8 +236,8 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .tp-knoppen { display: grid; grid-template-columns: repeat(8, 64px); gap: 6px; }
 
 /* ---- effect en sends in de kolom --------------------------------------------- */
-.t-fx { display: grid; grid-template-columns: 22px 1fr 22px; gap: 3px; align-items: center; }
+.t-fx { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px 4px; align-items: center; flex: none; }
 .t-fx > button { min-height: 22px; padding: 0; }
 .t-fx .b-fx[data-stand="aan"], .tp-kop .b-fx.aan { background: var(--sync); border-color: var(--sync); color: var(--bg); }
-.t-fx .knop.klein { grid-column: 1 / -1; display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 4px; }
-.t-fx .knop.klein canvas { width: 30px; height: 30px; }
+.t-fx .knop.klein { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 3px; min-height: 26px; cursor: ns-resize; }
+.t-fx .knop.klein canvas { width: 24px; height: 24px; }

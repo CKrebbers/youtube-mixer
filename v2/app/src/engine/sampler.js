@@ -34,9 +34,13 @@ export function knipBereik(grid, positie, tellen) {
   return { van: grid.timeOf(laatste - n), tot: grid.timeOf(laatste), tellen: n };
 }
 
-/** Een stuk (seconden van..tot) uit een bron als stereo Int16-pagina's die bij 0 beginnen. */
-export async function knipPcm(bron, van, tot) {
-  const sr = bron.sr;
+/**
+ * Een stuk (seconden van..tot) uit een bron als stereo Int16-pagina's die bij 0 beginnen. Een bron
+ * met stems (4 of 8 kanalen) wordt gemengd met `gewichten` per paar (wat je HOORT: een pad die je
+ * knipt terwijl de zang weg is, klinkt zonder zang; v1 knip met gewichten). Zonder: de som.
+ */
+export async function knipPcm(bron, van, tot, gewichten = null) {
+  const sr = bron.sr, kc = bron.kanalen ?? 2, paren = kc >> 1;
   const f0 = Math.max(0, Math.round(van * sr)), f1 = Math.min(bron.frames, Math.round(tot * sr));
   const frames = f1 - f0;
   if (frames <= 0) return null;
@@ -49,8 +53,13 @@ export async function knipPcm(bron, van, tot) {
     const n = Math.min(PAGINA, frames - van2);
     const uit = new Int16Array(n * 2);
     for (let i = 0; i < n; i++) {
-      const f = f0 + van2 + i, pag = bronPag.get(Math.floor(f / PAGINA)), j = (f % PAGINA) * 2;
-      if (pag && j + 1 < pag.length) { uit[2 * i] = pag[j]; uit[2 * i + 1] = pag[j + 1]; }
+      const f = f0 + van2 + i, pag = bronPag.get(Math.floor(f / PAGINA)), j = (f % PAGINA) * kc;
+      if (!pag || j + kc - 1 >= pag.length) continue;
+      if (kc === 2) { uit[2 * i] = pag[j]; uit[2 * i + 1] = pag[j + 1]; continue; }
+      let l = 0, r = 0;
+      for (let p = 0; p < paren; p++) { const g = gewichten ? (gewichten[p] ?? 0) : 1; l += g * pag[j + 2 * p]; r += g * pag[j + 2 * p + 1]; }
+      uit[2 * i] = Math.max(-32768, Math.min(32767, Math.round(l)));
+      uit[2 * i + 1] = Math.max(-32768, Math.min(32767, Math.round(r)));
     }
     paginas.push(uit);
   }
@@ -105,7 +114,7 @@ export class Sampler {
   async _speler(p) {
     if (!p.speler) {
       p.speler = await this.engine.audio.speler(this.engine.ctx);
-      p.speler.node?.connect?.(this.uitgang.pad(p.k));
+      (p.speler.uitgang ?? p.speler.node)?.connect?.(this.uitgang.pad(p.k));
       p.speler.onfout = (b) => this.engine.meld(`sampler ${p.k}: ${b}`, 'fout', `sampler:${p.k}`);
     }
     return p.speler;
@@ -126,7 +135,7 @@ export class Sampler {
     const p = this.pad(k);
     // De bron opnieuw openen (de pagina's van de track zitten in zijn worklet): een stroom leest
     // alleen wat nodig is, een demo wordt opnieuw gemaakt.
-    const pcm = await knipPcm(await t._haal(), b.van, b.tot);
+    const pcm = await knipPcm(await t._haal(), b.van, b.tot, t.stems ? t.stemGewichten() : null);
     if (!pcm) return { geweigerd: 'niets te knippen' };
     const sp = await this._speler(p);
     sp.laad(pcm);

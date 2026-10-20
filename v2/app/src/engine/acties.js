@@ -4,7 +4,7 @@
  * hier wordt geschaald.
  */
 import { MIN_BPM, MAX_BPM } from '../kern/klok.js';
-import { HOTCUES } from './track.js';
+import { HOTCUES, STEM_NAMEN } from './track.js';
 
 const bpmUit01 = (v) => MIN_BPM + v * (MAX_BPM - MIN_BPM);
 const bpmNaar01 = (bpm) => (bpm - MIN_BPM) / (MAX_BPM - MIN_BPM);
@@ -229,6 +229,27 @@ export function definieerActies(engine) {
     doe: (v) => (v ? engine.opname(!engine.opnemer?.loopt) : undefined),
     lees: () => (engine.opnemer ? (engine.opnemer.loopt ? 1 : 0) : null),
   });
+
+  // ---- stems (track.js): niveau en kill per stem; null zonder die stem ---------------------
+  const STEM_LABEL = { vocals: 'zang', inst: 'rest', drums: 'drums', bass: 'bas', other: 'overig' };
+  for (const s of STEM_NAMEN) {
+    const heeft = (n) => T(n).heeftStem(s);
+    bus.defineer({
+      id: `track.{n}.stem.${s}`, soort: 'waarde', label: `stem ${STEM_LABEL[s]}: niveau`,
+      doe: (v, n) => T(n).zetStemNiveau(s, v),
+      lees: (n) => (heeft(n) ? T(n).stemNiveau[s] : null),
+    });
+    bus.defineer({
+      id: `track.{n}.stem.${s}.kill`, soort: 'trigger', label: `stem ${STEM_LABEL[s]}: weg/terug`,
+      doe: (v, n) => (v ? T(n).zetStemKill(s, !T(n).stemKill[s]) : undefined),
+      lees: (n) => (heeft(n) ? (T(n).stemKill[s] ? 1 : 0) : null),
+    });
+    bus.defineer({
+      id: `track.{n}.stem.${s}.kill.hold`, soort: 'trigger', label: `stem ${STEM_LABEL[s]}: weg zolang je drukt`,
+      doe: (v, n) => T(n).zetStemKill(s, !!v),
+      lees: (n) => (heeft(n) ? (T(n).stemKill[s] ? 1 : 0) : null),
+    });
+  }
 
   // ---- de koptelefoon (audio/koptelefoon.js) ---------------------------------------
   // Wat je in de koptelefoon hoort is niet wat de zaal hoort: niet in het log (v1 OVERSLAAN).

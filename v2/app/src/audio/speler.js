@@ -6,8 +6,13 @@
  * positie(t) rekent met DEZELFDE formule als de worklet (P + (t − T)·R) uit de
  * laatst geplande segmenten: hoofdthread en worklet delen geen teller.
  */
-import { PAGINA, MAX_SEGMENTEN } from './speler-kern.js';
+import { PAGINA, MAX_SEGMENTEN, KANALEN } from './speler-kern.js';
 import { Stroom, paginasNodig } from './stroom.js';
+import { killVersterking, zetDoel } from './strip.js';
+import { startDrempel } from './overgang.js';
+
+/** Tijdconstante van het niveau van een stem (zoals een knop van de strip). */
+const STEM_TAU = 0.01;
 
 export { PAGINA };
 
@@ -93,9 +98,23 @@ export class Speler {
 
   constructor(ctx) {
     this.ctx = ctx;
+    // Vier stereo-uitgangen: uitgang 0 is het nummer (of stem 0), 1..3 de andere stems. Elke
+    // uitgang door een eigen gain (niveau en kill per stem) naar `uitgang`. Zonder stems staan
+    // ze op 1 en zijn 1..3 niet aangesloten: bit voor bit het stereopad (gain 1 is exact).
     this.node = new AudioWorkletNode(ctx, 'varve-speler', {
-      numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
+      numberOfInputs: 0, numberOfOutputs: 4, outputChannelCount: [2, 2, 2, 2],
     });
+    this.uitgang = ctx.createGain();
+    this._stemG = [];
+    for (let o = 0; o < 4; o++) {
+      const g = ctx.createGain();
+      g.connect(this.uitgang);
+      this._stemG.push(g);
+    }
+    this.node.connect(this._stemG[0], 0);
+    this._stemAan = [true, false, false, false];   // welke uitgang aangesloten is
+    this._stemW = [1, 1, 1, 1];                     // de gezette versterking per uitgang
+    this.kanalen = 2;
     this.onfout = null;                      // (bericht: string, kapot: boolean) => void; kapot = hij speelt stil
     this._lijn = [];                         // de geplande segmenten, voor positie()
     this._weg = false;
@@ -122,8 +141,8 @@ export class Speler {
    */
   laad({ sr, kanalen = 2, frames, paginas, stroom = null }) {
     this._levend();
+    if (!KANALEN.includes(kanalen)) throw new RangeError(`laad: kanalen ${kanalen} (2, of 4/8 voor stems)`);
     if (stroom) return this._laadStroom({ sr, kanalen, frames, stroom });
-    if (kanalen !== 2) throw new RangeError(`laad: alleen stereo (kanalen 2), niet ${kanalen}`);
     if (!(sr > 0) || !Number.isFinite(sr)) throw new RangeError(`laad: samplerate ${sr} klopt niet`);
     if (!Number.isInteger(frames) || frames < 0 || frames > 2 ** 30) throw new RangeError(`laad: frames ${frames} klopt niet`);
     if (!Array.isArray(paginas)) throw new TypeError('laad: paginas moet een array zijn');
@@ -135,13 +154,14 @@ export class Speler {
       const p = paginas[i];
       if (p === undefined || p === null) { lijst[i] = undefined; continue; }
       if (!(p instanceof Int16Array)) throw new TypeError(`laad: pagina ${i} is geen Int16Array`);
-      if (p.length > PAGINA * 2 || p.length % 2 !== 0) throw new RangeError(`laad: pagina ${i} heeft ${p.length} samples (hooguit ${PAGINA * 2}, even)`);
+      if (p.length > PAGINA * kanalen || p.length % kanalen !== 0) throw new RangeError(`laad: pagina ${i} heeft ${p.length} samples (hooguit ${PAGINA * kanalen}, een veelvoud van ${kanalen})`);
       lijst[i] = p;
       buffers.add(p.buffer);                 // gedeelde buffer: één keer in de transferlijst
     }
     this._lijn = [];
     this._sluitStroom();
-    this.node.port.postMessage({ type: 'laad', id: ++this._laadNr, sr, frames, paginas: lijst }, [...buffers]);
+    this._stemsVoor(kanalen);
+    this.node.port.postMessage({ type: 'laad', id: ++this._laadNr, sr, frames, paginas: lijst, kanalen }, [...buffers]);
   }
 
   /**
@@ -149,19 +169,47 @@ export class Speler {
    * haalt pagina i op zodra het plan hem nodig heeft (stroom.js). Wat er niet is, is stilte.
    */
   _laadStroom({ sr, kanalen, frames, stroom }) {
-    if (kanalen !== 2) throw new RangeError(`laad: alleen stereo (kanalen 2), niet ${kanalen}`);
     if (!(sr > 0) || !Number.isFinite(sr)) throw new RangeError(`laad: samplerate ${sr} klopt niet`);
     if (!Number.isInteger(frames) || frames < 0 || frames > 2 ** 30) throw new RangeError(`laad: frames ${frames} klopt niet`);
     if (typeof stroom.lees !== 'function') throw new TypeError('laad: stroom.lees moet een functie zijn');
     this._lijn = [];
     this._sluitStroom();
     const id = ++this._laadNr;
-    this.node.port.postMessage({ type: 'laad', id, sr, frames, paginas: [] });
+    this._stemsVoor(kanalen);
+    this.node.port.postMessage({ type: 'laad', id, sr, frames, paginas: [], kanalen });
     this._stroom = new Stroom({
-      id, sr, frames, lees: stroom.lees,
+      id, sr, frames, kanalen, lees: stroom.lees,
       stuur: (m, transfer) => { if (!this._weg) this.node.port.postMessage(m, transfer ?? []); },
       onfout: (bericht) => this._meld(`streamen: ${bericht}`, false),
     });
+  }
+
+  /**
+   * Een nieuw nummer met `kanalen`: de uitgangen die het nodig heeft aangesloten (aansluiten mag
+   * terwijl er geluid loopt: die uitgang zwijgt nog). Losmaken doen we nooit (niet sample-exact);
+   * een ongebruikte uitgang geeft nullen. De versterkingen zet de track (zetStem), bij elke laad.
+   */
+  _stemsVoor(kanalen) {
+    this.kanalen = kanalen;
+    for (let o = 1; o < kanalen / 2; o++) {
+      if (this._stemAan[o]) continue;
+      this.node.connect(this._stemG[o], o);
+      this._stemAan[o] = true;
+    }
+  }
+
+  /**
+   * De versterking van uitgang o (stem o): `kill` = een schakelaar (de zachte S van de EQ-kill in
+   * 5 ms, na startDrempel), anders een knop (setTargetAtTime vanaf waar hij nu is). Zelfde waarde:
+   * niets.
+   */
+  zetStem(o, w, { kill = false } = {}) {
+    if (this._weg || !(o >= 0 && o < 4) || !Number.isFinite(w)) return;
+    if (this._stemW[o] === w) return;
+    this._stemW[o] = w;
+    const p = this._stemG[o].gain, nu = this.ctx.currentTime;
+    if (kill) killVersterking(p, w, nu, startDrempel(this.ctx));
+    else zetDoel(p, w, nu, STEM_TAU);
   }
 
   _sluitStroom() { if (this._stroom) { this._stroom.sluit(); this._stroom = null; } }
@@ -231,6 +279,8 @@ export class Speler {
     this._sluitStroom();
     try { this.node.port.postMessage({ type: 'stop' }); } catch { /* al dicht */ }
     try { this.node.disconnect(); } catch { /* niet verbonden */ }
+    for (const g of this._stemG) { try { g.disconnect(); } catch { /* niet verbonden */ } }
+    try { this.uitgang.disconnect(); } catch { /* niet verbonden */ }
     this.node.port.onmessage = null;
     this.node.onprocessorerror = null;
     this.node.port.close?.();

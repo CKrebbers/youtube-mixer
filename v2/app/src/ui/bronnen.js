@@ -34,8 +34,9 @@ export function wavNaarPcm(buf) {
  * Een WAV op de server STREAMEN (budget M7): de kop met één Range-verzoek, daarna per pagina een
  * Range-verzoek (stroom.js beslist welke). Alleen 16-bit PCM, mono of stereo (meer kanalen: de
  * eerste twee). Geeft { sr, kanalen: 2, frames, stroom: { lees(i, signaal) } }.
+ * Met `alle`: 4 of 8 kanalen blijven zoals ze zijn (stems.wav: 2 of 4 stereoparen), kanalen = 4|8.
  */
-export async function stroomVanWav(url) {
+export async function stroomVanWav(url, { alle = false } = {}) {
   const kop = await fetch(url, { headers: { range: 'bytes=0-65535' } });
   if (!kop.ok) throw new Error(`audio ${kop.status}`);
   const buf = await kop.arrayBuffer();
@@ -51,6 +52,8 @@ export async function stroomVanWav(url) {
       if (!fmt) throw new Error('WAV: data vóór fmt');
       if (fmt.bits !== 16 || (fmt.formaat !== 1 && fmt.formaat !== 0xfffe)) throw new Error(`WAV: alleen 16-bit PCM (dit is ${fmt.bits}-bit)`);
       const k = fmt.kanalen, blok = 2 * k, begin = o + 8;
+      const houd = alle && (k === 4 || k === 8);
+      if (alle && !houd) throw new Error(`stems: ${k} kanalen (verwacht 4 of 8)`);
       const lengte = Math.min(len === 0xffffffff || len === 0 ? totaal - begin : len, totaal - begin);
       const frames = Math.floor(lengte / blok);
       const lees = async (i, signal) => {
@@ -62,12 +65,12 @@ export async function stroomVanWav(url) {
         const ruw = await r.arrayBuffer();
         if (ruw.byteLength !== n * blok) throw new Error(`pagina ${i}: ${ruw.byteLength} bytes, verwacht ${n * blok}`);
         const bron = new Int16Array(ruw);
-        if (k === 2) return bron;
+        if (k === 2 || houd) return bron;
         const uit = new Int16Array(n * 2);
         for (let j = 0; j < n; j++) { uit[2 * j] = bron[j * k]; uit[2 * j + 1] = k > 1 ? bron[j * k + 1] : bron[j * k]; }
         return uit;
       };
-      return { sr: fmt.sr, kanalen: 2, frames, stroom: { lees } };
+      return { sr: fmt.sr, kanalen: houd ? k : 2, frames, stroom: { lees } };
     }
     o += 8 + len + (len & 1);
   }

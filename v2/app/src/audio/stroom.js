@@ -68,8 +68,8 @@ export function paginasNodig(lijn, nu, { sr, frames, pins = [], vooruit = VOORUI
  * stereo, PAGINA frames of minder aan het eind); `stuur(bericht, transfer)` naar de worklet.
  */
 export class Stroom {
-  constructor({ id, sr, frames, lees, stuur, klok = () => performance.now() / 1000, onfout = null }) {
-    Object.assign(this, { id, sr, frames, lees, stuur, klok, onfout });
+  constructor({ id, sr, frames, kanalen = 2, lees, stuur, klok = () => performance.now() / 1000, onfout = null }) {
+    Object.assign(this, { id, sr, frames, kanalen, lees, stuur, klok, onfout });
     this.binnen = new Set();         // in de worklet
     this.onderweg = new Map();       // i -> AbortController
     this.overbodig = new Map();      // i -> sinds (klok) niet meer nodig
@@ -124,5 +124,5 @@ export class Stroom {
   }
 
   /** Bytes in de worklet (voor de meting). */
-  get bytes() { return this.binnen.size * PAGINA * 4; }
+  get bytes() { return this.binnen.size * PAGINA * 2 * this.kanalen; }
 }

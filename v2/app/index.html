@@ -6,6 +6,7 @@
 <title>VarveDJ</title>
 <link rel="stylesheet" href="/styles.css">
 <link rel="stylesheet" href="/src/ui/auto-paneel.css">
+<link rel="stylesheet" href="/src/beeld/beeld.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23f4efe6'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -38,11 +39,11 @@
     <button class="rec" data-actie="opname" data-lamp title="Opnemen: de master, zoals de zaal hem hoort, naar ~/.varve/v2/opnames">● REC <span id="rec-tijd"></span></button>
     <button class="start" id="start">Geluid aan</button>
   </header>
-  <div id="auto-rij"></div>
 
   <main class="tracks" id="tracks"></main>
 
   <section class="onder">
+    <div class="onder-rij">
     <div class="sampler" aria-label="Sampler: klik = de laatste tellen van de focus-track knippen, dan spelen/stoppen op de tel; shift = leeg">
       <strong>SAMPLER</strong>
       <button data-actie="sampler.1" data-actie-shift="sampler.1.wis" data-lamp>1</button>
@@ -58,16 +59,20 @@
       <button data-actie="sampler.lengte.langer" data-lamp title="langer knippen">+</button>
       <label class="mini">VOL <input type="range" min="0" max="1" step="0.001" data-waarde="sampler.volume"></label>
     </div>
-    <div class="xfader">
-      <span>A</span>
-      <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.xfader" aria-label="Crossfader">
-      <span>B</span>
+    <div id="auto-rij"></div>
     </div>
+    <div class="onder-rij">
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="library" class="aan">Library</button>
       <button role="tab" data-tab="track" title="Effecten, sends, instrument en patronen van de focus-track">Track <span id="tab-track-n"></span></button>
       <button role="tab" data-tab="beeld">Beeld</button>
     </nav>
+    <div class="xfader">
+      <span>A</span>
+      <input type="range" min="0" max="1" step="0.001" data-waarde="mixer.xfader" aria-label="Crossfader">
+      <span>B</span>
+    </div>
+    </div>
     <div class="paneel" id="paneel-track" data-paneel="track" hidden><p class="leeg-paneel">Hier komen de effecten, sends, het instrument en de patronen van de focus-track.</p></div>
     <div class="paneel" id="paneel-beeld" data-paneel="beeld" hidden><p class="leeg-paneel">Hier komt het beeld.</p></div>
     <div class="bieb paneel" data-paneel="library">
@@ -99,9 +104,9 @@
       <div class="t-transport">
         <button class="b-sync" data-actie="track.{n}.sync" title="Sync: koppel aan de klok">SYNC</button>
         <button class="b-klok" data-actie="track.{n}.sync.klok" title="Klok naar dit nummer">KLOK</button>
+        <button class="b-quant" data-actie="track.{n}.play.quant" title="Starten op de volgende 1 van de klok">▶1</button>
         <button class="b-cue" data-actie="track.{n}.cue">CUE</button>
         <button class="b-play" data-actie="track.{n}.play">▶</button>
-        <button class="b-quant" data-actie="track.{n}.play.quant" title="Starten op de volgende 1 van de klok">▶1</button>
       </div>
       <div class="t-cues" aria-label="Hotcues (shift: wissen)">
         <button data-actie="track.{n}.hotcue.1" data-actie-shift="track.{n}.hotcue.1.wis" data-lamp>1</button>

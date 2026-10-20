@@ -36,6 +36,13 @@ export const LUS_BEGIN = 4;
 export const BEATJUMP = 4;
 /** Hotcues per nummer. */
 export const HOTCUES = 8;
+/**
+ * Stems (v1 docs/STEMS.md): vooraf gesplitst door Demucs, stems.wav = 2 of 4 stereoparen. Twee:
+ * zang en de rest; vier: drums, bas, overig, zang. `inst` werkt in beide standen (bij vier: drums +
+ * bas + overig samen). Bij elke laad alles open: stems horen bij het NUMMER, niet bij de track.
+ */
+export const STEM_NAMEN = Object.freeze(['vocals', 'inst', 'drums', 'bass', 'other']);
+export const STEM_STANDEN = Object.freeze({ 2: ['vocals', 'inst'], 4: ['drums', 'bass', 'other', 'vocals'] });
 const mod = (a, n) => a - n * Math.floor(a / n);
 
 export class Track extends Emitter {
@@ -58,6 +65,9 @@ export class Track extends Emitter {
     // track (alle tijdvakken): wat voorbij B komt vouwt terug, hier én in de motor.
     this.lus = null;
     this.lusLengte = LUS_BEGIN;
+    this.stems = null;         // { namen, schaal } als het nummer met stems speelt, anders null
+    this.stemNiveau = Object.fromEntries(STEM_NAMEN.map((x) => [x, 1]));
+    this.stemKill = Object.fromEntries(STEM_NAMEN.map((x) => [x, false]));
     this.hotcues = new Array(HOTCUES).fill(null);
     this.instrument = null;    // { inst, soort, weg() } als de track een instrument draagt (plak 5)
   }
@@ -228,7 +238,54 @@ export class Track extends Emitter {
     this.hotcues = Array.from({ length: HOTCUES }, (_, i) => nummer?.hotcues?.[i] ?? null);
     this.cue = nummer?.cue ?? 0;
     this.vakken = [{ van: -Infinity, soort: 'stil', P: this.cue }];
+    this.stems = nummer?.stems ?? null;
+    for (const x of STEM_NAMEN) { this.stemNiveau[x] = 1; this.stemKill[x] = false; }
+    this._stemsToe();
     this._klaar();
+  }
+
+  // ---- stems -------------------------------------------------------------------------
+
+  /** Heeft dit nummer die stem? (`inst` ook bij vier: drums + bas + overig.) */
+  heeftStem(naam) {
+    const st = this.stems;
+    if (!st) return false;
+    return st.namen.includes(naam) || (naam === 'inst' && st.namen.length === 4);
+  }
+
+  /**
+   * De versterking per uitgang (kanaalpaar k = stems.namen[k]), v1 STEMS.md:
+   * (1 / schaal) × niveau(n) × kill(n) × (vier en n ≠ zang ? niveau(inst) × kill(inst) : 1).
+   */
+  stemGewichten() {
+    const st = this.stems;
+    if (!st) return [1];
+    const vier = st.namen.length === 4;
+    const w = (x) => (this.stemKill[x] ? 0 : this.stemNiveau[x]);
+    return st.namen.map((x) => (1 / st.schaal) * w(x) * (vier && x !== 'vocals' ? w('inst') : 1));
+  }
+
+  _stemsToe({ kill = false } = {}) {
+    const sp = this.speler;
+    if (!sp?.zetStem) return;
+    this.stemGewichten().forEach((g, k) => sp.zetStem(k, g, { kill }));
+  }
+
+  /** Niveau van een stem, 0..1 (een knop: glijdt). */
+  zetStemNiveau(naam, v) {
+    if (!this.heeftStem(naam)) return { geweigerd: `geen stem ${naam}` };
+    this.stemNiveau[naam] = Math.min(1, Math.max(0, v));
+    this._stemsToe();
+    this.emit('verander');
+  }
+
+  /** Een stem weg of terug: in 5 ms langs een zachte S, 0 in amplitude (v1 stem-kill). */
+  zetStemKill(naam, weg) {
+    if (!this.heeftStem(naam)) return { geweigerd: `geen stem ${naam}` };
+    if (this.stemKill[naam] === !!weg) return;
+    this.stemKill[naam] = !!weg;
+    this._stemsToe({ kill: true });
+    this.emit('verander');
   }
 
   leeg() {

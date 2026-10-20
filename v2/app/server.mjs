@@ -9,6 +9,7 @@
  *   /                    index.html en de modules (no-store: Chrome houdt ES-modules anders vast)
  *   /api/library         de nummers van v1 met grid (alleen lezen, de database gaat nooit open om te schrijven)
  *   /api/library/<id>/audio   audio.wav van dat nummer, met Range (de app streamt hem per pagina)
+ *   /api/library/<id>/stems   stems.wav (2 of 4 stems, interleaved, met Range), als het nummer stems heeft
  *   /api/library/<id>/peaks   peaks.bin naast audio.wav (v1: per vakje min en max als float32), voor het overzicht
  *   /api/v2/nummer/<id>       GET/PUT: wat bij een nummer hoort (hotcues, cue), in de eigen data van v2
  *   /api/v2/opname/<set>?frame=N   POST een stuk audio op zijn frame; …/klaar?frames=N; GET /api/v2/opnames
@@ -22,6 +23,7 @@ import { join, normalize, extname, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { Data, kiesData, MAX_STUK, MAX_NUMMER } from './server/data.mjs';
+import { videoRoute } from './src/beeld/server-video.mjs';
 
 const HIER = dirname(fileURLToPath(import.meta.url));
 const POORT = Number(process.env.VARVE_V2_POORT || 8780);
@@ -38,7 +40,7 @@ const SOORTEN = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.wav': 'audio/wav',
 };
 // Alleen wat de app nodig heeft; nooit test/, tools/ of iets erbuiten.
-const WITTE_LIJST = [/^\/$/, /^\/index\.html$/, /^\/src\/[\w/.-]+\.(js|css|svg)$/, /^\/styles\.css$/, /^\/indelingen\/[\w-]+\.json$/, /^\/racks\/[\w-]+\.json$/];
+const WITTE_LIJST = [/^\/$/, /^\/index\.html$/, /^\/beeld\.html$/, /^\/src\/[\w/.-]+\.(js|css|svg)$/, /^\/styles\.css$/, /^\/indelingen\/[\w-]+\.json$/, /^\/racks\/[\w-]+\.json$/];
 
 function kop(res, status, soort, extra = {}) {
   res.writeHead(status, {
@@ -70,14 +72,16 @@ async function library(media) {
 async function maakLibrary(media) {
   let lib;
   const pad = join(media, 'library.db');
-  if (!existsSync(pad)) return (lib = { nummers: () => [], audio: () => null, bron: null });
+  if (!existsSync(pad)) return (lib = { nummers: () => [], audio: () => null, stems: () => null, bron: null });
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(pad, { readOnly: true });
   const kolommen = new Set(db.prepare('PRAGMA table_info(tracks)').all().map((k) => k.name));
   const gridKolom = kolommen.has('grid_json') ? 'grid_json' : 'NULL';
   const toonKolom = kolommen.has('toon_json') ? 'toon_json' : 'NULL';
-  const lijst = db.prepare(`SELECT id, titel, uploader, duur, audio, toegevoegd, ${gridKolom} AS grid, ${toonKolom} AS toon FROM tracks ORDER BY toegevoegd DESC`);
-  const een = db.prepare('SELECT audio FROM tracks WHERE id = ?');
+  const videoKolom = kolommen.has('video') ? 'video' : 'NULL';
+  const stemsKolom = kolommen.has('stems_json') ? 'stems_json' : 'NULL';
+  const lijst = db.prepare(`SELECT id, titel, uploader, duur, audio, toegevoegd, ${gridKolom} AS grid, ${toonKolom} AS toon, ${videoKolom} AS video, ${stemsKolom} AS stems FROM tracks ORDER BY toegevoegd DESC`);
+  const een = db.prepare(`SELECT audio, ${stemsKolom} AS stems FROM tracks WHERE id = ?`);
   const opSchijf = (rel) => {
     const p = normalize(join(media, String(rel).replace(/^media[\\/]/, '')));
     return p.startsWith(normalize(media) + sep) ? p : null;
@@ -88,8 +92,12 @@ async function maakLibrary(media) {
       id: r.id, titel: r.titel, artiest: r.uploader || '', duur: r.duur, toegevoegd: r.toegevoegd ?? null,
       grid: r.grid ? JSON.parse(r.grid) : null,
       toon: hoofdToon(r.toon),
+      // Of er beeld is (v1 kolom video): de pagina vraagt dan pas /video op, zonder een 404 te proberen.
+      video: videoKolom === 'NULL' ? false : !!r.video,
+      stems: stemsVan(r.stems),
     })),
     audio: (id) => { const r = een.get(id); return r ? opSchijf(r.audio) : null; },
+    stems: (id) => { const r = een.get(id); const st = r && stemsVan(r.stems); return st ? opSchijf(st.bestand) : null; },
   };
   return lib;
 }
@@ -98,6 +106,23 @@ async function maakLibrary(media) {
  * De toonsoort van de plaat uit v1's toon_json (een kaart per stuk): de toonsoort die het langst
  * klinkt, alleen als hij zeker genoeg is (v1: ≥ 0,15; daaronder "~": geen duidelijke toonsoort).
  */
+/**
+ * De stems van een nummer uit v1's stems_json (server/library.js normaliseerStems, docs/STEMS.md):
+ * { aantal: 2|4, namen, schaal, bestand }, of null als het geen bruikbare set is (dan speelt audio.wav).
+ * `namen[k]` hoort bij kanaalpaar k van stems.wav.
+ */
+export function stemsVan(json) {
+  let s;
+  try { s = typeof json === 'string' ? JSON.parse(json) : json; } catch { return null; }
+  if (!s || typeof s !== 'object') return null;
+  const { aantal, namen, schaal, bestand } = s;
+  if (aantal !== 2 && aantal !== 4) return null;
+  if (!Array.isArray(namen) || namen.length !== aantal || !namen.every((n) => typeof n === 'string' && /^[a-z]{1,16}$/.test(n)) || new Set(namen).size !== aantal) return null;
+  if (!(typeof schaal === 'number' && schaal > 0 && schaal <= 1)) return null;
+  if (typeof bestand !== 'string' || !/^media\/[\w-]+\/stems\.wav$/.test(bestand)) return null;
+  return { aantal, namen: [...namen], schaal, bestand };
+}
+
 export function hoofdToon(json) {
   if (!json) return null;
   let k; try { k = JSON.parse(json); } catch { return null; }
@@ -161,19 +186,21 @@ export function maakServer({ media = kiesMedia(), data = kiesData() } = {}) {
       const pad = decodeURIComponent(url.pathname);
       if (pad.includes('..') || pad.includes('\\') || pad.includes('\0')) { kop(res, 400, 'text/plain'); return res.end(); }
 
+      if (await videoRoute(req, res, { pad, audioPad: async (id) => (await library(media)).audio(id), kop })) return;
       if (pad === '/api/library') {
         const l = await library(media);
         kop(res, 200, SOORTEN['.json']);
         return res.end(JSON.stringify({ bron: l.bron, nummers: l.nummers() }));
       }
-      const a = /^\/api\/library\/([\w.:-]+)\/(audio|peaks)$/.exec(pad);
+      const a = /^\/api\/library\/([\w.:-]+)\/(audio|peaks|stems)$/.exec(pad);
       if (a) {
-        const audio = (await library(media)).audio(a[1]);
-        const bestand = audio && (a[2] === 'audio' ? audio : join(dirname(audio), 'peaks.bin'));
+        const lib = await library(media);
+        const audio = lib.audio(a[1]);
+        const bestand = a[2] === 'stems' ? lib.stems(a[1]) : audio && (a[2] === 'audio' ? audio : join(dirname(audio), 'peaks.bin'));
         // Geen peaks bij een nummer is gewoon (v1 maakt ze bij de ingest): 204, geen fout in de console.
         if (a[2] === 'peaks' && audio && !existsSync(bestand)) { kop(res, 204, 'application/octet-stream'); return res.end(); }
         if (!bestand || !existsSync(bestand)) { kop(res, 404, 'text/plain'); return res.end(`geen ${a[2]}`); }
-        return stuurBestand(req, res, bestand, a[2] === 'audio' ? 'audio/wav' : 'application/octet-stream');
+        return stuurBestand(req, res, bestand, a[2] === 'peaks' ? 'application/octet-stream' : 'audio/wav');
       }
       if (!WITTE_LIJST.some((r) => r.test(pad))) { kop(res, 404, 'text/plain'); return res.end(); }
       const bestand = join(HIER, pad === '/' ? 'index.html' : pad);

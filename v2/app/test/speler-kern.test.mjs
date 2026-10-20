@@ -371,16 +371,18 @@ test('speler.js: één addModule per context, kopieën, transfer, positie(t), fo
       this.naam = naam; this.opties = opties; this.verbonden = true;
       this.port = { onmessage: null, postMessage: (m, transfer) => gestuurd.push({ m: structuredClone(m), transfer }), close() { this.dicht = true; } };
     }
+    connect() {}
     disconnect() { this.verbonden = false; }
   };
   let modules = 0;
-  const ctx = { currentTime: 0, audioWorklet: { addModule: async (url) => { modules++; assert.match(url, /speler-worklet\.js$/); } } };
+  const nepGain = () => ({ gain: { value: 1 }, connect() {}, disconnect() {} });
+  const ctx = { currentTime: 0, createGain: nepGain, audioWorklet: { addModule: async (url) => { modules++; assert.match(url, /speler-worklet\.js$/); } } };
   const { Speler, paginasUit } = await import('../src/audio/speler.js');
   const [a, b] = await Promise.all([Speler.maak(ctx), Speler.maak(ctx)]);
   await Speler.maak(ctx);
   assert.equal(modules, 1, 'worklet één keer geladen');
   assert.equal(a.node.naam, 'varve-speler');
-  assert.deepEqual(a.node.opties.outputChannelCount, [2]);
+  assert.deepEqual(a.node.opties.outputChannelCount, [2, 2, 2, 2], 'vier stereo-uitgangen (stems)');
 
   // paginasUit: mono wordt stereo, pagina's van PAGINA frames, elk een eigen buffer.
   const mono = new Float32Array(PAGINA + 10).map((_, i) => (i % 3) / 4 - 0.25);
