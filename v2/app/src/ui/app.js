@@ -14,6 +14,9 @@ import { opzetLibrary } from './library.js';
 import { opzetControllers } from './controllers.js';
 import { opzetIndelingPaneel } from './indeling-paneel.js';
 import { opzetTrackPaneel, instrumentSectie, effectSectie } from './track-paneel.js';
+import { Automaat } from '../auto/automaat.js';
+import { definieerAuto } from '../engine/acties-auto.js';
+import { opzetAutoPaneel, maakLaad } from './auto-paneel.js';
 
 const $ = (s, w = document) => w.querySelector(s);
 const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; };
@@ -142,6 +145,17 @@ zetStart();
 const library = opzetLibrary({ engine, bus, wortel: document, overzichten });
 const { laadOp } = library;
 window.varveLibrary = library;   // voor de headless proeven
+
+// ---- de auto-DJ (src/auto/): een extra bron van acties op de bus, Clay wint altijd -------------
+
+const automaat = new Automaat({
+  engine, bus, laad: maakLaad({ engine, library }),
+  // Met een echte library geen demo's in de set.
+  nummers: () => { const l = [...library.nummers.values()]; const echt = l.filter((x) => !x.demo); return echt.length ? echt : l; },
+});
+definieerAuto(bus, automaat);
+window.varveAuto = automaat;
+opzetAutoPaneel({ automaat, bus, paneel: $('#auto-rij') });
 
 // ---- controllers (APC40 en toetsenbord): de indeling als module, per nummer te kiezen ----------
 

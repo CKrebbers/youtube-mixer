@@ -97,11 +97,12 @@ export function opzetLibrary({ engine, bus, wortel, overzichten }) {
 
   // Laden: een spelende, hoorbare track vervang je pas bij een tweede druk binnen 3 s (v1).
   const laatsteDruk = new Map();
-  function laadOp(n, id) {
+  function laadOp(n, id, { bron = 'scherm' } = {}) {
     const x = nummers.get(id);
     if (!x) return;
     const nu = performance.now();
-    if (engine.track(n).speelt && engine.hoorbaar(n) && !(laatsteDruk.get(n) > nu - 3000)) {
+    // De automaat beslist zelf (hij laadt nooit over wat klinkt); de dubbele druk is voor handen.
+    if (bron === 'scherm' && engine.track(n).speelt && engine.hoorbaar(n) && !(laatsteDruk.get(n) > nu - 3000)) {
       laatsteDruk.set(n, nu);
       engine.meld(`track ${n} speelt: druk nog eens om te vervangen`, 'info', `laad:${n}`);
       return;
@@ -130,7 +131,7 @@ export function opzetLibrary({ engine, bus, wortel, overzichten }) {
         return pcm;
       },
     };
-    bus.doe(`track.${n}.laad`, nummer);
+    bus.doe(`track.${n}.laad`, nummer, { bron });
   }
 
   // De bus: bladeren en laden (een controller, het toetsenbord). Niet in het log: de laad zelf staat erin.

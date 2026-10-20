@@ -27,7 +27,10 @@ const MAG = {
   // audio/ (geen Web Audio-nodes maken of aanraken) en niet de binnenkant van de engine: die LEEST het
   // duck-typed via wat de opzet meegeeft. Engine, audio, kern en control importeren nooit uit beeld/.
   beeld: ['kern', 'beeld'],
-  ui: ['kern', 'audio', 'engine', 'control', 'beeld', 'ui'],
+  // auto/ (plak 6): de auto-DJ is een extra BRON van acties op de bus (zoals een controller): hij
+  // leest de engine duck-typed en raakt geen audio, DOM of eigen klok (test/auto-regels.test.mjs).
+  auto: ['kern', 'auto'],
+  ui: ['kern', 'audio', 'engine', 'control', 'beeld', 'auto', 'ui'],
 };
 
 for (const [laag, mag] of Object.entries(MAG)) {

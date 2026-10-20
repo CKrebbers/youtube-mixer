@@ -1,0 +1,11 @@
+/* De AUTO-rij (src/ui/auto-paneel.js). Tokens uit styles.css. */
+.auto-rij { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px; font: 11px var(--f-tekst); color: var(--dim); }
+.auto-rij .auto-aan { font-weight: 700; letter-spacing: .08em; }
+.auto-rij.aan .auto-aan { border-color: var(--play); color: var(--play); }
+.auto-rij .auto-fase { min-width: 4.5em; color: var(--tekst); }
+.auto-rij .auto-nu, .auto-rij .auto-volgende { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.auto-rij .auto-nu { flex: 0 1 auto; max-width: 30%; }
+.auto-rij .auto-volgende { flex: 1 1 auto; color: var(--tekst); }
+.auto-rij .auto-pijl { color: var(--zwak); }
+.auto-rij .auto-knoppen { display: flex; gap: 4px; flex: none; }
+.auto-rij .auto-knoppen button.aan { border-color: var(--sync); color: var(--sync); }
