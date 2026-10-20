@@ -13,7 +13,7 @@ import { schrijversVoor } from './schrijver.js';
 import { opzetLibrary } from './library.js';
 import { opzetControllers } from './controllers.js';
 import { opzetIndelingPaneel } from './indeling-paneel.js';
-import { opzetTrackPaneel, instrumentSectie, effectSectie, stemsSectie } from './track-paneel.js';
+import { opzetTrackPaneel, instrumentSectie, effectSectie, stemsSectie, patroonSectie } from './track-paneel.js';
 import { Automaat } from '../auto/automaat.js';
 import { opzetBeeld } from '../beeld/opzet.js';
 import { definieerAuto } from '../engine/acties-auto.js';
@@ -221,6 +221,11 @@ const trackPaneel = opzetTrackPaneel({ engine, paneel: $('#paneel-track') });
 trackPaneel.sectie(effectSectie({ engine, bus, maakKnop }));
 trackPaneel.sectie(stemsSectie({ bus, maakKnop }));
 trackPaneel.sectie(instrumentSectie({ engine, bus, maakKnop }));
+trackPaneel.sectie(patroonSectie({ engine, bus }));
+// De patronen bewaren (~/.varve/v2/instellingen/patronen.json): één seconde na de laatste bewerking.
+instelling('patronen').then((set) => { if (set) engine.patronen.zetSet(set); });
+let patronenTimer = null;
+engine.on('patronen-set', (set) => { clearTimeout(patronenTimer); patronenTimer = setTimeout(() => bewaarInstelling('patronen', set), 1000); });
 // Beeld (plak 4, src/beeld/): video per track als slaaf van wat je hoort, vormlagen, het losse venster.
 const beeld = opzetBeeld({ engine, bus, paneel: $('#paneel-beeld'), analyser: engine.mixer.analyser });
 void beeld;

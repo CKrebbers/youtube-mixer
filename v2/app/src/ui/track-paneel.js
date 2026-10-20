@@ -154,3 +154,57 @@ export function stemsSectie({ bus, maakKnop }) {
     },
   };
 }
+
+/** Een MIDI-noot als naam (60 = C3, zoals Logic en de Maschine). */
+const NOOT = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+const nootNaam = (n) => `${NOOT[n % 12]}${Math.floor(n / 12) - 2}`;
+
+/**
+ * De sectie Patroon (plak 5): alleen met een instrument op de track. Vijf plekken (klik = kiezen;
+ * met noten: starten/wisselen/stoppen op de "1"), zestien stappen van de gekozen plek (klik = aan/uit
+ * met de laatst gespeelde noot: speel eerst een noot of pad, dan de stappen), lengte en pagina, en de
+ * afspeelkop. Alles via de bus (track.{n}.patroon.*), dus ook vanaf een controller.
+ */
+export function patroonSectie({ engine, bus }) {
+  return {
+    naam: 'patroon',
+    maak(n, el, t) {
+      if (!t.instrument) return null;
+      const P = engine.patronen;
+      const knop = (actie, tekst, titel = '') => `<button data-actie="${actie}" title="${titel}">${tekst}</button>`;
+      el.innerHTML = `<div class="tp-kop"><strong>PATROON</strong>
+        ${[1, 2, 3, 4, 5].map((k) => knop(`track.${n}.patroon.${k}`, k, `plek ${k}: kiezen; met noten starten of wisselen op de 1`)).join('')}
+        ${knop('patronen.stop', '■', 'alle patronen stoppen op de 1')}
+        <span class="tp-pat-noot" title="de noot die een stap schrijft: de laatst gespeelde"></span>
+        ${knop(`track.${n}.patroon.lengte.korter`, '−', 'korter')}<span class="tp-pat-lengte"></span>${knop(`track.${n}.patroon.lengte.langer`, '+', 'langer')}
+        ${knop(`track.${n}.patroon.pagina.vorige`, '◀', 'vorige 16 stappen')}<span class="tp-pat-pagina"></span>${knop(`track.${n}.patroon.pagina.volgende`, '▶', 'volgende 16 stappen')}
+        ${knop(`track.${n}.patroon.wis`, 'wis', 'deze plek leegmaken')}</div>
+        <div class="tp-stappen">${Array.from({ length: 16 }, (_, s) => knop(`track.${n}.patroon.stap.${s + 1}`, '', `stap ${s + 1}`)).join('')}</div>`;
+      const plekken = [...el.querySelectorAll('.tp-kop button')].filter((b) => /patroon\.\d$/.test(b.dataset.actie));
+      const stappen = [...el.querySelectorAll('.tp-stappen button')];
+      const nootEl = el.querySelector('.tp-pat-noot'), lengteEl = el.querySelector('.tp-pat-lengte'), paginaEl = el.querySelector('.tp-pat-pagina');
+      const stand = (v) => (v === null || v === undefined ? 'uit' : v >= 1 ? 'aan' : v > 0 ? 'gevuld' : 'leeg');
+      return {
+        teken() {
+          plekken.forEach((b, i) => {
+            const s = stand(bus.lees(b.dataset.actie));
+            if (b.dataset.stand !== s) b.dataset.stand = s;
+            b.classList.toggle('gekozen', P.gekozen[n] === i + 1);
+          });
+          const kop = P.stapNu(n), pag = P.pagina[n];
+          stappen.forEach((b, s) => {
+            const st = stand(bus.lees(b.dataset.actie));
+            if (b.dataset.stand !== st) { b.dataset.stand = st; b.disabled = st === 'uit'; }
+            b.classList.toggle('kop', kop !== null && kop === pag * 16 + s && P.stand(n).speelt === P.gekozen[n]);
+            b.classList.toggle('tel', s % 4 === 0);
+          });
+          const p = P.bewerkt(n);
+          const nt = `noot ${nootNaam(P.stapNoot(n))}`, lt = `${p?.lengte ?? 16}`, pt = `${pag + 1}/${Math.max(1, Math.ceil((p?.lengte ?? 16) / 16))}`;
+          if (nootEl.textContent !== nt) nootEl.textContent = nt;
+          if (lengteEl.textContent !== lt) lengteEl.textContent = lt;
+          if (paginaEl.textContent !== pt) paginaEl.textContent = pt;
+        },
+      };
+    },
+  };
+}

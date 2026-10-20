@@ -17,6 +17,7 @@ import { Klok } from '../kern/klok.js';
 import { Bus, TRACKS } from '../kern/bus.js';
 import { Beatgrid, TapTempo } from '../kern/grid.js';
 import { Track, STEM_STANDEN } from './track.js';
+import { definieerPatronen } from './acties-patronen.js';
 import { definieerActies } from './acties.js';
 import { definieerFx } from './acties-fx.js';
 import { Handelingenlog, setId } from './log.js';
@@ -86,6 +87,7 @@ export class Engine extends Emitter {
     this._bewaakContext();
     definieerActies(this);
     this.fx = definieerFx(this);
+    definieerPatronen(this);
     this.klaar = Promise.all(this.tracks.map(async (t) => {
       t.speler = await audio.speler(ctx);
       t.speler.onfout = (bericht, kapot = true) => this.meld(kapot
@@ -258,7 +260,8 @@ export class Engine extends Emitter {
   noot(noot, snelheid, { n = this.speeltrack(), t } = {}) {
     const inst = n ? this.track(n).instrument?.inst : null;
     if (!inst) return false;
-    if (snelheid > 0) inst.noteOn(noot, Math.min(1, snelheid), t); else inst.noteOff(noot, t);
+    if (snelheid > 0) { inst.noteOn(noot, Math.min(1, snelheid), t); this.patronen.noot[n] = noot; }   // een stap schrijft de laatst gespeelde noot
+    else inst.noteOff(noot, t);
     return true;
   }
 

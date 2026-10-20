@@ -13,9 +13,13 @@
  * Grens (bewust): wat al gepland is staat vast in het instrument. Verandert de klok binnen
  * VOORUIT, dan klinken die paar noten nog op het oude tempo (bij 1 bpm verschil < 1 ms).
  */
-import { PPQN, notenInVenster } from '../kern/patronen/venster.js';
+import { PPQN, notenInVenster, stapOp } from '../kern/patronen/venster.js';
+import { leegSet, normaliseerSet, patroonOp, metPatroon, metNieuwPatroon, zonderPatroon, wisselNoot, metLengte, volgendeLengte, leeg } from '../kern/patronen/model.js';
 
+/** Zoveel plekken per track op het scherm en de APC (het model kan er 64). */
 export const PLEKKEN = 5;
+/** Zoveel stappen staan er tegelijk op het scherm (een pagina); een langer patroon heeft pagina's. */
+export const STAPPEN = 16;
 export const VOORUIT = 0.12;    // s
 export const TIK_MS = 25;
 
@@ -23,8 +27,12 @@ export class Patronen {
   constructor(engine, { timers = { zet: (f, ms) => setInterval(f, ms), weg: (id) => clearInterval(id) } } = {}) {
     this.engine = engine;
     this.timers = timers;
-    // Per track: vijf plekken met een patroon (of null), en wat er speelt.
-    this.plekken = Array.from({ length: engine.tracks.length + 1 }, () => new Array(PLEKKEN).fill(null));
+    // De set (kern/patronen/model.js): een lijst patronen op (track, plek). Onveranderlijk: elke
+    // bewerking geeft een nieuwe set, en de speler leest bij elke tik wat er NU staat (live bewerken).
+    this.set = leegSet();
+    this.gekozen = new Array(engine.tracks.length + 1).fill(1);   // welke plek je per track bewerkt
+    this.pagina = new Array(engine.tracks.length + 1).fill(0);    // welke 16 stappen je ziet
+    this.noot = new Array(engine.tracks.length + 1).fill(null);   // de laatst gespeelde noot per track
     this.spel = new Map();       // n -> { k, basis, start, stop } (ticks); stop = Infinity tot hij stopt
     this.gepland = null;         // tot deze tick is alles gepland (null = niets loopt)
     this.tempo = 120;            // als de klok stilstaat en een patroon start
@@ -44,8 +52,84 @@ export class Patronen {
     return Math.ceil(vanaf / per - 1e-9) * per;
   }
 
-  zetPatroon(n, k, p) { this.plekken[n][k - 1] = p ?? null; }
-  patroon(n, k) { return this.plekken[n][k - 1]; }
+  patroon(n, k) { return patroonOp(this.set, n, k); }
+
+  /** Plek k van track n vullen (of leeg met null). Voor de tests en het laden. */
+  zetPatroon(n, k, p) {
+    const oud = this.patroon(n, k);
+    if (!p) { if (oud) this._zet(zonderPatroon(this.set, oud.id)); return; }
+    if (oud) this._zet(metPatroon(this.set, { ...oud, ...p, id: oud.id, track: n, plek: k }));
+    else { const r = metNieuwPatroon(this.set, { track: n, plek: k }); this._zet(metPatroon(r.set, { ...r.patroon, ...p, id: r.patroon.id, track: n, plek: k })); }
+  }
+
+  /** De hele set vervangen (van de server). Wat speelt, speelt door als zijn plek nog bestaat. */
+  zetSet(invoer) {
+    const { set } = normaliseerSet(invoer);
+    this.set = set;
+    this.engine.emit('patronen');
+  }
+
+  _zet(set) {
+    this.set = set;
+    this.engine.emit('patronen');
+    this.engine.emit('patronen-set', set);     // de app bewaart
+  }
+
+  // ---- bewerken (stap voor stap) ------------------------------------------------------
+
+  /** Het patroon dat je op track n bewerkt (de gekozen plek), of null. */
+  bewerkt(n) { return this.patroon(n, this.gekozen[n]); }
+
+  /** De noot die een stap schrijft: de laatst gespeelde op die track, anders C2 (36, de kick van de drums). */
+  stapNoot(n) { return this.noot[n] ?? 36; }
+
+  /** Een stap van de gekozen plek aan/uit (pagina erbij opgeteld); maakt het patroon als het er niet is. */
+  wisselStap(n, s) {
+    const stap = this.pagina[n] * STAPPEN + s;
+    let p = this.bewerkt(n);
+    if (!p) { this.zetPatroon(n, this.gekozen[n], {}); p = this.bewerkt(n); }
+    if (stap >= p.lengte) return { geweigerd: `stap ${stap + 1} ligt voorbij de lengte (${p.lengte})` };
+    this._zet(metPatroon(this.set, wisselNoot(p, stap, this.stapNoot(n))));
+  }
+
+  /** Staat er op stap s (van de pagina) een noot? 1 = de noot die je schrijft, 0,5 = een andere, 0 = niets, null = voorbij de lengte. */
+  stapStand(n, s) {
+    const p = this.bewerkt(n), stap = this.pagina[n] * STAPPEN + s;
+    const lengte = p?.lengte ?? 16;
+    if (stap >= lengte) return null;
+    if (!p) return 0;
+    const hier = p.noten.filter((x) => x.stap === stap);
+    if (!hier.length) return 0;
+    return hier.some((x) => x.noot === this.stapNoot(n)) ? 1 : 0.5;
+  }
+
+  lengteStap(n, r) {
+    const p = this.bewerkt(n);
+    if (!p) return { geweigerd: 'geen patroon op deze plek' };
+    this._zet(metPatroon(this.set, metLengte(p, volgendeLengte(p.lengte, r))));
+    const pag = Math.max(0, Math.ceil(this.bewerkt(n).lengte / STAPPEN) - 1);
+    if (this.pagina[n] > pag) this.pagina[n] = pag;
+  }
+
+  paginaStap(n, r) {
+    const p = this.bewerkt(n), max = Math.max(0, Math.ceil((p?.lengte ?? 16) / STAPPEN) - 1);
+    this.pagina[n] = Math.min(max, Math.max(0, this.pagina[n] + r));
+    this.engine.emit('patronen');
+  }
+
+  wis(n) {
+    const p = this.bewerkt(n);
+    if (p) this._zet(metPatroon(this.set, leeg(p)));
+  }
+
+  /** De stap die NU klinkt op track n (van de plek die speelt), of null. Voor de afspeelkop. */
+  stapNu(n) {
+    const s = this.spel.get(n), e = this.engine;
+    if (!s || !e.klok.loopt) return null;
+    const t = this.tickOp(e.nu() - e.vertraging());
+    const deel = t < s.start && s.vorige ? s.vorige : s;
+    return stapOp(this.patroon(n, deel.k), deel, t);
+  }
 
   /**
    * Plek k van track n starten op de volgende "1" (of meteen met `meteen`); speelt die plek al,
@@ -54,7 +138,14 @@ export class Patronen {
   wissel(n, k, { meteen = false } = {}) {
     const e = this.engine, t = e.track(n);
     if (!t.instrument) return { geweigerd: `track ${n} heeft geen instrument` };
-    if (!this.patroon(n, k)) return { geweigerd: `plek ${k} van track ${n} is leeg` };
+    this.gekozen[n] = k;
+    if (!this.patroon(n, k)?.noten.length) {
+      // Een lege plek kiezen = hem gaan bewerken (er komt een leeg patroon); spelen doet hij pas met noten.
+      if (!this.patroon(n, k)) this.zetPatroon(n, k, {});
+      this.pagina[n] = 0;
+      e.emit('patronen');
+      return;
+    }
     const A = e.straks();
     if (!e.klok.loopt) e.zetKlokTempo(this.tempo, A);
     const vanaf = Math.max(this.gepland ?? this.tickOp(A), this.tickOp(A));

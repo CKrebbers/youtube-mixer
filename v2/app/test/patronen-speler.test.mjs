@@ -90,14 +90,46 @@ test('een tempowissel van de klok: de volgende noten volgen hem', async () => {
   dicht(laatste[2][2] - laatste[1][2], 0.6, 1e-9, '100 bpm = 0,6 s per tel');
 });
 
-test('weigert zonder instrument of met een lege plek; zonder klok start hij de klok op het eigen tempo', async () => {
+test('weigert zonder instrument; een lege plek = kiezen om te bewerken (niets speelt); zonder klok start hij de klok op het eigen tempo', async () => {
   const { e, zet } = await opzet();
   assert.ok(e.patronen.wissel(2, 1)?.geweigerd);
-  assert.ok(e.patronen.wissel(1, 3)?.geweigerd);
+  assert.equal(e.patronen.wissel(1, 3), undefined);
+  assert.equal(e.patronen.gekozen[1], 3, 'plek 3 gekozen');
+  assert.ok(e.patronen.patroon(1, 3), 'er staat een leeg patroon om te bewerken');
+  assert.equal(e.patronen.speelt, false, 'een leeg patroon speelt niet');
   e.patronen.zetPatroon(1, 1, patroon([[0, 36]]));
   e.patronen.tempo = 96;
   zet(1);
   e.patronen.wissel(1, 1);
   assert.ok(e.klok.loopt);
   dicht(e.klok.bpm(2), 96, 1e-9);
+});
+
+test('bewerken: stappen wisselen met de laatst gespeelde noot, pagina, lengte, wissen; de set meldt zich', async () => {
+  const { e } = await opzet();
+  const sets = [];
+  e.on('patronen-set', (s) => sets.push(s));
+  e.patronen.wissel(1, 2);
+  e.patronen.noot[1] = 38;
+  e.patronen.wisselStap(1, 0);
+  e.patronen.wisselStap(1, 4);
+  assert.deepEqual(e.patronen.bewerkt(1).noten.map((n) => [n.stap, n.noot]), [[0, 38], [4, 38]]);
+  assert.equal(e.patronen.stapStand(1, 0), 1);
+  e.patronen.noot[1] = 36;
+  assert.equal(e.patronen.stapStand(1, 0), 0.5, 'een andere noot op die stap');
+  e.patronen.wisselStap(1, 0);
+  assert.equal(e.patronen.stapStand(1, 0), 1);
+  e.patronen.wisselStap(1, 0);
+  assert.equal(e.patronen.stapStand(1, 0), 0.5, 'de kick weer weg, de snare blijft');
+  e.patronen.lengteStap(1, 1);
+  assert.equal(e.patronen.bewerkt(1).lengte, 20);
+  e.patronen.paginaStap(1, 1);
+  assert.equal(e.patronen.pagina[1], 1);
+  assert.equal(e.patronen.stapStand(1, 3), 0, 'stap 20 bestaat');
+  assert.equal(e.patronen.stapStand(1, 4), null, 'stap 21 niet');
+  assert.ok(e.patronen.wisselStap(1, 4)?.geweigerd);
+  e.patronen.wis(1);
+  assert.equal(e.patronen.bewerkt(1).noten.length, 0);
+  assert.ok(sets.length >= 6, 'elke bewerking meldt de set');
+  assert.equal(sets.at(-1).patronen.length, 1);
 });

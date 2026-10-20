@@ -233,7 +233,7 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .tp-kop { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .tp-kop strong { font-size: 11px; letter-spacing: .08em; color: var(--dim); margin-right: 6px; }
 .tp-kop button.aan { background: var(--klok); color: var(--bg); border-color: var(--klok); }
-.tp-knoppen { display: grid; grid-template-columns: repeat(8, 64px); gap: 6px; }
+.tp-knoppen { display: grid; grid-template-columns: repeat(4, 66px); gap: 4px 6px; }
 
 /* ---- effect en sends in de kolom --------------------------------------------- */
 .t-fx { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px 4px; align-items: center; flex: none; }
@@ -241,3 +241,17 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .t-fx .b-fx[data-stand="aan"], .tp-kop .b-fx.aan { background: var(--sync); border-color: var(--sync); color: var(--bg); }
 .t-fx .knop.klein { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 3px; min-height: 26px; cursor: ns-resize; }
 .t-fx .knop.klein canvas { width: 24px; height: 24px; }
+
+/* ---- plak 5: de patronen in het trackpaneel ---------------------------------- */
+.tp-patroon .tp-kop button { min-width: 26px; font-family: var(--f-cijfer); }
+.tp-patroon .tp-kop button.gekozen { outline: 1px solid var(--tekst); outline-offset: 1px; }
+.tp-patroon .tp-kop button[data-stand="gevuld"] { border-color: var(--pad); color: var(--pad); }
+.tp-patroon .tp-kop button[data-stand="aan"] { background: var(--pad); border-color: var(--pad); color: var(--bg); }
+.tp-pat-noot, .tp-pat-lengte, .tp-pat-pagina { font: 11px var(--f-cijfer); color: var(--dim); min-width: 2.2em; text-align: center; }
+.tp-pat-noot { min-width: 5.5em; }
+.tp-stappen { display: grid; grid-template-columns: repeat(16, 26px); gap: 3px; }
+.tp-stappen button { height: 26px; padding: 0; }
+.tp-stappen button.tel { border-color: var(--zwak); }
+.tp-stappen button[data-stand="gevuld"] { background: var(--vlak2); border-color: var(--pad); }
+.tp-stappen button[data-stand="aan"] { background: var(--pad); border-color: var(--pad); }
+.tp-stappen button.kop { box-shadow: inset 0 -3px 0 var(--tekst); }
