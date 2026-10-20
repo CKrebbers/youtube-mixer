@@ -1,8 +1,10 @@
 # VarveDJ v2
 
-Plak 1: de maatklok speelt. Acht tracks, sync die blijft, jog en nudge op de klok, de pitchfader
-als klok-tempo, starten op de maat, kanaalstrip met EQ, kill, filter en limiter. Ontwerp en
-besluiten: `../ontwerp/` en de planner; architectuur: `ARCHITECTUUR.md`.
+Eén maatklok waar alles op valt: acht tracks (een nummer óf een instrument), sync die blijft,
+effecten en sends op de klok, hotcues en lussen, stems, een sampler, patronen, beeld, de auto-DJ,
+de APC40 met een indeling die je zelf kiest en per nummer kunt wisselen. Ontwerp en besluiten:
+`../ontwerp/`, `../BOUWPLAN.md`; architectuur: `ARCHITECTUUR.md`; wat alleen op de Mac te toetsen
+is: `../meting/MAC.md`.
 
 ## Starten (op de Mac)
 
@@ -12,35 +14,55 @@ node server.mjs            # http://localhost:8780
 ```
 
 Open in Chrome. De library van v1 wordt ALLEEN GELEZEN: `VARVE_MEDIA`, anders `~/.varve/media-pad`
-(dat zet VARVE.app al), anders `../../media`. Zonder library zijn er vijf demonummers.
-v1 (poort 8777) en v2 (poort 8780) kunnen naast elkaar draaien; open ze niet tegelijk met de APC
-(nog geen MIDI in v2).
+(dat zet VARVE.app al), anders `../../media`. Zonder library zijn er vijf demonummers. Wat v2 zelf
+bewaart (hotcues, cue, je indelingen, patronen, opnames, het log) staat in `~/.varve/v2`
+(`VARVE_V2_DATA`), nooit in de v1-library.
 
-## Bediening (plak 1)
+v1 (poort 8777) en v2 (poort 8780) kunnen naast elkaar draaien, maar NOOIT allebei open met de
+APC aangesloten (één tabblad praat met de APC; een Web Lock geldt alleen binnen één poort).
+
+## Het scherm
 
 | | |
 |---|---|
-| laden | knop 1–8 achter een nummer, of slepen naar een track; over een spelende track: twee keer |
-| ▶ | play/pauze; de eerste die start, start de klok op zijn tempo en zijn "1" |
-| SYNC | gekoppeld aan de klok tot je het uitzet; weigert op een onzeker grid |
-| KLOK | de klok neemt het tempo en de tel van dit nummer over |
-| ▶1 | starten op de volgende "1" van de klok |
-| jog | slepen = het nummer schuift t.o.v. de klok (Shift = fijn) |
-| ‹ › | nudge: zolang je drukt 4% trager/sneller |
-| PITCH | gekoppeld en hoorbaar: het tempo van de klok; anders de eigen pitch |
-| −1 −.1 +.1 +1 TAP | het tempo van de klok |
-| knoppen | slepen, scrollwiel, pijltjes; Shift = fijn; dubbelklik = midden |
+| bovenin | de klok (bpm, maat, tel), tempo −1 −.1 +.1 +1 TAP, master, koptelefoon (alleen met vier kanalen), indeling ⌨, REC |
+| per track | titel, overzicht; SYNC, KLOK (klok naar dit nummer), ▶1 (starten op de "1"), CUE, ▶; hotcues 1–8 (shift = wissen); « ½ lus ×2 »; jog en nudge ‹ ›; TRIM, HOOG, MID, LAAG (met KILL), FILTER; PITCH en VOL; effect ‹ FX › met MIX, ECHO, GALM; CUE (koptelefoon) en de kant A/B/thru |
+| onder | de sampler (8 pads, −/+ tellen, VOL), AUTO (de auto-DJ), de crossfader |
+| tabbladen | Library (zoeken, sorteren, laden), Track (effect-rack, stems, instrument, patroon van de focus-track), Beeld (video, effecten, vormlagen, los venster) |
 
-## Toetsen
+- **Laden**: knop 1–8 achter een nummer, slepen, of Enter (op de focus-track). Over een spelende track: twee keer.
+- **PITCH**: gekoppeld en hoorbaar = het tempo van de klok; anders de eigen pitch.
+- **Knoppen**: slepen, scrollwiel, pijltjes; Shift = fijn; dubbelklik = midden.
+- **Instrument**: in het tabblad Track (geen, Poly, FM, Klankschaal, Drums). Een MIDI-keyboard speelt op de laatst gekozen instrumenttrack.
+- **Patroon**: kies een plek (1–5), speel een noot of pad, klik de stappen aan; met noten start een plek op de volgende "1".
+- **Stems**: alleen bij een nummer dat in v1 gesplitst is; in het tabblad Track per stem niveau en KILL.
+
+## Toetsen (`indelingen/toetsen.json`, zelf aan te passen)
+
+1–8 focus · Q play (shift: op de maat) · W cue · E sync (shift: klok naar dit nummer) · R/T beatjump
+(shift: lus ½ ×2) · G lus · A S D F hotcues 1–4 (shift: wissen) · Z X nudge · C koptelefoon · V kant ·
+J K L bas/mid/hoog weg · , . klok −0,1/+0,1 (shift: ±1) · / tap · ↑ ↓ Enter library.
+
+## De APC40 mkII (`indelingen/apc40mk2.json`)
+
+Eén kolom = één track (knop boven: filter, fader onder). Grid-standen op scene 1–5: hotcues 1–4,
+hotcues 5–8, kills en beatjump, stems (weg zolang je drukt, shift = vast), patronen. Rechts de
+focus-track. Een eigen indeling maken, leren door aanwijzen en per nummer kiezen: de knop ⌨.
+
+## Toetsen van de code
 
 ```
-npm test                          # 152 tests: kern, scenario's, modeltest (10.000 reeksen), afspeelmotor, streamen, strip, mixer, limiter
-node tools/proef-sync.mjs         # echte Chrome (headless): klinkt een gesynct nummer op de tel?
+npm test                          # alle tests (kern, scenario's, modeltest, afspeelmotor, stems, effecten, controllers, beeld, instrumenten, patronen, auto-DJ)
+node tools/proef-sync.mjs         # plak 1: gesynct op de tel, ook na een tempowissel en een jog
+node tools/proef-plak2.mjs        # lus, opname, log, hotcues, grote library
+node tools/proef-fx.mjs           # echo op de klok, rack wisselen zonder tik, galm, worklets, gouden hash
+node tools/proef-koptelefoon.mjs  # vier kanalen: cue vóór de fader, cue = zaal op de sample
+node tools/proef-apc.mjs          # de APC (nep-poort): lampjes, ringen, leren, tweede tabblad
+node tools/proef-sampler.mjs      # een pad als lus op de klok, ook na een tempowissel
+node tools/proef-instr.mjs        # instrumenten: luidheid, toonhoogte, roven zonder tik
+node tools/proef-patronen.mjs     # patronen bouwen met de muis, exact op de klok, bewaard
+node tools/proef-stems.mjs        # vier stems aan de master: kill, niveau, open na een laad
+node tools/proef-beeld.mjs        # video volgt wat je hoort, noodknoppen, het losse venster
+node tools/proef-auto.mjs         # een automatische blend op de "1", nooit twee bassen, nooit stilte
 ```
-De proef laadt twee demonummers via het scherm, synct, zet de klok op 126 en jogt 1/16 tel, en
-meet in de opname van beide strips hoeveel ms ze uit elkaar liggen (gemeten: 0,25 ms = de
-meetresolutie; de jog −29,5 ms waar −29,8 verwacht is).
-
-## Nog niet in plak 1
-MIDI en de APC, sends, koptelefoon, stems, effecten, sampler, instrumenten, patronen, beeld,
-hotcues en loops. Wat plak 1 haalt en wat nog gemeten moet worden: `../meting/RAPPORT.md`.
+Elke proef draait headless Chrome tegen een eigen server met een tijdelijke datamap.

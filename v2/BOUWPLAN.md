@@ -19,11 +19,11 @@ moet proberen.
 | Plak | Wat | Waarom eerst (telling) |
 |---|---|---|
 | 1 ✓ | maatklok, sync, jog/nudge, pitch = klok, strip, limiter, streamen | ritme is de ruggengraat (WENSEN 19 okt) |
-| 2 | **het DJ-instrument af**: insert-effect per track (8 knoppen + mix, racks als data), twee sends (echo en galm, op de klok), hotcues en loops op de klok, koptelefoon (cue vóór de fader), library-paneel, handelingenlog (altijd aan, met bron) en opnemen | strip + effecten + sends = 63% van wat de handen doen |
-| 3 | **controllers**: Web MIDI, APC40 mkII (0x42, alle lampjes en ringen van ons), toetsenbord, de INDELING als module (wisselen tijdens het spelen, per nummer), MIDI-leren | "alle knoppen moeten beter en logischer, modulair" (WENSEN) |
-| 4 | **beeld in de kern**: video per track als slaaf van wat je hoort, WebGL2-mixer, video-effecten op de klok, vormlagen, het losse venster | video/vormen = 17% van de handen, nu achter een vlag |
-| 5 | **produceren op de klok**: sampler (8 pads), instrumenten (poly, drums), patronen, klankschaal | eén klok voor alles (WENSEN "b en a") |
-| 6 | stems, auto-DJ/plan, de Stroommachine, de hub, iPad | groot in de code, klein in de handen (telling punt 5, 6) |
+| 2 ✓ | **het DJ-instrument af**: insert-effect per track (8 knoppen + mix, racks als data), twee sends (echo en galm, op de klok), hotcues en loops op de klok, koptelefoon (cue vóór de fader), library-paneel, handelingenlog (altijd aan, met bron) en opnemen | strip + effecten + sends = 63% van wat de handen doen |
+| 3 ✓ | **controllers**: Web MIDI, APC40 mkII (0x42, alle lampjes en ringen van ons), toetsenbord, de INDELING als module (wisselen tijdens het spelen, per nummer), MIDI-leren | "alle knoppen moeten beter en logischer, modulair" (WENSEN) |
+| 4 ✓ | **beeld in de kern**: video per track als slaaf van wat je hoort, WebGL2-mixer, video-effecten op de klok, vormlagen, het losse venster | video/vormen = 17% van de handen, nu achter een vlag |
+| 5 ✓ | **produceren op de klok**: sampler (8 pads), instrumenten (poly, drums), patronen, klankschaal | eén klok voor alles (WENSEN "b en a") |
+| 6 (deels) | stems ✓, auto-DJ ✓ (zonder setplan), de Stroommachine, de hub; iPad en setplan bewust later (zie onder) | groot in de code, klein in de handen (telling punt 5, 6) |
 
 ## Contracten tussen de delen
 

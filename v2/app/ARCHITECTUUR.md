@@ -28,28 +28,48 @@ gaan voor alles.
 ```
 v2/app/
   index.html            de mixer
-  server.mjs            statisch (no-store, COOP/COEP) + /api/library en /media uit de v1-library (alleen lezen)
+  beeld.html            het losse beeldvenster (de beamer): mengt zelf, leest de stand van de mixer
+  server.mjs            statisch (no-store, COOP/COEP) + /api/library (+ /audio, /stems, /peaks, /video) uit de
+                        v1-library (alleen lezen) + /api/v2/* (eigen data: nummers, instellingen, opnames, log)
+  server/data.mjs       de eigen data in VARVE_V2_DATA (standaard ~/.varve/v2)
+  indelingen/           apc40mk2.json, toetsen.json: wat elke knop doet (data)
+  racks/                sjablonen.json: kant-en-klare effect-racks (data)
   src/
-    kern/               puur
+    kern/               puur: geen DOM, geen Web Audio, geen eigen klok of toeval
       klok.js           de maatklok: gebroken lijn {T, C, R}, tel/tijd, glijden zonder sprong
       grid.js           het beatgrid (tempokaart) — overgenomen uit v1 src/engine/beatgrid.js
       koppeling.js      klok-tel + verschuiving -> plek in het nummer, als segmenten {T, P, R}
       bus.js            acties met meta en trackparameter ({n} = 1..8)
-      inhoud.js         wat er op een track staat (één plek), met gebeurtenissen
-      emitter.js
+      herhaal.js        een POST herhalen zolang de server weg is (uit v1)
+      patronen/         model.js (de set als lijst), venster.js (384 PPQN, swing, micro)
+      smf.js, patronen-smf.js   patronen als MIDI-bestand (byte voor byte v1)
     audio/              Web Audio, geen DOM
-      speler-kern.js    rekenkern van de afspeler (puur, in Node te testen): pagina's, segmenten, overvloeien
-      speler-worklet.js de AudioWorklet eromheen
-      speler.js         de node-kant: laden, segmenten plannen
+      speler-kern.js    rekenkern van de afspeler (puur, in Node te testen): pagina's, segmenten, lus, stems
+      speler-worklet.js de AudioWorklet eromheen (vier stereo-uitgangen)
+      speler.js         de node-kant: laden, streamen, segmenten plannen, een gain per stem
+      stroom.js         welke pagina's nodig zijn (uit het plan) en het ophalen
       overgang.js       hellingen op een AudioParam — overgenomen uit v1
-      strip.js          de kanaalstrip van één track
-      mixer.js          crossfader, master, limiter, meter
-    engine/             lijm
-      engine.js         klok + acht tracks + mixer + bus
-      track.js          één track: drager, transport, koppeling -> speler
-    ui/                 DOM
+      strip.js          de kanaalstrip van één track (insert-slot, sends, cue vóór de fader)
+      mixer.js          crossfader, master, limiter, meter, send-bussen
+      koptelefoon.js    zaal op 1/2, koptelefoon op 3/4 van één context
+      fx/               effecten, racks, modulators, sends (uit v1)
+      instrumenten/     poly, fm, drums, klankschaal (schaal); aansluiting.js = op de strip
+      opnemer.js        de master opnemen (SharedArrayBuffer-ring)
+      sampler-uitgang.js  de acht pads naar de master
+    engine/             lijm: geen DOM, geen Web Audio-nodes
+      engine.js         klok + acht tracks + mixer + bus + sampler + patronen + log
+      track.js          één track: nummer óf instrument, transport, lus, hotcues, stems, koppeling -> speler
+      acties*.js        alles op de bus (transport, strip, fx, patronen, auto)
+      sampler.js        acht pads als lus op de klok
+      patronen.js       de patronenspeler op de klok
+      log.js            het handelingenlog
+    control/            controllers: leest alleen kern/ (MIDI en lock komen van buiten)
+    auto/               de auto-DJ: een bron van acties (leest de engine, schrijft via de bus)
+    beeld/              video per track, vormlagen, het losse venster (leest de engine)
+    koppel/             de Stroommachine: klok, kenmerken en tracks naar de relay (leest de engine)
+    ui/                 DOM: app.js zet alles op
   test/                 node --test; *.test.mjs
-  tools/                headless proeven (Playwright)
+  tools/                headless proeven (Playwright), één per plak
 ```
 
 ## Contracten
@@ -126,7 +146,7 @@ demonummer); sync aan/uit, jog, nudge, pitchfader = klok-tempo (alleen hoorbaar)
 klok, Shift + Sync = klok naar dit nummer, starten op de maat. Scenario's klok-S01 … klok-S21 als
 tests. Nog niet: sends, cue, stems, effecten, sampler, instrumenten, MIDI.
 
-## Plak 2 — het DJ-instrument (deels; effecten en koptelefoon volgen)
+## Plak 2 — het DJ-instrument
 
 - **Lus** (`speler-kern.js`, `track.js`):
   - Een segment mag `la`/`lb` hebben (seconden). De kern vouwt terug en vloeit de laatste 10 ms
@@ -153,6 +173,15 @@ tests. Nog niet: sends, cue, stems, effecten, sampler, instrumenten, MIDI.
 - **Eigen data** (`server/data.mjs`):
   - Staat in `VARVE_V2_DATA`, standaard `~/.varve/v2`: `nummers/`, `opnames/` en `instellingen/`.
   - Een proefserver schrijft altijd in een tijdelijke map.
+- **Effecten** (`audio/fx/`, `engine/acties-fx.js`): een insert-slot per strip ná het filter en vóór
+  de fader, lui (pas een keten als de mix open gaat: zonder effect bit voor bit plak 1, gouden hash).
+  Racks als data, acht knoppen + mix, wisselen met een kruisfade. Twee sends (A echo, B galm) na de
+  fader en vóór de kant, naar gedeelde bussen op de master; de echo op de maatklok.
+- **Koptelefoon** (`audio/koptelefoon.js`): alleen met een uitgang van vier kanalen (Mac: een
+  samengesteld apparaat), anders bestaat hij niet en is de master bit voor bit dezelfde. Zaal 1/2,
+  koptelefoon 3/4 (omwisselen na herladen). De cue tapt vóór de fader, ook de natte weg van het
+  effect, en loopt even laat als de zaal (de vooruitblik van de limiter). `track.{n}.pfl`,
+  `koptelefoon.volume`, `koptelefoon.mix` — niet in het log.
 - **Library** (`ui/library-lijst.js` puur, `ui/library.js` scherm):
   - Een virtuele lijst, met sorteren en zoeken zonder accenten.
   - `library.volgende/.vorige/.laad` op de bus; laden gaat naar de focus-track, met de tweede druk
@@ -175,3 +204,52 @@ tests. Nog niet: sends, cue, stems, effecten, sampler, instrumenten, MIDI.
   - `null` = uit, 0 = leeg, gevuld = de donkere kleur, 1 = aan;
   - knipperen op de tel van de klok zoals je hem hoort (`klok.fase`);
   - wachtrij van 16 berichten per 4 ms.
+
+## Plak 4 — beeld (`src/beeld/`, `beeld.html`)
+
+- **Video is slaaf van wat je hoort:** het doel is `plek(nu − V)` van de track, op zijn snelheid;
+  zichtbaar = `engine.zaalVersterking(n)` (fader × kant): een track die niet speelt is zwart.
+- **De stand is één object** (`stand.js`): effecten, mengvorm, puls, noodknoppen, vormen. Het losse
+  venster leest datzelfde object en mengt zelf (eigen `<video>`'s en rAF), zodat de beamer doorloopt
+  met het hoofdtabblad op de achtergrond.
+- **Puls op de maatklok**: de tel komt van `klok.tel(nu − vertraging)`, niet van een "maatgever".
+- **Vormlagen**: de 26 systemen uit v1, elk in een Worker, rekenen pas als ze aan staan.
+- **Laag:** beeld/ leest kern/ en de engine duck-typed; niemand importeert uit beeld/.
+- De server zegt per nummer of er video is (`video` in /api/library), de pagina vraagt dan pas
+  `/api/library/<id>/video` op (een open Range hooguit 2 MB, zoals v1).
+
+## Plak 5 — produceren op de klok
+
+- **Een track draagt een nummer óf een instrument** (`audio/instrumenten/`: poly, fm, drums,
+  klankschaal). Het instrument sluit via een eigen gain aan op de strip: EQ, effect, fader, sends en
+  cue werken vanzelf. Weghalen: aansluiting dicht langs de zachte S, dan pas `vernietig()`.
+- **De klankschaal** speelt op de toonsoort van wat je hoort (`engine.hoorbareToon()`: het luidste
+  nummer met een toonsoort, + 1200·log2(R) cent zonder keylock).
+- **Noten gaan niet over de bus** (`control/noten.js` → `engine.noot`) naar de speeltrack.
+- **De sampler** (`engine/sampler.js`): acht pads, elk een kleine speler met DEZELFDE afspeelmotor,
+  als lus op de maatklok; knippen in tellen van wat je hoort (met stems: gemengd zoals je ze hoort).
+- **Patronen** (`engine/patronen.js`, `kern/patronen/`): een tick is `klok.tel × 384`; de timer zegt
+  alleen wanneer er gepland wordt (120 ms vooruit), elke noot gaat met zijn tijd op de audioklok
+  naar het instrument. De set is een LIJST patronen op (track, plek); de speler leest bij elke tik
+  wat er nu staat, dus bewerken klinkt meteen. Starten, wisselen en stoppen op de eerste "1" na wat
+  al gepland is. Een stap schrijft de laatst gespeelde noot. De set staat in `instellingen/patronen`.
+- **APC**: scene 5 = patronen (per kolom de vijf plekken), Stop All Clips = alles stoppen.
+
+## Plak 6 — stems, auto-DJ en de koppelingen
+
+- **Stems** (vooraf door Demucs in v1, `stems.wav` = 2 of 4 stereoparen):
+  - De afspeelkern leest 4 of 8 kanalen in een eigen functie (`stemBlokMeer`): dezelfde lijn, lus,
+    naad en gaten; elk paar is bit voor bit een stereobron met dezelfde samples. Stereo blijft door
+    het oude pad (gouden hash gelijk).
+  - De worklet heeft altijd vier stereo-uitgangen; de speler een gain per uitgang (kill = 0 langs de
+    zachte S in 5 ms, niveau als knop), opgeteld naar `speler.uitgang`.
+  - Versterking per stem (v1): `(1/schaal) × niveau × kill × (vier en niet zang ? niveau(rest) × kill(rest) : 1)`.
+    Bij elke laad alles open: stems horen bij het nummer.
+  - Kosten: acht decks met vier stems ~6% van een kern in de kern (stereo 3%).
+  - Acties `track.{n}.stem.<zang|rest|drums|bas|overig>` (niveau), `.kill`, `.kill.hold`; APC
+    scene 4; de sectie STEMS in het trackpaneel.
+- **Auto-DJ** (`src/auto/`): een bron van acties op de bus met bron 'auto' (dus in het log), de
+  bewakers van v1 (blend alleen met twee zekere grids, tempo ≤ 6%, toon ≤ 1 stap ná de sync),
+  overgangen in tellen van de maatklok, de nieuwe op de "1" via `play.quant`, de bas wisselt in het
+  midden, Clay wint altijd (CLAY_RECENT 120 s), nooit stilte.
+

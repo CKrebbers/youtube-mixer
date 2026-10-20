@@ -71,3 +71,42 @@ Open de mixer (`node v2/app/server.mjs`, http://localhost:8780) met de APC aange
 7. Hapert of crasht Chrome bij het openen (~141 berichten bij de init)?
 8. De indeling onder je handen: rij 1 als bas weg per kolom, laag-EQ op device knob 4, het toetsenbord naast het scherm. Wat zit in de weg?
 Schrijf het per punt in één zin in `v2/meting/uitslag/apc.md`.
+
+## 9. De koptelefoon (plak 2, 15 min)
+Maak in Audio-MIDI-instellingen een samengesteld apparaat: de Scarlett 2i2 eerst (zaal = 1/2), de
+koptelefoonuitgang van de Mac daarna (3/4), en zet het als uitvoer. Open de mixer.
+1. Staan KOP en CUE↔ZAAL bovenin, en een CUE-knop onder elke track? (Zonder vier kanalen zijn ze weg; dat hoort zo.)
+2. Track met de fader dicht, CUE aan: hoor je hem in de koptelefoon en niet in de zaal?
+3. CUE↔ZAAL in het midden met dezelfde track ook in de zaal: hoor je één geluid, of een kamfilter (holle klank)? De cue is 72 samples vertraagd zodat hij gelijk loopt met de limiter.
+4. Zaal en koptelefoon verkeerd om? ⇄ en herladen.
+Schrijf het in `uitslag/koptelefoon.md`.
+
+## 10. Stems (plak 6, 15 min)
+Laad een nummer dat in v1 gesplitst is (STEMS-kolom in v1).
+1. Tabblad Track: staat de sectie STEMS er (ZANG, DRUMS, BAS, OVERIG, REST)?
+2. KILL op de zang en weer terug, midden in een zin: tik of plof?
+3. APC scene 4, per kolom pad 5–1 vasthouden: verdwijnt precies die stem zolang je drukt? Shift = vast.
+4. Knip een sampler-pad terwijl de zang weg is: klinkt de pad zonder zang?
+5. Acht decks met stems tegelijk (als je er zoveel hebt): hapert iets? (In de kern ~6% van een kern gemeten.)
+
+## 11. Instrumenten, sampler en patronen (plak 5, 20 min)
+1. Zet Drums op track 3 en speel met het toetsenbord of een MIDI-keyboard: hoe lang van toets tot geluid (doel < 15 ms)?
+2. Klankschaal op een track terwijl een nummer met een toonsoort speelt: klinkt hij in de toon (ook na een tempowissel, zonder keylock schuift de toon mee)?
+3. Patroon: plek 1, een kick op 1 5 9 13, starten. Valt hij op de "1" van wat speelt? Zet de klok op een ander tempo: blijft hij erop?
+4. APC scene 5: start en wissel plekken per kolom; Stop All Clips stopt alles op de "1".
+5. Hoe klinken Poly, FM, Drums en de Klankschaal naast echte nummers (alles staat op −14 LUFS; de pieken van Drums en Klankschaal gaan boven 0 dBFS, de limiter vangt ze)?
+
+## 12. Beeld (plak 4, 20 min)
+1. Laad een nummer met video, tabblad Beeld: loopt het beeld gelijk met wat je hoort (kick op een flits)? Na een sprong (hotcue): hoe snel weer in de pas?
+2. `los venster`, sleep het naar het tweede scherm, dubbelklik voor volledig scherm. Zet daarna een ander tabblad vooraan in het hoofdvenster: loopt de beamer door?
+3. ZWART, ZWART ▮ (vasthouden), BEVRIEZEN, FLITS: doet het doek wat de knop zegt, ook in het losse venster?
+4. Een vormlaag aan op een avond met muziek: hoeveel ms en welke kwaliteit staat er naast de laag (budget 4 ms hoofdthread, 12 ms Worker, op de M1 nog niet gemeten)?
+5. Met `PROEF_MAAT=1280x720 node v2/app/tools/proef-beeld.mjs`: haalt de upload op Metal ook in de p95 binnen één beeld?
+
+## 13. De auto-DJ (plak 6, een half uur)
+1. AUTO aan met je echte library. Klinkt de baswissel in het midden van een beatloze overgang goed (nieuw in v2)?
+2. Een blend tussen twee zekere nummers: valt de nieuwe op de "1"?
+3. Na een beatloze overgang naar een ander tempo zet de automaat de klok op het nieuwe nummer (`sync.klok`). Goed, of liever niet aan de klok komen?
+4. Pak midden in een overgang een fader of de crossfader: laat hij los, en gaat hij daarna verder?
+5. Het tabblad een poos op de achtergrond: loopt de overgang door?
+Schrijf het in `uitslag/auto.md`.
