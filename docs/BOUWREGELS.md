@@ -1,0 +1,1760 @@
+# Bouwregels: wat een bouwer niet mag breken
+
+Verplaatst uit CLAUDE.md op 29 okt 2026, ongewijzigd en met dezelfde koppen. Een verwijzing
+"CLAUDE.md, <onderwerp>" in code, tests of docs staat nu hier onder dezelfde kop.
+Lees de sectie van het onderwerp waar je aan werkt vóór je iets verandert (index: CLAUDE.md).
+
+## Bekende grenzen (niet als bug rapporteren)
+
+- Wat uit de library komt STREAMT (`StreamBron`, sinds 23 september 2026): alleen
+  pagina's van ~1,4 s rond de positie, de loop, het cuepunt en de hotcues staan
+  in het geheugen, ~4-6 MB per track, hoe lang hij ook is. Gemeten: acht keer
+  een album van 31 minuten ~30 MB, waar het uitgepakt 5,7 GB was. Een track die je
+  HOORT houdt sinds 15 okt 60 s vooruit (zie "De server mag even weg zijn"): ~12,8 MB
+  voor een hoorbare stereotrack, ~46 MB met vier stems.
+- ÉÉN afspeelmotor (Clay 23 sep): losgesleepte bestanden en de demotrack gaan
+  ook door de StreamBron. `deck.laadGeheugen(buffer)` zet de AudioBuffer om
+  naar het formaat van de ingest (`maakWav`, 16-bit stereo) en geeft de
+  StreamBron een `geheugenHaal` die Range-verzoeken uit dat geheugen
+  beantwoordt. Kost ~11 MB per minuut (de hele WAV staat in RAM, maar als
+  16-bit: de helft van een AudioBuffer). `deck.load()` met de BufferBron
+  bestaat nog als reserve, voor de engine-tests en straks keylock.
+- Streamen leest `audio.wav` (of `stems.wav`) rechtstreeks met Range-verzoeken,
+  en kan daarom alleen 16-bit PCM met 2, 4 of 8 kanalen (stereo, of 2/4 stems
+  interleaved). De ingest zet dat formaat expliciet. Verander je het formaat van
+  `audio.wav`, dan weigert de StreamBron het met een reden. Met stems kost een
+  deck ×2 (twee) of ×4 (vier) aan geheugen en netwerk. Wordt het bestand op de
+  server vervangen terwijl een deck het streamt (Content-Range-totaal anders),
+  dan haalt de StreamBron niets meer op: stilte en een melding, nooit ruis.
+- Springen naar een plek die nog niet binnen is, geeft een paar tientallen ms
+  stilte (een gat is stilte, nooit een herhaling). Hotcues en cuepunt zijn
+  vastgepind en klinken direct.
+- Een loop springt van einde naar begin, en die twee samples liggen bijna
+  nooit op dezelfde hoogte: een tik. De streamkern vloeit daarom de laatste
+  5 ms (`LOOP_NAAD`) equal-power over naar wat er vlak vóór het loop-BEGIN
+  staat. Gemeten op het ADRIANA-album: sprongen tot 0,147 werden niet groter
+  dan een gewone stap in de muziek. Alleen voor de StreamBron (dus alles in de
+  app); de BufferBron (reserve) loopt via de native loop en tikt nog.
+- Hoofdthread en worklet delen GEEN teller: ze rekenen allebei met dezelfde
+  formule uit `stream-kern.js` op dezelfde audioklok ("vanaf T staat de
+  positie op P met snelheid R"). Elke wijziging is een nieuw segment; een
+  bericht dat laat aankomt rekent vanaf T door. Regel 3 over een draadgrens.
+- HET AUDIOPAD MAAKT GEEN AFVAL (25 sep, ROADMAP 22, `docs/AUDIOPAD.md`): een GC
+  op de audiothread is een tik. `renderBlok` en de worklet maken per blok niets
+  aan: tussenresultaten in `klad` (Float64Arrays), hulpfuncties op het hete pad
+  krijgen alleen objecten en hele getallen en geven niets of een boolean terug
+  (een double over een functiegrens wordt een HeapNumber zodra V8 niet inlinet),
+  `positieOp` alleen via `posities()`. Een nieuw segmentveld is een OBJECT
+  (`rem: { a }`), geen getal dat soms ontbreekt (dat maakte per blok een
+  getal-object). `renderblok.test.mjs` eist 0 GC's en een gouden hash; die hangt
+  van V8's sin/cos af: na een Node-update opnieuw meten op de oude kern, niet
+  blind overnemen.
+- TRANSPORT (25 sep, ROADMAP 16):
+  - Beatjump (`track.N.beatjump.*`, lengte 1–32, standaard 4) rekent in TELLEN
+    (`Beatgrid.verschuif`): fase exact, ook over een stukgrens; in een loop
+    schuift de LOOP mee. Weigeren met een melding: zonder grid, onzeker stuk
+    zonder slot, loop buiten het nummer, voorbij het einde (klemmen liet de
+    track midden in een set stoppen), en vóór het begin ('begin', Clay 26 sep,
+    J4: klemmen op 0 brak de beatmatch). Precies op 0 landen mag.
+  - Loop in/out/reloop: out zet de loop meteen aan; reloop = eraf, of de vorige
+    loop (`vorigeLoop`) terug. In-punt en vorige loop zijn vastpunten.
+  - Quantize is ÉÉN schakelaar voor de hele engine (`transport.quantize`): zetten
+    snapt naar de tel; een hotcue-SPRONG is fasebehoudend en meteen
+    (`metFaseVan`), en de HOTCUE beslist of een loop blijft (`_naarHotcue`), niet
+    het landingspunt. Alleen op een zeker grid. Op de APC en het scherm = Lock,
+    met zijn stand. Doet Lock in het open mapje iets anders (grid-modus: slot),
+    dan staat er een Q in de hoek van Lock (`herbereken()` in spiegel.js;
+    absoluut in de cel: een extra grid-item verschuift de APC-knoppen).
+  - Starten op de maat (`track.N.play.quant`): het geluid begint op het volgende
+    maatbegin van de maatgever en de tel van de track bij het startpunt valt
+    erop; zonder maatgever meteen. Op een actieve track als play (`togglePlay`):
+    speelt = pauze, wacht = annuleren, remt = los. Lampje (read): 1 = wacht
+    (fel groen), 0,5 = speelt (donkergroen), 0 = stil (donkergrijs), null = leeg.
+    GEPLAND STARTEN (`bron.start(p, { op })`): de bron speelt al (`deck.wacht`)
+    maar klinkt pas vanaf `op`, sample-exact; de worklet krijgt `gepland: true`
+    (zonder klinkt vóór T wat er vóór het startpunt staat); `ctxTijdVan` rekent
+    vanaf max(nu, T). Een wachtende track geeft de maat niet (tenzij verder niets
+    klinkt), volgt DEZELFDE tel van de maatgever als die verschuift
+    (`_volgWachtenden`; "de volgende maat" opnieuw uitrekenen schoof in een
+    korte loop elke ronde op), en sync doet dan alleen het tempo.
+  - Toetsen: R/T en Y/U beatjump (shift: lengte), G/C en H/N loop in/out
+    (shift: reloop), shift+Q/P op de maat, 6 quantize.
+  - Op de APC (voorstel A, 25 sep, `docs/APC40.md`), rechts voor de focus-track:
+    Bank ◀ ▶ beatjump (shift: lengte ½/×2), Pan/Sends/User loop in/out/reloop,
+    Lock quantize, Stop All Clips rem (geen LED op het apparaat); shift + nummer
+    (2×2) = op de maat. Keylock = Shift + Tap, toon = Shift + Nudge ± (VRAGEN I4; Bank is met de hub de hubtoets). Kill,
+    rem en op de maat per kolom: de grid-modus klank (MAPJES).
+- REM (vinylstop, 25 sep): `track.N.brake` remt in `track.N.brake.time`
+  (SECONDEN 0,1–5, standaard 1: een gebaar van de draaitafel, ook zonder grid)
+  lineair tot stilstand, daarna een gewone pauze. Nog eens drukken of play = los;
+  op een stilstaand of wachtend deck niets. Segment `rem: { a }`: positieOp =
+  P + R·dt + a·dt²/2 tot stilstand, zelfde formule in hoofdthread en worklet.
+  Onder 25% snelheid (`REM_UIT`) dooft de worklet uit (anders een plof van de
+  vastgehouden laatste sample). Tijdens een rem: sync zet alleen het tempo, een
+  loopwissel houdt dezelfde rem (alleen P schuift), seek/hotcue/pauze/nudge
+  halen hem eraf, geen maatgever, `fxKlok` null; de video volgt `deck.snelheid`.
+  Toetsen: ` (links van 1) = focus, = = rechterhand.
+- EQ-KILL (25 sep): `track.N.kill.low/mid/high` (schakelaar) en `.hold`, −70 dB
+  zoals de knop-kill. De knopstand blijft staan (kill uit = precies terug), ook
+  bij een nieuw nummer, zoals de EQ-knoppen. Klikvrij met hellingen van 5 ms die
+  in AMPLITUDE een zachte S volgen (zie overgangen). Lampje 1 = weg, 0 = open.
+- Pitch schuift mee met tempo (zonder keylock). Keylock en toon: `docs/KEYLOCK.md` §9.
+- Nudge op de APC = BEND (`deck.bend`, actions `track.N.bend.back/fwd`): zolang
+  je drukt draait alleen de BRON 4% trager/sneller; `deck.rate` (pitchfader,
+  bpm, sync) blijft staan, dus loslaten is precies terug. `nudge.back/fwd`
+  (50 ms springen) bestaat nog voor het toetsenbord.
+- Pitchbereik per track: ±8, ±16 (standaard) of ±50% (`PITCH_BEREIKEN` in
+  `deck.js`, action `track.N.pitch.range`). De fader blijft 0..1, de engine
+  schaalt. Bereik wisselen laat het tempo staan; alleen de faderstand verschuift.
+  Sync mag verder (0,5–2): dan staat de fader tegen de aanslag (read geklemd).
+  Een nieuw nummer begint op 0% pitch (`_naLaden`); het bereik blijft staan.
+- De tempo-encoder van de APC stuurt `track.N.tempo`, NIET de pitchfader:
+  lineair over de hele rate (0,5–2×), 0,1% per tik (shift 0,01%), read niet
+  geklemd. Via de geklemde pitch-read sprong één tik na een sync buiten het
+  bereik van 1,30 naar 1,16.
+- De master-limiter is sinds 5 okt een AudioWorklet met vooruitblik (−1 dBTP,
+  `docs/MASTER.md`); tot hij geladen is (of als laden mislukt) de oude
+  `DynamicsCompressor`. Zie "Master en limiter" hieronder.
+- Er zijn twee soorten loops naast elkaar: in seconden en in tellen. De
+  beat-loops klikken in op het grid; zonder grid doen ze niets.
+- Een loop wordt geklemd op het trackeinde, dus `loop 4s` vlak voor het eind geeft
+  een kortere loop. Correct gedrag.
+- Springen (seek, hotcue, cue) naar een plek BUITEN de loop verlaat hem; binnen
+  blijft hij staan. Fasecorrectie (sync, nudge) vouwt terug in de loop via
+  `seek(p, { binnenLoop: true })`: een verschuiving van een paar ms mag de loop
+  niet opheffen. Vroeger landde een hotcue tijdens een loop ergens ín de loop.
+- Een mislukte laad laat cue en hotcues van de track staan; een loop vanaf 0 s
+  vloeit bij de naad niet meer naar stilte (er staat niets vóór 0).
+- De nummers in `devices/apc40mk2.js` komen uit Akai's protocoldocument v1.2
+  (tabellen op p13-17 en p23-26), niet uit herinnering. Wijk er niet van af
+  zonder het document erbij. Twee dingen die makkelijk misgaan: de grid-noten
+  lopen van ONDER naar boven (0x00 is linksonder), en de device knobs melden
+  alleen in generic mode (0x40) via het MIDI-kanaal bij welke trackstrip ze
+  horen. Wij draaien in 0x42 (zie hieronder): daar staan ze op kanaal 0.
+- De UI stuurt de engine aan via actions, maar VOLGT hem ook: knoppen en faders
+  op het scherm lezen elke frame hun stand terug via `read()`. Zonder dat loopt
+  het scherm achter zodra er een tweede bron is (MIDI, en straks automatisering).
+- Een rack bewaart per macro alleen de `default`. De live knopstand is
+  sessietoestand en gaat nergens heen — anders is elk rack na drie seconden
+  spelen "gewijzigd" en verdrink je in opslaan-vragen.
+- De rack-editor toont eerst de acht KNOPPEN, dan de keten als effecten met
+  draaiknoppen in echte eenheden (`eenheid` per effect in `fx.js`, dezelfde
+  formule als `zet()` — wijkt er één af, dan liegt het scherm). Drie soorten
+  wijzigingen: KETEN (erbij, weg, volgorde, aan/uit) bouwt opnieuw via
+  `zetRack(..., { behoudStanden: true })` met kruisfade; een PARAMETER gaat via
+  `zetParam()` zonder nieuwe keten; MACRO'S (bereik, venster, curve) via
+  `bewerkMacros()`, geen node. Een parameter die door een knop gestuurd wordt
+  is op het scherm niet te draaien: de knop wint, dus draaien zou liegen.
+  Tijdens het slepen wordt niets opnieuw getekend.
+- Een knop instellen gaat op het gehoor: DICHT zet hem op 0, OPEN op 1, en elke
+  draai aan een effect wordt die kant (`neemOp()` in `rack.js`: `from` = dicht,
+  `to` = open, wat venster en curve ook zijn). Een parameter die de knop nog
+  niet stuurde komt erbij met zijn huidige stand als andere kant; worden beide
+  kanten gelijk, dan verdwijnt de koppeling. Draai je aan de knop zelf (scherm,
+  FX-rij, APC), dan stopt het instellen — gecontroleerd op een timer, niet in
+  de animatielus, want die staat stil als het venster achter iets anders zit.
+- Glijden per knop (`macro.glide`, seconden, hooguit 600): de KNOP staat meteen
+  waar je hem zet (`leesPlek`, dat leest soft-takeover), het GELUID glijdt
+  (`plekEffectief`, afgeleid van de audioklok). Een timer van 33 ms geeft de
+  tussenstanden alleen door; `_pasMacrosToe` stuurt alleen wat echt veranderd
+  is, anders bouwt een gate 30x per seconde zijn buffer opnieuw. De editor
+  zet bij DICHT/OPEN en startstand `direct: true`: instellen wacht niet.
+- Kant-en-klare racks staan in `racks/sjablonen.json` en zijn voor elk nummer
+  te kiezen. Laden geeft herkomst `"s:<nr>"`; bewaren overschrijft alleen een
+  GETAL (library-id), dus een sjabloon wordt altijd een nieuw rack van het
+  nummer. `rack.test.mjs` loopt elk sjabloon na: bestaat elke parameter, staat
+  geen parameter op twee knoppen, staat het filter open bij de beginstand.
+- `fx.herkomst` zegt uit welk bewaard rack wat er klinkt komt (library-id), of
+  null. Bewerken in de editor houdt hem; elk ander rack (volgend effect, los
+  effect) wist hem. Bewaren schrijft ALLEEN over een rack heen als de herkomst
+  klopt, anders wordt het een nieuw rack. Zonder die regel overschreef
+  "volgend effect + bewaar" een bewaard rack met één los effect.
+- Elke knopplek heeft een DRUKvariant (Clay 23 sep): `track.N.fx.knob.K.hold`
+  en `send.a/b.knob.K.hold`. Indrukken = vol open (direct, geen glijden),
+  loslaten = terug naar de stand van vóór het drukken. Wisselt het rack tijdens
+  het drukken, dan niet terugzetten. Op het scherm: alt + vasthouden (shift is
+  al fijn slepen). Op de APC nog geen knop toegewezen (Lock werd quantize,
+  voorstel A van 25 sep; `docs/VERBETERINGEN.md` ronde 3).
+- Botsen twee macro's op dezelfde parameter, dan wint de HOOGSTE plek. Saai en
+  voorspelbaar; "laatste in de lijst wint" hangt van de volgorde af.
+- Een onbekend effecttype in een rack wordt NIET weggegooid: het blijft als ruwe
+  JSON bewaard, staat uit, en komt er bij het opslaan ongeschonden weer uit.
+  Eén keer openen in een oudere versie mag geen rack slopen.
+- **Het scherm spiegelt de APC40 mkII** (sinds 23 september 2026): onder links
+  acht kolommen precies zoals een APC-kolom (track knob · 5 pads · Clip Stop ·
+  Track Select · 2×2 · fader), rechts het focusdeel (scene launch, transport,
+  device knobs 2×4, pijlen/shift, masterfader, crossfader), boven de track met
+  focus groot plus acht dunne banen. Wat een knop doet komt UIT DE MAPPING:
+  elk element heeft een `data-sig`, en `leesControl()` (spiegel-plan.js) vraagt
+  `mapping.kies(sig)` + `resolveTarget` — shift, open mapje en focus tellen mee.
+  Herberekend bij mapping-`change`, `shift`, lagen-`change` en focuswissel. Is
+  de geladen mapping niet voor een APC, dan leest het scherm een eigen
+  exemplaar van `mappings/apc40mk2.json`. Raak je de APC aan, dan licht het
+  element 300 ms op (`geraakt` uit midi-opzet.js -> `spiegel.markeer`). Knoppen
+  lezen hun action bij het INDRUKKEN, en loslaten gaat naar dezelfde action.
+  Maat: past op 1440×900 (daar verdwenen eerst de banen achter de kolommen):
+  het focusdeck houdt zijn hoogte, de banen staan in twee kolommen, faders
+  krimpen mee, onder 900 px hoogte compacter. De rijen onder de mixer (stems …
+  klankschaal) staan samen in `#rijen`, dat zelf scrolt: main wordt nooit lager
+  dan zijn inhoud met de faders op 56 px (`min-height:min-content`), dus faders
+  en sampler blijven heel met welke rijen ook open (6 okt, `tools/headless/rijen.mjs`).
+  Een nieuwe rij hoort in `#rijen`. GEEN brede `:has()` in styles.css (14 okt): `body:has(#rijen …) .kol …`
+  liet elke tekstwissel (elk beeld) ~256 elementen restylen; zo'n voorwaarde wordt een klasse
+  (`src/ui/rij-klassen.js`, MutationObserver), en wat per MIDI-bericht op het scherm moet (spiegel,
+  mapje-balk, oplichten) gebeurt bij het volgende beeld, het geluid meteen (`tools/headless/latentie.mjs`). `#rijen` houdt rechts 8 px vrij: met alleen een
+  trackpad zweeft de schuifbalk van macOS over de inhoud (een muis: hij neemt zelf 15 px);
+  rijen.mjs toetst beide standen, los van wat er aan de Mac hangt. Per kolom bovenaan resterende
+  tijd (14 px, rood onder 30 s als hij speelt) en BPM, groot genoeg voor de
+  zaal. Labels ≥ 11 px. APC-knopnamen alleen in de KOPPELMODUS (anders ruis).
+  MAAT-badge zegt "(stil)" als de maatgever stilstaat; hotcues overal geel met
+  nummer; foutmeldingen blijven staan tot je ze wegklikt. De renderloop leest
+  het focusoverzicht uit een cache en schrijft alleen wat verandert. De golfvormen (zoom,
+  overzicht, de acht banen) TEKENEN alleen als hun sleutel verandert (`zelfde()` in waveform.js:
+  analyse, maat, positie in hele apparaatpixels, loop, cue, hotcues, grid, zoom). Elke teken-actie
+  is een upload naar de GPU: zonder sleutel tekende VARVE in rust ~29 Mpx/s en liep Demucs (stems)
+  op de helft (gemeten 5 okt). Tekent een nieuw element iets in een draw(), zet het in de sleutel.
+- Vensters bestaan nog, maar als MODEL (`staat.venster`), niet als UI:
+  L = de track met focus (volgt engine.focus), R = de VORIGE focus-track
+  (`volgFocus`/`zetTweede` in spiegel-plan.js). Het toetsenbord volgt dat
+  (`{L}`/`{R}`): linkerhand = focus, rechterhand = waar je vandaan kwam, I =
+  wisselen. `window.L.show.N` = focus op N, `window.R.show.N` = N als tweede.
+  De RACK-rij en de rack-editor horen bij de track met focus.
+- Clip/Device View (`layer.device.view`) licht alleen op in het RACK: een
+  kiesknop met meer mapjes brandt niet in zijn standaardmapje.
+- Crossfader-toewijzing per track: A, B of thru. Standaard 1 op A, 2 op B, de
+  rest thru — zo klinkt een set voor twee als vroeger.
+  Eén plek voor de kant, op scherm én APC: de A|B-knop in het 2×2-blok
+  (`track.N.xfade.side`, rondlopen A → B → thru). Op de APC de tweekleurige
+  LED (geel = A, oranje = B, uit = thru), op het scherm de letter in die
+  kleur. De drie segmenten van C3 zijn weg van het scherm; de actions
+  `track.N.xfade.a/.thru/.b` bestaan nog om te koppelen.
+- Sync kent geen "het andere deck" meer: een track synct naar de MAATGEVER
+  (`Engine.maatgever()`): de hardst klinkende (faderGain × crossfader) die speelt,
+  een grid heeft, niet wacht en niet remt, met HYSTERESE (25 sep): een ander
+  neemt het pas over als hij 3 dB harder klinkt (`MAAT_MARGE_DB`) en dat 250 ms
+  audioklok volhoudt (`MAAT_WACHT`); stopt of remt de maatgever, dan meteen. Puur
+  (`volgMaatgever`); een timer bepaalt alleen WANNEER, een wissel meldt 'change'.
+  `syncMaster(id)`: maatgever → luidste andere → luidste wachtende als verder
+  niets klinkt → eerste geladen met grid. MAAT-badge, bussen, sampler, sync,
+  starten op de maat, video-puls en vormen volgen zo dezelfde track; puls en
+  vormen alleen als je hem hoort (`maatgever()` in puls.js).
+- Wat je HOORT staat op één plek, `src/engine/hoorbaar.js`: positie −
+  (outputLatency + baseLatency) × rate tijdens spelen (tijdens een rem de
+  snelheid van nu; rate 0 is echt), de positie zelf als hij stilstaat of wacht.
+  Video `_volg` gebruikt `naVertraging()`, dat ook stilstaand aftrekt (anders
+  seekt de video bij elke pauze). Bend telt niet mee (< 1 ms).
+- De action-bus spreekt in TRACKS (`track.1.filter`), de engine in decks (A, B).
+  De vertaling staat op één plek: `TRACKS` in `actions.js`. `{focus}` in een
+  mapping wordt een tracknummer. Mappings van versie 1 (`deck.A.…`) en 2
+  (Nederlandse namen: `fx.knop`, `sampler.1.wis`, `venster.L.toon.3`…) worden bij
+  het laden omgezet door `migreerAction()` (`NIEUWE_NAMEN`); niet weghalen, er
+  kunnen nog geëxporteerde bestanden rondslingeren. Sinds versie 3 (23 sep) zijn
+  ALLE action-namen Engels; labels op het scherm blijven Nederlands.
+- De FX-knoppen wijzen naar een PLEK (`track.1.fx.knob.1`), niet naar een
+  parameter. Wissel je van effect, dan betekent plek 1 iets anders en hoef je
+  niets opnieuw te koppelen. Dat is de opzet waar de effect-racks op verder
+  bouwen: het rack bepaalt wat een plek doet, de mapping blijft staan.
+- Overgangen op een AudioParam (kruisfade, kill) NOOIT als `setValueCurveAtTime`
+  (25 sep): bovenop een lopende curve gooit `setTargetAtTime` NotSupportedError,
+  en afbreken met `cancelAndHoldAtTime` gooit niet, maar Chrome speelt het
+  afgekapte stuk dan opnieuw af vanaf het begin (sprong 0,15–0,6). Gebruik
+  `zetHellingen()` (`src/engine/overgang.js`, via `zetOvergang` in fx.js en
+  `killEqBand`): vasthouden, beginpunt, lineaire hellingen, en pas beginnen na
+  `startDrempel`, want de renderthread loopt tot ~7,5 ms vóór `currentTime` en
+  Chrome zet een voorbij punt op zijn eigen nu: korte hellingen vallen dan samen
+  tot één stap (de kill van 5 ms in één sample). Een doelwaarde (mix, EQ-knop)
+  gaat direct via `zetDoel()`/`setEqBand` (houdVast + setTargetAtTime). De mock
+  telt afgebroken curves (`CURVE_BREUK` = 0); `kijk.mjs` meet het in Chrome. Nog
+  op nu: gate zonder maat (5 ms) en de declick van de BufferBron (4 ms).
+- Een tempo-gesynchroniseerd effect krijgt zijn klok van het DECK, niet van een
+  grid dat het zelf opzoekt: `fxKlok()` levert de hoorbare tellengte plus het
+  moment waarop de volgende tel valt op de audioklok. Herankeren is verplicht
+  bij seek, hotcue, tempowijziging en gridbewerking — vergeet er één en je gate
+  loopt na twintig minuten een zestiende naast.
+- Gate en sampler lopen EXACT op de maat via `playbackRate`, niet via de
+  bufferlengte: een buffer heeft hele samples, dus een periode die een fractie
+  van een sample afwijkt loopt weg (gemeten ~1/16 naast na 26 min). Gate: buffer op
+  hele samples, rate maakt de periode exact, buffer hergebruikt bij kleine
+  tempowissels. Sampler: rate = duur / (tellen × tellengte).
+- Starten op de tel gaat via `startOpDeTel()` (fx.js): valt de volgende tel
+  binnen de uitgangsbuffer, dan wordt het de tel erna. Anders start het
+  blijvend een paar ms te laat (Web Audio begint een bron in het verleden gewoon nu).
+- **Q van een Web Audio-lowpass is een piek in DECIBEL, geen factor.** De
+  standaard (1 dB) is al 12% boven 1 bij de afsnijfrequentie. In een
+  feedbacklus groeit dat: de reverb zwol aan in plaats van uit te sterven, en
+  de delay op volle feedback deed hetzelfde (lusversterking 1,03). Elk filter
+  in een lus krijgt een negatieve Q; `engine.test.mjs` controleert het.
+- De reverb is een FDN (acht lijnen, Householder-matrix), geen ConvolverNode:
+  alleen zo kan freeze vasthouden (invoer dicht, lus verliesloos). Galmtijd
+  meet je aan de HELLING van het uitsterven, niet aan de eerste -60 dB na de
+  piek; zo gemeten klopt de knop (3,46 s beloofd, 3,5 s gemeten).
+- Delaytijd wordt NIET verschoven op één DelayNode: dat laat de toonhoogte van
+  de echo glijden (gemeten: een toon van 1000 Hz zwiepte tot 4293 Hz). Er zijn
+  twee leeskoppen op hetzelfde signaal; een nieuwe tijd gaat op de stille kop
+  en daar wordt 80 ms naartoe gefaded (5 Hz afwijking). Snel draaien wacht tot
+  de fade klaar is en pakt dan de laatste stand — twee fades over elkaar
+  klikken. Loopt de audio niet, dan direct: een fade op een stilstaande klok
+  wordt nooit klaar.
+- Effecten wisselen gaat NOOIT door de bedrading te veranderen waar signaal
+  doorheen loopt: twee complete ketens equal-power kruisfaden, en de oude pas
+  opruimen na fade plus staarttijd. `disconnect()` is niet sample-accuraat en
+  klikt; of je het hoort hangt af van het niveau, dus je merkt het pas laat.
+- Het deck weet niet HOE er geluid uit een track komt; dat staat in `bron.js`.
+  Transport, cues, loops en grid zijn muzikaal, de bron is technisch. Daardoor
+  kan er een time-stretcher (keylock) of een streamende leeslus voor in de
+  plaats zonder dat het deck verandert. Een bron moet regel 3 waarmaken:
+  positie uit `ctx.currentTime`, nooit een eigen teller.
+- De AudioContext wordt expliciet op 48 kHz gezet, gelijk aan wat de ingest
+  levert. Laat je dat aan de geluidskaart over, dan hersamplet `decodeAudioData`
+  en klopt de golfvorm niet meer.
+- De server stuurt COOP/COEP-headers. Dat is nu nog nergens voor nodig, maar het
+  is de voorwaarde voor SharedArrayBuffer in de streaming-engine, en het kost
+  vandaag niets omdat de pagina geen enkele cross-origin verwijzing heeft.
+- Het beatgrid staat in TRACKTIJD, niet in afspeeltijd. Draait een deck op
+  1,05x, dan verschuift het grid niet — de track klinkt alleen sneller. `deck.bpm`
+  is de hoorbare bpm (grid × rate); `grid.bpm` is wat er op de plaat staat.
+- Een beatgrid hoort bij de link, net als een effect-rack. Eén keer uitmeten en
+  hij klopt voorgoed, op welke track je hem ook laadt (schema v2).
+- **Teken de golfvorm NOOIT met `buffer.sampleRate`.** De server rekent peaks op
+  48 kHz, maar `decodeAudioData` hersamplet naar de snelheid van de geluidskaart.
+  Op een 44,1 kHz-kaart trekt dat de golfvorm 8,8% uit de pas — gemeten
+  correlatie met de audio zakte daardoor van 0,95 naar 0,004. Gebruik
+  `effectieveSampleRate(count, perBucket, duration)`; die klopt per definitie.
+- Peaks worden bij de ingest uitgerekend en op schijf gezet (`peaks.bin`, per
+  bucket een min en een max als float32). De browser leest dat bestand en valt
+  alleen terug op zelf rekenen als het er niet is. Het formaat is identiek aan
+  `computePeaks()`; `analyze.test.mjs` vergelijkt ze bit voor bit.
+- Video is SLAAF van de audio (`src/video/`, fase 4). Klein verschil: een
+  fractie sneller of trager (hooguit 10%); boven 150 ms: springen, naar waar
+  de audio is ALS de seek klaar is (seekduur per video, gemeten in `_volg` tot
+  het eerste beeld met `seeking` weer false; NIET met het `seeked`-event: dat
+  komt onder belasting na de volgende sprong, seekduur zakte naar ~0 en de
+  video's bleven springen). Het doel is
+  wat je HOORT: deckpositie min uitgangsvertraging, op `deck.snelheid` (ook bend
+  en rem). Zichtbaarheid = fader × crossfader; wat onzichtbaar is of op de maat
+  wacht wordt gepauzeerd en niet geüpload. requestVideoFrameCallback is gemeten en
+  NIET gebruikt: zijn `mediaTime` loopt ~10 ms achter op wat `texImage2D` uploadt.
+  Ontbrekende of kapotte video: een fout in de strook (`fouten.js`), één per bron.
+- HET LOSSE VENSTER MENGT ZELF (25 sep, ROADMAP 18, `docs/BEAMER.md`):
+  `video.html` heeft een eigen VideoMixer, eigen `<video>`'s en WebGL op ZIJN rAF,
+  dus de beamer loopt door met het hoofdtabblad verborgen. Het leest
+  `window.opener.varveBeamer` (same-origin, zelfde thread; geen berichten, want
+  de timers van een verborgen tabblad worden geknepen) en neemt elk beeld via
+  `neemOver()` alles over, ook DEZELFDE beeldlaag-objecten; de bus blijft bij het
+  hoofdvenster. Open en zichtbaar = het hoofdvenster mengt niet en toont het
+  beamerbeeld via captureStream (`wieMengt`); verborgen = het paneel mengt weer.
+  INLOOP (`beamer.js`): gaat het losse venster open of komt het terug van
+  verborgen terwijl het hoofdvenster mengde, dan blijft DAT mengen en zet het
+  elk beeld meteen op het losse canvas (`toonBeeld`, in dezelfde taak: een
+  WebGL-canvas zonder preserveDrawingBuffer is leeg zodra hij getoond is;
+  captureStream liep onder belasting tot 2,9 s weg). Het losse venster stuurt
+  en uploadt intussen zijn eigen video's zonder te mengen (`loopIn`: een
+  `<video>` die niemand uitleest krijgt geen vers beeld) en neemt over als alle
+  zichtbare 0,3 s binnen 50 ms lopen (`inDePas`), of na 20 s. Hoofdtabblad
+  verborgen = meteen zelf mengen. Gemeten: acht tracks 8–9,4 s inloop, elk
+  beeld binnen 150 ms, overname naadloos.
+  Headless: `tools/headless/beamer.mjs` (Chrome for Testing `--headless=new`:
+  alleen daar wordt een tabblad echt verborgen).
+- De video's hebben een sleutelbeeld per 8,3 s (zoals YouTube ze levert).
+  Springen midden in zo'n stuk laat de decoder tot 8 s beeld doorrekenen.
+  Clay zag loops en sprongen op 23 september 2026 netjes meelopen, dus de GOP
+  blijft zoals hij is. Hapert het ooit alsnog: kortere GOP bij de ingest
+  (-g 30), niet slimmer springen.
+- Een OPEN Range-verzoek op `video.mp4` (`bytes=N-`) krijgt hooguit 2 MB terug
+  (`VIDEO_KNIP` in `statisch()`, 14 okt, docs/LIBRARY.md "Video en audio over
+  één host"): over HTTP/1.1 opent Chrome 6 verbindingen per host, en acht
+  video's die vooruit bufferen lieten de audiopagina's tot 10 s wachten
+  (stilte). audio.wav/stems.wav vragen altijd een gesloten bereik en blijven
+  zoals ze waren; de StreamBron haalt met `priority: 'high'`.
+- Het videobeeld gaat in drie shaderstappen: mengen (mengvorm) -> effecten
+  (met het VORIGE eindbeeld voor sporen, twee buffers om de beurt) -> tonen.
+  Vast op 1280×720. Het paneel is een inklapbare kolom rechts in `main`, naast
+  kolommen en focusdeel (CSS `main:has(> .video-panel:not(.hidden))`), nooit
+  een laag over de bediening. Effecten en mengvorm staan op de action-bus
+  (`video.fx.*`, `video.mode`, via `bindVideo`), dus ze zijn te koppelen.
+  Effecten op de tel (`video.pulse`, `video.pulse.target`): de maat komt van de
+  maatgever van de engine (zie Sync), alleen als je hem hoort, op het moment dat
+  je hem HOORT. De puls komt bovenop de knopstand en dooft binnen een halve tel.
+  Een nieuwe sectie van de maatgever is een ACCENT op de puls (6 okt, `metPuls(…, accent)`,
+  `VideoMixer._accentNu` met een `SectieLezer`): vol, wat de diepte ook is, alleen met de puls aan. Geen
+  nieuw PULS_DOEL: de doelen lopen rond in het handelingenlog.
+  Meet je dit, meet dan NIET precies op de tel: door afronding val je dan op
+  het einde van de vorige tel en zie je niets.
+  Testen zonder zichtbaar venster: geef de mixer een canvas als nep-video,
+  en maak dat testbeeld ASYMMETRISCH (vier verschillende kwarten). Een beeld
+  dat alleen links-rechts verschilt verstopte dat sporen ondersteboven stond:
+  een buffer-texture staat omgekeerd t.o.v. een video-texture.
+- Chrome laadt en decodeert geen media in een tabblad dat niet zichtbaar is,
+  en pauzeert daar de animatielus. Video-gedrag test je dus met het venster
+  vooraan; in een achtergrondtab meet je niets.
+- Opnemen tapt de master NA de limiter: wat de zaal hoort. De worklet geeft
+  per seconde een stuk; elk stuk gaat met `?frame=N` (frames van de audioklok)
+  en de server schrijft het OP DIE PLEK, niet erachter. Daardoor is herhalen
+  na een verloren antwoord veilig (geen dubbel stuk), en wordt een weggevallen
+  stuk stilte op zijn plek in plaats van dat alles erna t.o.v. de video
+  verschuift. `klaar?frames=N` vult een weggevallen staart aan. Een crash kost
+  hooguit een seconde. De WAV-kop krijgt zijn lengte pas bij "klaar" (alleen
+  hele frames); is dat nooit gebeurd, dan herstelt `lijst()` hem bij het
+  opstarten uit de bestandsgrootte. Alleen op 48 kHz: de kop zegt 48000.
+  Nieuwe opnames hebben een kop van 80 bytes met een JUNK-chunk die boven
+  4 GB (~6,2 uur) `ds64` wordt: RF64 (ffmpeg las 7 uur volledig). Oude koppen
+  worden geklemd met een waarschuwing. Starten via de APC zet de AudioContext
+  aan of weigert duidelijk; verloren videostukken gaan naar `onFout` (scherm).
+  ELKE fetch leest zijn antwoord, ook als het gelukt is (`leesWeg`,
+  src/lib/antwoord.js): een ongelezen antwoord houdt Chrome vast, en de opname
+  groeide zo 26,6 MB per minuut, ook na GC (14 okt, `tools/headless/lek.mjs`;
+  na de fix 0,2 MB/min). Geldt voor elke POST die vaker dan af en toe gaat.
+- Met video erbij: naast de WAV een set-<id>.mp4 (H.264, 1280×720, 30 fps,
+  8 Mbit/s — ~3,6 GB per uur) met eigen geluidsspoor, via MediaRecorder op
+  het mixer-canvas. mp4 als Chrome het kan, anders webm. Ook per seconde
+  weggeschreven. Tijdens een video-opname rendert de mixer door, ook als het
+  paneel dicht is, anders neem je zwart op. Een nieuwe opname neemt het canvas
+  van wie er mengt (`Beamer.opnameCanvas`): met het losse venster open mag het
+  hoofdtabblad verborgen zijn, zonder bevriest de opname in een achtergrondtab.
+  Een opname die in het hoofdvenster begon blijft daar (MediaRecorder wisselt
+  niet van bron). Het beeld loopt een paar ms
+  achter op het geluid in de video (de mixer mikt op wat je HOORT, de
+  opname-tap zit vóór de uitgangsvertraging): minder dan één beeld.
+- HANDELINGENLOG (25 sep, ROADMAP 20, `docs/HANDELINGENLOG.md`): elke action als
+  `[t, action, waarde]` op de audioklok, plus laad/focus/rack/grid/hotcues/pads en
+  een beginstand. Het hangt aan de bus (`bijInvoke`, vóór de action) en de
+  laadlaag (`naLaad`); de engine weet van niets. Bewaard NAAST de opname
+  (`opnames/set-<id>.acties.jsonl`, zelfde id), in stukken op hun byte zoals
+  `?frame=N`, alleen ASCII (tekens = bytes). Rack, grid, pads en hotcues worden
+  VERGELEKEN, niet gemeld: zo komen editor, server en de hotcues die na het laden
+  terugkomen erin. Terugspelen: beginstand, dan T0 + t op de audioklok; slaat
+  `record.*`, `log.*`, `layer.*`, `rack.next/prev` en `track.N.key*` over, en op
+  een track zonder zijn nummer van toen ook transport. MIDI doet mee (een fader
+  moet altijd kunnen). Terugspelen bewaart NIETS in de library
+  (`staat.terugspeelDecks`). Opnieuw renderen (● dan speel): de beginstand gaat
+  buiten de bus om, dus `Terugspeler.onStand` schrijft een `stand` midden in het
+  lopende log. Klikken op golfvorm/baan springt via de bus (`track.N.seek`).
+  ALTIJD AAN (Clay 26 sep, J18): vinkje in de lijst achter ↺, onthouden in
+  localStorage `varve.log.altijd`; het log begint vanzelf zodra de AudioContext
+  loopt (niet eerder: de klok van het log staat dan stil), één keer per pagina,
+  dus ○ log stopt hem voor deze keer.
+- Sends: per track A (echo) en B (galm), getapt NA de fader en vóór de
+  crossfader, naar twee gedeelde bussen in de engine (`engine.sends`). Een bus
+  is een gewone InsertSlot met een rack (`SEND_RACKS`), maar helemaal nat: het
+  droge signaal komt al via de track. Fader dicht = niets meer insturen, de
+  staart sterft vanzelf uit (echo-out). Het insert-effect per track zit
+  daarentegen VÓÓR de fader en wordt dus mee dichtgedraaid. Sendknop is
+  kwadratisch: het eerste stuk subtiel, het laatste gooit.
+  Bewust vóór de crossfader (Clay, 23 sep): wegdraaien met de crossfader
+  stuurt nog in, zodat echo-out ook met de crossfader werkt.
+- De delay kan op de maat (`sync`, Clay 23 sep: "met een schakelaar"). Op de maat
+  kiest dezelfde tijdknop een deling uit `ECHO_DELINGEN` (1/16 … 1/1, kort naar
+  lang) × de hoorbare tel van de klok; vrij is het weer 20 ms–1,2 s. Zonder klok
+  houdt hij de laatst bekende tel (niet terugvallen: dat verspringt midden in een
+  set). Tempo/seek/grid herankert, via `wissel()` dus zonder doppler. De bussen
+  horen bij geen deck: de engine herankert ze bij elke 'change' van een deck.
+  Echo-bus: standaard op de maat, 1/4 tel, knop 4 = schakelaar. `toonWaarde`
+  krijgt een `lees` mee zodat de eenheid ("1/8 tel" of "250 ms") klopt.
+- Sampler: een lege pad knipt de laatste N tellen van de track met FOCUS, in
+  tracktijd, eindigend op de laatste tel vóór de positie (`knipBereik`). Een
+  streamende track wordt daarvoor opnieuw van schijf gelezen (`bron.knip`),
+  want de pagina's zitten in de worklet. Afspelen: loop, gestart op de
+  volgende tel van de klok die sync ook gebruikt, op diens tempo
+  (playbackRate = hoorbare bpm / sample-bpm). De naad wordt bij het knippen
+  al naadloos gemaakt (`naadloos`).
+- Sampler-pads horen bij het NUMMER (schema v4, tabel `samples`; Clay 23 sep).
+  Bewaard wordt alleen WAAR het stuk zit (van/tot in tracktijd, tellen, bpm),
+  geen audio: herstellen knipt opnieuw van schijf. De engine kent geen library:
+  de sampler heeft `herinneringen` (pure data) en meldt `onGevuld`/`onVergeet`;
+  de app vult en bewaart. Laad je het nummer, dan staan zijn pads als "bewaard"
+  (↺) op lege pads; klik = terughalen, ongeacht focus of positie. Shift op een
+  gevulde pad = leeg (blijft bewaard); shift op een lege, bewaarde pad = vergeten.
+  Een track die iets anders laadt neemt zijn herinneringen mee weg. Pads van een
+  los bestand of de demo worden niet bewaard.
+- Spelende pads lopen mee met de maat (Clay 23 sep): tempo én tel. Elke pad
+  houdt een segment { T, P, R } bij (regel 3). `heranker()` rekent uit waar de
+  pad op de volgende tel van de maat is; daar start een nieuwe bron op het
+  nieuwe tempo, op de dichtstbijzijnde hele tel van het sample, en de oude
+  vloeit er 5 ms in over. Klopt tempo en fase al, dan gebeurt er niets. De
+  engine roept dit (en `heranker` van de bussen) aan bij elke 'change' van een
+  deck of van de mixer: niemand anders weet wanneer de maat verandert.
+- Verbeterronde 23 september 2026 (vier auditagenten). Wat daaruit vastligt:
+  - Tap tempo deelt door `d.rate`: je tikt wat je HOORT, het grid staat in tracktijd.
+  - Transport is klikvrij: BufferBron vloeit 4 ms in/uit per start (`DECLICK`);
+    de streamkern vloeit bij elke segmentwissel 4 ms over (`vorig`/`wisselT`)
+    en ziet een gat 3 ms vooruit aankomen (`GAT_FADE`, `staat.env`).
+  - De gate laat de oude puls doorlopen tot de nieuwe op de tel begint.
+  - `ctxTimeOf`/`ctxTijdVan` houden rekening met een loop die al rondging.
+  - Elk effect heeft `vernietig()` (oscillatoren en bronnen stoppen); `_ruimOp`
+    roept die aan. Losmaken alleen lekte complete ketens.
+  - `zetOvergang` (was `zetCurve`) houdt een lopende overgang vast en gaat van
+    daar verder: twee rackwissels binnen 40 ms gooiden anders NotSupportedError.
+    De mock in engine.test is daarom net zo streng als Chrome.
+  - StreamBron.laad nummert elke laad en controleert na elke await; de app doet
+    hetzelfde (`nieuweLaad`/`nogDeLaatste`). Opnemer: start en stop na elkaar.
+  - Server: witte lijst voor statische bestanden, Range geklemd, POST-routes
+    alleen JSON, racks bijwerken/wissen alleen binnen het eigen nummer, ingest
+    in een werkmap (`media/.bezig-*`) en pas bij succes verhuizen, video-id
+    gecontroleerd, migraties in een transactie. `VARVE_DB`/`VARVE_OPNAMES`/
+    `VARVE_MEDIA` voor tests (een testserver ruimde anders `.bezig-*` op in de
+    echte media/), plus `VARVE_TESTSERVER=1` (zie "Waar media/ staat" hieronder).
+  - Server, tweede ronde (d2f6844): de witte lijst kijkt naar het pad NÁ
+    decoderen en normaliseren; `%2f`, `%5c`, `..`-segmenten en backslashes
+    worden geweigerd (`/src/..%2fmedia%2flibrary.db` gaf 200). Mediatype exact
+    `application/json`; Host alleen localhost/127.0.0.1/[::1] met de eigen poort
+    (DNS-rebinding); Origin moet gelijk zijn bij alles behalve GET/HEAD
+    (zonder Origin mag het, voor curl). Peaks, onset en tap-verfijning draaien
+    in een `worker_thread` (`analyse-werker.js`), bit-identiek: de langste
+    blokkade was 2,6 s bij verfijnen, nu enkele ms — anders gaten in spelende
+    decks, want de server levert ook hun pagina's. Tap-verfijning scoort
+    ±45 s rond `positie` (tracktijd) als die meekomt: lange albums hebben
+    tempowissels. Na een serverwijziging: server herstarten. `leesJson`
+    verzamelt Buffers en decodeert één keer (25 sep: `data += d` brak een
+    UTF-8-teken over een pakketgrens); statische `/opnames/` komt uit `VARVE_OPNAMES`.
+  - UI: fouten naar `meld()` (strook onderaan), nooit alleen console. Geen
+    `prompt()` (legt de pagina stil). Library = toets B (L is hotcue 3 van de
+    vorige focus, `{R}`). Sneltoetsen alleen uit tijdens TYPEN (`isTypen`).
+    Het toetsenbord negeert alles met Cmd/Ctrl/Alt (Cmd+F startte een hotcue)
+    en laat alles los bij blur of een verborgen tabblad; loslaten gaat naar
+    de action van het indrukken, ook met shift. Eén onderpaneel tegelijk
+    (library, MIDI, rack-editor: `sluitOnderpanelen`), Esc sluit. Destructief = tweede klik
+    binnen 3 s (laden over een spelende track, nummer weghalen, opname stoppen,
+    mapping resetten, DICHT/OPEN op een hoorbare track). Eigen MIDI-mapping op de
+    server (`/api/mapping`, instellingen-tabel) en in localStorage als reserve;
+    bij opstarten gaat de server voor (E3; sinds 25 sep als VERSCHIL, zie onder
+    MAPJES). MAAT-badge toont wie de maat geeft.
+- BEELD-NOODKNOPPEN (2 okt, ONTBREEKT A4, `docs/BEAMER.md`): `video.black` (fade
+  250 ms), `.black.hold` (direct), `video.freeze`, `video.master` (0..1) en
+  `video.flash` (300 ms) werken in de LAATSTE stap (tonen, `src/video/eindbeeld.js`):
+  zaal, los venster en opname zien hetzelfde, de sporen onthouden er niets van.
+  Zwart wint van alles en is precies 0. De klok is `performance.timeOrigin +
+  performance.now()`, NIET de audioklok: een fade op een stilstaande AudioContext
+  wordt nooit klaar, en de absolute klok is in beide vensters dezelfde. Het losse
+  venster neemt de stand over in `neemOver`; `toonBeeld` (inloop) zet de toon
+  neutraal, want het geleende beeld heeft hem al. Bevroren toont het laatste
+  eindbeeld van NA het indrukken; de video's lopen door. Zwart en bevriezen staan
+  in de beginstand van het log. APC: de master-knop (`note:0:80`) = zwart in elk
+  mapje; in de modus video rechts flits, zwart vasthouden, zwart, bevriezen.
+- ZAALBEELD (10 okt, spoor beeld-een-machine, `docs/BEAMER.md` "Zaalbeeld"): `video.clips`
+  (trigger met read, schakelaar) zet de deck-video's uit: in `VideoMixer._bijwerken` telt elke
+  video dan als onzichtbaar (gewicht 0, gepauzeerd); vormlagen, effecten en noodknoppen lopen
+  door, dus zaal, los venster (`neemOver` neemt `clips` over) en opname zien hetzelfde. Standaard
+  aan, geen localStorage; in `RONDLOPERS` (een log van daarvóór begint met clips aan). Op het
+  scherm alleen in VARVE (knop video in amber, de tekst blijft "video": 8 px speling op 1440;
+  knopje CLIPS in de rij van de deck-video's, NIET in de kop: de statusregel heeft daar maar
+  ~136 px; de statusregel "clips uit"; venstertitel), nooit op het doek. Op één machine met de
+  Stroommachine: `zsh tools/beeld-lokaal.sh` en de knopjes "deze Mac · pc" in de BEELD-rij
+  (`BEELD_ADRESSEN`, docs/BEELD.md §8). De meting
+  "Stroommachine op de Mac zelf": `tools/headless/beeld-lokaal.mjs` (hartslag-worklet in
+  `engine.ctx` via CDP, nooit in de app; `--zelftest` zonder GPU); `beeld-status.fps` van de
+  Stroommachine is vast 63 en zegt niets.
+- BACKUP VAN DE LIBRARY (2 okt, ONTBREEKT A6, `server/backup.js`, docs/LIBRARY.md
+  "Backup"): `VACUUM INTO` op een eigen alleen-lezen verbinding in een
+  worker_thread, NOOIT het bestand kopiëren (in WAL staat recent werk alleen in
+  `-wal`). Bij het opstarten en elk uur als `lib.wijzigingen()` veranderde; alleen
+  bewaard als de SHA-256 afwijkt van de nieuwste kopie; fsync en quick_check vóór
+  het hernoemen. Bewaard: de laatste 12 plus de nieuwste per dag van 30 dagen,
+  alleen namen `library-JJJJ-MM-DD_UU-MM-SS.db`. Standaard `media/backups/`,
+  `VARVE_BACKUPS` om te verleggen. Mislukt = `[backup] MISLUKT` in het log en een
+  rode tegel in de Controlekamer; de server draait door. `GET /api/backups` geeft
+  alleen de stand; de kopieën staan niet op de witte lijst. Terugzetten met de
+  hand: server stoppen, `library.db` plus `-wal`/`-shm` opzij, kopie als `library.db`.
+- RANDGEVALLEN (2 okt, ONTBREEKT A9, VERBETERINGEN ronde 4):
+  - Hotcues: van 'load' tot het antwoord van de server is een gezette hotcue
+    VOORLOPIG en gaat niet naar de server. Een bewaarde op die plek wint, en het
+    deck springt erheen als de druk ≤ `HOTCUE_VERS` (1 s) oud is; een lege plek
+    houdt de jouwe. Mislukt het ophalen, dan blijft de voorlopige alleen op het
+    deck. (De sprong naar de bewaarde gaat niet via de bus.)
+  - Geen enkele trap van `syncMaster` kiest een track die remt.
+  - `speelt` en `remt` komen van de audioklok (`remVoorbij` in bron.js): vanaf de
+    stilstand is het een pauze, ook als de timer nog niet vuurde; tempo, loop of
+    pauze in dat gat maken de pauze eerst af (`_remAfAlsStil`).
+  - Gate zonder maat: de poort gaat open via `zetHellingen` na `startDrempel`,
+    elke puls met een eigen gain die uitvloeit voordat de bron stopt. Op nu staat
+    alleen nog de declick van de BufferBron.
+- OVERAL OPENEN (2 okt, `docs/TAILSCALE.md`): niet publiek, via Tailscale.
+  `tailscale serve --bg 8777` zet HTTPS voor de server; `VARVE_HOSTS=<naam>.ts.net`
+  laat die naam door `vreemdVerzoek` (Host zonder poort of :443, Origin
+  `https://<naam>`); de server blijft op 127.0.0.1. Nooit `tailscale funnel`.
+  `localhost` en de ts.net-naam zijn twee oorsprongen: de Web Lock beschermt
+  daartussen NIET, dus op de Mac zelf altijd localhost.
+- Eigen bestanden (24 september 2026): `POST /api/upload?naam=…` met het
+  bestand als body (application/octet-stream, audio/* of video/*; de enige
+  uitzondering op de JSON-regel, Host/Origin blijft). GESTREAMD naar een
+  werkmap `media/.bezig-upload-*`, onderweg geteld en gehasht; boven
+  `VARVE_UPLOAD_MAX` (standaard 8 GB) 413. Dan ffprobe (`onderzoek()`): zonder
+  geluidsspoor of geen media = 415 met reden; een hoesje in een mp3 telt NIET
+  als beeld. Id `lokaal-<12 hex van de SHA-256>`, url `bestand:<hash>:<naam>`:
+  hetzelfde bestand nog eens = hetzelfde nummer, niets opnieuw. De naam is
+  alleen titel (tags gaan voor), nooit een pad. Daarna DEZELFDE pijplijn als
+  een link (`ingest` en `ingestBestand` delen `verwerk()`). Slepen op een
+  track: audio speelt direct zoals altijd; VIDEO (en audio die de browser niet
+  leest) gaat via de library en komt daarna op die track — niet als die track
+  dan speelt. Het origineel wordt niet bewaard, alleen wat de pijplijn maakt.
+  Sinds 10 okt (kaart, `tools/lokaal/`) drie optionele parameters: `?video=0`
+  (alleen de audio, ook met beeld), `?titel=` en `?artiest=` (gaan vóór de
+  tags). Zonder die drie gedraagt de route zich als voorheen.
+- TikTok (en wat yt-dlp verder kent) werkt; gemeten met yt-dlp 2026.08.19 op
+  Clay's link (79 s nummer, 57 s ingest, video 720×1280). TikTok vraagt
+  browser-imitatie; yt-dlp doet dat zelf zolang `curl_cffi` geïnstalleerd is
+  (hier 0.13.0). Zonder curl_cffi, of bij een video die inloggen vraagt, zegt
+  de ingest wat er nodig is (`tiktokHint`). Cookies uit de browser lezen zit
+  er bewust NIET in. Links worden `https://www.tiktok.com/@naam/video/<id>`
+  (zonder "www." herkent yt-dlp ze niet; parameters eraf, zodat dezelfde
+  video hetzelfde nummer is). Id's van andere sites dan YouTube krijgen de
+  extractor ervoor (`tiktok-<getal>`). Beeld met `-S res:720` (720 op de
+  KORTE kant): `[height<=720]` gaf op een staande TikTok niets. De transcode
+  schaalt naar hooguit 720 op de korte kant (4K eigen video's ook).
+- INGEST-WACHTRIJ (25 sep, ROADMAP 21, `server/wachtrij.js`): één opdracht
+  tegelijk, links én eigen bestanden in één rij; `POST /api/ingest` met `{ url }`
+  of `{ urls }` (≤ 100), `DELETE /api/ingest/<id>` annuleert. Een bestand dat
+  je op een TRACK sleept gaat vooraan (`/api/upload?…&vooraan=1`, achter eerdere
+  vooraan-opdrachten; wat loopt blijft lopen; Clay 26 sep, J12). Annuleren met
+  SIGINT, niet SIGTERM: yt-dlp (Python) valt op SIGTERM om en laat de ffmpeg
+  staan die hij bij live/HLS start; die erft onze pijpen, dus `run()` hing en de
+  rij stond stil. Na 3 s SIGKILL voor de hele familie. Een analyse-worker ruimt
+  eerst zijn eigen ffmpeg's op (`startFfmpeg`), anders een zombie per annulering.
+  yt-dlp meldt voortgang op STDOUT (`--newline`, eigen `--progress-template`).
+  Vooraf geweigerd: playlist, kanaal, profiel (`bekijkLink`); in de metadata
+  playlists en livestreams. Dubbel (in de rij, of in de library met audio op
+  schijf) = geen download. Na een serverherstart (ander `server`-id in
+  `GET /api/ingest`) zet de strook "opnieuw" klaar. De strook tekent niet tijdens
+  een druk: een knop die tussen indrukken en loslaten vervangen wordt, krijgt in
+  Chrome geen klik. `VARVE_YTDLP` = een andere yt-dlp (tests: `nep-ytdlp.mjs`).
+- Beeldverhouding: elke videolaag houdt zijn eigen verhouding
+  (`videoWidth/videoHeight`, `passen.js`). `video.fit`: passend (standaard,
+  zwarte randen) of vullen (bijsnijden). Buiten zijn beeld is een laag
+  DOORZICHTIG, niet zwart: naast een liggende video zie je die in de randen.
+- Een effect-rack hangt aan een LINK (`tracks.id`), niet aan een fader. Laad je
+  hetzelfde nummer op een andere track, dan komen zijn racks mee. Meerdere per
+  nummer, één actief. De inhoud is JSON: wat er ín een rack staat is een zaak
+  van de FX-laag, zodat het schema niet mee hoeft te veranderen met elk effect.
+- LIBRARY (25 sep, ROADMAP 21, `docs/LIBRARY.md`): PAGINA'S van de server
+  (`GET /api/library?sorteer=&richting=&van=&aantal=`, hooguit 500; zonder
+  `aantal` alles), en het paneel tekent alleen de zichtbare rijen (vaste hoogte
+  28 px; iets zwevends, zoals de toonsoortkiezer, staat absoluut onder zijn rij).
+  Sorteren alleen op eigen sleutels (`isSortering`), NULL achteraan, gelijkspel op
+  toegevoegd + rowid. Schema v6 = `toon_json`, v7 = `hotcues` + `titel_sleutel`;
+  tests rekenen met `SCHEMA.length`.
+- Hotcues horen bij het NUMMER (tabel `hotcues`, zoals de pads): het deck meldt
+  'hotcue' alleen bij zetten/wissen (met quantize de gesnapte tijd),
+  `restoreHotcues()` vult alleen lege plekken en meldt niets; `hotcue-opslag.js`
+  houdt zelf bij welk nummer waar staat. Laden zet `deckTrack` op null zodra
+  `laadStream` slaagt: anders zag de bewaarlus het nieuwe nummer onder het oude
+  id en postte grid en toon als null naar het vorige (slot en al weg).
+- Alles wat naar buiten gaat loopt door een wachtrij: maximaal 16 berichten per
+  4 ms. Comet (Chromium 152) legt zijn eigen MIDI-service om bij een burst —
+  vier crashes op 22 september 2026, alle vier in `MidiService_TaskService_Thread`
+  op dezelfde codeplek. Dat is hun bug, maar honderd berichten in één synchrone
+  lus is sowieso geen net gedrag. Alleen bij het sluiten van de pagina mag het
+  direct, want dan is er geen volgende tik meer. Sinds 14 okt een SCHUIVEND venster
+  (16 in elk venster van 4 ms, ook in hub.js en de hub-patch) dat meteen stuurt als
+  er plaats is: geen setTimeout per lampje.
+- ÉÉN VARVE-tabblad praat met de APC (`tabblad.js`, Web Lock `varve-mixer`), sinds
+  Chrome op 23 sep in `MidiService_TaskService_Thread` crashte met vier
+  VARVE-tabbladen die tegelijk init en LED's stuurden. Een tweede tabblad vraagt
+  helemaal GEEN MIDI-toegang aan (`midi-opzet.js` wrapt `midi.init`) en neemt het
+  pas over als het eerste sluit (een lock verdwijnt ook bij een crash).
+  Uitzondering: `apc.html` leest zelf mee, zonder sysex en zonder iets te sturen.
+  **Regel voor sessies:** open NOOIT een extra VARVE-tabblad terwijl de APC
+  aangesloten is en Clay's tabblad open staat. Vraag Clay eerst de APC los te
+  koppelen, of test met zijn toestemming in zijn tabblad.
+  AV-kern (`~/src/av-kern`, Vite op :5173) heeft sinds 24 sep dezelfde wachtrij
+  en een eigen lock (`av-kern-apc`), maar een Web Lock geldt per ORIGIN: tegen
+  elkaar beschermen ze niet. Varve en AV-kern nooit tegelijk open met de APC.
+- De hub telt alleen poorten met state `connected`: Chrome laat een
+  losgetrokken poort staan (`disconnected`), dus opnieuw aansluiten gaf eerst
+  geen init en dode LED's. Valt de invoer weg, dan laat `mapping.losgekoppeld()`
+  shift en ingedrukte knoppen los.
+- De hub negeert echo's: een CC die identiek is aan wat wij net stuurden en
+  binnen 60 ms terugkomt, bereikt de mapping niet. ALLEEN CC (14 okt): op noten
+  slikte hij echte knoppen in (lampje uit = [0x90, n, 0] = het loslaten; een
+  knipperend lampje 127 = het indrukken); dat een lampje nooit als druk terugkomt
+  rust op het protocol, niet op een meting aan het apparaat. Een ring op de waarde
+  die de knop ons net ZELF stuurde wordt niet onthouden (`_laatsteIn`, behalve 0 en
+  127): anders at het filter bij het terugdraaien elke vorige stap op. Zonder die rem maken de
+  LED-ringen een lus — wij zetten een ring, het apparaat meldt de stand terug,
+  wij verwerken dat als een knopdraai — en loopt de bus vol. Het filter is per
+  apparaat uit te zetten (`echoFilter` in het profiel); voor de APC staat het
+  nog AAN tot gemeten is dat hij in 0x42 niets terugkaatst (`hub.status().echoes`
+  na een sessie nog 0 → mag uit). ALLEEN CC (14 okt): een noot is nooit een echo
+  (een LED is note-on met de kleur als velocity); het slikte 13% van de drukken
+  en 12% van het loslaten op een knipperende knop (synthetisch, `tools/bench/echo.mjs`:
+  een nep-hand op Sends met een loop op 124 bpm; niet op het apparaat gemeten).
+- MAPJES (lagen) en SHIFT op de controller (Clay, 23 sep, VRAGEN B3). Een regel
+  kan `"shift": true` en/of `"laag": "device.rack"` hebben; de sleutel is
+  `sig[#shift][@laag]`, dus één knop heeft meerdere regels. `mapping.kies()`
+  zoekt: met shift eerst shift-regels, dan gewone (een fader blijft werken met
+  shift vast); binnen elk eerst het open mapje, dan zonder mapje. Loslaten gaat
+  ALTIJD naar de action van het indrukken (`mapping.vast`), ook als shift of het
+  mapje intussen wisselde. De shiftknop staat bovenaan de mapping (`"shift"`)
+  en gaat nooit de bus op. Groepen en mapjes staan in `lagen.js`. HERZIEN na
+  het onderzoek (`docs/APC40-onderzoek.md`, Clay 23 sep): de KERN zit nooit in
+  een mapje — één kolom = één track (filter boven, fader onder, play/sync/A-B
+  in het 2×2-blok, cue onder shift), rechts de strip van de focus-track in DJ-mixervolgorde.
+  Alleen twee groepen: `device` (strip ↔ rack, één oplichtende knop) en `grid`
+  (hotcues/loops/sampler/video/klank op de scene-knoppen, elk een eigen kleur).
+  Kort drukken = vast, vasthouden ≥ 400 ms vanuit een ander mapje = gluren.
+  Kiesknoppen zijn actions (`layer.<groep>.<knop>`, `layer.grid.next/prev`). Koppelen komt in het mapje
+  dat open staat, en met shift vast in de shift-laag. De LED's volgen
+  `mapping.actieveRegels()`; wat bij een dicht mapje hoort gaat uit, en het
+  ringtype wisselt mee. `mapje-balk.js` toont bij elke wissel wat de knoppen
+  doen. De standaardmapping (374 regels sinds voorstel A, 25 sep; 387 sinds 2 okt: modus auto en beeld-noodknoppen) volgt de
+  tabel in `docs/APC40.md`; aanpassen mag gewoon in de JSON of met koppelen.
+  Grid-modus KLANK (magenta): Shift + scene 5 (scene 5 zelf blijft één druk
+  "loop weg") of ▲ ▼. Per kolom rij 1–3 kill hoog/mid/laag zolang je drukt
+  (`.hold`; shift + pad = schakelaar), rij 4 rem, rij 5 op de maat. In klank
+  brandt scene 5 magenta via `led.lees` (lees bepaalt ook KLEUR en tel). Kill
+  fel rood = weg, donkerrood = open; rem fel oranje = remt, donker = speelt. De
+  spiegel licht op zoals de LED (`lamp`/`lampOm` = led.lees/led.invert).
+  MODUS AUTO (2 okt, VRAGEN AU1, `docs/APC40.md` "Modus auto"): zesde grid-modus
+  `grid.auto` (limoen) in de STANDAARDmapping, geen fragment: de auto-DJ hangt niet
+  aan een vlag. Openen: Shift + scene 4 of ▲ ▼ (na klank); in auto brandt scene 4
+  fel limoen via `led.lees`, de knop blijft video. Bovenste rij: pad 1 ok, 2
+  overslaan, 3 langer, 4 nu, 8 aan/uit; lampjes uit de reads van `bindAuto`. In de
+  grid-modus blijft Shift + scene 4 "halve tel" (eigen regel
+  `note:0:85#shift@edit.aan`). Standaardmapping 387 regels (met de noodknoppen).
+  `apc.html` is een interactieve kaart: één APC met de knoppen op hun ECHTE
+  plek (uitgemeten op de Features-tekening, User Guide p4: apparaat x 70–1040,
+  y 392–970 → procenten). Schakelaars voor grid-modus, strip/rack en shift;
+  klik = uitleg (nu, met shift, per modus); zoeken markeert waar een functie
+  zit; kleur per soort. Hij luistert zelf mee met de APC (alleen invoer, stuurt
+  niets) en volgt shift en modusknoppen via een eigen Mapping die alleen
+  `layer.*` uitvoert. Wat een knop doet komt uit de mapping via `kies()`; geef
+  een nieuwe action een uitleg in `apc-beschrijf.js` (de test eist dat).
+- Eigen mapping = VERSCHIL met de standaard (25 sep, ROADMAP 13,
+  `docs/MAPPING-VERSCHIL.md`): `{ kind:'diff', device, base, top, rules, removed }`
+  op de server en in localStorage. Laden = `mappings/<device>.json` + verschil, dus
+  een nieuwe standaardregel komt vanzelf binnen en een eigen regel wint (stil). Wie
+  de standaard verandert, hoeft Clay's kopie niet meer samen te voegen. Export
+  blijft VOLLEDIG; "standaard herstellen" = een LEEG verschil (wissen liet een
+  kopie uit een andere browser terugkomen). Opstarten bewaart alleen als de server
+  gelezen is; kwam de standaard niet binnen, dan die sessie niets bewaren. Code
+  van vóór 25 sep leest een verschil als volledige mapping (APC dood): niet
+  terugdraaien zonder eerst een export terug te zetten.
+  Een oude VOLLEDIGE kopie wordt afgezet tegen de standaard waar hij het
+  dichtst bij ligt (`verschilVanKopie`): de huidige of een voorganger uit
+  `eerder` in het standaardbestand (verschil met de huidige regels, op
+  vingerafdruk gecontroleerd). Zonder voorganger gold alles wat de standaard
+  erbij kreeg als "door jou weggehaald". **Na elke wijziging aan
+  `mappings/apc40mk2.json`: `node tools/mapping/eerder.mjs`** (vóór de commit;
+  idempotent; `mapping.test` faalt anders).
+- De LED-laag leest de MAPPING, niet de engine. Koppel je een pad aan iets
+  anders, dan verhuist zijn lampje vanzelf mee. Er is bewust geen tweede tabel.
+- LED's in drie standen uit `read()` (VRAGEN B4): `null` = UIT (niets te doen,
+  bv. hotcue op een lege track), donkergrijs = leeg maar bruikbaar, DONKERE
+  kleur = gevuld/dicht, volle kleur = actief. Donker is paletindex n+1 (de
+  #59xxxx-tinten), NIET de "zacht"-pastels (12/36/44/48): die zijn op het
+  apparaat even fel als de volle kleur, dus gedimd zou niet te zien zijn. Zo zijn een
+  gevulde en een spelende sampler-pad te onderscheiden. De LED's volgen shift
+  (wis-regels rood zolang shift vastzit); On/Off brandt als het effect AAN staat.
+- Knipperen op de tel rekenen we ZELF (B2), niet met het knipperkanaal van de
+  APC (dat vraagt MIDI clock): `track.N.phase` = gridfase op positie min
+  uitgangsvertraging, dus op wat je hoort. Loop-pads knipperen zolang ze aan
+  staan; de Track Select van de maatgever knippert omgekeerd. Een kwart tel
+  fel, op de "1" van de maat een halve (`track.N.barbeat`, `TEL_VENSTER_EEN`),
+  twee berichten per LED per tel.
+- De 16 ringknoppen (track knobs en device knobs) staan in modus `endless`:
+  de knop stuurt absolute waarden, maar we gebruiken alleen het verschil met
+  zijn vorige waarde, opgeteld bij de softwarestand. De ring toont al die
+  stand, dus na een focus- of mapjewissel draai je meteen door vanaf wat je
+  ziet, zonder overpakken. Faders (geen ring) houden absolute + soft-takeover.
+- LED's lopen op een eigen `setInterval`, niet op de renderloop: `requestAnimationFrame`
+  staat stil zodra het venster naar de achtergrond gaat, en dan zouden de lampjes
+  bevriezen terwijl de muziek doorspeelt. Daarnaast `Feedback.wek()` na elke action op
+  de bus (14 okt): een knop licht meteen op (microtaak, alleen verschillen). ALLEEN
+  LAMPJES: ringen blijven op de tik van 33 ms, want een APC die een ring als knopwaarde
+  overneemt (hub-proef V1, niet gemeten) botst met endless bij een ring na elke stap. De tik
+  leest per regel alleen nog de read; het PLAN (regels, doelen, kleuren) wordt pas
+  opnieuw gemaakt bij een andere mapping, shift, mapjes of focus. Een nieuwe input
+  voor wat een regel betekent (naast vars, lagen, shift): zet hem in `_planNu()`.
+- De APC draait in mode 0x42, Alternate Ableton Live (Clay, 23 sep, VRAGEN
+  B1). Alles momentary, ALLE LED's en ringen van ons, Track Select stuurt MIDI,
+  de device-sectie is NIET gebankt: device knobs op kanaal 0 (`cc:0:16-23`),
+  gemeten. Welke track ze bedienen bepaalt de mapping met `{focus}`
+  (`track.{focus}.fx.knob.1-8`). Controls per trackstrip (fader, activator,
+  solo, clip stop, track select) melden via het KANAAL welke strip.
+  Na loskoppelen staat hij weer in generic (0x40): init opnieuw bij elke hotplug.
+
+- AV-APP-HUB (3 okt 2026, repo AV-app-hub, PROTOCOL.md §5): alleen met
+  `?hub=ws://localhost:7700/app`. De hub bezit APC40 en LPD8; VARVE is een
+  LEASE-app: `HubMidi` (src/control/hub.js) is een MidiHub met één nep-poort
+  "APC40 mkII (hub)", dus mapping, LED-laag, mapjes en leren blijven gelijk.
+  Invoer = `{t:'midi'}` (alleen met focus; loslaten altijd), LED's gaan per
+  beeld gebundeld als `{t:'led'}`. Met de vlag: GEEN requestMIDIAccess (ook
+  niet in de APC-kaart: de knop geeft de vlag door en apc.html kijkt dan niet
+  live mee; vanuit de Controlekamer opent hij zonder vlag), de Web Lock
+  beslist niets over MIDI, de init-SysEx wordt ingeslikt (de hub zet 0x42),
+  en Clay's bewaarde poortkeuze blijft onaangeroerd.
+  - De sectie (PROTOCOL §18 van de hub, 7 okt, `studio/sec-hub`): `levert: ['sectie']`. `engineSecties` =
+    een SectieLezer op de maatgever die je hoort (dezelfde als vormbron en video-accent), plus een seintje
+    van elke deck. Elke grens die je hoort: één `globaal {sectie.nieuw: true, sectie.energie (die van de
+    sectie zelf), sectie.label}`, meteen; vangnet hooguit één per seconde; alles samen hooguit 10/s
+    (schuivend venster, de nieuw telt mee). Verder energie (stap ≥ 0,01) en label bij verandering. Na
+    (her)verbinden de sectie van nu ZONDER nieuw. t loopt nooit terug; een nieuwe sectie is een GROTERE
+    teller. Lezen elke 50 ms + een wekker op de grens of de hoorbare sprong + op hub-berichten (≥ 20 ms).
+    Een oude hub negeert het. Toets: `tools/headless/sec-hub.mjs` (8921/9521/7721, `opname: false`).
+  - Twee tabbladen: de hub laat de nieuwste winnen, de oude krijgt 4001, wacht
+    30 s en MELDT dat (fout-melding, weg na een stabiele herverbinding). De
+    status voor de Controlekamer komt van het tabblad dat met de hub verbonden
+    is (geen: de lockhouder, tenzij vervangen).
+  - Hartslag op de TIJD (`HB_MS` 0,6 s stilte), niet op tikken: in een
+    verborgen, stil tabblad lopen timers 1×/s (na 5 min 1×/min). Elk bericht
+    van de hub (`globaal`/adem ~10×/s; WebSocket-events worden niet geknepen)
+    kijkt ook of er een hb moet. Anders wordt een gepauzeerde DJ op de
+    achtergrond `stil`/`weg` en zet de hub de APC uit.
+  - Herverbinden 0,5 → 1 → 2 → 5 s; terug naar 0,5 s pas na 3 s stabiel open
+    (een hub die aanneemt en meteen sluit: geen lus van 0,5 s); een socket die
+    na 5 s nog niet open is, sluiten we zelf.
+  - `?hub=` alleen naar deze machine, het privé-LAN (10/8, 172.16/12,
+    192.168/16) of de tailnet (100.64/10, *.ts.net, *.local); een andere host
+    alleen met `&hub_extern=1`, anders een fout-melding en gewoon Web MIDI.
+  - Rollen ALLEEN op het beeld: K2 helderheid = `video.master` (slew 0,25 s),
+    K4 beweging = `video.pulse`. K1 (`macro.intensiteit`) NIET op
+    `mixer.master`: de pickup van een LPD8-knop volgt de EERSTE app met die
+    rol, en andere apps gebruiken intensiteit als beeld (av-scene-kit 0,35);
+    dat gaf een hoorbare dip 0,80 → 0,43. Master en crossfader staan zonder
+    rol en zonder slew in de cockpit (de hub laat alleen rol-zets glijden;
+    snapshots slaan lease-apps over). K1 in VARVE: VRAGEN O1.
+  - `paniek` (LPD8 P1, 1 s vasthouden) = `video.black.hold`: het eindbeeld
+    zwart zolang hij vastzit, loslaten = de schakelaar beslist weer; de audio
+    blijft. Valt de verbinding weg terwijl hij vastzit, dan laat VARVE zelf los.
+  - De hubtoets is Bank (0x67, config.json `hubtoets`): met de vlag komt Bank
+    (en alles wat je indrukt terwijl hij vastzit) nooit bij VARVE aan. Bank
+    was bedoeld voor keylock (VRAGEN I4): open vraag N2.
+  Zonder vlag wordt hub.js niet geladen. Toets: `node tools/headless/hub.mjs`
+  (toetsApp van de hub + de echte hub met nep-APC/LPD8 en een andere app met
+  intensiteit; `VARVE_HUB_REPO`). `test/hub.test.mjs` valideert het manifest
+  met de hub als die naast deze map staat; anders meldt `alles.mjs` het als
+  overgeslagen (een fout als `VARVE_HUB_REPO` gezet is maar niet klopt).
+
+- VORMLAGEN (24 september 2026, docs/plugins/01-plan.md, stap 1): de
+  Vormmachines uit Clay's artifact als generatief beeld over de video. Alleen
+  met `?vormen=1` (onthouden in localStorage, `?vormen=0` = uit); zonder vlag
+  wordt er niets gemaakt, gebonden of geladen. Clay koos: eerst Varve stap 1,
+  dan AV-kern (publicatie 25 okt); lagen tussen mengen en effecten. Op zijn
+  vraag "wat denk jij?" was het advies, waarop hij stap 1 liet bouwen: GEEN
+  tweede MIDI-driver (de AV-kern-driver zet 0x41, stuurt zonder wachtrij en
+  herkent 5 van de 83 blauwdrukfuncties), en de bron van de vormen staat HIER
+  (`src/vormen/systemen.js`, AV-kern kopieert). Regels:
+  - "Video is slaaf van de positie, beeldlagen zijn slaaf van de maat." Een laag
+    krijgt `ctx.currentTime` min uitgangsvertraging en doet stappen van 1/60 s
+    (hooguit 3 per beeld, niet inhalen). Stille audioklok = stil beeld.
+  - `systemen.js` kent geen DOM, geen `Math.random` (zaad: `g.r()`), geen
+    `performance.now`; de test controleert dat. Zo kan hij later in een Worker.
+  - De mixer kent geen vormen: `voegBeeldlaagToe({ aan, dekking, mengvorm,
+    frame(t) })`. Geen laag aan = de oude drie stappen, bit voor bit; het doek
+    `gelaagd` bestaat pas na de eerste laag. De bijna-zwarte achtergrond van
+    een vorm (#07090c) wordt in de shader afgetrokken.
+  - Het doek van een vormlaag is 16:9, 640 × 360 (25 sep, ROADMAP 7,
+    `docs/VORMEN-16x9.md`): 12% minder pixels dan het oude 512², precies 2× naar
+    1280 × 720 (de budgetten kloppen), schaal [1, 1] in de mixer; `LAAG_FIT`
+    'vullen' geldt alleen nog voor een laag met een andere verhouding. g heeft W,
+    H en D (korte zijde / 320); `g.S` bestaat niet meer (vormen.test controleert
+    het). De API staat bovenaan hulp.js (`cellen`, `rooster(g, { nx, ny })`,
+    `blit`, `midden`); nalopen met `tools/headless/vormen-plaat.mjs`.
+  - Clay 25 sep, letterlijk: "Midden, 2 breder". Vormen rond een middelpunt
+    blijven heel en rond in het midden (links en rechts doorzichtig boven de
+    video); de Harmonograaf slingert breder (een cirkel wordt een ellips) en de
+    Zonnebloem loopt door tot in de hoeken. Velden en roosters vullen het doek.
+    De bewuste uitzonderingen per systeem (dl, jl, tv-lucht, ep-kanalen, dw, sp,
+    ph) staan in VORMEN-16x9.md. Het geluid van de isomorfe is sample voor sample
+    gelijk gebleven, maar een samengetrokken dw-wolk bestrijkt ×0,56 van buffer
+    en stereobeeld (beeld = geluid).
+  - De lagenstap leest het gemengde beeld (een BUFFER) met `1.0 - uv.y`. Met `uv`
+    was het een derde omkering en stond de video onder een vormlaag op zijn kop
+    (Clay, 24 sep). De lagen zelf zijn canvas-texturen en gaan zoals een video.
+    `kijk.mjs` meet het met vier gekleurde kwarten, met en zonder laag, en faalt
+    op de oude shader.
+  - Knoppen wijzen naar een PLEK (`video.layer.knob.1–6`), op de GEKOZEN laag,
+    zoals de FX-knoppen: een andere vorm vraagt geen nieuwe koppeling. Alleen
+    knoppen zonder `sel`/`re` (keuzelijsten en herstart-knoppen niet).
+  - APC: Detail View opent het mapje `device.vorm` (derde mapje van de
+    device-groep; bestaat alleen met de vlag: `voegVormMapjeToe()` vóór
+    bindLagen). Daarin device knobs 1–6 = vorm, 7 = dekking, 8 = reageren op
+    de mix (`video.layer.react`), Device ◀ ▶ = vorm, On/Off = laag aan/uit,
+    Bank ◀ ▶ = laag 1/2 (het open mapje wint van beatjump; shift + Bank blijft
+    de beatjump-lengte: een shift-regel gaat voor het mapje, bewust). De
+    videomodus op scene 4 is NIET veranderd.
+  - Die regels staan in een FRAGMENT (`mappings/apc40mk2-vormen.json`) dat
+    `Mapping.voegToe()` erbij zet: het gaat niet mee in `toJSON()`, dus niet in
+    Clay's bewaarde mapping, en overleeft het laden van een andere mapping.
+    Een eigen regel op dezelfde plek wint; weghalen kan niet (hij komt meteen
+    terug). midi-opzet bewaart je mapping alleen als JOUW deel veranderde
+    (vergelijking met het laatst bewaarde), anders maakte het fragment van de
+    standaard stilletjes een volledige eigen kopie.
+  - Alle 26 systemen (24 sep, sporen B1–B3): tien lichte in systemen.js, vijf
+    zware (gs, cl, ln, ph, sp), zeven middel (ch, jl, ls, dl, lg, wv, if) en vier
+    isomorf (sn, tv, ep, dw). Alleen imports uit hulp.js. sf is middelzwaar
+    (~1,4 ms), niet licht. Twee lagen tegelijk, niet meer.
+  - `g.kwaliteit` (0,25..1, ontbreekt = 1): zware lussen schalen mee, het BEELD
+    wordt grover, de BEWEGING nooit trager (gs/ln op het halve rooster met
+    meegeschaalde diffusie/kernel; ph minder agents; cl/if minder punten; fl minder
+    deeltjes, sinds 16:9 ×1,78; sp hooguit 150000 × kwaliteit omvallers per stap,
+    de rest de volgende stap — abels, dus zelfde eindvorm). dl negeert hem bewust.
+  - Isomorf: geluid alleen achter `g.geluid = null | { ctx, uit, grondtoon?,
+    toonladder?, korrelBuffer? }`; in Varve nog NERGENS aangesloten, dus alleen
+    beeld. Knoppen met `geluid: 1` (volume) slaat draaiKnoppen over. Een
+    aanslag met sink rekent 12–32 ms op de hoofdthread: vóór aansluiten naar
+    een worklet of cachen.
+  - WORKER (stap 3): elke laag een module-Worker als Worker, OffscreenCanvas
+    en createImageBitmap bestaan, anders hoofdthread (`laag.modus`). In de
+    Worker draait dezelfde VormLaag in hoofd-modus. Terug komt per beeld een
+    ImageBitmap via createImageBitmap (NIET transferToImageBitmap: dat wist
+    het canvas en de vormen tekenen op hun vorige beeld). `frame(t)` wacht
+    nooit. Parameters ALTIJD via `laag.zetParams()` (ook modulatie), niet
+    `laag.p` direct. Een ImageBitmap negeert UNPACK_FLIP_Y: zet je dat ooit
+    aan in video-mixer.js, dan staan vormen in werker-modus ondersteboven.
+  - Tijdsbudget per laag in ms (budget.js): 4 ms hoofdthread, 12 ms Worker
+    (aannames, niet op de M1 gemeten). EMA; erboven kwaliteit −0,125, onder de
+    helft trager omhoog; noodrem na 3 beelden boven 2× budget: meteen 0,25 en
+    een melding, de laag gaat niet uit. Het scherm toont "12 ms · 50%".
+  - Een systeemwissel zet de 2D-context terug (`ctx.reset()`) en wist het
+    canvas: anders lekten lineCap/imageSmoothing van het ene systeem naar het
+    volgende. De lagenstap (programma, doek, texturen) wordt pas gebouwd bij de
+    eerste `voegBeeldlaagToe`, buiten teken(). `schoon()` in de shader trekt
+    #07090c per kanaal af met een zachte drempel (3–8%): een 8-bits canvas dat
+    met kleine alpha vervaagt komt nooit terug op de achtergrond, en die waas
+    hoort niet over de video. Bij fl met spoor 0,01 blijft er meer over.
+  - REAGEREN OP DE MIX (stap 2): de vorm hoort de MASTER (na de limiter: kill,
+    fader, crossfader, sends en sampler tellen mee), niet de hardst klinkende
+    track (die wissel gaf sprongen). Analysers per strip en master op fftSize
+    2048, smoothing 0; gladmaken doet features.js met exp(-dt/τ) op de
+    audioklok (0,02 s op, 0,12 s neer). Banden = gemiddeld vermogen per bin op
+    een eigen dB-bereik per band (BAND_DB), geijkt op Clay's library met
+    master 0,8. Onset = spectrale flux gemiddeld per band, drempel mediaan(1 s)
+    × 1,4 + 0,01, refractair 80 ms; op 30 fps vindt hij er minder (bekend).
+  - Een route schrijft een OFFSET via `zetModulatie(i, offset)`: leesKnop/read()
+    blijven de basisstand, dus scherm, LED-ring en soft-takeover bewegen niet
+    mee. Nooit moduleren via actions of zetKnop. De analyse loopt mee met het
+    tekenen (vlak voor laag.frame), geen eigen timer; alle sterktes dicht =
+    niets uitgelezen. Eén route per laag, standaard bas → knop 1, sterkte 0;
+    `video.layer.react.source/.target` lopen rond. Sessietoestand, niet bewaard.
+  - DE MAAT ALS BRON (25 sep, ROADMAP 23, `src/analysis/maat.js`): naast de vijf
+    master-bronnen `maatklap` (de klappen uit de offline onset-analyse,
+    `deck.onsets`) en `tel` (`pulsVorm`, als `video.pulse`), van de maatgever van
+    de engine (`engineMaatLezer`), alleen als je hem hoort. De klap loopt 12 ms
+    VÓÓR de klap op tot 1 op de klap (ze zijn vooraf bekend), τ 0,1 s in KLOKtijd.
+    Geen sprong: de uitvoer zakt nooit sneller dan de puls uitdooft; neemt een
+    track die al speelde de maat over, dan telt alleen wat sinds het vorige beeld
+    komt, tot hij terugspringt tot ervóór (loop rond, hotcue). Sinds 6 okt ook `sectie.energie`
+    en `sectie.nieuw` (achteraan in BRONNEN, uit `SectieLezer`: geen objecten per beeld, stil na
+    een sprong tot je hem hoort, een grens uit een gat > 1 s telt niet; NIEUW_TAU 0,2 s,
+    ENERGIE_TAU 0,25 s). Alleen de lezer die
+    een open route nodig heeft wordt gelezen (`router.nodig()`). Nog niet:
+    `metPuls` zelf als route.
+
+## Onderzochte keuzes
+
+De uitkomsten van het onderzoek van 22 september 2026 staan in ROADMAP.md onder
+"Onderzocht en vastgelegd". Kort wat daar voor de architectuur uit volgt:
+
+- Het deck staat achter één interface (`src/engine/bron.js`), zodat
+  `AudioBufferSourceNode`, een time-stretcher en een streamende leeslus
+  inwisselbaar zijn. Gebouwd op 22 september 2026; keylock is nu een bronwissel.
+- Keylock wordt Signalsmith Stretch (MIT, één gevendord bestand). Niet
+  SoundTouch: WSOLA warbelt op aangehouden polyfone klanken, en dat is precies
+  dit repertoire. Niet Rubber Band: GPL, en een browser-app serveren is
+  distributie — dat zou de hele app GPL maken zodra hij op varve.nl staat.
+- Streamen gebruikt een pagina-cache op samplepositie met vastgepinde pagina's
+  voor hotcues, geen ringbuffer. Een ringbuffer gaat uit van vooruit consumeren;
+  een deck springt en gaat achteruit.
+
+## Toonsoort (gebouwd 25 sep) en keylock (gebouwd 5 okt)
+
+Volledig in `docs/TOONSOORT.md` (§13: wat gebouwd is) en `docs/KEYLOCK.md`,
+besluiten in VRAGEN blok I. Toonsoort is op 25 sep gebouwd (ROADMAP 14), eerder
+dan "na 25 okt" (Clay 24 sep avond: zoveel mogelijk met agenten). Keylock is op
+5 okt gebouwd na de luistertest (Clay: "klinkt goed"; `docs/KEYLOCK.md` §9). Wat
+een bouwer niet mag missen:
+- **Toonsoort is een KAART** in tracktijd, van de plaat, zoals het grid:
+  `{stukken:[{van, toonsoort, stemming, zekerheid, tweede?}], bron, slot, versie}`
+  per link (schema v6, kolom `toon_json`). Een stemming PER STUK (zoned out +43 ct,
+  ADRIANA −45…+25 ct); zonder stemmingscorrectie gaan synthetische proeven fout.
+  Profiel Temperley 2005 (8/10 op bekende stukken; edma en Krumhansl 5/10: die
+  kiezen op piano de kwint). Zeker ≥ 0,40, onder 0,15 = "~" (geen duidelijke
+  toonsoort: bij ambient een eerlijk antwoord); de drempels staan in
+  `src/engine/toonsoort.js`. Ze rusten op ~15 stukken: herijken na ~20 sloten.
+- SERVER: `server/toon.js` rekent getal voor getal hetzelfde als
+  `tools/toonsoort/toon.mjs` (toon.test controleert het); worker-taak, ingest-stap
+  na het grid, op de achtergrond per nummer eerst grid dan toonsoort.
+  `TOON_VERSIE`: alleen AUTO-kaarten met een lagere versie worden opnieuw gedaan;
+  verhoog hem bij een beter algoritme en meet opnieuw (`fragmenten.mjs`). Regels
+  als het grid: slot nooit overschrijven, 'hand' alleen via ↻ (↻ = grid én
+  toonsoort). `POST .../toon` zonder `toon` = 400, NIET wissen. Alles wat de
+  browser post gaat door `normaliseerToon` (vaste spelling C Db D Eb E F F# G Ab A
+  Bb B, m voor mineur); toonsoort.test stuurt elke bewerking erdoorheen. null in
+  een AUTO-kaart = stilte (zekerheid 0), met de hand = "geen toonsoort". `tweede`
+  (de beste met een ANDER Camelot-getal) hoort bij de zekerheid: een stuk dat je
+  met de hand zet verliest beide.
+- CLIENT: `src/engine/toonsoort.js` (ToonKaart, puur). Het deck krijgt `toonKaart`
+  van laden.js (laden wist hem, zoals het grid); `deck.toonsoort` = wat je HOORT.
+  Actions `track.N.key.*` en `track.N.key` (24 standen in wijzervolgorde) werken op
+  het stuk rond wat je hoort. Geen APC-knoppen (T6) en geen sneltoetsen: een per
+  ongeluk verzette kwint wordt bewaard als 'hand'. Kolom: toonsoort ONDER de bpm
+  (ernaast drukte de MAAT-badge hem weg); focuskop: klik = correctiemenu;
+  library-kolom 'toon' = de PLAAT, klik = kiezer (bron 'hand' + slot). laden.js
+  POST elke 1,5 s wat veranderde; een 4xx één keer melden, niet herhalen.
+- **Wat je HOORT** (Clay, T3): halve tonen erbij = transpositie + (keylock ? 0 :
+  12·log2(rate)) + stemming/100; `bend` telt niet mee (flikkert). De library toont de plaat.
+- **Keylock = Signalsmith 1.3.2 BINNEN `stream-lezer.js`** (optie A), gevoed met hele
+  frames uit de pagina's; dezelfde segmenten {T, P, R}. NIET hun `.mjs` importeren in
+  onze worklet: dat registreert hun eigen processor; de WASM-fabriek moet er los uit
+  (`tools/keylock/kern.mjs`, `laadFabriek`). Het npm-pakket heeft GEEN LICENSE-bestand:
+  bij vendoren de MIT-tekst uit de bron-repo erbij. De Emscripten-code noemt
+  `document.currentScript`: `regels.test.mjs` vlagt dat, dus vendoren in een submap
+  of de regel aanpassen. Wat erbij komt in de worklet houdt zich aan de regels van
+  het audiopad (geen afval per blok; `renderblok.test.mjs`).
+- Hoorbare positie klopt (±0,6 ms) alleen met vooruitblik uitLat + 128 frames.
+  Tempo en bend gaan direct in (T = nu); een SPRONG met keylock aan wordt gepland op
+  uitLat + één blok (63–93 ms, exact, volle sterkte; Clay K3). Ter plekke seeken
+  verliest de eerste ~60 ms. Zonder keylock blijft springen direct.
+- Acht decks ~16% van een kern, maar zonder `splitComputation` vallen de STFT-blokken
+  samen tot 170% van een quantum: gespreid rekenen is verplicht. Pieken tot +3,6 dB
+  bij zang (headroom). Keylock aan/uit wisselen vraagt een polariteitskeuze, anders
+  een dip tot −15 dB (ontworpen, niet gebouwd).
+- Namen op het deck, gedeeld door beide ontwerpen: `deck.keylock` (boolean) en
+  `deck.transpositie` (halve tonen). Transponeren mag ook zonder keylock (K8).
+- **Gebouwd (5 okt), regels voor wie eraan komt:**
+  - Een segment heeft ZEVEN velden in vaste volgorde (`StreamBron._maak`, `rek`
+    erbij): één hidden class voor de worklet. Een segment in een andere vorm liet
+    in de test renderBlok weer afval maken (polymorf).
+  - Segmenten zonder `rek` gaan door renderBlok zoals altijd: de gouden hash in
+    renderblok.test mag niet veranderen. Een rem gaat ook met keylock via renderBlok.
+  - Een sprong met keylock = een GEPLAND segment op het zoekrooster (`rekPlanT`,
+    ~98 ms): tot T speelt het vorige (`StreamBron._vorig`, `positieIn`). Dat is geen
+    start op de maat: `wachtTot` blijft null, `_wacht` is "er ligt iets in de
+    toekomst". Fasebehoudende sprongen (sync, nudge, beatjump, gequantiseerde
+    hotcue) met `doorlopend`.
+  - Zoeken: doel op t0 + uitLat; doorlopen: t0 + uitLat + één blok (gemeten, §9.2).
+  - In het hete pad van de worklet geen double als argument (ook niet naar de WASM
+    per blok): `_mengB` leest de klok uit `this.t0`. Een WASM-aanroep met een
+    niet-geheel getal kost ~48 bytes; alleen per sprong of toonwissel.
+  - `src/engine/vendor/` wordt gemaakt door `tools/keylock/vendor.mjs`, niet met de hand.
+
+## Auto-DJ (fase 1, gebouwd 30 sep)
+
+Volledig in `docs/AUTO-DJ.md`. Wat een bouwer niet mag missen:
+- De automaat is een extra BRON van actions (zoals terugspelen): alles via de
+  bus, dus in het handelingenlog. Laden via `laden.laadLibrary`. Nooit in de
+  engine, nooit Claude in het audiopad: Claude levert alleen het setplan.
+- De bewakers (`kiesOvergang`) gaan boven het plan: blend alleen met twee zekere
+  grids, tempo ≤ 6% en toon ≤ 1 stap NA de sync; anders filter-uit of beatloos.
+  Beatloos is in Clay's library de hoofdroute, geen noodgeval.
+- Wat Clay aanraakt tijdens een overgang is van hem (`OVERNEEM` in automaat.js).
+  Nieuwe knoppen op een deck die de mix raken: daar ook bij zetten.
+- Waar de overgang is komt van de POSITIE van de uitgaande (regel 3); de timer
+  van 40 ms beslist alleen wanneer er gekeken wordt.
+- Fades GLIJDEN (2 okt, ONTBREEKT A7, AUTO-DJ.md §2b):
+  `track.N.{fader,filter,send.a,send.b}.glide` = "glijd hierheen in GLIJ = 0,5 s"
+  (0..1, geen read, dus niet in de beginstand van het log). De automaat stuurt het
+  punt van de curve dat GLIJ verderop ligt (vanaf de positie van de uitgaande),
+  opnieuw zodra er nog 0,1 s te gaan is. De bas (wissel) en het einde blijven
+  directe standen. `Deck.glide`: lineaire hellingen na startDrempel; een nieuwe
+  glijbeurt laat de lopende doorlopen tot daar (`zetVervolg`, cancelAndHold in de
+  TOEKOMST op lineaire hellingen, geen curve), een gewone set houdt vast waar het
+  geluid nu is. `deck.ui` leest via getters de stand van NU (ctx.currentTime);
+  schrijven stopt het glijden. Test met `test/nep-tijdlijn.mjs`.
+
+## Het planvenster (fase 1, gebouwd 30 sep)
+
+Volledig in `docs/PLAN.md`. Wat een bouwer niet mag missen:
+- `plan.html` is een VENSTER van de mixer (window.opener.varvePlan, zoals de
+  beamer): geen AudioContext, geen MIDI, geen Web Lock. Knoppen gaan over de
+  bus van de mixer. Los geopend = alleen editor.
+- Eén definitie van een plan: `src/plan/plan-model.js` (puur), gebruikt door
+  venster, automaat, server en tests. Stap-id's zijn vast en worden nooit
+  hergebruikt; tijden in tracktijd, null = de app kiest.
+- Opslaan alleen met `versie` (hash van de inhoud): 409 bij een botsing, nooit
+  stil overschrijven. Claude mag het bestand direct schrijven; venster en
+  mixer zien het binnen 3 s. `vervangPlan` laat klinken wat klinkt.
+
+## Klankschaal (gebouwd 29 sep)
+
+Volledig in `docs/KLANKSCHAAL.md`. Wat een bouwer niet mag missen:
+- Geen pluginsysteem: een instrument naast de sampler (`engine.klankschaal`),
+  actions `klankschaal.*`, een rij op het scherm (standaard dicht). Geen plek op
+  de standaard-APC (KS1): koppelen werkt.
+- De toon komt van `deck.toonsoort` (wat je HOORT, met stemming in cent) van de
+  maatgever of de focus-track; `stemming()` is puur en getest over alle 24
+  toonsoorten. Past de ladder niet bij majeur/mineur: de RELATIEVE toonsoort.
+  Zonder toonsoort: de laatste toon blijven houden, nooit terug naar D.
+- De kern (`klankschaal-kern.js`) volgt de regels van het audiopad: geen afval
+  per blok, geen Math.random op de audiothread, slapen bij stilte. De test
+  meet het (GCProfiler) en meet de toonhoogte (Goertzel).
+- Luidheid is gemeten tegen −14 LUFS (`UIT_OPHOGING`, `VELD_OPHOGING`): verander
+  je het model, meet dan opnieuw.
+
+## Stems (gebouwd 3 okt)
+
+Volledig in `docs/STEMS.md`. Wat een bouwer niet mag missen:
+- De rij (`StemsRij`) gaat niet op aankomst maar op VOLGORDE (5 okt, STEMS.md §6): eerst `vooraan`
+  (de STEMS-rij, in de volgorde van vragen), dan de kortste eerst; wat loopt, loopt door. htdemucs
+  haalt op de M1 ~3× realtime; fp16 en minder overlap zijn gemeten en NIET de moeite (of hoorbaar).
+- Splitsen gebeurt VOORAF, bij de ingest of met de knop in de library, door
+  Demucs (`server/stems/splits.py`, Python in `~/.varve/stems-venv`), nooit
+  realtime. De engine speelt alleen `stems.wav`: 16-bit, 48 kHz, 4 of 8 kanalen
+  interleaved, kanaalpaar k = `namen[k]`, evenveel frames als audio.wav. De SOM
+  van de stems is audio.wav (de rest van het model zit in inst/other).
+- ÉÉN worklet per deck met ALTIJD vier stereo-uitgangen naar `chain.stemIn`
+  (vóór trim en EQ); de streamkern leest één paar per renderBlok-aanroep
+  (`stride`/`paar`, `hergebruik` voor paar 1–3). Stereo blijft bit voor bit (de
+  gouden hash), stems blijven afvalvrij (0 GC). Geen tweede afspeelmotor per stem.
+- Stem-kill is 0 in amplitude met de zachte S van de EQ-kill (`killVersterking`,
+  na `startDrempel`, nooit setValueCurveAtTime). Bij elke laad alles open: stems
+  horen bij het NUMMER. `inst` werkt in beide standen (bij vier: drums + bas +
+  overig samen).
+- Een testserver (`VARVE_TESTSERVER=1`) splitst alleen met `VARVE_STEMS_CMD` (één
+  uitvoerbaar bestand: `maakNepStems(map)`) of `VARVE_STEMS_PY`. Na een
+  serverwijziging: server herstarten; schema v8 migreert vanzelf.
+- Opnieuw splitsen vervangt `stems.wav`: de ui weigert het zolang een track dat
+  nummer met stems speelt, en de StreamBron vangt het af (zie Bekende grenzen).
+- Op de APC sinds 5 okt de grid-modus stems (zie Stemkanalen). Een nieuwe
+  stem-knop op een deck: ook in `OVERNEEM` (auto-DJ) en, als het een schakelaar
+  is, in de beginstand van het handelingenlog (`stemKill`).
+
+## Koptelefoon (gebouwd 5 okt, ROADMAP 27 S1)
+
+Volledig in `docs/STUDIO.md` §3. Wat een bouwer niet mag missen:
+- Eén AudioContext, één uitgang met VIER kanalen (op de Mac een samengesteld
+  apparaat: Scarlett 2i2 = 1/2 de zaal, koptelefoonuitgang van de Mac = 3/4). Eén
+  klok, regel 3. Geen tweede AudioContext met setSinkId: dat zijn twee klokken.
+- Zonder vier kanalen (`kanApart(ctx)` false) bestaat de koptelefoon niet: geen node
+  erbij, `createMasterChain(ctx, koptelefoon.zaalIn)` gaat dan naar `ctx.destination`
+  zoals altijd, en `track.N.pfl`/`headphone.*` lezen null.
+- De cue tapt `chain.lpf` (vóór de fader, na trim/EQ/effect/filter); aan en uit met
+  `killVersterking` (zachte S na startDrempel). Volume en mix via `zetDoel`. De zaal in
+  de koptelefoon tapt `master.analyser` (na de limiter), zoals de opname.
+- Zaal en koptelefoon omwisselen is BEDRADING: alleen bij het maken
+  (`new Engine({ koptelefoon: { omgewisseld } })`, de app leest localStorage).
+- `headphone.*` en `track.N.pfl` horen niet bij wat er klinkt: OVERSLAAN in
+  terugspelen.js, NIET_IN_WAARDEN in handelingen.js, niet in OVERNEEM (auto-DJ).
+- APC: ● (record arm) zonder shift = `track.N.pfl`; shift + ● blijft het cuepunt.
+  Cue Level = `headphone.level`, shift + Cue Level = `headphone.mix` (Clay 5 okt);
+  sampler-volume en puls op shift + Cue Level in grid-modus sampler en video.
+- Gemeten met `tools/headless/koptelefoon.mjs` (echte Chrome, OfflineAudioContext van
+  vier kanalen); de mock in engine.test kent geen echte splitter/merger.
+
+## Instrumenten op een track (gebouwd 5 okt)
+
+Volledig in `docs/INSTRUMENTEN.md` (§3 het contract, §6 de track). Wat een bouwer niet mag missen:
+- Een track draagt een nummer óf een instrument (ST7). `engine.zetInstrument(id, soort|null)`,
+  `instrumentOp(id)`, `speeltrack()`. Het instrument sluit via een eigen GainNode aan op
+  `chain.input`: EQ, effect, filter, fader, sends en cue werken vanzelf. Een instrument erop =
+  `deck.leeg()` (het nummer eraf, een lopende laad geeft false); een nummer laden haalt het
+  instrument weg. Weghalen: aansluiting klikvrij dicht, dan pas `vernietig()` en losmaken.
+- Een instrumenttrack heeft geen buffer: geen maatgever, geen sync of op de maat, de auto-DJ
+  laadt er niet op (`_vrijDeck`). Nieuwe code die "een lege track" zoekt: kijk ook naar
+  `instrumentOp(id)`.
+- Noten gaan NIET over de bus (`src/control/noten.js`): elke MIDI-ingang behalve de APC, via de
+  MidiHub (geen eigen requestMIDIAccess, dus alleen het eerste tabblad); een poort van buiten
+  (de hub, straks) met `koppel(poort)`. Noot-uit en pedaal gaan naar waar de noot-aan heen ging.
+  Knoppen van het keyboard via `mappings/xboard49.json` (`{speel}`, absoluut = soft-takeover);
+  de CC-nummers zijn een AANNAME.
+- Actions `track.N.inst` (rondlopend; een SPELEND nummer eraf pas bij een tweede druk binnen
+  3 s, ook op de APC), `.inst.next/.prev`, `.inst.knob.1–8`, `.inst.stil`. Terugspelen slaat ze
+  over, de knoppen staan niet in de beginstand.
+- APC: het mapje `device.inst` (Clip/Device View strip → rack → inst) bestaat alleen als de
+  focus-track een instrument heeft (`OP_AANVRAAG` + `beschikbaar` in lagen.js); zonder blijft het
+  strip ↔ rack.
+- De Poly plant zijn envelopes op de audioklok en kent zijn eigen stand (`_envOp`): in Chrome
+  begon een lineaire helling na `cancelAndHoldAtTime` midden in een `setTargetAtTime` op 0 (een
+  tik bij een GEPLANDE stemroof). Luidheid gemeten: `OPHOGING` 0,52 = −14 LUFS voor een akkoord
+  van drie op 0,8; verander je de klank, meet opnieuw (`tools/headless/instrument.mjs`).
+- Crossover (10 okt, `docs/INSTRUMENTEN.md` "Uit de sampler"): `sampler.N.drums` zet sampler-pad N
+  op drumpad `DRUMPAD_VAN_SAMPLER[N−1]` (S1–S4 → 13–16, S5–S8 → 9–12: dezelfde fysieke
+  Maschine-pad als in de padmodus sampler) van `engine.drumsDoel()`, via
+  `engine.samplerNaarDrums(n, { pad })`; `pad` is verplicht (de engine kent de tabel niet).
+  `drumsDoel()` = de speeltrack als die de Drums heeft, anders de enige Drums; geweigerd alleen
+  als de speeltrack een ander instrument is en er twee of meer Drums zijn. Pads 9–16 staan NIET
+  in de set; `sampler.N.drums` staat wel in het log, maar terugspelen slaat hem over
+  (`OVERSLAAN`): na herladen zijn ze leeg, en `herstelInstrumenten` meldt het als een patroon
+  ze gebruikt ("stonden er stukken uit de sampler op, zet ze dan terug …").
+
+## Master en limiter (gebouwd 5 okt)
+
+Volledig in `docs/MASTER.md`. Wat een bouwer niet mag missen:
+- `input (gain) -> fx (InsertSlot) -> limiter -> analyser -> uit`. `master.analyser`
+  blijft het EIND: opname, de zaal in de koptelefoon en de vormen tappen daar.
+  `master.limiter` is de uitgang van de limiterstap, niet de compressor.
+- De limiter (`limiter-kern.js`, puur) houdt zich aan de regels van het audiopad:
+  0 GC (`master.test` meet het). Onder het plafond is de gain PRECIES 1 (geen
+  pompen, de uitvoer is bit voor bit de invoer, 72 samples later). Verander je de
+  kern: `node test/master.test.mjs` en `tools/headless/master.mjs` (true peak 16×).
+- De vooruitblik is vertraging en telt mee in wat je hoort: `ctx.graafVertraging`
+  in `uitgangsVertraging` (hoorbaar.js), op de context zelf (het losse venster).
+- De worklet laadt async: nooit live herbedraden. Context stil = direct erin; de
+  audio loopt = equal-power kruisfade van 40 ms, het oude pad weg na de fade.
+  Op een OfflineAudioContext eerst `await engine.master.klaar`, dan renderen.
+- Het master-rack (`master.fx.*`, `master.rack.next/prev`) is een gewone
+  InsertSlot op de klok van de maatgever; welk rack bewaart de schermlaag in
+  localStorage (`varve.master.rack`, sjabloon op naam). MIX start altijd op 0.
+- APC: Shift + Clip/Device View = mapje `device.master` (knop 1–7, 8 = mix,
+  shift + 8 = knop 8, Device ◀ ▶ = rack, On/Off = aan/uit). Alleen regels erbij.
+- De cue in de koptelefoon is even laat als de zaal: `koptelefoon.zetVertraging(master.vertraging)`
+  (de engine zet hem, ook na `master.klaar`). Open (docs/MASTER.md, "Grenzen"): de master klinkt ~0,8 dB zachter dan met de compressor (die tilde
+  op); het master-rack staat niet als gebeurtenis in het handelingenlog.
+
+## Effecten uit de filter app (gebouwd 5 okt)
+
+Volledig in `docs/EFFECTEN.md` (STUDIO S2c). Wat een bouwer niet mag missen:
+- Tien effecten in `fx-meer.js` (distortion, chorus, flanger, vibrato, tremolo,
+  autopan, auto-wah, pitch, compressor, breedte), in `EFFECTEN` achter de zeven van
+  fx.js. Geheugen (90 s) bewust niet: in een insert-rack begint hij bij elke
+  ketenwissel leeg. Wat dubbel was (filter, delay, galm, crush, ringmod, phaser) niet.
+- Alles met een vertraging of een andere vorm verzet je met TWEE PADEN
+  (`wisselaar`: de twee koppen van de delay, lineair, de laatste stand wint), ook
+  drempel/ratio van de compressor (Chrome rekent die per blok: trapjes).
+- Alles met geheugen zit achter een INLOOP (30 ms): een nieuwe keten begint met
+  lege vertragingen, en de vertraagde kopie begon anders abrupt (×21 gemeten).
+  De delay van fx.js heeft hem sinds 5 okt ook (was ×46 bij een wissel, nu ×1,6).
+- Tijdens het bouwen (klok niet verder) zet `zet()` direct (`zetter`), daarna glijdt hij.
+- Worklets: `laadFxWorklet(ctx)` één keer per context, pas bij gebruik; tot dan droog,
+  daarna invloeien; was hij er al, dan meteen. `vernietig()` stuurt 'stop'.
+- Tremolo/autopan op de maat via `fx-lfo.js`: één cyclus als buffer, start METEEN op
+  de fase die hij hoort te hebben en vloeit 20 ms over. Op de "1" van de maat kan
+  niet (fxKlok kent alleen de tel).
+- Chrome-feiten (gemeten): WaveShaper 2x/4x = 128/192 samples later (daarom geen
+  oversampling: met de mix-knop is dat een kam); DynamicsCompressor kijkt 288 samples
+  (6 ms) vooruit en doet zelf make-up ((1/curve(1))^0,6, `chromeMakeup`), die wordt
+  eruit gedeeld; een DelayNode op 0 is bit voor bit door.
+- Een effect dat een oudere versie niet kent, bewaart zijn eigen `bypass` (`_bypass`
+  in rack.js); vroeger kwam het er na één keer bewaren als `bypass: true` uit.
+
+## Stemkanalen (gebouwd 5 okt)
+
+Volledig in `docs/STEMS.md` §5 (ROADMAP 27, STUDIO S2b). Wat een bouwer niet mag missen:
+- Per stem een filter (`track.N.stem.<s>.filter`, bipolair, zoals het trackfilter), een
+  echo en een galm (`.send.a/.b`) en een cue (`.pfl`); read null zonder die stem, de cue
+  ook zonder koptelefoonuitgang. Bij vier stems werkt `inst` op drums + bas + overig:
+  filter in serie (per kant het sterkste), sends de grootste, cue "of".
+- De droge weg `stemIn[k] -> trim` is NIET veranderd. Het filter is een correctie ernaast
+  (`maakStemFilter`: x + H(g·x) − g·x), en elk deel (filter, send, cue) komt er pas bij
+  als het voor het eerst iets doet, stil, zoals een nieuwe keten in de insert-slot. Er
+  gaat nooit iets los. Zonder stems of met alles open: bit voor bit het oude pad en
+  dezelfde CPU (gemeten met `tools/headless/stemkanalen.mjs --vergelijk`).
+- Stem-sends gaan door een SPIEGEL van de fader (`deck.stemSends[A|B].fader`): elke
+  nieuwe code die `chain.fader.gain` aanraakt, moet de spiegels mee nemen (`applyUi`,
+  `_glijParams`, `_glijDoelen`), anders blijft de echo van een stem open als de fader
+  dicht gaat. Trim zit in de versterking per stem. Niet door EQ, effect en trackfilter.
+- De cue van de stems is ÉÉN ingang per track in de koptelefoon (`A:stems`, de engine
+  volgt `deck.stemPflIets`); `track.N.stem.<s>.pfl` staat in OVERSLAAN, niet in OVERNEEM
+  en niet in de beginstand. Filter en sends wel in OVERNEEM; als value-action vanzelf
+  in de beginstand.
+- APC: grid-modus stems (zeegroen, Shift + scene 3 of ▲ ▼, achteraan): per kolom rij
+  1–5 zang · rest · drums · bas · overig weg zolang je drukt, shift = vastzetten. 83
+  regels erbij (480), geen bestaande veranderd; `note:0:84#shift@edit.aan` houdt bpm ½.
+- Een insert-effect per stem is gemeten en NIET gebouwd: ~5,5 ms CPU per s audio per
+  slot, ook stil (acht tracks × vier stems: +110%).
+- Chrome offline is niet deterministisch op de bits als een ingang twee klinkende
+  verbindingen optelt (een hashset: 1 ULP), of als er timers in het renderen vallen:
+  vergelijk bit voor bit alleen met één klinkende bron per optelpunt.
+
+## Patronen (gebouwd 5 okt)
+
+Volledig in `docs/PATRONEN.md` (§1–6 het contract, §7 wat gebouwd is). Wat een bouwer niet mag missen:
+- `engine.patronen` (PatroonSpeler, `src/engine/patronen/`) speelt per track met een instrument vijf
+  plekken. Eén KLOK voor alle patronen: klok-tellen <-> audioklok als gebroken lijn (klok.js). Met een
+  maatgever (`syncMaster()`, `fxKlok()`) richt hij zich op diens tellen en maat-anker; zonder een eigen
+  tempo (`set.tempo`); valt de maatgever weg terwijl er iets speelt, dan het laatste tempo vasthouden.
+- Regel 3: de timer (25 ms) zegt alleen WANNEER; noten gaan met `t` op de audioklok, 120 ms vooruit.
+  Wat gepland is staat vast: de klok verandert alleen NA `geplandTot`, en dan zonder sprong (in een
+  tel naar de doellijn). Vensters zijn halfopen in klok-ticks (384 PPQN): elke noot precies één keer.
+  Verander je de klok of de vensters: `test/patronen.test.mjs` (doorlopend, op de tel) en
+  `tools/headless/patronen.mjs` (in Chrome, ook in de opname).
+- Starten/wisselen/stoppen staan in klok-TICKS, op het eerste maatbegin na wat al gepland is;
+  `alleUit(t)` op het maatbegin VÓÓR de eerste noot van het volgende patroon. Instrument weg = patroon
+  weg (engine `'instrument'`); een ander instrument = het patroon speelt daarop verder.
+- Noten gaan niet over de bus: live opnemen luistert op `noten.js` (`'noot'` met snelheid); stap voor
+  stap = de laatst gespeelde noot. Bewerken gaat wel over de bus (`track.N.pattern.step.S`, …) maar
+  terugspelen slaat het over (OVERSLAAN): de set is al bewaard. Starten/stoppen/rijen/tempo spelen terug.
+- De set staat op de server (`patronen/<naam>.json`, `/api/patronen`, versie + 409, zoals de plannen);
+  `server/patronen.js` gebruikt `model.js` (puur). Instrumenten staan er alleen als hint in.
+- APC: grid-modus `patronen` (oranje 9/10): Shift + scene 2 of ▲ ▼; pad = plek per track, shift =
+  meteen, scene = rij, Stop All Clips = alles stoppen. De read knippert zelf (een instrumenttrack heeft
+  geen `track.N.phase`). Alleen regels erbij.
+- Naar Logic (10 okt, `docs/PATRONEN.md` §8): `src/export/patronen-smf.js` maakt een MIDI-bestand uit de
+  VENSTERS van de speler (`notenInVenster`, 384 PPQN: swing en micro zijn tijdverschuiving). Buiten de engine
+  (regels.test: geen `MThd`/`MTrk`/`0x99` in `src/engine/`). Verander je venster of model: ook
+  `test/patronen-midi.test.mjs` (gouden bytes, 500 patronen tegen de speler). De CLI `tools/patronen/midi.mjs`
+  werkt op een kopie van de set (bestand in, bestand uit); nog geen route of knop.
+
+## Xboard49 en Maschine via de hub (gebouwd 5 okt)
+
+Volledig in `docs/MASCHINE.md` (wat elke knop doet). Wat een bouwer niet mag missen:
+- Alleen met `?hub=`: `MANIFEST.speelt = ['xboard49', 'maschine-mk2']`; app.js laadt
+  `ui/speelapparaten.js` (en daarmee maschine.js, maschine-scherm.js, het profiel en
+  `mappings/maschine-mk2.json`) pas binnen `if (hubUrl)`. hub.test controleert dat niemand ze
+  statisch importeert. Uitzondering: de Maschine-kaart (`maschine.html`, een EIGEN pagina); hub.test
+  controleert ook dat de mixer die nooit laadt.
+- Elk speelapparaat heeft een EIGEN nep-poort (`midi.speelPoort(dev)`: "Xboard49 (hub)",
+  "Maschine MK2 (hub)", interface van een MIDIInput), NIET in `access.inputs`: de MidiHub, de
+  APC-mapping en het echofilter zien ze nooit. Geen focusfilter (de hub beslist wie speelt).
+  Weg/terug = `state` + `onstatechange`: noten.koppel en maschine.js laten dan los.
+- Wat naar de Maschine gaat (lampjes `{t:'led', dev:'maschine-mk2'}`, schermen
+  `{t:'scherm', dev, nr, data}`) loopt door een eigen wachtrij in hub.js (16 per 4 ms, zoals de
+  MidiHub), lampjes daarna per beeld gebundeld. De APC-lease is ongewijzigd (LED's zonder `dev`).
+- Pads = noten via noten.js (`noten.ontvang` met bron `hub-maschine-mk2-input`), nooit over de
+  bus. Knoppen 0–47 zitten op kanaal 1: NOOIT de Maschine-poort aan noten.koppel hangen.
+- Het masterwiel KIEST voor de focus-track (scherm), indrukken/ENTER ZET (`track.N.inst.choose`,
+  value 0..1 zoals de read van `track.N.inst`; terugspelen slaat hem over zoals alle `inst`).
+- Een speelapparaat is nooit "de controller" (`isSpeelapparaat` in midi.js, OOK zonder hub):
+  niet automatisch, niet uit localStorage, niet met de hand.
+- De schuif van de Xboard is SysEx Master Volume: signature `master-volume` in een
+  apparaatmapping (noten.js). Knop 9–16 = FX van de speeltrack. CC's: AANNAME.
+- Patronen op de Maschine (`docs/MASCHINE.md` §5): STEP = stapmodus (pad = `track.{speel}.pattern.step.S`,
+  lampje = die read, de lopende stap wit via `engine.patronen.stand/stapNu`), PATTERN + pad 1–5 =
+  `engine.patronen.kies` (geen action voor kiezen), PLAY/RESTART/REC/ERASE en SHIFT + ◄ ► via de
+  mapping met `{plek}` (= de gekozen plek van de speeltrack). Live opnemen gaat vanzelf: de pads
+  spelen via noten.js. Een pad laat los waar hij indrukte, ook na een moduswissel (`padVast`).
+  Headless: `VARVE_PATRONEN` naar een tijdelijke map, anders schrijft de testserver `patronen/set.json`.
+- Secties op de Maschine (`docs/MASCHINE.md` §5b, 6 okt): SCENE = padmodus secties, de 16 pads = de secties
+  van de FOCUS-track (groep A–H), pad = `track.N.section.K` via `invoke` (dus log en auto-DJ zien het), ◄ ►
+  bladert boven de 16, kleuren uit de read zoals de APC, links op het scherm wat je hoort + een 4×4-raster.
+  Eén padmodus tegelijk (STEP, SCENE). De hub in een headless-proef altijd met `opname: false`: de echte
+  config heeft een `avondmap`.
+- Knoppagina's en uitleg (`docs/MASCHINE.md` §5c, 7 okt, tak `studio/maschine-dj`): ◄ ► links boven wisselt
+  Instrument · Strip · Rack. De pagina is een open MAPJE voor de mapping (`lagen` in maschine.js), dus wat een
+  knop doet staat in `mappings/maschine-mk2.json` (`"laag": "pagina.strip"`); een nieuwe pagina = regels erbij
+  plus een naam in `PAGINAS`. Strip en Rack werken op de FOCUS-track (Instrument op de speeltrack). Waarden in
+  echte eenheden uit de engine-formules (`eqDb`, `filterDoelen`), nooit zelf een tweede formule. CONTROL
+  vasthouden = uitleg: niets uitvoeren, wel uitleggen (`beschrijf` uit apc-beschrijf.js, meegegeven door
+  speelapparaten.js); het loslaten van wat tijdens de uitleg werd ingedrukt gaat nergens heen.
+- De Maschine-kaart (`maschine.html`, `docs/MASCHINE.md` §5d, 7 okt): de tekst per control is `legUit()` van een
+  eigen Maschine-exemplaar, dus nooit een tweede beschrijving. Knoppen die maschine.js zelf afhandelt staan in
+  `UITLEG` als `{ kort, soort, tekst }` (label en kleur voor de kaart naast de tekst van CONTROL). Een nieuwe
+  pagina: `PAGINAS` (de kaart volgt vanzelf); een nieuwe padmodus: ook `PADMODI` in maschine-kaart-plan.js. Live
+  via `window.opener.maschine` (alleen met `?hub=`): stand overnemen, `maschine.geraakt` (laatst ingedrukt of
+  gedraaid) en `maschine.schermen` (wat er naar het apparaat ging). De kaart stuurt NIETS (`invoke` doet niets).
+- Bladeren (`docs/MASCHINE.md` §5e, 8 okt): BROWSE = `library.toggle`; zolang de library OPEN is (hoe ook geopend)
+  bladert het wiel (`library.next/prev`, maschine.js), ◄ ► = `library.page.*` en ENTER/wiel indrukken =
+  `track.{focus}.load.selected` (laag `bladeren` in de mapping). De keuze leeft in het paneel (`gekozen`, een rij
+  van de huidige sortering); laden gaat door het paneel, met de tweede druk over een spelende track. Terugspelen
+  slaat `library.*` en `load.selected` over: de laad zelf staat al in het log.
+- De sampler (`docs/MASCHINE.md` §5f, 8 okt): SAMPLING = padmodus sampler (één padmodus tegelijk). Boven de 8
+  sampler-pads (`sampler.K`), onder een sectie in pad 1–8 (`sampler.K.section`), SHIFT + pad = `sampler.K.clear`
+  (`samplerPad`/`samplerActie` in maschine.js). Laag `sampler` VOORAAN in `lagen`: ◄ ► = `sampler.length.down/up`,
+  draaiknop 5 = `sampler.volume`; de andere draaiknoppen blijven van de pagina.
+- Toetsen: `node test/maschine.test.mjs`, `node test/hub.test.mjs`, en headless
+  `VARVE_HUB_REPO=<hub> node tools/headless/speelapparaten.mjs` (echte hub, nep-Maschine op
+  HID-niveau, eigen poorten; het eerste knoppenrapport na aansluiten is in de hub alleen een
+  beginstand).
+
+## Secties (gebouwd 6 okt, tak `studio/secties`; verweven 6 okt avond, `studio/sec-*`)
+
+Volledig in `docs/SECTIES.md`, vragen in VRAGEN blok SE. Wat een bouwer niet mag missen:
+- Een SECTIEKAART zoals de toonsoortkaart: `{ versie, opGrid, grid, stukken: [{ van, label, groep,
+  energie, zeker?, stems? }], bron, slot }` in tracktijd, kolom `secties_json` (schema v9). NIET in
+  `/api/library` (de lijst blijft klein): laden.js haalt hem met `GET /api/library/<id>/secties?maak=1`,
+  en de server rekent dan eerst als `moetSecties` ja zegt (geen kaart, oudere `SECTIE_VERSIE`, een ander
+  grid — `grid` is een FNV-vingerafdruk van het grid — of stems erbij). 'hand' en slot: nooit overschrijven.
+- Grenzen liggen op maatbegins van het grid van TOEN. Verandert het grid, dan wordt de kaart bij het
+  volgende laden opnieuw berekend; tijdens een sessie blijft hij staan.
+- De sprong (`sectieDoel`): NU springen naar vlak vóór de sectie, zo ver vóór haar "1" als je van de
+  volgende "1" af zit (fasebehoudend, `seek` met `doorlopend`); geen timer, geen wachten (regel 3).
+  `sectieOpDeMaat` = de sectie op de volgende "1": volgende/vorige rekenen daarvanaf (tijdens een
+  aanloop hoor je nog de maat ervóór: `sectieHier` is wat je HOORT).
+- APC: grid-modus `secties` (Shift + scene 1, achteraan in ▲ ▼), 40 pads = secties van de FOCUS-track,
+  shift = als loop. Kleuren: wit (hoor je, `tel: 'aan'`) / `hemelsblauwdonker` (42) / uit. 82 regels
+  erbij, geen bestaande veranderd; `eerder` bijgewerkt met `tools/mapping/eerder.mjs`.
+- Labels zijn een gok uit energie en drums (intro · opbouw · drop · break · outro · `deel`); gemeten
+  op synthetisch materiaal (`test/synth-nummer.mjs`), nog niet op Clay's library (SE2). Een beter
+  algoritme = `SECTIE_VERSIE` omhoog; dan rekent alles vanzelf opnieuw.
+- VERWEVEN (docs/SECTIES.md §7, TASKS-SECTIES.md, VRAGEN blok SV). Wat je niet mag breken:
+  - Marges: `sectieEen` 0,01 tel en `SectieKaart.index` 1 ms. De server rondt sectiebegins af op 0,1 ms;
+    zonder marge viel een begin net ná zijn "1" een maat te laat in. Niet weghalen.
+  - Toetsenbord: `SHIFT_TOETS` in keyboard.js (shift+W/E de focus-track, shift+I/O de rechterhand),
+    `toetsActie(code, shift)`. Aan het eind van de kaart een melding uit de action zelf (`naarSectieStap`
+    geeft `waarom`), niet uit `waaromNiet`.
+  - Sampler: `knipSectie` (hele maten van "1" tot "1", stopt vóór een maat die niet vol is; hooguit
+    `SECTIE_MAX_MATEN` 32 en `SECTIE_MAX_SEC` 90). Een pad van meer dan 8 tellen IS een sectie en start op
+    de "1" van de maatgever (`startOpDeEen`, `fxKlok().tellenTotEen`). Action `sampler.N.section`, rij 3.
+  - Plan: een stap mag `in`/`uit` = `{ sectie: K (vanaf 1), label, groep }` hebben; `van` blijft de
+    waarheid en de terugval. Een PUT zonder `kent` zet in/uit per stap terug (`herstelSecties`); Claude
+    stuurt `kent` ALTIJD mee (docs/PLAN.md §2b).
+  - Log: de kaart staat in de beginstand en als gebeurtenis `secties`; terugspelen haalt hem NIET van de
+    server. Een sectiedruk draagt `{ van }` (de plek waarvan hij rekende, 4e element van de logregel,
+    `invoke(id, v, { laat, van })`). `section.K.loop` staat niet apart in de stand: de loop van het deck
+    is de waarheid.
+  - Auto-DJ (AUTO-DJ.md §3b): secties alleen met een kaart op een ZEKER grid; zonder kaart precies het oude
+    gedrag (ook bij een trage kaart: het wachten stopt vóór het oude moment). De bewakers gaan voor, de soort
+    overgang verandert nooit. `momentArgs` (planner.js) is DE rekenregel voor automaat én planvenster: geef
+    planMoment nooit losse argumenten. `vindSectie`: dezelfde label+groep, het dichtst bij de tijd van toen
+    (binnen `SECTIE_SPELING` 30 s, anders wint `van`).
+  - Loops: `sectieHier` vouwt wat je hoort terug in de loop (anders 1–40 ms de vorige sectie na het
+    rondgaan), en `sectieOpDeMaat` geeft in de laatste maat van een loop wat er NA het rondgaan komt.
+  - Controlekamer: `Library.sectieTelling()` gebruikt dezelfde helpers als `moetSecties`; verander je die
+    regel, verander hem op één plek (sec-controle.test vergelijkt ze).
+  - `SectieLezer` (src/analysis/maat.js; vormbron, video-accent en hub): een stap terug in t kleiner dan
+    GAT (1 s) is geen nieuwe klok (de uitgangsvertraging kan groeien); hetzelfde sectiebegin binnen 0,99
+    maat is een herhaling, geen nieuwe sectie; zonder maatgever blijft de energie `HOUD` (0,5 s) staan.
+  - Headless: elke `tools/headless/sec-*.mjs` zet VARVE_PATRONEN en VARVE_PLANNEN op zijn tmp-map. Anders
+    leest de proefserver `patronen/` van de worktree, en in `sintegratie` is dat de map van de echte mixer.
+
+## Beeld: de Stroommachine (gebouwd 6 okt, tak `studio/beeld`)
+
+Volledig in `docs/BEELD.md`, vragen in VRAGEN blok BE. Het protocol is van de Stroommachine-repo
+(`~/Projects/stroommachine`, `github.com/CKrebbers/stroommachine`): `koppel/PROTOCOL-dj.md`. Wat een
+bouwer niet mag missen:
+- DE KOPPEL-LAAG (`src/koppel/`) staat buiten engine en scherm: geen DOM, geen import uit ui/control/
+  server/video (`regels.test.mjs`). `beeld.js` LEEST de engine (duck-typed, zoals maat.js) en schrijft
+  er nooit in; de bus roept hem aan via `bindBeeld` (actions.js), het scherm via `beeld-paneel.js`.
+- De zender (`varve-beeld-zender.js`) is ONGEWIJZIGD overgenomen (herkomstregel `stroommachine@<commit>`).
+  Wijzig hem in de Stroommachine-repo en neem hem opnieuw over, met zijn test (`test/varve-beeld-zender.test.mjs`,
+  alleen het importpad anders).
+- Ontwerpregel: uit, zonder adres of zonder relay verandert er NIETS (geen WebSocket, geen timer, geen
+  melding die terugkomt). Hooguit één melding "verbonden" en één "antwoordt niet" per start.
+- De tel = `engineTel` (maat.js): de maatgever die je HOORT, positie − (uitgangsvertraging − extra
+  latentie) × rate. + latentie = de tel vóór = het beeld eerder (beamer). Geen maatgever = `speelt:false`
+  met de laatste tel. `t` in de berichten is performance.now() (de zender): de Stroommachine rekent het
+  klokverschil zelf met ping/pong.
+- Track en mix zijn TOESTAND: pas sturen als de Stroommachine er is (verse `beeld-status` of ping,
+  < 3 s), en opnieuw na (her)verbinden of als ze HERLADEN is: haar ping-teller begint per pagina bij 1,
+  dus een ping-id die niet hoger is dan de vorige = een nieuwe pagina (`hoorBericht`; we luisteren mee
+  via een WebSocket-subklasse rond die van de zender, `_meeluisterWS`). Hooguit eens per 10 s
+  (`OPNIEUW_MS`), uitgesteld, nooit verloren. De gezette macro's gaan dan ook opnieuw. NOOIT in het
+  'status'-event van de zender: die meldt "verbonden" vóór zijn manifest, en de relay wil het manifest
+  eerst. Klok, kenmerken en regie gaan altijd.
+- EÉN TABBLAD zendt: `magZenden(statusVanMij())` in app.js (de Web Lock, met `?hub=` de hub), anders
+  antwoorden twee tabbladen op elke ping en is het klokverschil onzin. Het paneel maakt de koppeling met
+  `mag: false`; een start uit localStorage is `vanzelf` (de melding "geen relay" is dan info, niet rood).
+- Kenmerken: zolang er iets KLINKT (een track speelt of de master > `STIL`), daarna nog `STIL_MS` door
+  (naar ~0) en dan null; anders bevriezen de bronnen van de Stroommachine op de laatste luide waarde.
+- Deck A/B = de crossfaderKANT (`kiesKant`): wie speelt met de kanaalfader open, dan wie speelt (fader
+  dicht = voorbeluisteren), anders wie het laatst geladen of gestart werd; thru telt niet. Id per nummer: `yt:<videoId>`, `<site>:<id>`, `lokaal:<hash>`, `varve:demo-<zaad>`,
+  `bestand:<naam>` (`stabieleId`). De laad komt via `naLaad` van laden.js, net als het handelingenlog.
+- APC: mapje `device.beeld` op Shift + Detail View (een device-mapje, want de faders zijn de kern en alleen
+  de device-groep wisselt de device knobs). Knob 1–8 = `beeld.macro.*`, scene 1–5 = `beeld.regie.*`, Stop
+  All = paniek. Read null zonder verbinding (ring en lampje uit). 15 regels erbij, eerder.mjs gedraaid.
+- Een mislukte WebSocket logt Chrome zelf rood in de console (Log-domein); JavaScript kan dat niet
+  onderdrukken. Headless-tools tellen dat apart van fouten van onze code.
+
+## Audio-gezondheid (15 okt, verslag docs/verslagen/2026-10-15/arch-audio.md)
+
+- Een AudioWorkletNode die weg moet krijgt eerst `'stop'` (of `{ type: 'stop' }`) en geeft daarna `false` uit
+  `process()`; pas dan los en `port.close()`. Alleen los of dicht = hij draait voor altijd (gemeten: +68 MB na 50
+  instrumentwissels, na de fix +3 MB). NOOIT op het herlaadpad van de StreamBron (`laad()` hergebruikt de node).
+- Elke AudioWorkletNode krijgt `onprocessorerror` en meldt via `meldWorkletFout(ctx, …)` (src/engine/worklet-fout.js,
+  een event op de context: regel 1). De StreamBron bouwt één keer per laad opnieuw op (zelfde segment {T,P,R}),
+  de limiter valt terug op de compressor, klankschaal en schaal bouwen bij de volgende aanslag opnieuw, een
+  effect bouwt zijn worklet één keer opnieuw (`metWorklet`, `HERBOUW_MAX`, AR5) en de opnemer meldt alleen.
+- `src/ui/gezondheid.js` bewaakt de AudioContext: niet-'running' = melding (sleutel `audio`), de eerste druk op
+  controller, hub of toetsenbord doet `ctx.resume()`, en bij de statechange probeert hij het zelf, hooguit eens per
+  `ZELF_MS` (10 s, AR6: geen lus van stil-aan-stil); klok twee keer > 0,5 s achter terwijl 'running' = "audio-uitgang
+  staat stil". Vóór de eerste start meldt hij niets.
+- De golfvorm-sleutels lezen `gridVersie` uit de snapshot, niet het grid als tekst (8 kB → 0,3 kB per beeld). Een
+  nieuwe plek die het grid verandert: via `gridGewijzigd()`/`setGrid()`, anders tekent de golfvorm oude lijnen
+  (`engine.test` "gridVersie volgt elke gridwijziging"). `StreamBron.buffer` is één object per bestand (geen afval
+  per beeld); vergelijken op identiteit blijft af te raden (laadSleutel = `bron.bestand`).
+- Het grid in de snapshot is GEDEELD en bevroren (AR7): `deck.gridJson` maakt per `gridVersie` één diep bevroren
+  object. Wie de snapshot leest mag het grid nooit aanpassen (in strict mode een TypeError); een kopie maken mag.
+- `lek.mjs` meet op Linux het privé geheugen (smaps `Anonymous`): RSS telt gedeelde code van Chrome mee die pas
+  laat voor het eerst draait.
+
+## De server mag even weg zijn (15 okt, docs/WINST.md punt 3)
+
+Verslag `docs/verslagen/2026-10-15/arch-server-weg.md`. Wat een bouwer niet mag missen:
+- Opname, videostukken en handelingenlog herhalen een stuk zonder antwoord (geen verbinding, time-out 10 s,
+  5xx) met 0,25 → 2 s zolang ze lopen (`src/lib/herhaal.js`); de rij is begrensd (opname 300 s ≈ 57 MB, log
+  16 MB); past een NIEUW stuk er niet meer in, dan valt DAT stuk weg (gat op zijn plek): je houdt de eerste 5 minuten
+  van de storing (AR10, 16 okt; tot dan het oudste). Een 4xx hooguit drie keer, `vol` nooit
+  opnieuw. Bij stop nog 10 s, dan de oude regel. Videostukken dragen `?van=<byte>` (de server schrijft op die
+  plek, zoals `?frame=N` voor de WAV).
+- De opname geeft ÉÉN melding (sleutel `opname`, `meldingVan`), het log de sleutel `handelingenlog`:
+  `meld(tekst, soort, duur, { sleutel })` vervangt wat er onder die sleutel staat, `wisMelding(sleutel)` haalt
+  hem weg. Een nieuwe melding die meegroeit: een sleutel, geen nieuwe per seconde. Tests met een nep-klok:
+  `wacht` schuift `nu` op (anders draait een herhaallus als microtaken eeuwig door).
+- VOORUIT: een track die je HOORT (geladen, speelt, fader × crossfader > −60 dB; "> 0" werkt niet: een dichte
+  fader is −70 dB) houdt 60 s pagina's vooruit (`VOORUIT_HOORBAAR`), de rest 20 s (`VOORUIT`). De engine beslist
+  (`_volgVooruit` bij elke 'change'), het deck geeft het getal door (`zetVooruit`), alleen `bijvullen` leest het.
+  Met hysterese (AR11): pas `VOORUIT_NA` (30 s audioklok) niet-hoorbaar terug naar 20 s, per nummer (sleutel
+  `bron.bestand`); een eigen timer op die grens, want zonder 'change' kijkt niemand.
+- HERSTARTLUS: VARVE.app start de server via `tools/varve-app/server-lus.sh` (POSIX sh): hooguit 5 herstarts
+  per minuut, niet na exit 0, SIGTERM/INT/HUP of 3. De server stopt zelf met exit 3 als poort 8777 bezet is
+  (vroeger liep een tweede server zonder poort door, met achtergrondwerk op dezelfde library). Stoppen:
+  `sh tools/varve-app/server-lus.sh stop` of `pkill -f server/index.js`. De LaunchAgent uit
+  docs/TAILSCALE.md start sinds AR8 (16 okt) de LUS, niet `node` (zonder KeepAlive): een tweede lus zegt "draait al".
+  Na een wijziging aan de Dock-app: `zsh tools/varve-app/maak.sh`.
+- Toets: `tools/headless/server-weg.mjs` (poorten 8961/8962): gemeten 0 stille vensters van 50 ms in 1040, een
+  WAV van 49 s zonder nullen, één opname-melding die op "weer goed" eindigt (zonder dit: 10 s stilte, 20 s
+  nullen, 20 meldingen). Niet gebouwd: hang-detectie en de noodlus op de maat (volgende versie). Met
+  `VARVE_WEG_SOORT=hang` (16 okt) hangt de server 30 s: ook goed, de melding pas na de time-out van 10 s.
+  HANGEN (AR18, 16 okt): een wachter in de lus peilt elke 5 s `GET /api/leeft` (uit het geheugen, NOOIT schijf of
+  database: een schijf die hangt lost een herstart niet op); drie keer niets binnen 2 s = kill -9 op de server en zijn
+  nazaten, en de lus start hem opnieuw (telt mee in de 5 per minuut); 120 s tot het eerste antwoord. Gemeten 21 s van
+  hangen tot een nieuwe server (`VARVE_WEG_SOORT=lus`). Wat de event loop langer dan ~15 s vastzet wordt dus neergezet:
+  zwaar werk hoort in een worker of kindproces. De lus geeft elke nieuwe server mee wat hij weet (`VARVE_LUS_SINDS`,
+  `_AANTAL`, de laatste 20 in `_HERSTARTS` als `<s>:<exitcode>:om|hang`; een hang meldt de wachter met
+  `<pidbestand>.hang`); `server/lus.js` leest het voor `/api/leeft`, en de tegel Server zegt "herstart om …" (AR9).
+  De server kijkt EERST of zijn poort vrij is (`server/poort.js`, AR20, 16 okt), vóór de library, de mappen en het opruimen
+  van `.bezig-*`: een tweede server raakt niets aan. Een stream die hapert geeft één melding per track (sleutel
+  `stream:<deck>`, `onHapert` in bron.js) die "stream weer goed" wordt (AR17).
+
+## Het avondpakket per platform (15 okt, docs/AVONDPAKKET.md §9b)
+
+- `meet({ platform })` kiest de sondes via `metersVoor()` (standaard `process.platform`): de Mac zoals altijd;
+  Linux GNU `stat -c`, `/sys/class/power_supply`, `lsusb` plus `/sys/bus/usb/devices` (kindprocessen met
+  `LC_ALL=C`), en grijs "niet op dit platform" voor instellingen, iCloud, geluid en Bluetooth (de live-mixer
+  draait op de Mac); elk ander platform alleen de AV-hub. Een sonde accepteert NOOIT een exitcode als stderr
+  zegt dat het commando een optie niet kent (`ONBEKENDE_OPTIE`): de BSD-`find -flags` gaf op Linux exit 1 en
+  dat telde als geslaagd (vals rood op compleet, vals groen op instellingen). Een nieuwe sonde: per platform,
+  met een fixture en `"platform"` in nep.json. Uitzenden hercodeert met videotoolbox op de Mac en libx264
+  elders (`hercodeerEncoder`); `tools/headless/beeld-lokaal.mjs` meet pmset/sysctl/plutil/swiftc alleen
+  achter `isMac()`. Op een machine die geen Mac is en geen library.db heeft (de pc, AR19): backup grijs "geen library",
+  geen exit 3 zonder mediamap, "op deze machine" (`metingen.platform` in het oordeel). Op de Mac verandert niets.
+- De pc meet sinds 16 okt iets eigens (AR13/AR14), alleen op Linux: `relay` (poort 7702), `hdmi` (`/sys/class/drm`,
+  sleutel `drm`, `parseDrm`), `node` (`nodeVersie` tegen `.node-version`) en het punt "De Mac" (een macOS-peer uit
+  `parseTailscale`). Op de Mac gooien die sondes `ALLEEN_PC` en toont het oordeel ze niet (`ALLEEN_PC_SONDES`).
+  `node tools/avondpakket.mjs --vastleggen <map>` (AR12) schrijft de ruwe uitvoer per sonde als fixtures; de
+  thuismap wordt `/home/test`, Tailscale gaat door `kaalTailscale` (nooit adressen of sleutels in de repo).
+
+## Waar media/ staat (11 okt, VI2)
+
+Volledig in `docs/LIBRARY.md` "Waar media/ staat". Wat een bouwer niet mag missen:
+- `VARVE_MEDIA` is de mediamap, niets meer. "Dit is een testserver" is ALLEEN `VARVE_TESTSERVER=1`
+  (`isTestserver` in `server/media-plek.js`). Een nieuwe testserver in `test/` of `tools/headless/`
+  zet beide; `test/media-verhuis.test.mjs` faalt anders.
+- `library.db` staat standaard in de mediamap (`join(MEDIA, 'library.db')`), en alles wat naast de
+  database hoort (backups, kaart.db, nacht.json, stems-rij.json) verhuist mee. Paden in de database
+  blijven relatief (`media/<id>/…`, `alsPad`/`opSchijf`): sla nooit een absoluut pad op.
+- Zonder `VARVE_MEDIA` en zonder `<projectmap>/media` volgt de server `media-VERHUISD.txt`
+  (`kiesMedia`); een testserver nooit.
+- Verhuizen gaat met `tools/media-verhuis.mjs` (droog standaard; `--doe` hernoemt alleen, met de
+  server uit). VARVE.app leest `~/.varve/media-pad` en, via de login-shell, `~/.zprofile`.
+
+## Werkruimte: aanhaakpunten (14 okt, spoor S0)
+
+Volledig in `docs/werkruimte/S0.md`. Precisie (S1): `docs/werkruimte/S1.md`; duwen en jog gaan door de
+Duwer (hooguit één nudge/seek per 15 ms, met keylock nooit twee geplande sprongen), headless
+`tools/headless/precisie.mjs`. Een spoor van de werkruimte raakt ALLEEN zijn eigen stub:
+`src/ui/aanhakers/<spoor>.js`, `src/ui/beschrijf/<spoor>.js`, `src/ui/css/<spoor>.css`,
+`server/routes/<spoor>.js`. Uitzonderingen in de meta van de action, niet in een regex:
+`log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true`, `nummer: true` (hoort
+bij het nummer: terugspelen slaat hem over op een track zonder zijn nummer van toen, `nummerNodig`). Een
+fasemeter op een endless-knop krijgt GEEN `takeover: 1`: dan geeft de eerste tik na een jog of sync een
+sprong (docs/werkruimte/S1.md). Mapjes van buiten:
+`voegMapjeToe`/`haalMapjeWeg`/`zetVolgorde` (lagen.js) en daarna `herbindLagen()`; regels van buiten:
+`mapping.vervangFragment(bron, doc)`/`haalWeg(bron)` (een eigen regel wint altijd).
+Een spoor erbij = vijf plekken: AANHAKERS (src/ui/aanhakers.js), SPOREN van de uitleg (src/ui/beschrijf/index.js),
+SPOREN van de server (server/routes/index.js), de stylesheet in index.html, en in werk.html/uitlijn.html plus de
+tabel `OOK` in de test; `test/aanhaakpunten.test.mjs` legt ze tegen de bestanden op schijf (S0.md §8b). Kleine
+afspraken uit de opruimronde van 15 okt: getallen als tekst uit `src/lib/notatie.js`, "welke track" uit
+`src/ui/wie.js`, `WORKLET_FADE` één export in fx-meer.js (nooit uit fx-worklet.js: dat is de audiothread), een
+effect toetsen op id en nooit op zijn plek in `EFFECTEN`, en `PaneelRelais._stuur` maakt de SSE-tekst één keer
+per bericht (`_tekst`), niet per kijker.
+
+Werkruimte-kern (S3, `docs/werkruimte/S3.md`): `werkruimtes/<naam>.json` (niet in git) of een voorbeeld uit
+`tools/werkruimtes/voorbeelden/`; zonder werkruimte (`standaard`) is de mapping bit voor bit die van vandaag en de
+werk-balk `hidden`. Een deelwissel zet ALLEEN mapjes (layer.* via de adapters), rijen, onderpaneel en werkvak
+(event `'werkruimte'`): 0 invokes buiten `layer.*`/`werk.*` (bus-spion in werkruimte.test). Wat een werkruimte
+mag en niet mag staat op één plek: `src/werk/model.js` (de server gebruikt hetzelfde).
+Op 1440×790 is er met een rij open geen pixel over: de werk-balk haalt zijn hoogte van de mixer zelf af
+(`body.werk-balk-aan` in `src/ui/css/werk.css`, alleen bij een wissel gezet), nooit van de pagina;
+`tools/headless/werkruimte.mjs` toetst het per deel. Wie nog iets boven `main` zet: hetzelfde.
+Een HERLAAD (peil, 409, terugval) haalt mapjes weg en zet ze terug: dat gaat STIL (`adapter.stil(fn)`, geen
+volgt-melding) en daarna gaat per apparaat weer open wat er stond. Een nieuwe adapter (S6: de Maschine) geeft
+`stil` mee, anders springt het deel bij elke peil (review ronde 2). Nieuwe fs-lezers in de server: via `beperkt`
+uit server/standen.js met `ANDERE_LEZERS`, nooit een eigen pool (de grens van 2 geldt voor de hele server).
+
+## Werkruimte (S0–S8, 14 okt): wat een bouwer niet mag missen
+
+Volledig in `docs/WERKRUIMTE.md` ("Gebouwd") en `docs/werkruimte/S0–S8.md`; vragen in VRAGEN blok W.
+- **Met `standaard` is alles bit voor bit vandaag**: geen fragment, geen mapje erbij, de werk-balk `hidden`, en de mixer
+  laadt niets van `src/paneel/` (geen zender, geen ontvanger, geen timer). Elke bestaande test en headless tool moet zo groen blijven.
+- **Stukken en werkruimteregels alleen op VRIJE sleutels of in nieuwe/eigen mapjes**, nooit op de kern of een plek van de
+  standaard (`leesRegels`, B1/B3). Een eigen (gekoppelde) regel wint altijd. De standaardmappings veranderen pas na de proef.
+- **Een deel zet nooit een klank**: alleen mapjes (layer.* via de adapters), rijen, onderpaneel, werkvak (bus-spion, 0 invokes buiten layer.*/werk.*).
+- **Meta-vlaggen, geen regex**: `log: 'overslaan'`, `beginstand: false`, `overneem: true`, `alleenScherm: true` (een mapping weigert
+  hem op een knop, de iPad ook), `nummer: true`. Houd-mapjes (`houd.<naam>`) zijn gedeeld over alle apparaten.
+- **Eigen stubs per spoor**: `src/ui/aanhakers/<spoor>.js`, `src/ui/beschrijf/<spoor>.js`, `src/ui/css/<spoor>.css`, `server/routes/<spoor>.js`.
+- **De iPad en iPhone (S8)**: de schrijfweg staat standaard UIT (404, ook na een herstart van de server); alleen via de tailnet
+  (VARVE_HOSTS) en met een Origin die precies de eigen pagina is; een koppelcode (6 cijfers, 60 s) geeft een HttpOnly-cookie
+  (alleen de hash op schijf) per apparaat én scherm. De MIXER beslist (`src/paneel/uitvoer.js`): alleen wat in de panelen
+  van DAT scherm in het actieve deel staat, en `waaromNietOpScherm` (model.js): VAST_NOOIT (opnemen, log, mappings,
+  werkruimtes, library, laden, auto-DJ, `track.*.grid.*`, `track.*.key`/`.key.*` (niet keylock), patronen opnemen; op de NAAM) wint altijd, dan `nooit`, dan TIJDKRITISCH (bend, play, cue, nudge, hotcues, loop in/out,
+  tap: alleen met `"tijdkritisch": true`), dan `mag`. Rem 120/s per apparaat en scherm (loslaten door als er iets vastzit of een `aan` onderweg is), `seq` tegen
+  dubbel, wegvallen = binnen 1,5 s alles los wat met `druk: 'aan'` binnenkwam (geen ping met `?k=` of de SSE dicht; de
+  mixer ook zelf als zijn kanaal 1,5 s stil is). Het log draagt de bron als vierde kolom (`[t, id, v, { bron: 'ipad' }]`,
+  samen met `van`); terugspelen leest alleen `van`. Een nieuwe action die gevaarlijk is van buiten de Mac: in VAST_NOOIT.
+- **Eén tabblad**: zender en ontvanger alleen in het tabblad dat `statusVanMij` is; de server neemt één mixer-verbinding aan (het tabblad van de relais, anders de eerste; een ander 409). De ontvanger opent zijn SSE alleen als de
+  schrijfweg aan staat: een open SSE kost een van de zes verbindingen per host die de StreamBron nodig heeft.
+- **xy-pad**: `y`, `druk`, `los` staan in het model; `actionsVan` neemt `y` en `druk` mee (anders weigert de mixer ze).
+- **✎ inrichten** (`src/werk/inrichten.js`): elke bewerking = één opslag met versie, het model toetst vooraf; toewijzen aan
+  een groep knoppen gaat in een eigen mapje `p-<paneel>` dat het deel openzet; terug = `POST /api/werkruimtes/<naam>/terug` (409).
+- **Totaalmeting**: `tools/headless/werk-alles.mjs` (C6). Wie iets per beeld toevoegt aan de mixer of mac-2: opnieuw meten.
+
+## Meer effecten, sjablonen en modulators (14 okt, spoor S10)
+
+Volledig in `docs/EFFECTEN-MEER.md` (ontwerp + "Gebouwd"), vragen in VRAGEN blok S10. Wat een bouwer niet mag missen:
+- Het rackformaat blijft SCHEMA 1; alles is optioneel: `mods`, `xy`, `uitleg`, `meng` per effect, `kromme` per
+  koppeling, doelen `plek.K`, `mod.N.diepte` en `<slot>._nat`. Een rack zonder die velden laadt, klinkt en schrijft
+  bit voor bit als voorheen (`bouwKeten` maakt alleen een droog/nat-pad als het rack erom vraagt). `schrijfRack`
+  bewaart onbekende velden op het hoogste niveau (behalve `_…`), en een onbekende modulator blijft als ruwe JSON.
+- Modulators (`src/engine/modulatie.js`) zijn een BESTURING: InsertSlot rekent elke 33 ms (`MOD_TIK`, alleen als het
+  rack modulators met een doel heeft; 8 ms `MOD_TIK_FIJN` met een snelle op de maat) op `ctx.currentTime` en de klok van het deck; staat die stil, dan gebeurt er
+  niets. Ze geven een OFFSET: `leesPlek` (knopstand, soft-takeover, LED-ring) beweegt niet mee, `paramWaarde` wel.
+  Een parameter met `trappen` krijgt alleen een nieuwe stand als hij een trap verder is (`_opTrap`). De volger leest
+  een AnalyserNode op `slot.in` die pas bestaat als er een volger is. Nooit Math.random: toeval komt uit een zaad.
+- Knop → knop (`stuurPlekken`) is één niveau diep: elke knop rekent met zijn EIGEN stand. `resolveMacros` laat
+  `plek.*` en `mod.*` buiten de keten; een nieuwe plek die macro's oplost: gebruik `_waardenNu()` in InsertSlot.
+- Droog/nat per effect is LINEAIR (`zetNat`); een effect met `alleenNat: true` (de delay) krijgt een STUUR vóór
+  het effect (droog vol, de staart rolt door). Een eigen sjabloon heeft herkomst `eigen:<naam>` (niet `e:`: dat is op de master "los effect"), een kant-en-klaar
+  `s:<nr>`. Weghalen van een modulator of koppeling: `_herstelLos` zet de parameter terug; bewerken houdt de
+  `ModStaat` van een modulator met dezelfde soort (`new ModBank(mods, vorige)`).
+- Een nieuw doel `<slot>._nat` op een effect zonder droog/nat-pad vraagt een nieuwe keten: `natOntbreekt()` /
+  `bewerkMods().opnieuw`, en de editor doet dan `zetRack(…, { behoudStanden: true })` (kruisfade).
+- De drie nieuwe kernen (`Kam`, `Freqschuif`, `Aanslag` in fx-kern.js) volgen het audiopad: 0 GC, gemeten in
+  `test/effecten-s10.test.mjs`. Twee dingen die hier al misgingen: een keyed store van een double
+  (`this.kern[naam] = …` in de processor) en een module-constante in de lus (de grens van de aanslag) maakten
+  per blok afval; geef de processor een `zet(kern, p)` met namen en lees een grens in een veld. Niemitalo's
+  Hilbert-tabel geeft a, de trap rekent met a². Parameters die per blok binnenkomen en een lus versterken
+  (feedback van de kam) glijden per SAMPLE in de kern.
+- Een sjabloon met `uitleg` (die van S10) moet in `rack.test` ook: knopnamen, `xy` op twee knoppen, een DROGE
+  beginstand (wat een echo, galm, kam, frequentieschuif … erin mengt staat dicht; een delay via `_nat`), en
+  modulators die in de beginstand stilstaan. Nieuw sjabloon: ook `node tools/headless/effecten-meer.mjs`.
+- Eigen sjablonen: `/api/sjablonen` (bewaren met versie, 409 met wat er nu staat; geen naam van een kant-en-klaar
+  sjabloon; alleen `vanDezeMac`). In de kiezer achter de kant-en-klare (`_eigen`), dus `s:<nr>` van een
+  kant-en-klaar sjabloon verandert niet. Elke proefserver zet ook `VARVE_SJABLONEN` (`harnas()`, set-proef, latentie, sec-plan en sec-auto doen het al), anders schrijft "als sjabloon" in `<worktree>/racks/eigen.json`.
+- De XY-pad van een rack: `track.N.fx.xy.x/.y` (`beginstand: false`, de plek staat al in het log). Bouwsteen
+  `sjablonen` in `src/paneel/vrij.js`; bewaren of wissen staat niet op de bus, dus nooit van de iPad.
+- De editor (`rack-editor.js`) tekent nog steeds niet tijdens het slepen: schuiven van modulators en de kromme
+  veranderen alleen getallen en hun eigen canvas (`tools/headless/rack-editor.mjs` meet het met een MutationObserver).
+
+## Een set klaarzetten, live bijmixen, sets (14 okt, spoor S9)
+
+Volledig in `docs/PLAN-SET.md`. Wat een bouwer niet mag missen:
+- Het planformaat groeit ZONDER nieuwe versie: `tracks: { auto }` (plan), `go: 'wacht'` en
+  `lagen` (stap), allemaal optioneel. Wie het plan schrijft stuurt `kent: KENT` (plan-model.js);
+  zonder zet de server ze terug (`herstelVelden`, de regels van in/uit). Een nieuw optioneel veld:
+  in KENT en in GROEPEN van herstelVelden.
+- De automaat raakt een track van Clay NOOIT: met `tracks` alleen die, zonder nooit een track waar
+  iemand anders dan de automaat de laatste `CLAY_RECENT` (120 s) een `track.N.*` stuurde, en nooit
+  een track met een laag (`_laagDecks`). `_luidste`/`_naOvername` tellen alleen zijn tracks. Een
+  nieuwe plek die een track kiest: `_mijn()` en `_vanClay()`.
+- GO heeft een uiterste moment (`_goUiterst`): nooit stilte gaat voor GO. Lagen kijken naar de
+  POSITIE van de hoofdtrack (regel 3); Clay die de track van een laag aanraakt = de laag is van hem.
+- `plan.*` en `set.*` hebben `log: 'overslaan'` en `beginstand: false`; `set.bewaar*` en
+  `set.terugladen*` staan in VAST_NOOIT (src/werk/model.js). De rest mag van de iPad alleen als `mag`
+  het noemt.
+- Laden gaat niet over de bus: de automaat ziet wat Clay laadde aan een ANDER nummer op het deck
+  (`_kijkLaden`, elke tik, met `laadSleutel` = `bron.bestand`; NOOIT `deck.buffer` vergelijken: de
+  StreamBron geeft daar elke keer een nieuw object); zelf laden gaat via `_laadZelf`, en die leest null van
+  `laadLibrary` als "verdrongen door Clay": een GELUKTE laad geeft daarom altijd een object (`{}`), nooit null
+  (integratie S9: met null telde elke laad van de auto-DJ als een laad van Clay; set-proef stap 4). Een laag rekent op de positie van zijn
+  eigen track en loopt mee over een stapwissel; zonder zeker grid start hij niet vanzelf.
+- Een SET (`src/sets/model.js`, puur, ook de server): plan en patronen als KOPIE, werkruimte op
+  NAAM, momentopname = `leesStand()` met speelt/wacht/pads/patronen UIT. `sets/<naam>.json` (niet in
+  git: `/sets/` in .gitignore; `VARVE_SETS`, ook in elke proefserver), versie + 409 + `.versies`, elke fs-operatie via `beperkt` (server/sets.js).
+  Terugladen laadt nummers gewoon uit de library (grid van NU) en zet dan de stand
+  (`maakZetMoment`); over een spelende track pas bij de tweede druk binnen 3 s; er start niets.
+- `/api/set/klaarmaken` weigert (409) als er een deck speelt of op een speeldag (de speeldagen van
+  de nacht). De secties gaan één voor één en wachten als er een deck gaat spelen.
+- Aanhaker `src/ui/aanhakers/set.js` (negende in AANHAKERS), uitleg `src/ui/beschrijf/set.js`,
+  routes `server/routes/sets.js`, bouwstenen `plan` en `sets` (src/paneel/vrij.js; de live-stand
+  erboven in paneel.js `setVak`, op de iPad via `GET /api/set/live`). Toetsen: `test/plan-set`,
+  `test/auto-set`, `test/sets-server`, `test/sets-mixer`; headless `tools/headless/set-proef.mjs`.
+
+## Beatgrid (23 sep 2026, restpunten 25 sep, docs/BEATGRID.md)
+- Het grid is een TEMPOKAART: stukken {van, bpm, anker, zekerheid?, maat?} in tracktijd; tellen
+  lopen door over de grenzen. Reken in tellen (timeOf/beatAt) en met bpmAt/beatLengthAt(pos) — nooit
+  grid.bpm/beatLength (alleen het eerste stuk). Bewerken raakt alleen het stuk rond de positie
+  en loopt via deck.gridGewijzigd() (herankert, zet bron:'hand'). slot = met de hand bevestigd
+  (Lock of een tap van ≥ 4 tikken).
+- MAAT-ANKER (25 sep): `maat` = tracktijd van een tel 1 op het eigen rooster van het stuk. Zonder
+  (oude JSON, analyse) telt hij door vanaf het vorige stuk = de oude maten; daarna houdt elk stuk
+  zijn eigen "1". Tel 1 hier zet tel én "1". Reken met maten ALTIJD via barPhase/telInMaat/
+  isMaatbegin/beatsBetween, nooit met beat % beatsPerBar. Laden bewaart niets (alleen een bewerking).
+- TWEEDE KANS (25 sep, `tweedeKans` in detect.js): de tempocurve van 12 s kiest midden in een
+  nummer vaak een toevallig tempo, en dan telt het venster als gat. Een korte keten met binnen
+  60 s een keten op hetzelfde tempo T laat de vensters ertussen opnieuw meten op T (T/2 gaat mee,
+  2T blijft staan, twee lange ketens nooit samen). Het moet wel ÉÉN grid opleveren
+  (`eenGridPast`: > 10% van de vensters > 0,15 tel naast = niet), anders plakte hij een volgend
+  nummer op hetzelfde tempo "zeker" vast. Het 156-bpm-stuk van het album staat er na ↻ in.
+  ELK STUK MOET PASSEN (25 sep, `stukPast` in analyseerGrid, BEATGRID.md punt 4): per venster de
+  fase op het grid van zijn stuk, 0,1 tel rond de fase met de meeste buren (0,15 liet een sprong
+  van 0,3 tel toe). Past het niet: splitsen waar de fase verspringt, anders bijstellen op de
+  helling, anders onzeker (`PAST_NIET`). Een stuk dat meteen past houdt precies zijn oude grid.
+  Een kant of rest < 20 s is een onzeker gat, ook als er een grid op past. Een break tussen twee
+  stukken op één grid (≤ 32 maten, puls op de tel of precies op de offbeat) blijft één stuk.
+  Bekende grens: een kort stuk op 1–2% ander tempo aan de rand van een lang stuk blijft erin.
+  Meten op fragmenten (`tools/beatmeting/rest/fragment.mjs`): met de nul van het hele nummer.
+- Verfijnen na "tel 1 hier" (`/grid/verfijn` met anker) is gemeten en NIET gebouwd: op Clay's
+  muziek niet beter (de voorflank lukt op 2 van 6 fragmenten).
+- Tap: rechte lijn door de tikken; de server verfijnt alleen ±25% rond de getikte fase; geen
+  puls (score niet boven een geschudde nul) → zeker:false en de tap blijft staan.
+- Bij binnenhalen automatisch analyseGrid (bron:'auto', zekerheid per stuk = fase-stabiliteit
+  boven een geschudde nul; blokken worden ook rondgedraaid, anders kreeg een schone 120 bpm
+  "geen puls"). Bij opstarten heranalyseert de server op de achtergrond (één tegelijk, worker)
+  alleen lege of oude grids (geen slot, geen bron). Slot wordt nooit overschreven, bron:'hand'
+  alleen via ↻ in de library. VARVE_HERANALYSE=uit voor tests.
+- Zeker ≥ 0,65, geen puls < 0,15 (gemeten op Clay's library: drie groepen 0–0,06 / 0,20–0,62 /
+  0,69–0,94). In een onzeker stuk weigeren sync en beat-loops met een melding; op slot geldt
+  het hele grid als zeker. Sinds 16 okt (AR3) ook bij twijfel 'maat': sync en beat-loops vragen `syncBij`
+  (`deck.gridSyncHier`, melding `EEN_TWIJFEL`), een goedgekeurde (`ok`) "1" telt als zeker. Beatjump, quantize,
+  op de maat en secties blijven op `zekerBij`; de bewakers van de auto-DJ (`kenmerken`, `_uitKenmerken`) op
+  `syncBij`. Een nieuwe plek die sync doet of een blend kiest: `syncBij`. Strook onder overzicht en banen; onset-streepjes in de zoom.
+- HET DJ-TEMPO (14 okt, BEATGRID.md §12): onder 88 bpm verdubbelt elk automatisch grid (tellen én oude
+  analyse; `dansOctaven`, `DANS_MIN`/`DANS_MAX` in tellen.js): Beat This! hoort vaak de halve tel (77
+  waar Clay 153 tikt). Een wals niet ×2. Prijs: wat echt op 70–87 telt krijgt het dubbele. HALVEREN
+  alleen als het moet (boven 300: het netwerk telt de achtsten) of BEVESTIGD: boven 180 met downbeats
+  krijgt een stuk een voorstel (`halveer`), en alleen `vergelijk` voert het uit als de oude analyse het
+  halve tempo hoort in de fase van de "1" (review ronde 1: echte 181–300 die Beat This! goed telt bleef
+  anders niet zeker). HALVEREN IS EEN GOK over welke van de twee tellen de tel is: een boven 300
+  gehalveerd stuk is onzeker (`twijfel: 'tel'`) tot `vergelijk` het GRID TEGEN GRID bevestigt (de lijnen
+  in de tel van de oude analyse) én de downbeats het zeggen; zonder downbeats kiest de oude analyse de
+  fase, maar het blijft onzeker. De tweede mening staat in `tweede-mening.json` (OUDE_ANALYSE_VERSIE in
+  analyze.js omhoog bij een andere uitkomst van maakGrid); moet hij gerekend worden, dan wacht de
+  achtergrond zolang er een deck speelt. Een grid ander octaaf meten kan: meetGrid/afwijkingBij tellen
+  tellen op de halve tel mee als ze om en om vallen én de lijnen de meerderheid dragen (`fijner`;
+  anders werd een slot-grid een halve tel naast "100% raak"). Een octaafwissel van een auto-grid
+  rekent de bewaarde sampler-pads mee om (`_samplesNaarOctaaf`, library.js). De oude analyse controleert zijn
+  zekere stukken op de onset-pieken (`blokDrift`, `kantelOpPieken`): wegloopt = `twijfel: 'drift'`.
+  Verander je de analyse: `node tools/beatmeting/synth/bench.mjs` (vóór/na met `--code`, `--vergelijk`)
+  en `node test/beatbench.test.mjs` (nergens vals zeker). Kaart-VERSIE omhoog = alle auto-grids uit de tellen opnieuw.
+- deck.onsets = klappen in tracktijd (GET /api/library/<id>/onsets, eigen ijking 68,5 ms, ±15 ms):
+  goed om te snappen, niet om een fase op te zetten.
+- SNAPPEN (15 okt, BEATGRID.md §14): tel 1 hier, tellen hier, vast en de klik in de golfvorm snappen via
+  `snapNaarTel(d.tellen, d.onsets, t)` (beatgrid.js): eerst de tel van Beat This! binnen 30 ms, dan de klap,
+  dan de positie. De klappen hebben een vaste ijking (synthetisch −8,9 ms scheef); de pin telt op
+  `klappenEnTellen`. Een nieuwe plek die snapt: dezelfde helper, nooit `snapNaarOnset(d.onsets, …)` alleen.
+- DE "1" TEGEN DE LAGE BAND (15 okt, §14): `maatMening(kaart, laag)` na `vergelijk` in `pasTellenToe`; de lage
+  band (`laagEnvelope` in detect.js, energie < 150 Hz per 4 ms) staat in `media/<id>/laag.bin` + `laag.json`
+  (`LAAG_VERSIE`). Alleen `twijfel: 'maat'` (de zekerheid blijft, nooit een andere "1"); vier op de vloer zegt
+  niets. Verander je `laagEnvelope`: `LAAG_VERSIE` omhoog. Verander je `maatMening`: `bench.mjs` met en zonder
+  `--geen-maat` en `test/beatbench.test.mjs` (geen goede "1" onterecht, vals zeker 0). Een FFT-flux per frame is
+  hiervoor NIET goed (aliasing tegen de maat). Kaart-VERSIE is sinds 16 okt 3 (VRAGEN AR1): de eerste start
+  rekent elk automatisch grid uit de tellen opnieuw, zodat de hele library de tweede mening krijgt.
+- Grid-modus op de APC: Shift + Metronome (mapje `edit`, een schakelaar, vooraan in GROEPEN).
+  Scene 1 tel 1 hier (snapt ±30 ms naar een onset, vanaf wat je HOORT: positie min
+  uitgangsvertraging × rate) · 2 ×2 · 3 ½ · 4 halve tel · 5 nieuw stuk · Nudge ±5 ms (shift ±1) ·
+  Cue level bpm ±0,01 (shift ±0,1; track.N.grid.bpm lineair over 40–300) · Lock = slot (alleen in
+  grid-modus, het open mapje wint; erbuiten is Lock quantize). Wat de grid-modus niet
+  definieert blijft werken. regel.led.lees laat een lampje de stand van een andere action tonen.
+  Sinds 14 okt (BEATGRID.md §12) ook: Device ◀ ▶ de "1" ∓ een tel (shift: plek ◀ ▶), On/Off controle
+  (shift: ✓), Clip/Device View tellen hier (`grid.align`), Detail View ↶; scene 1 brandt oranje bij twijfel.
+  `grid.undo` zet PRECIES terug (geen bron 'hand'); pin krijgt `klappen` (deck.onsets) en telt daarop
+  als het grid > ¼ tel uit de pas ligt. Bewaren: `src/ui/grid-bewaren.js` (250 ms na een bewerking,
+  leesWeg ook bij een fout, time-out 5 s), na elke POST de library-rij, pas na de REEKS andere tracks
+  met dat nummer (`naReeks`). Een geladen grid als bewaard markeren: `grids.alsBewaard(id)`, niet
+  `gridBewaard[id]` zelf zetten. Weergave leest `deck.gridMetingBij(nu)`.
+
+## Categorieën en tags in de library (14 okt, spoor S11)
+
+Volledig in `docs/LIBRARY-TAGS.md`, vragen in VRAGEN blok S11. Wat een bouwer niet mag missen:
+- Begrippen: *categorie* (eigen bak met volgorde, plat), *slimme categorie* (bewaard filter, de server rekent hem bij
+  elke vraag), *tag* (label + kleur), *snel-tag 1–8* (een PLEK die naar een tag wijst: de bus kent geen namen). Een
+  *krat* is van de kaart; "→ categorie" maakt er een KOPIE van. Tags van nummers zijn niet `rack.tags`.
+- Schema v10: `tags`, `nummer_tags`, `categorieen`, `categorie_nummers` (`plek` REAL, tussenvoegen = een getal ertussen,
+  te klein = opnieuw nummeren) en de afgeleide kolommen `k_grid`/`k_toon`/`k_energie`. Een nieuwe plek die grid, toon,
+  secties of duur schrijft: `this._kenmerken(id)` erachter (anders klopt het filter niet). Formules alleen uit
+  `src/library/indeling.js` (die gridStatus en ToonKaart gebruikt), nooit een tweede.
+- Het filter is ÉÉN object (`normaliseerFilter`), in de URL via `filterNaarQuery`/`queryNaarFilter`, in het zoekveld als
+  zoekregel (`leesZoekregel`/`zoekregelVan`). In de UI is de tekst van het zoekveld de enige bron: een klik op een
+  categorie of tag schrijft die tekst om. Tags in een regel staan bij SLEUTEL; hernoemen/samenvoegen schrijft de regels
+  en snel-tags mee om (één transactie). Slim in slim kan niet; een slimme mag binnen één gewone zoeken.
+- `GET /api/library` zonder de nieuwe parameters = precies de oude lijst. `sorteer=plek` alleen met een gewone categorie
+  (400). Een filterkolom met weinig waarden (k_grid) gaat NIET via de index (`+t.k_grid`): dat maakte een slimme
+  telling twee keer zo duur. `stand()` is onthouden op total_changes + data_version.
+- Schrijven: `/api/indeling/*`, elke POST `vanDezeMac` (403). Op de bus alleen kiezen en taggen
+  (`library.category.*`, `library.quicktag/quickfilter.K`, `track.N.tag.K`), alle met `log: 'overslaan'` en
+  `beginstand: false`; wissen, hernoemen, categorieën maken nooit op de bus. `library.*` blijft VAST_NOOIT;
+  `track.*.tag.*` mag van de iPad als `mag` het noemt (bouwsteen `tags`).
+- Met de kolom open vallen LUFS en racks uit de lijst (`SMAL_WEG` in library-panel.js): zo past hij op 1440. Een kolom
+  erbij in de library: meet het opnieuw (tools/headless/indeling.mjs controleert de breedte).
+- Toetsen: `test/indeling*.test.mjs`, `tools/headless/indeling.mjs` (echte Chrome, 5000 nummers),
+  `tools/bench/indeling.mjs` (5.000 en 20.000).
