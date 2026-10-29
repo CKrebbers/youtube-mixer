@@ -18,6 +18,10 @@ const KNOPPEN = [
   ['opstelling.herrol', 'nieuw zaad', 'hetzelfde recept, alles opnieuw'], ['opstelling.muteer', 'muteer', 'een stap opzij'], ['opstelling.kruis', 'kruis', 'half deze, half de vorige'],
   ['opstelling.terug', 'terug', 'de vorige opstelling'], ['opstelling.genereer', 'genereer', 'een nieuw recept uit de bouwdoos'],
   ['opstelling.start', 'start', 'alles op de volgende 1'], ['opstelling.stop', 'stop', 'patronen stil'], ['opstelling.bewaar', 'bewaar', 'als nieuw recept bewaren'],
+  ['opstelling.loop', 'laat lopen', 'een heel nummer: intro, opbouw, vol, breuk, vol, uitloop (Maschine SHIFT+PLAY, APC SESSION)'],
+  ['opstelling.neem', '● vastleggen', 'wat je speelt als take bewaren (Maschine REC); nog eens = klaar'],
+  ['opstelling.take.speel', '▶ take', 'de gekozen take afspelen (SHIFT+REC)'], ['opstelling.take.weg', '✕ take', 'naar de prullenbak (SHIFT+ERASE)'],
+  ['opstelling.take.terug', '↶ take', 'de laatste uit de prullenbak terug (SHIFT+DUPLICATE)'],
 ];
 
 /** De tocht op de schermen (CONTROL vast, of even na een nieuw hoofdstuk): links het hoofdstuk, rechts de doelen. */
@@ -68,7 +72,8 @@ export function tekenOpstelling(st, nr) {
   if (nr === 0) {
     tekst(buf, 2, 1, pasIn(st.naam ?? 'geen opstelling', Math.floor((BREED - 4) / 12)), 2);
   } else {
-    tekst(buf, 2, 1, pasIn(st.kandidaat && st.kandidaat !== st.naam ? `wiel: ${st.kandidaat}` : (st.melding || ''), REGEL));
+    const status = st.take?.neemt ? `● NEEMT ${st.take.maten}` : st.take?.speelt ? `▶ ${st.take.speelt}` : st.loop ? `LOOPT ${st.loop.deel} ${st.loop.m}/${st.loop.maten}` : null;
+    tekst(buf, 2, 1, pasIn(status ?? (st.kandidaat && st.kandidaat !== st.naam ? `wiel: ${st.kandidaat}` : (st.melding || '')), REGEL));
     tekst(buf, 2, 9, pasIn((st.sporen ?? []).map((s) => `${s.n}${s.soort === 'nummer' ? 'N' : s.wat?.[0]?.toUpperCase() ?? '-'}`).join(' '), REGEL));
   }
   lijn(buf, 0, BREED - 1, 17);
@@ -113,6 +118,7 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
       if (!v.laag.aan) v.wisselAan();
       if (Number.isFinite(dekking)) v.zetDekking(dekking);
     } : null,
+    bewaarTakes: (x) => bewaarInstelling('takes', x),
     bewaar: async (recept) => {
       const eigen = (await instelling('opstellingen-eigen')) ?? [];
       await bewaarInstelling('opstellingen-eigen', [...eigen.filter((r) => r.id !== recept.id), recept]);
@@ -135,6 +141,7 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
     for (const [id, f] of Object.entries(fouten)) engine.meld(`recept ${id}: ${f.length} fout(en), eerste: ${f[0]}`, 'fout', `opstelling:${id}`);
   };
   laadRecepten();
+  instelling('takes').then((x) => { if (x) o.laadTakes(x); });
 
   // De drift: elke 50 ms kijken; WAT er gebeurt zegt de maatklok (acties-opstelling.js tik).
   setInterval(() => { o.tik(); engine.tocht?.tik(); engine.gebaren?.tik(); }, 50);
@@ -158,6 +165,7 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
       <div class="opst-scenes"></div>
       <div class="opst-partituur" title="De partituur (APC: USER): kolom = spoor, onder rustig, boven vol. Wit = speelt, geel = wacht op de maat."></div>
       <div class="opst-sporen"></div>
+      <div class="opst-takes"></div>
       <p class="opst-uitleg">Een recept + een zaad = een opstelling. Maschine: draaiknop 1–8 = de macro's, pads midden = scenes, pads boven = nieuw zaad · muteer · kruis · terug, wiel = recept kiezen, indrukken = laden, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren. Macro 7 (variatie) laat de opstelling uit zichzelf bewegen.</p>
     </div>`;
   const $ = (s) => paneel.querySelector(s);
@@ -197,6 +205,27 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
     }
     tochtEl.innerHTML = `<div class="tocht-balk">${balkjes}</div>${midden}${smaak}`;
   }
+  const takeEl = $('.opst-takes');
+  let takeSleutel = '';
+  function tekenTakes(st) {
+    const k = st.take, l = st.loop;
+    const sleutel = JSON.stringify([k, l]);
+    if (sleutel === takeSleutel) return;
+    takeSleutel = sleutel;
+    const status = [
+      l ? `<b>loopt</b> ${esc(l.deel)} ${l.m}/${l.maten} · ${l.gedaan}/${l.totaal} maten` : '',
+      k.neemt ? `<b class="neemt">● neemt op</b> ${k.maten} maten` : '',
+      k.speelt ? `<b>▶ ${esc(k.speelt)}</b>` : '',
+    ].filter(Boolean).join(' · ');
+    takeEl.innerHTML = `${status ? `<div>${status}</div>` : ''}${k.lijst.length ? `<div class="opst-takelijst">takes: ${k.lijst.map((x, i) => `<button data-take="${i}" class="${x.gekozen ? 'aan' : ''}" title="${x.maten} maten${x.loop ? ', met het verloop' : ''}">${esc(x.naam)}</button>`).join('')}${k.prullenbak ? ` <span>(${k.prullenbak} in de prullenbak)</span>` : ''}</div>` : ''}`;
+  }
+  takeEl.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-take]');
+    if (!b) return;
+    // Kiezen: met volgende/vorige tot de gekozen (de engine kent alleen een volgorde).
+    const st = o.stand().take, doel = Number(b.dataset.take), nu = st.lijst.findIndex((x) => x.gekozen);
+    for (let i = 0; i < (doel - nu + st.lijst.length) % st.lijst.length; i++) druk('opstelling.take.volgende');
+  });
   const partEl = $('.opst-partituur');
   let partSleutel = '';
   function tekenPartituur(st) {
@@ -251,6 +280,7 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
     const padNamen = padstand === 'gebaren' && engine.gebaren ? engine.gebaren.padLabels()
       : padstand ? Array.from({ length: 16 }, (_, i) => { const r = ctl.maschine.regelVoor(`pad${i + 1}`, { shift: false }); return r?.label ?? null; }) : null;
     tekenPartituur(st);
+    tekenTakes(st);
     const scherm = ctl?.maschineScherm;
     if (scherm) for (const nr of [0, 1]) {
       const buf = toonTocht ? tekenTocht(t, nr) : (nr === 1 && padstand ? tekenPads(padstand, padNamen) : tekenOpstelling(st, nr));

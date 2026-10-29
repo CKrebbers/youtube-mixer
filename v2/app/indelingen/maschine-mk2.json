@@ -3,7 +3,7 @@
   "naam": "opstelling",
   "apparaat": "maschine-mk2",
   "shift": "shift",
-  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, G korrels (de granular sampler: de eerste druk bevriest wat de track met focus net speelde, pad 1 = net tot pad 16 = bijna 3 s terug, druk = hoe vol, van pad naar pad = door het sample), F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht. SAMPLING = de korrelwolk (instrument) vangt de laatste 4 tellen van wat er speelt; speel hem dan met de noten (groep C).",
+  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, G korrels (de granular sampler: de eerste druk bevriest wat de track met focus net speelde, pad 1 = net tot pad 16 = bijna 3 s terug, druk = hoe vol, van pad naar pad = door het sample), F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht. SAMPLING = de korrelwolk (instrument) vangt de laatste 4 tellen van wat er speelt; speel hem dan met de noten (groep C). Laten lopen: SHIFT+PLAY (of SHIFT+wiel = recept laden en meteen lopen). Vastleggen: REC = aan/uit, SHIFT+REC = afspelen, SHIFT+ERASE = weg (prullenbak), SHIFT+DUPLICATE = terug, SHIFT+◄ ► = andere take.",
   "regels": [
     {
       "control": "enc1",
@@ -1745,6 +1745,69 @@
       "actie": "korrel.vang",
       "gedrag": "trigger",
       "label": "korrelwolk: vang wat er speelt"
+    },
+    {
+      "control": "rec",
+      "actie": "opstelling.neem",
+      "gedrag": "trigger",
+      "led": {},
+      "label": "vastleggen aan/uit (een take)"
+    },
+    {
+      "control": "rec",
+      "shift": true,
+      "actie": "opstelling.take.speel",
+      "gedrag": "trigger",
+      "label": "take afspelen / stop"
+    },
+    {
+      "control": "erase",
+      "shift": true,
+      "actie": "opstelling.take.weg",
+      "gedrag": "trigger",
+      "label": "take naar de prullenbak"
+    },
+    {
+      "control": "duplicate",
+      "shift": true,
+      "actie": "opstelling.take.terug",
+      "gedrag": "trigger",
+      "label": "take terug uit de prullenbak"
+    },
+    {
+      "control": "navL",
+      "shift": true,
+      "actie": "opstelling.take.vorige",
+      "gedrag": "trigger",
+      "label": "vorige take"
+    },
+    {
+      "control": "navR",
+      "shift": true,
+      "actie": "opstelling.take.volgende",
+      "gedrag": "trigger",
+      "label": "volgende take"
+    },
+    {
+      "control": "play",
+      "shift": true,
+      "actie": "opstelling.loop",
+      "gedrag": "trigger",
+      "label": "laten lopen (een heel nummer)"
+    },
+    {
+      "control": "wiel",
+      "shift": true,
+      "actie": "opstelling.laadloop",
+      "gedrag": "trigger",
+      "label": "recept laden en laten lopen"
+    },
+    {
+      "control": "enter",
+      "shift": true,
+      "actie": "opstelling.laadloop",
+      "gedrag": "trigger",
+      "label": "recept laden en laten lopen"
     }
   ]
 }

@@ -247,3 +247,34 @@ achteruit · breedte · bevries.
   (zijn ring liep mee). Laadt het gebaar hem net, dan vangt hij eerst 1,5 s.
 
 Nog niet: de korrelwolk als instrument (met een eigen bron, op toonhoogte bespeelbaar) en korrels op de maatklok.
+
+## Laten lopen en vastleggen (30 okt)
+
+**Laten lopen** (`kern/opstelling/verloop.js`): open een recept en druk op één knop. Daarvoor zijn er drie wegen:
+Maschine SHIFT+PLAY, SHIFT+wiel (recept laden en meteen lopen), of APC SESSION. De opstelling wordt dan een
+heel nummer, in deze delen:
+
+1. **intro**: 1–2 rustige sporen
+2. **opbouw**: om de paar maten een spoor erbij
+3. **vol**: alles, op rij 4–5
+4. **breuk**: één spoor, met een lege maat aan het eind
+5. soms een **tweede opbouw**
+6. **vol**
+7. **uitloop**: één voor één eruit
+
+Lengtes en volgorde komen uit het zaad, dus elke keer anders. De scenes van het recept glijden mee. Wat je zelf
+aanraakt (een variant, Clip Stop) gaat voor tot het volgende deel. Aan het eind stoppen de patronen.
+
+**Vastleggen** (`kern/opstelling/take.js`): REC neemt op wat je speelt, op hele maten. Een take bewaart:
+- het recept en het zaad, zodat de opstelling precies terugkomt;
+- als het liep: vanaf welke maat van het verloop;
+- je gebaren, macro's, varianten, drums, noten en strip, uitgedund tot 1/16 tel.
+
+| Knop | Doet |
+|---|---|
+| SHIFT+REC | afspelen (op de volgende maat) |
+| SHIFT+ERASE | naar de prullenbak; niets is echt weg, de laatste 50 blijven |
+| SHIFT+DUPLICATE | terug uit de prullenbak |
+| SHIFT+◄ ► | een andere take kiezen |
+
+Opslag: `~/.varve/v2/instellingen/takes.json` (`{ takes, prullenbak }`).

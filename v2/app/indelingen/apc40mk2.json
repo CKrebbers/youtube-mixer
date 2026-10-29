@@ -3,7 +3,7 @@
   "naam": "standaard",
   "apparaat": "apc40mk2",
   "shift": "shift",
-  "uitleg": "Eén kolom = één track (knop boven: filter, fader onder). Rechts de track met focus. Vijf grid-standen op scene 1-5 (hotcues 1-4, hotcues 5-8, kills en beatjump, stems, patronen), drie knoppenstanden op Clip/Device View en Detail View. {k} = kolom 1-8, {focus} = de track met focus. USER = de partituur (aan/uit): kolom = spoor van de opstelling, rij 1 (onder) rustig tot 5 (boven) vol, wisselt op de maat; scene-knoppen = een hele rij, SHIFT+scene = glijden; A|B k = scene k als eindpunt van de crossfader, de crossfader mengt ernaartoe; Clip Stop = spoor uit op de maat; device-knoppen = de acht macro's.",
+  "uitleg": "Eén kolom = één track (knop boven: filter, fader onder). Rechts de track met focus. Vijf grid-standen op scene 1-5 (hotcues 1-4, hotcues 5-8, kills en beatjump, stems, patronen), drie knoppenstanden op Clip/Device View en Detail View. {k} = kolom 1-8, {focus} = de track met focus. USER = de partituur (aan/uit): kolom = spoor van de opstelling, rij 1 (onder) rustig tot 5 (boven) vol, wisselt op de maat; scene-knoppen = een hele rij, SHIFT+scene = glijden; A|B k = scene k als eindpunt van de crossfader, de crossfader mengt ernaartoe; Clip Stop = spoor uit op de maat; device-knoppen = de acht macro's. SESSION = de opstelling laten lopen (een heel nummer).",
   "regels": [
     {
       "control": "fader{k}",
@@ -1879,6 +1879,13 @@
       "gedrag": "trigger",
       "laag": "modus.partituur",
       "label": "start op de 1"
+    },
+    {
+      "control": "session",
+      "actie": "opstelling.loop",
+      "gedrag": "trigger",
+      "led": {},
+      "label": "laten lopen (een heel nummer)"
     }
   ]
 }

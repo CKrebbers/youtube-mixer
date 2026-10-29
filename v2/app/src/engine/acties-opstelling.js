@@ -26,6 +26,18 @@
  *   opstelling.b.{s}             trigger  scene s als eindpunt van de crossfader (de morph begint bij wat er nu staat)
  *   opstelling.morph             waarde   0 = waar je was, 1 = de gekozen scene; alles ertussen = een mengsel
  *
+ * Laten lopen (kern/opstelling/verloop.js): één knop en de opstelling wordt een heel nummer.
+ *   opstelling.loop              trigger  aan/uit: intro, opbouw, vol, breuk, vol, uitloop, elke maat op de maat;
+ *                                         de scenes glijden mee; wat JIJ aanraakt gaat voor tot het volgende deel
+ *   opstelling.laadloop          trigger  het gekozen recept klaarzetten en meteen laten lopen
+ *
+ * Vastleggen (kern/opstelling/take.js): wat je speelt als automation bewaren, en weer weg als het niets is.
+ *   opstelling.neem              trigger  opnemen aan/uit (begint en eindigt op hele maten; ook het verloop als het liep)
+ *   opstelling.take.speel        trigger  de gekozen take afspelen (zet zijn opstelling terug), nog eens = stop
+ *   opstelling.take.weg          trigger  de gekozen take naar de prullenbak (niets is echt weg)
+ *   opstelling.take.terug        trigger  de laatste uit de prullenbak terug
+ *   opstelling.take.volgende / .vorige   trigger  een andere take kiezen
+ *
  * Klaarzetten start nooit geluid (zoals een stand of set in v1): pas `opstelling.start` speelt.
  * Een macro zet zijn links via de bus (bron 'opstelling'), dus alles staat in het handelingenlog.
  * De drift (de opstelling beweegt uit zichzelf, macro "variatie") loopt in `tik(t)`, op de maatklok.
@@ -34,6 +46,8 @@ import { normaliseerRecept, ROLLEN } from '../kern/opstelling/model.js';
 import { realiseer, macroActies, sceneWaarden, PATROON_PLEK, RIJEN, MIDDEN } from '../kern/opstelling/realiseer.js';
 import { muteer, kruis, drift, genereer } from '../kern/opstelling/varieer.js';
 import { volgendZaad } from '../kern/opstelling/zaad.js';
+import { maakVerloop, standOp } from '../kern/opstelling/verloop.js';
+import { dun, legtVast, normaliseerTake, nogVast } from '../kern/opstelling/take.js';
 import { Emitter } from '../kern/emitter.js';
 
 export const GESCHIEDENIS = 32;
@@ -59,6 +73,12 @@ export function definieerOpstelling(engine) {
   let uitGezet = new Map();      // spoor -> fader van voor het uitzetten
   let glij = null;          // { van: [...], naar: Map(i -> v), t0, duur }
   let morph = { a: null, b: null, m: 0, naam: null };
+  let loop = null;          // { v: verloop, start: maat of null, gepland, deel, hand: Set(spoor) }
+  let takes = [];           // alle takes (genormaliseerd), op volgorde van maken
+  let prullenbak = [];      // weggegooide takes (de laatste 50)
+  let takeKeuze = -1;       // index in takes
+  let opname = null;        // { start: tel of null, acties, recept, zaad, loop: { van } | null }
+  let afspelen = null;      // { take, start: tel of null, i, laatst: Map }
 
   const zeg = (t) => { melding = t; engine.meld?.(`opstelling: ${t}`, 'info', 'opstelling'); uit.emit('verander'); };
   const catalogus = () => { try { return bronnen.catalogus() ?? {}; } catch { return {}; } };
@@ -89,12 +109,14 @@ export function definieerOpstelling(engine) {
       if (o.patronen.some((p) => p.n === sp.n)) engine.patronen?.zetPatroon(sp.n, PATROON_PLEK, null);
       if (sp.soort === 'instrument' && engine.track(sp.n)?.instrument?.soort === sp.instrument) engine.zetInstrument(sp.n, null);
     }
+    if (afspelen && afspelen.take.recept !== nieuw.recept) stopAfspelen(false);
     o = nieuw;
     actief = Object.fromEntries(Object.keys(o.varianten ?? {}).map((n) => [n, MIDDEN]));
     wacht = new Map();
     uitGezet = new Map();
     glij = null;
     morph = { a: null, b: null, m: 0, naam: null };
+    loop = null;
     basis = o.macros.map((m) => m.waarde);
     nu = basis.slice();
     uit.emit('verander');
@@ -204,8 +226,7 @@ export function definieerOpstelling(engine) {
     zeg(`${r.naam} #${z} staat klaar: start = spelen`);
     return undefined;
   });
-  trig('opstelling.start', 'opstelling: alles starten op de volgende "1"', () => {
-    if (!o) return { geweigerd: 'nog geen opstelling' };
+  function startAlles() {
     for (const p of o.patronen) engine.patronen?.wissel(p.n, p.plek);
     for (const sp of o.sporen) {
       if (sp.soort !== 'nummer' || !sp.nummer) continue;
@@ -214,6 +235,11 @@ export function definieerOpstelling(engine) {
       try { if (engine.klok.loopt) bus.doe(`track.${sp.n}.sync`, true, { bron: 'opstelling' }); bus.doe(`track.${sp.n}.sync`, false, { bron: 'opstelling' }); } catch { /* geen grid */ }
       try { bus.doe(`track.${sp.n}.play.quant`, true, { bron: 'opstelling' }); bus.doe(`track.${sp.n}.play.quant`, false, { bron: 'opstelling' }); } catch { /* nog niet geladen */ }
     }
+  }
+  const speeltIets = () => !!engine.patronen?.speelt || engine.tracks.some((t) => t.speelt);
+  trig('opstelling.start', 'opstelling: alles starten op de volgende "1"', () => {
+    if (!o) return { geweigerd: 'nog geen opstelling' };
+    startAlles();
     zeg('start');
     return undefined;
   });
@@ -248,7 +274,11 @@ export function definieerOpstelling(engine) {
   function opDeMaat(t) {
     if (!wacht.size) return;
     if (engine.klok?.loopt && engine.klok.volgendeEen(t) - t > 0.15) return;
-    for (const [n, x] of wacht) { if (x === 'stop') pasStopToe(n); else pasVariantToe(n, x); }
+    for (const [n, x] of wacht) {
+      if (x === 'stop') pasStopToe(n);
+      else if (typeof x === 'object') { if (uitGezet.has(n)) pasStopToe(n); pasVariantToe(n, x.rij); }   // het verloop: spoor aan op rij r
+      else pasVariantToe(n, x);
+    }
     wacht = new Map();
     uit.emit('verander');
   }
@@ -256,17 +286,18 @@ export function definieerOpstelling(engine) {
     for (let r = 1; r <= RIJEN; r++) {
       bus.defineer({
         id: `opstelling.variant.${k}.${r}`, soort: 'trigger', label: `partituur: spoor ${k} variant ${r}`, meta: TRIG,
-        doe: (v) => { if (!v || !o?.varianten?.[k]) return undefined; wacht.set(String(k), r); opDeMaat(engine.nu()); uit.emit('verander'); return undefined; },
+        doe: (v, _n, c) => { if (!v || !o?.varianten?.[k]) return undefined; if (c?.bron !== 'opstelling') loop?.hand.add(String(k)); wacht.set(String(k), r); opDeMaat(engine.nu()); uit.emit('verander'); return undefined; },
         lees: () => {
           if (!o?.varianten?.[k]?.[r - 1]) return null;
-          if (wacht.get(String(k)) === r) return 0.5;
+          const w = wacht.get(String(k));
+          if (w === r || w?.rij === r) return 0.5;
           return actief[k] === r && !uitGezet.has(String(k)) ? 1 : 0;
         },
       });
     }
     bus.defineer({
       id: `opstelling.stop.${k}`, soort: 'trigger', label: `partituur: spoor ${k} uit/aan op de maat`, meta: TRIG,
-      doe: (v) => { if (!v || !o?.sporen.some((s) => s.n === k)) return undefined; wacht.set(String(k), 'stop'); opDeMaat(engine.nu()); uit.emit('verander'); return undefined; },
+      doe: (v, _n, c) => { if (!v || !o?.sporen.some((s) => s.n === k)) return undefined; if (c?.bron !== 'opstelling') loop?.hand.add(String(k)); wacht.set(String(k), 'stop'); opDeMaat(engine.nu()); uit.emit('verander'); return undefined; },
       lees: () => (o?.sporen.some((s) => s.n === k) ? (uitGezet.has(String(k)) ? 0 : 1) : null),
     });
   }
@@ -305,6 +336,146 @@ export function definieerOpstelling(engine) {
       lees: () => (o?.scenes?.[k - 1] ? (morph.naam === o.scenes[k - 1].naam ? 1 : 0) : null),
     });
   }
+  // ---- laten lopen ------------------------------------------------------------------------
+  const perMaat = () => engine.klok?.perMaat ?? 4;
+  function zetLoop(aan, { van = 0 } = {}) {
+    if (!aan) { if (loop) { loop = null; zeg('lopen: uit (je speelt zelf verder)'); } return; }
+    const v = maakVerloop(o, o.zaad);
+    if (!v.delen.length) return;
+    loop = { v, start: null, gepland: van - 1, deel: -1, hand: new Set(), van };
+    if (!speeltIets()) startAlles();
+    if (engine.klok?.loopt) loop.start = Math.floor(engine.klok.tel(engine.nu()) / perMaat()) + 1 - van;
+    plan(van);
+    zeg(`lopen: ${v.maten} maten (${v.delen.map((d) => d.naam.replace(/\d$/, '')).join(' · ')})`);
+  }
+  /** Maat `rel` van het verloop klaarzetten (de wachtrij zet het op de maat). */
+  function plan(rel) {
+    if (!loop || !o) return;
+    loop.gepland = rel;
+    const st = standOp(loop.v, rel);
+    if (!st) {
+      engine.patronen?.stopAlles();
+      loop = null;
+      zeg('lopen: klaar');
+      return;
+    }
+    if (st.i !== loop.deel) {
+      loop.deel = st.i;
+      loop.hand.clear();
+      if (st.deel.scene && engine.klok?.loopt) {
+        const w = sceneWaarden(o, st.deel.scene, volgendZaad(o.zaad, 400 + st.i));
+        if (w) {
+          const naar = new Map(Object.entries(w).map(([rol, x]) => [macroVanRol(rol), x]).filter(([i]) => i >= 0));
+          const t0 = (loop.start ?? Math.ceil(engine.klok.tel(engine.nu()) / perMaat())) * perMaat() + rel * perMaat();
+          glij = { van: basis.slice(), naar, t0, duur: Math.min(st.deel.maten, 8) * perMaat(), naam: o.scenes[st.deel.scene - 1].naam };
+        }
+      }
+      zeg(`lopen: ${st.deel.naam.replace(/\d$/, '')} (${st.deel.maten} maten)`);
+    }
+    for (const [n, rij] of Object.entries(st.sporen)) {
+      if (loop.hand.has(n) || !o.varianten?.[n] && rij > 0 && !uitGezet.has(n)) continue;
+      if (rij === 0) { if (!uitGezet.has(n)) wacht.set(n, 'stop'); }
+      else if (uitGezet.has(n) || actief[n] !== rij) wacht.set(n, { rij });
+    }
+    uit.emit('verander');
+  }
+  bus.defineer({ id: 'opstelling.loop', soort: 'trigger', label: 'opstelling: laten lopen (een heel nummer) aan/uit', meta: TRIG,
+    doe: (v) => { if (!v) return undefined; if (!o) return { geweigerd: 'nog geen opstelling: kies een recept' }; zetLoop(!loop); return undefined; },
+    lees: () => (o ? (loop ? 1 : 0) : null) });
+  trig('opstelling.laadloop', 'opstelling: het gekozen recept klaarzetten en laten lopen', () => {
+    const r = recepten[gekozen];
+    if (!r) return { geweigerd: 'geen recepten' };
+    zet(maak(r, nieuwZaad())).then(() => zetLoop(true));
+    return undefined;
+  });
+
+  // ---- vastleggen: takes ----------------------------------------------------------------------
+  const SPELER = new Set(['apc', 'maschine', 'toetsen', 'scherm', 'hub']);
+  const volgendeMaatTel = () => (Math.floor(engine.klok.tel(engine.nu()) / perMaat()) + 1) * perMaat();
+  const bewaarTakes = () => { try { bronnen.bewaarTakes?.({ takes, prullenbak }); } catch { /* bewaren mag nooit het spelen stoppen */ } };
+  bus.on('actie', (a) => {
+    if (!opname || !SPELER.has(a.bron) || !legtVast(a.id) || !engine.klok?.loopt) return;
+    if (bus.zoek(a.id)?.def?.soort === 'commando') return;
+    if (opname.start === null) opname.start = volgendeMaatTel() - perMaat();   // de maat waarin je begon
+    const tel = engine.klok.tel(engine.nu()) - opname.start;
+    if (tel >= 0) opname.acties.push({ tel, id: a.id, v: a.v });
+  });
+  function neem() {
+    if (opname) {
+      const o2 = opname;
+      opname = null;
+      if (!o2.acties.length || o2.start === null) { zeg('vastleggen: er was niets te bewaren'); return; }
+      const eind = engine.klok.tel(engine.nu()) - o2.start;
+      const maten = Math.max(1, Math.ceil(eind / perMaat() - 1e-6));
+      const nr = takes.filter((x) => x.recept === o2.recept).length + 1;
+      const t = normaliseerTake({ id: `take-${o2.recept}-${o2.zaad}-${teller++}`.slice(0, 80), naam: `${o?.naam ?? o2.recept} ${nr}`,
+        recept: o2.recept, zaad: o2.zaad, maten, gemaakt: takes.length + prullenbak.length + 1, loop: o2.loop, acties: dun(o2.acties) });
+      takes.push(t);
+      takeKeuze = takes.length - 1;
+      bewaarTakes();
+      zeg(`vastgelegd: ${t.naam} (${maten} maten, ${t.acties.length} handelingen)`);
+      return;
+    }
+    if (!o) return { geweigerd: 'nog geen opstelling' };
+    if (!speeltIets()) startAlles();
+    const begin = engine.klok?.loopt ? volgendeMaatTel() - perMaat() : null;
+    opname = { start: begin, acties: [], recept: o.recept, zaad: o.zaad,
+      loop: loop && begin !== null ? { van: Math.max(0, Math.round(begin / perMaat()) - loop.start) } : null };
+    zeg('vastleggen: speel maar (nog eens = klaar)');
+    return undefined;
+  }
+  function stopAfspelen(melding = true) {
+    if (!afspelen) return;
+    for (const [id, v] of nogVast(afspelen.take.acties.slice(0, afspelen.i))) { try { bus.doe(id, v, { bron: 'take' }); } catch { /* weg */ } }
+    afspelen = null;
+    if (melding) zeg('take: stop');
+  }
+  async function speelTake() {
+    if (afspelen) { stopAfspelen(); return; }
+    const t = takes[takeKeuze];
+    if (!t) { zeg('take: er is er nog geen (REC = vastleggen)'); return; }
+    // Eerst de opstelling van toen (recept + zaad), als die niet al staat.
+    const r = recepten.find((x) => x.id === t.recept);
+    if (r && (o?.recept !== t.recept || o?.zaad !== t.zaad)) await zet(maak(r, t.zaad));
+    if (!o) return;
+    if (t.loop) zetLoop(true, { van: t.loop.van });
+    else if (!speeltIets()) startAlles();
+    afspelen = { take: t, start: engine.klok?.loopt ? volgendeMaatTel() : null, i: 0 };
+    zeg(`take: ${t.naam} speelt (${t.maten} maten)`);
+  }
+  bus.defineer({ id: 'opstelling.neem', soort: 'trigger', label: 'opstelling: vastleggen aan/uit (een take)', meta: TRIG,
+    doe: (v) => (v ? neem() : undefined), lees: () => (o ? (opname ? 1 : 0) : null) });
+  trig('opstelling.take.speel', 'take: afspelen / stoppen', () => { speelTake(); return undefined; });
+  trig('opstelling.take.weg', 'take: naar de prullenbak', () => {
+    const t = takes[takeKeuze];
+    if (!t) return { geweigerd: 'geen take gekozen' };
+    if (afspelen?.take === t) stopAfspelen(false);
+    takes.splice(takeKeuze, 1);
+    prullenbak = [...prullenbak, t].slice(-50);
+    takeKeuze = Math.min(takeKeuze, takes.length - 1);
+    bewaarTakes();
+    zeg(`weg: ${t.naam} (terug kan: take terug)`);
+    return undefined;
+  });
+  trig('opstelling.take.terug', 'take: de laatste uit de prullenbak terug', () => {
+    const t = prullenbak.at(-1);
+    if (!t) return { geweigerd: 'de prullenbak is leeg' };
+    prullenbak = prullenbak.slice(0, -1);
+    takes.push(t);
+    takeKeuze = takes.length - 1;
+    bewaarTakes();
+    zeg(`terug: ${t.naam}`);
+    return undefined;
+  });
+  for (const [id, r] of [['opstelling.take.volgende', 1], ['opstelling.take.vorige', -1]]) {
+    trig(id, `take: ${r > 0 ? 'volgende' : 'vorige'} kiezen`, () => {
+      if (!takes.length) return { geweigerd: 'nog geen takes' };
+      takeKeuze = ((takeKeuze + r) % takes.length + takes.length) % takes.length;
+      zeg(`take: ${takes[takeKeuze].naam} (${takes[takeKeuze].maten} maten)`);
+      return undefined;
+    });
+  }
+
   bus.defineer({
     id: 'opstelling.morph', soort: 'waarde', label: 'crossfader: van waar je was naar de gekozen scene',
     doe: (v) => {
@@ -319,6 +490,14 @@ export function definieerOpstelling(engine) {
   return Object.assign(uit, {
     /** Wat buiten de engine ligt: catalogus(), laadNummer(n, id), zetVorm(id, dekking), bewaar(recept). */
     zetBronnen(b) { bronnen = { ...bronnen, ...b }; },
+    /** Bewaarde takes terug (instelling 'takes': { takes, prullenbak }). */
+    laadTakes(x) {
+      takes = (Array.isArray(x?.takes) ? x.takes : []).map(normaliseerTake).filter(Boolean);
+      prullenbak = (Array.isArray(x?.prullenbak) ? x.prullenbak : []).map(normaliseerTake).filter(Boolean).slice(-50);
+      takeKeuze = takes.length - 1;
+      uit.emit('verander');
+    },
+    takes: () => takes,
     /** De recepten (ruw of al genormaliseerd); geeft de fouten terug per recept. */
     zetRecepten(lijst) {
       const fouten = {};
@@ -338,6 +517,22 @@ export function definieerOpstelling(engine) {
      */
     tik(t = engine.nu()) {
       if (!o) return;
+      if (loop && engine.klok?.loopt) {
+        const tel = engine.klok.tel(t), pm = perMaat();
+        if (loop.start === null) loop.start = Math.ceil(tel / pm - 1e-6) - (loop.van ?? 0);
+        const volgende = Math.floor(tel / pm) + 1, rel = volgende - loop.start;
+        if (rel > loop.gepland && engine.klok.tijd(volgende * pm) - t < 0.2) plan(rel);
+      }
+      if (afspelen && engine.klok?.loopt) {
+        const tel = engine.klok.tel(t);
+        if (afspelen.start === null) afspelen.start = (Math.floor(tel / perMaat()) + 1) * perMaat();
+        const rel = tel - afspelen.start, a = afspelen.take.acties;
+        while (afspelen.i < a.length && a[afspelen.i].tel <= rel + 0.02) {
+          const x = a[afspelen.i++];
+          try { bus.doe(x.id, x.v, { bron: 'take' }); } catch { /* er is iets niet meer */ }
+        }
+        if (rel >= afspelen.take.maten * perMaat()) { stopAfspelen(false); zeg('take: klaar'); }
+      }
       opDeMaat(t);
       if (!engine.klok?.loopt) return;
       const tel = engine.klok.tel(t);
@@ -363,6 +558,10 @@ export function definieerOpstelling(engine) {
         scenes: (o?.scenes ?? []).map((s) => s.naam),
         partituur: Object.fromEntries(Object.entries(o?.varianten ?? {}).map(([n, v]) => [n, { actief: actief[n], wacht: wacht.get(n) ?? null, uit: uitGezet.has(n), namen: v.map((x) => x.naam) }])),
         glij: glij ? glij.naam : null, morph: morph.naam ? { naar: morph.naam, m: morph.m } : null,
+        take: { neemt: !!opname, maten: opname?.start != null && engine.klok?.loopt ? Math.max(0, Math.floor((engine.klok.tel(engine.nu()) - opname.start) / perMaat()) + 1) : 0,
+          aantal: takes.length, prullenbak: prullenbak.length, keuze: takes[takeKeuze]?.naam ?? null, speelt: afspelen?.take.naam ?? null,
+          lijst: takes.map((x, i) => ({ naam: x.naam, maten: x.maten, gekozen: i === takeKeuze, loop: !!x.loop })) },
+        loop: loop ? (() => { const st = standOp(loop.v, Math.max(0, loop.gepland)); return st ? { deel: st.deel.naam.replace(/\d$/, ''), m: st.m + 1, maten: st.deel.maten, gedaan: Math.max(0, loop.gepland), totaal: loop.v.maten } : null; })() : null,
         sporen: (o?.sporen ?? []).map((s) => ({ n: s.n, soort: s.soort, wat: s.nummer?.titel ?? s.instrument ?? '—', rack: s.rack?.naam ?? null,
           patroon: o.patronen.find((p) => p.n === s.n)?.uitleg ?? null })),
       };

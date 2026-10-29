@@ -300,3 +300,9 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .opst-partituur button.speelt { color: var(--bg); background: var(--klok); }
 .opst-partituur button.wacht { border-color: var(--cue); color: var(--cue); }
 .opst-partituur span { color: var(--zwak); text-align: center; }
+.opst-takes { display: grid; gap: 3px; color: var(--dim); font-size: 11px; }
+.opst-takes b { color: var(--tekst); font-weight: 500; }
+.opst-takes b.neemt { color: var(--rec); }
+.opst-takelijst { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.opst-takelijst button { background: var(--bg); color: var(--dim); border: 1px solid var(--lijn); border-radius: 3px; padding: 1px 6px; font: inherit; cursor: pointer; }
+.opst-takelijst button.aan { color: var(--tekst); border-color: var(--klok); }
