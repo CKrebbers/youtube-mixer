@@ -190,7 +190,9 @@ console.log('contract');
 const plekVan = (e) => EFFECTEN.findIndex((x) => x.id === e.id);
 const plekken = M.MEER_EFFECTEN.map(plekVan);
 const S10_IDS = new Set((await import('../src/audio/fx/fx-s10.js')).S10_EFFECTEN.map((e) => e.id));
-const eigen = EFFECTEN.map((e, i) => [e, i]).filter(([e]) => !NIEUW.includes(e.id) && !S10_IDS.has(e.id)).map(([, i]) => i);
+// Na S10 nog de korrelwolk (fx-korrel.js, 30 okt): een eigen groep achteraan.
+const NA_S10 = new Set(['korrel']);
+const eigen = EFFECTEN.map((e, i) => [e, i]).filter(([e]) => !NIEUW.includes(e.id) && !S10_IDS.has(e.id) && !NA_S10.has(e.id)).map(([, i]) => i);
 ok(`tien effecten uit de filter app (${NIEUW.join(', ')})`, NIEUW.length === 10);
 ok('elk staat in EFFECTEN, op id en als hetzelfde object (effectVan vindt het)',
   M.MEER_EFFECTEN.every((e, k) => plekken[k] >= 0 && EFFECTEN[plekken[k]] === e && effectVan(e.id) === e),
@@ -844,8 +846,8 @@ const PROC = {};
 globalThis.registerProcessor = (naam, klasse) => { PROC[naam] = klasse; };
 await import('../src/audio/fx/fx-worklet.js');
 // En de drie van spoor S10 (kam, freqschuif, aanslag): getoetst in test/effecten-s10.test.mjs.
-ok('de worklet registreert de omhullende en de toonhoogte (en de drie van S10)', Object.keys(PROC).sort().join()
-  === 'varve-fx-aanslag,varve-fx-freqschuif,varve-fx-kam,varve-fx-omhullende,varve-fx-toonhoogte');
+ok('de worklet registreert de omhullende en de toonhoogte (en de drie van S10, en de korrelwolk)', Object.keys(PROC).sort().join()
+  === 'varve-fx-aanslag,varve-fx-freqschuif,varve-fx-kam,varve-fx-korrel,varve-fx-omhullende,varve-fx-toonhoogte');
 {
   const toon = new PROC['varve-fx-toonhoogte'](), omh = new PROC['varve-fx-omhullende']();
   // Invoer: 64 blokken ruis + toon, vooraf gemaakt (het harnas zelf mag ook niets aanmaken).

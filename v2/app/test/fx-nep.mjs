@@ -101,6 +101,7 @@ export const PARAMS_VAN = {
   'varve-fx-kam': [['toon', 220], ['fb', 0.5], ['demping', 8000]],
   'varve-fx-freqschuif': [['hz', 0]],
   'varve-fx-aanslag': [['aanval', 0], ['sustain', 0]],
+  'varve-fx-korrel': [['grootte', 0.08], ['dichtheid', 20], ['terug', 0.25], ['spray', 0.2], ['toon', 0], ['omkeer', 0], ['breedte', 0.6], ['bevries', 0]],
 };
 globalThis.AudioWorkletNode = class {
   constructor(ctx, naam, opties = {}) {

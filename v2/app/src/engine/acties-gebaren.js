@@ -5,6 +5,9 @@
  *
  *   gebaar.<naam>          waarde 0..1   het gebaar zelf (ook voor de APC, leren en het toetsenbord)
  *   gebaar.pad.{1..16}     waarde 0..1   pad k van de padstand gebaren: 1–8 vast, 9–16 die van het recept
+ *   korrel.veld.{1..16}    waarde 0..1   de granular sampler (padstand korrels): de eerste druk bevriest wat de
+ *                                        track met focus net speelde; pad k = plek k in dat stuk (1 = net, 16 ≈ 3 s
+ *                                        terug), druk = hoe vol; loslaten van de laatste pad = terug
  *   gebaar.optel           trigger       loslaten op de tel aan/uit (standaard aan): wat je loslaat,
  *                                        gaat pas op de volgende tel terug, zodat de terugkeer strak valt
  *   speel.drum.{1..16}     waarde        pad k speelt drumnoot 35+k op het drumspoor, met aanslag; 0 = los
@@ -22,6 +25,11 @@ import { kromme } from '../kern/opstelling/model.js';
 import { LADDERS } from '../kern/opstelling/patroon.js';
 import { GEBAREN, padGebaren } from '../kern/opstelling/gebaren.js';
 
+/**
+ * Bevriezen heeft een verleden nodig: staat de Korrelwolk al op de track (zijn ring loopt mee), dan
+ * meteen; laadt het gebaar hem net, dan eerst zo lang vangen (de ring van een nieuw rack is leeg).
+ */
+export const VANG_S = 1.5;
 /** Stotteren: hoe dieper je drukt, hoe korter de lus (tellen). */
 export const STOTTER = Object.freeze([0.5, 0.25, 0.125]);
 /** Zoveel seconden vóór de tel gaat een loslaten al (de tik loopt elke 50 ms). */
@@ -37,7 +45,17 @@ const RACKS = {
   wegspoelen: { rack: 'Wegspoelen', knoppen: (v) => ({ 1: v }) },
   oplossen: { rack: 'Oplossen', knoppen: (v) => ({ 1: v, 6: v }) },
   bevries: { rack: 'Ruimte bevriezen', knoppen: (v) => ({ 1: 1, 3: v > 0.6 ? 1 : 0 }) },
+  // De korrelwolk (fx-korrel.js): knop 1 uiteen, 2 grootte, 3 spray, 4 terug, 5 toon, 6 achteruit, 7 breedte, 8 bevries.
+  korrel: { rack: 'Korrelwolk', knoppen: (v) => ({ 1: Math.min(1, 0.35 + v * 0.65), 3: 0.15 + v * 0.6, 5: v > 0.75 ? (v - 0.75) * 2 : 0 }) },
+  'alles.korrel': { rack: 'Korrelwolk', alles: true, knoppen: (v) => ({ 1: Math.min(1, 0.35 + v * 0.65), 3: 0.15 + v * 0.6 }) },
+  korrelvast: { rack: 'Korrelwolk', vries: true, knoppen: (v) => ({ 1: 1, 3: 0.1 + v * 0.8, 2: 0.6 }) },
+  achteruit: { rack: 'Korrelwolk', knoppen: (v) => ({ 1: Math.min(1, 0.5 + v * 0.5), 2: 0.85, 3: 0.02, 4: 0.35, 6: 1, 7: 0.3 }) },
 };
+
+/** Plek k van het korrelveld: zoveel seconden terug (de ring van korrel-kern.js is 4 s). */
+export const veldSeconden = (k) => 0.1 + ((k - 1) / 15) * 2.8;
+/** De knop "terug" van het rack Korrelwolk (fx-korrel.js terugKorrel = 0,03 · 100^t) voor zoveel seconden. */
+export const terugKnop = (s) => Math.min(1, Math.max(0, Math.log(s / 0.03) / Math.log(100)));
 
 export function definieerGebaren(engine) {
   const bus = engine.bus;
@@ -48,6 +66,12 @@ export function definieerGebaren(engine) {
   const lees = (id) => { try { return bus.lees(id); } catch { return null; } };
   let optel = true;
   let volg = 0;
+  // Het korrelveld: één rack-gebaar, de plek volgt de laatst ingedrukte pad.
+  let veldKnop = terugKnop(veldSeconden(1));
+  const veldVast = new Set();
+  const rackVan = (naam) => (naam === 'korrelveld'
+    ? { rack: 'Korrelwolk', vries: true, knoppen: (v) => ({ 1: Math.min(1, 0.45 + v * 0.55), 4: veldKnop, 3: 0.03, 2: 0.55, 7: 0.5 }) }
+    : RACKS[naam]);
 
   // ---- de stapel per parameter --------------------------------------------------------
   const stapels = new Map();   // actie -> { basis, lagen: Map(gebaar -> { naar, kromme, v, volg, wachtTel }) }
@@ -93,8 +117,8 @@ export function definieerGebaren(engine) {
 
   function start(naam, v) {
     const g = { v, volg: ++volg, losOp: null };
-    if (RACKS[naam]) {
-      const r = RACKS[naam];
+    if (rackVan(naam)) {
+      const r = rackVan(naam);
       if (!(engine.fx?.sjablonen() ?? []).some((x) => x.name === r.rack)) return null;
       const sporen = (r.alles ? metIets() : [engine.focus]).filter((n) => ![...actief.values()].some((x) => x.rack && x.sporen.some((s) => s.n === n)));
       g.rack = r;
@@ -102,8 +126,11 @@ export function definieerGebaren(engine) {
         n, naam: engine.fx.rackNaam(n), mix: lees(`track.${n}.fx.mix`), aan: lees(`track.${n}.fx.aan`),
         knoppen: Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map((k) => [k, lees(`track.${n}.fx.knop.${k}`)])),
       }));
+      g.t0 = engine.nu();
       for (const s of g.sporen) {
-        engine.fx.kiesRack(s.n, r.rack);
+        // Staat dit rack er al, dan niet opnieuw laden: dan houdt hij zijn verleden (de korrelwolk zijn ring).
+        s.alGeladen = s.naam === r.rack;
+        if (!s.alGeladen) engine.fx.kiesRack(s.n, r.rack);
         if (lees(`track.${s.n}.fx.aan`) === 0) { bus.doe(`track.${s.n}.fx.aan`, true, { bron: 'gebaar' }); bus.doe(`track.${s.n}.fx.aan`, false, { bron: 'gebaar' }); }
         zet(`track.${s.n}.fx.mix`, 1);
       }
@@ -132,7 +159,13 @@ export function definieerGebaren(engine) {
 
   function werk(naam, g, v) {
     g.v = v;
-    if (g.rack) for (const s of g.sporen) for (const [k, x] of Object.entries(g.rack.knoppen(v))) zet(`track.${s.n}.fx.knop.${k}`, x);
+    if (g.rack) {
+      for (const s of g.sporen) {
+        for (const [k, x] of Object.entries(g.rack.knoppen(v))) zet(`track.${s.n}.fx.knop.${k}`, x);
+        // Bevriezen (knop 8 van de Korrelwolk): meteen als hij al meeliep, anders na VANG_S vangen.
+        if (g.rack.vries) zet(`track.${s.n}.fx.knop.8`, s.alGeladen || engine.nu() - g.t0 >= VANG_S ? 1 : 0);
+      }
+    }
     else if (g.stotter) {
       const t = T(g.stotter.n);
       const l = STOTTER[Math.min(STOTTER.length - 1, Math.floor(v * STOTTER.length))];
@@ -195,6 +228,16 @@ export function definieerGebaren(engine) {
       },
       lees: () => actief.get(opPad.get(k) ?? padNamen()[k - 1])?.v ?? 0 });
   }
+  for (let k = 1; k <= 16; k++) {
+    bus.defineer({ id: `korrel.veld.${k}`, soort: 'waarde', label: `korrelveld: plek ${k} (${veldSeconden(k).toFixed(1)} s terug)`, meta: META,
+      doe: (v) => {
+        if (v > 0) { veldVast.add(k); veldKnop = terugKnop(veldSeconden(k)); return gebaar('korrelveld', v); }
+        veldVast.delete(k);
+        if (veldVast.size) { veldKnop = terugKnop(veldSeconden([...veldVast].at(-1))); const g = actief.get('korrelveld'); if (g) werk('korrelveld', g, g.v); return undefined; }
+        return gebaar('korrelveld', 0);
+      },
+      lees: () => (actief.has('korrelveld') ? (veldVast.has(k) ? actief.get('korrelveld').v : 0) : 0) });
+  }
   bus.defineer({ id: 'gebaar.optel', soort: 'trigger', label: 'gebaren: loslaten op de tel aan/uit', meta: META,
     doe: (v) => { if (v) { optel = !optel; engine.meld?.(`gebaren: loslaten ${optel ? 'op de tel' : 'meteen'}`, 'info', 'gebaar'); } }, lees: () => (optel ? 1 : 0) });
 
@@ -239,6 +282,8 @@ export function definieerGebaren(engine) {
     /** De tel: loslaten op de tel en wat pas op de tel mag beginnen (echo vast, galm vast). Elke tik. */
     tik(t = engine.nu()) {
       for (const [naam, g] of actief) if (g.losOp !== null && t >= g.losOp - VOOR_DE_TEL) stop(naam);
+      // Een bevriezend rack-gebaar dat nog aan het vangen was: na VANG_S de wolk vastzetten.
+      for (const [naam, g] of actief) if (g.rack?.vries && !g.bevroren && t - g.t0 >= VANG_S) { g.bevroren = true; werk(naam, g, g.v); }
       for (const [actie, s] of stapels) {
         let iets = false;
         for (const l of s.lagen.values()) if (l.wachtTel !== null && t >= l.wachtTel - VOOR_DE_TEL) { l.wachtTel = null; iets = true; }

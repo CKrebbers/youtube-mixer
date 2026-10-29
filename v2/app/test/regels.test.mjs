@@ -86,8 +86,10 @@ test('de effectlaag (audio/fx/) raakt geen DOM, maakt geen eigen tijd en geen to
     }
   }
   // De worklet van de effecten kent alleen zijn rekenkern (hij draait op de audiothread).
-  assert.deepEqual(imports('audio/fx/fx-worklet.js'), ['./fx-kern.js']);
+  // De worklet van de effecten kent alleen zijn rekenkernen (hij draait op de audiothread); de korrelwolk heeft een eigen kern (30 okt).
+  assert.deepEqual(imports('audio/fx/fx-worklet.js'), ['./fx-kern.js', './korrel-kern.js']);
   assert.deepEqual(imports('audio/fx/fx-kern.js'), []);
+  assert.deepEqual(imports('audio/fx/korrel-kern.js'), []);
 });
 
 test('niemand onder ui importeert uit beeld/, en beeld maakt geen Web Audio-nodes', () => {

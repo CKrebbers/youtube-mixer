@@ -5,6 +5,7 @@ import { ModBank } from './modulatie.js';
 import { startDrempel, houdVast, zetHellingen } from '../overgang.js';
 import { MEER_EFFECTEN, inloop } from './fx-meer.js';
 import { S10_EFFECTEN } from './fx-s10.js';
+import { korrel } from './fx-korrel.js';
 import { fxKlokVan, isMaatklok, volgKlok } from './klok.js';
 
 // Herkomst: v1 youtube-mixer/src/engine/fx.js @ e27018f. Anders in v2 (src/audio/fx/):
@@ -809,6 +810,8 @@ export const EFFECTEN = [
   // Kam, klinker, frequentieschuif, band, kanteling, aanslag en duiker (spoor S10,
   // fx-s10.js, docs/EFFECTEN-MEER.md).
   ...S10_EFFECTEN,
+  // De korrelwolk (granular, 30 okt: fx-korrel.js, korrel-kern.js).
+  korrel,
 ];
 
 export const effectVan = (id) => EFFECTEN.find((e) => e.id === id) || null;

@@ -3,7 +3,7 @@
   "naam": "opstelling",
   "apparaat": "maschine-mk2",
   "shift": "shift",
-  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht.",
+  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, G korrels (de granular sampler: de eerste druk bevriest wat de track met focus net speelde, pad 1 = net tot pad 16 = bijna 3 s terug, druk = hoe vol, van pad naar pad = door het sample), F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht.",
   "regels": [
     {
       "control": "enc1",
@@ -1502,6 +1502,243 @@
       "gedrag": "trigger",
       "led": {},
       "label": "gebaren loslaten op de tel aan/uit"
+    },
+    {
+      "control": "groepG",
+      "actie": "laag:pads.korrels",
+      "gedrag": "trigger",
+      "led": {
+        "lees": "laag:pads.korrels",
+        "kleur": {
+          "aan": "zeegroen",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "pads: korrels"
+    },
+    {
+      "control": "pad1",
+      "actie": "korrel.veld.1",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "hemelsblauwdonker"
+        }
+      },
+      "label": "0,1 s"
+    },
+    {
+      "control": "pad2",
+      "actie": "korrel.veld.2",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "hemelsblauwdonker"
+        }
+      },
+      "label": "0,3 s"
+    },
+    {
+      "control": "pad3",
+      "actie": "korrel.veld.3",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "hemelsblauwdonker"
+        }
+      },
+      "label": "0,5 s"
+    },
+    {
+      "control": "pad4",
+      "actie": "korrel.veld.4",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "hemelsblauwdonker"
+        }
+      },
+      "label": "0,7 s"
+    },
+    {
+      "control": "pad5",
+      "actie": "korrel.veld.5",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "cyaandonker"
+        }
+      },
+      "label": "0,8 s"
+    },
+    {
+      "control": "pad6",
+      "actie": "korrel.veld.6",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "cyaandonker"
+        }
+      },
+      "label": "1,0 s"
+    },
+    {
+      "control": "pad7",
+      "actie": "korrel.veld.7",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "cyaandonker"
+        }
+      },
+      "label": "1,2 s"
+    },
+    {
+      "control": "pad8",
+      "actie": "korrel.veld.8",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "cyaandonker"
+        }
+      },
+      "label": "1,4 s"
+    },
+    {
+      "control": "pad9",
+      "actie": "korrel.veld.9",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "zeegroendonker"
+        }
+      },
+      "label": "1,6 s"
+    },
+    {
+      "control": "pad10",
+      "actie": "korrel.veld.10",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "zeegroendonker"
+        }
+      },
+      "label": "1,8 s"
+    },
+    {
+      "control": "pad11",
+      "actie": "korrel.veld.11",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "zeegroendonker"
+        }
+      },
+      "label": "2,0 s"
+    },
+    {
+      "control": "pad12",
+      "actie": "korrel.veld.12",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "zeegroendonker"
+        }
+      },
+      "label": "2,2 s"
+    },
+    {
+      "control": "pad13",
+      "actie": "korrel.veld.13",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "groendonker"
+        }
+      },
+      "label": "2,3 s"
+    },
+    {
+      "control": "pad14",
+      "actie": "korrel.veld.14",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "groendonker"
+        }
+      },
+      "label": "2,5 s"
+    },
+    {
+      "control": "pad15",
+      "actie": "korrel.veld.15",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "groendonker"
+        }
+      },
+      "label": "2,7 s"
+    },
+    {
+      "control": "pad16",
+      "actie": "korrel.veld.16",
+      "gedrag": "druk",
+      "laag": "pads.korrels",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "groendonker"
+        }
+      },
+      "label": "2,9 s"
     }
   ]
 }

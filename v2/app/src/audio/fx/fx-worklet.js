@@ -11,6 +11,7 @@
  * zichzelf in leven, ook als niets er meer aan hangt.
  */
 import { Omhullende, Toonhoogte, Kam, Freqschuif, Aanslag } from './fx-kern.js';
+import { Korrel } from './korrel-kern.js';
 
 class OmhullendeProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
@@ -105,6 +106,21 @@ registerProcessor('varve-fx-aanslag', stereoProcessor(Aanslag, [
   { name: 'aanval', defaultValue: 0, minValue: -1, maxValue: 1, automationRate: K },
   { name: 'sustain', defaultValue: 0, minValue: -1, maxValue: 1, automationRate: K },
 ], (k, p) => { k.aanval = p.aanval[0]; k.sustain = p.sustain[0]; }));
+
+// De korrelwolk (korrel-kern.js, fx-korrel.js).
+registerProcessor('varve-fx-korrel', stereoProcessor(Korrel, [
+  { name: 'grootte', defaultValue: 0.08, minValue: 0.005, maxValue: 1, automationRate: K },
+  { name: 'dichtheid', defaultValue: 20, minValue: 0.5, maxValue: 200, automationRate: K },
+  { name: 'terug', defaultValue: 0.25, minValue: 0, maxValue: 3.9, automationRate: K },
+  { name: 'spray', defaultValue: 0.2, minValue: 0, maxValue: 2, automationRate: K },
+  { name: 'toon', defaultValue: 0, minValue: 0, maxValue: 24, automationRate: K },
+  { name: 'omkeer', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: K },
+  { name: 'breedte', defaultValue: 0.6, minValue: 0, maxValue: 1, automationRate: K },
+  { name: 'bevries', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: K },
+], (k, p) => {
+  k.grootte = p.grootte[0]; k.dichtheid = p.dichtheid[0]; k.terug = p.terug[0]; k.spray = p.spray[0];
+  k.toon = p.toon[0]; k.omkeer = p.omkeer[0]; k.breedte = p.breedte[0]; k.bevries = p.bevries[0];
+}));
 
 registerProcessor('varve-fx-omhullende', OmhullendeProcessor);
 registerProcessor('varve-fx-toonhoogte', ToonhoogteProcessor);

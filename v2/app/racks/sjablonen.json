@@ -2974,6 +2974,141 @@
         1,
         2
       ]
+    },
+    {
+      "schema": 1,
+      "name": "Korrelwolk",
+      "tags": [
+        "granular",
+        "textuur",
+        "overgang"
+      ],
+      "uitleg": "Wat de track speelt valt uiteen in korrels (granular): knop 1 zet de wolk erin (en maakt hem dichter), knop 2 de grootte van de korrels (stof tot brokken), knop 3 het toeval in de plek, knop 4 hoe ver terug in het verleden, knop 5 spreidt de toonhoogte (octaven en kwinten), knop 6 laat korrels achteruit spelen, knop 7 de stereobreedte en knop 8 bevriest de wolk: er komt niets nieuws meer bij, de wolk blijft hangen. In de beginstand droog.",
+      "xy": [
+        1,
+        3
+      ],
+      "chain": [
+        {
+          "slot": "a",
+          "type": "korrel",
+          "params": {
+            "grootte": 0.45,
+            "dichtheid": 0.45,
+            "terug": 0.4,
+            "spray": 0.35,
+            "toon": 0,
+            "omkeer": 0,
+            "breedte": 0.6,
+            "bevries": 0,
+            "meng": 0
+          }
+        }
+      ],
+      "macros": [
+        {
+          "place": 1,
+          "label": "Uiteen",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.meng",
+              "from": 0,
+              "to": 1,
+              "curve": "log"
+            },
+            {
+              "target": "a.dichtheid",
+              "from": 0.35,
+              "to": 0.75
+            }
+          ]
+        },
+        {
+          "place": 2,
+          "label": "Grootte",
+          "default": 0.45,
+          "links": [
+            {
+              "target": "a.grootte",
+              "from": 0.1,
+              "to": 0.9
+            }
+          ]
+        },
+        {
+          "place": 3,
+          "label": "Spray",
+          "default": 0.35,
+          "links": [
+            {
+              "target": "a.spray",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 4,
+          "label": "Terug",
+          "default": 0.4,
+          "links": [
+            {
+              "target": "a.terug",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 5,
+          "label": "Toon",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.toon",
+              "from": 0,
+              "to": 0.5
+            }
+          ]
+        },
+        {
+          "place": 6,
+          "label": "Achteruit",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.omkeer",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 7,
+          "label": "Breedte",
+          "default": 0.6,
+          "links": [
+            {
+              "target": "a.breedte",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        },
+        {
+          "place": 8,
+          "label": "Bevries",
+          "default": 0,
+          "links": [
+            {
+              "target": "a.bevries",
+              "from": 0,
+              "to": 1
+            }
+          ]
+        }
+      ]
     }
   ]
 }

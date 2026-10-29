@@ -260,7 +260,7 @@ console.log('\nkant-en-klare racks');
     // beginstand van de knoppen dicht (de MIX van de slot mag dan open, je hoort nog niets vreemds).
     // Een delay heeft geen eigen meng: dan moet zijn droog/nat (`_nat`) er zijn en dicht staan.
     const stand = (t) => (bijStart.has(t) ? bijStart.get(t) : (() => { const [slot, p] = t.split('.'); const n = rack.chain.find((x) => x.slot === slot); return p === '_nat' ? (n.meng ?? 1) : (n.params[p] ?? effectVan(n.type).standaard[p]); })());
-    const nat = rack.chain.filter((n) => ['delay', 'reverb', 'kam', 'freqschuif', 'flanger', 'chorus', 'pitch', 'ringmod', 'klinker', 'autowah', 'band'].includes(n.type)).map((n) => {
+    const nat = rack.chain.filter((n) => ['delay', 'reverb', 'kam', 'freqschuif', 'flanger', 'chorus', 'pitch', 'ringmod', 'klinker', 'autowah', 'band', 'korrel'].includes(n.type)).map((n) => {
       const eff = effectVan(n.type);
       const v = eff.params.includes('meng') && n.meng === undefined ? stand(`${n.slot}.meng`) : Math.min(stand(`${n.slot}._nat`), eff.params.includes('meng') ? stand(`${n.slot}.meng`) : 1);
       return { slot: n.slot, type: n.type, v };

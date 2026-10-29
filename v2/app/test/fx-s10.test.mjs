@@ -33,8 +33,9 @@ ok('elk staat in EFFECTEN, op id en als hetzelfde object',
   S.S10_EFFECTEN.every((e, k) => plekken[k] >= 0 && EFFECTEN[plekken[k]] === e),
   S.S10_EFFECTEN.filter((e, k) => plekken[k] < 0).map((e) => e.id).join(', '));
 ok('aaneengesloten en in hun eigen volgorde (de kiezer)', plekken.every((p, k) => k === 0 || p === plekken[k - 1] + 1));
+// Achteraan alleen nog de korrelwolk (fx-korrel.js, 30 okt).
 ok('achter de filter app en de effecten van fx.js', MEER_EFFECTEN.length === 10
-  && EFFECTEN.every((e, i) => S.S10_EFFECTEN.includes(e) || i < plekken[0]));
+  && EFFECTEN.every((e, i) => S.S10_EFFECTEN.includes(e) || e.id === 'korrel' || i < plekken[0]));
 ok('ids uniek over alle effecten', new Set(EFFECTEN.map((e) => e.id)).size === EFFECTEN.length);
 for (const e of S.S10_EFFECTEN) {
   const goed = typeof e.naam === 'string' && e.params.length >= 1 && e.params.length <= 8

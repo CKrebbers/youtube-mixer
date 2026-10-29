@@ -219,3 +219,31 @@ Clay vond de gebaren het interessantste deel. Daarom zijn ze uitgebouwd (`kern/o
 
 Nog niet mogelijk: een echte tape-stop en achteruit spelen. Daarvoor moet de afspeelmotor de snelheid tot 0
 of negatief kunnen sturen.
+
+## De korrelwolk (granular, 30 okt)
+
+**Als effect** (`audio/fx/korrel-kern.js` + `fx-korrel.js`, worklet `varve-fx-korrel`):
+- wat de track speelt gaat in een ring van 4 s, en daaruit spelen tot 48 korrels met een Hann-venster;
+- parameters: grootte, dichtheid, terug, spray, toon (octaven en kwinten), omkeer (achteruit), breedte, bevries, meng;
+- 0 GC per blok (getest), toeval uit een eigen LCG met een zaad;
+- idee en invarianten uit MediSynth `grains.js`.
+
+**Rack "Korrelwolk"** (in de beginstand droog), met knoppen 1–8: uiteen · grootte · spray · terug · toon ·
+achteruit · breedte · bevries.
+
+**Gebaren** (op de pads per recept):
+
+| Gebaar | Doet |
+|---|---|
+| korrel | uiteenvallen, dieper = dichter en wilder |
+| alles korrel | hetzelfde op alles |
+| korrel vast | bevriest wat net klonk |
+| achteruit | lange korrels achteruit: het nummer loopt terug |
+
+**De granular sampler: Maschine groep G "korrels".**
+- De eerste druk bevriest wat de track met focus net speelde.
+- Pad 1 is 0,1 s terug, pad 16 is 2,9 s terug. Druk = hoe vol, van pad naar pad = door het sample bewegen.
+- Bevriezen heeft een verleden nodig. Staat de Korrelwolk al als rack op de track, dan bevriest hij meteen
+  (zijn ring liep mee). Laadt het gebaar hem net, dan vangt hij eerst 1,5 s.
+
+Nog niet: de korrelwolk als instrument (met een eigen bron, op toonhoogte bespeelbaar) en korrels op de maatklok.
