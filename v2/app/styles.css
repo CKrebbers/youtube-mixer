@@ -224,6 +224,7 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .tabs button { min-height: 24px; padding: 2px 12px; background: none; color: var(--dim); }
 .tabs button.aan { background: var(--vlak); color: var(--tekst); border-color: var(--zwak); }
 .paneel { background: var(--vlak); border: 1px solid var(--lijn); border-radius: 6px; height: 196px; overflow: auto; }
+#paneel-opstelling { height: auto; max-height: 420px; }
 .paneel[hidden] { display: none; }
 .leeg-paneel { color: var(--dim); padding: 12px; margin: 0; }
 
@@ -274,3 +275,20 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .opst-sporen b { color: var(--tekst); }
 .opst-uitleg { margin: 0; color: var(--zwak); font-size: 11px; }
 @media (max-width: 900px) { .opst-macros { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tocht { border: 1px solid var(--lijn); border-radius: 6px; padding: 6px 8px; display: grid; gap: 4px; background: var(--bg); }
+.tocht p { margin: 0; color: var(--dim); }
+.tocht ul, .tocht ol { margin: 0; padding-left: 18px; }
+.tocht li span { font-family: var(--f-cijfer); color: var(--zwak); }
+.tocht li.af { color: var(--play); }
+.tocht-balk { display: grid; grid-auto-flow: column; gap: 3px; }
+.tocht-balk i { height: 4px; border-radius: 2px; background: var(--lijn); }
+.tocht-balk i.klaar { background: var(--play); }
+.tocht-balk i.nu { background: var(--klok); }
+.tocht-kop { display: flex; gap: 10px; align-items: baseline; }
+.tocht-kop span { color: var(--zwak); }
+.tocht-kop button:first-of-type { margin-left: auto; }
+.tocht button, .tocht-einde button { background: var(--vlak); color: var(--tekst); border: 1px solid var(--lijn); border-radius: var(--r); padding: 2px 8px; font: inherit; cursor: pointer; }
+.tocht button.aan { border-color: var(--klok); }
+.tocht-einde, .tocht-verzameling { display: flex; flex-wrap: wrap; gap: 4px; }
+.tocht-smaak { color: var(--zwak); font-size: 11px; }
+.tocht-smaak b { color: var(--dim); font-weight: 500; }

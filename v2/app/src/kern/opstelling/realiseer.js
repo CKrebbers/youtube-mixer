@@ -7,6 +7,7 @@
  *   instrumenten: ['drums', 'poly', …]           wat de audiolaag kent
  *   racks:        ['naam', …]                    racks/sjablonen.json, in volgorde
  *   vormen:       ['lz', 'gs', …]                de vormsystemen van het beeld
+ *   smaak:        kern/tocht/smaak.js (optioneel): racks, instrumenten en vormen die je mooi vindt komen vaker
  * }
  * opstelling: {
  *   recept, zaad, naam, toon,
@@ -20,6 +21,7 @@
 import { stroom } from './zaad.js';
 import { linkWaarde } from './model.js';
 import { maakPatroon, toonVan } from './patroon.js';
+import { kiesMetSmaak } from '../tocht/smaak.js';
 
 /** De plek waar een opstelling zijn patronen zet: 1–4 blijven van jou (kern/patronen: vijf plekken). */
 export const PATROON_PLEK = 5;
@@ -49,6 +51,7 @@ export function realiseer(recept, zaad, catalogus = {}, { focus = 1 } = {}) {
   const instrumenten = catalogus.instrumenten ?? [];
   const racks = catalogus.racks ?? [];
   const vormen = catalogus.vormen ?? [];
+  const smaak = catalogus.smaak ?? null;
   const bezet = new Set();
   const sporen = [];
   const patronen = [];
@@ -63,12 +66,12 @@ export function realiseer(recept, zaad, catalogus = {}, { focus = 1 } = {}) {
       if (x) { bezet.add(x.id); uit.nummer = { id: x.id, titel: x.titel }; if (toonK === null && Number.isInteger(x.k)) toonK = x.k; }
     } else {
       const mag = sp.kies.uit.filter((s) => !instrumenten.length || instrumenten.includes(s));
-      uit.instrument = rs.kies(mag.length ? mag : sp.kies.uit);
+      uit.instrument = kiesMetSmaak(rs, mag.length ? mag : sp.kies.uit, smaak, (x) => `inst:${x}`);
       for (const [k, b] of Object.entries(sp.knoppen ?? {})) uit.waarden[`track.${sp.n}.inst.knop.${k}`] = tussen(rs, b);
     }
     if (sp.rack && racks.length) {
       const lijst = sp.rack === 'elk' ? racks : sp.rack.filter((x) => racks.includes(x));
-      const naam = rs.kies(lijst);
+      const naam = kiesMetSmaak(rs, lijst, smaak, (x) => `rack:${x}`);
       if (naam) uit.rack = { naam, index: racks.indexOf(naam) };
     }
     if (sp.mix) uit.waarden[`track.${sp.n}.fx.mix`] = tussen(rs, sp.mix);
@@ -88,7 +91,7 @@ export function realiseer(recept, zaad, catalogus = {}, { focus = 1 } = {}) {
   let beeld = null;
   if (recept.beeld) {
     const rb = stroom(zaad, recept.id, 'beeld');
-    const lagen = recept.beeld.lagen.map((l) => rb.kies(l.uit.filter((x) => !vormen.length || vormen.includes(x))) ?? null).filter(Boolean);
+    const lagen = recept.beeld.lagen.map((l) => kiesMetSmaak(rb, l.uit.filter((x) => !vormen.length || vormen.includes(x)), smaak, (x) => `vorm:${x}`) ?? null).filter(Boolean);
     beeld = { lagen, opacity: tussen(rb, recept.beeld.opacity) };
   }
   const macros = recept.macros.map((m) => {

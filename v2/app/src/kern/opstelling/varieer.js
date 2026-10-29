@@ -7,12 +7,14 @@
  *   kruis(a, b, zaad)           per macro en per spoor de helft van a en de helft van b ("Kweek")
  *   drift(o, tel, variatie)     waar de macro's op deze tel naartoe zweven (de opstelling speelt zelf mee,
  *                               AVBRNC-autonomie): elke 4 maten een nieuw doel, glad ertussen
- *   genereer(catalogus, zaad)   een NIEUW recept uit alle bouwstenen die er zijn (de bouwdoos hieronder)
+ *   genereer(catalogus, zaad)   een NIEUW recept uit alle bouwstenen die er zijn (de bouwdoos hieronder);
+ *                               met catalogus.smaak kiest hij vaker de soorten sporen die je mooi vindt
  */
 import { stroom } from './zaad.js';
 import { ROLLEN, normaliseerRecept } from './model.js';
 import { realiseer, kiesNummer } from './realiseer.js';
 import { maakPatroon, toonVan } from './patroon.js';
+import { kiesMetSmaak } from '../tocht/smaak.js';
 
 const klem01 = (v) => Math.min(1, Math.max(0, v));
 
@@ -111,10 +113,10 @@ const BOUWDOOS = {
 };
 /** Wat een spoor kan zijn, met zijn kans en wat erbij hoort. */
 const SPOOR_SOORTEN = [
-  { gewicht: 3, maak: (r) => ({ soort: 'nummer', kies: { bpm: r.kans(0.5) ? [110, 130] : null, stems: r.kies(['liefst', 'maakt-niet-uit']), toon: 'past' }, rack: 'elk', mix: [0, 0.3], strip: { fader: [0.7, 0.9] } }) },
-  { gewicht: 2, maak: (r) => ({ soort: 'instrument', kies: { uit: ['drums'] }, patroon: { soort: 'drums', dichtheid: [0.25, 0.75], lengte: [16, 32] }, strip: { fader: [0.6, 0.85] } }) },
-  { gewicht: 2, maak: (r) => ({ soort: 'instrument', kies: { uit: ['poly', 'fm'] }, patroon: { soort: r.kies(['bas', 'lijn', 'akkoord']), dichtheid: [0.2, 0.7], lengte: [16, 32] }, rack: 'elk', mix: [0, 0.4], strip: { fader: [0.5, 0.8] }, knoppen: { 1: [0.2, 0.8], 2: [0.2, 0.8] } }) },
-  { gewicht: 1, maak: (r) => ({ soort: 'instrument', kies: { uit: ['schaal'] }, patroon: { soort: 'lijn', dichtheid: [0.1, 0.4], lengte: [32] }, strip: { fader: [0.4, 0.7] } }) },
+  { kenmerk: 'spoor:nummer', gewicht: 3, maak: (r) => ({ soort: 'nummer', kies: { bpm: r.kans(0.5) ? [110, 130] : null, stems: r.kies(['liefst', 'maakt-niet-uit']), toon: 'past' }, rack: 'elk', mix: [0, 0.3], strip: { fader: [0.7, 0.9] } }) },
+  { kenmerk: 'spoor:drums', gewicht: 2, maak: (r) => ({ soort: 'instrument', kies: { uit: ['drums'] }, patroon: { soort: 'drums', dichtheid: [0.25, 0.75], lengte: [16, 32] }, strip: { fader: [0.6, 0.85] } }) },
+  { kenmerk: 'spoor:poly', gewicht: 2, maak: (r) => ({ soort: 'instrument', kies: { uit: ['poly', 'fm'] }, patroon: { soort: r.kies(['bas', 'lijn', 'akkoord']), dichtheid: [0.2, 0.7], lengte: [16, 32] }, rack: 'elk', mix: [0, 0.4], strip: { fader: [0.5, 0.8] }, knoppen: { 1: [0.2, 0.8], 2: [0.2, 0.8] } }) },
+  { kenmerk: 'spoor:schaal', gewicht: 1, maak: (r) => ({ soort: 'instrument', kies: { uit: ['schaal'] }, patroon: { soort: 'lijn', dichtheid: [0.1, 0.4], lengte: [32] }, strip: { fader: [0.4, 0.7] } }) },
 ];
 const NAMEN_A = ['Nacht', 'Stroom', 'Kristal', 'Stof', 'Puls', 'Diep', 'Glas', 'Motor', 'Mist', 'Koraal', 'Vonk', 'Getij'];
 const NAMEN_B = ['veld', 'lijn', 'kamer', 'zee', 'werk', 'boog', 'wolk', 'kern', 'gang', 'zand'];
@@ -130,7 +132,7 @@ export function genereer(catalogus = {}, zaad = 1, { beeld = true } = {}) {
   const pot = SPOOR_SOORTEN.flatMap((s) => Array(s.gewicht).fill(s));
   const isDrums = (sp) => sp.soort === 'instrument' && sp.kies.uit.includes('drums');
   for (let n = 1; n <= aantal; n++) {
-    let sp = r.kies(pot).maak(r);
+    let sp = kiesMetSmaak(r, pot, catalogus.smaak, (x) => x.kenmerk).maak(r);
     if (sp.soort === 'nummer' && !(catalogus.nummers?.length)) sp = r.kies([SPOOR_SOORTEN[1], SPOOR_SOORTEN[2], SPOOR_SOORTEN[3]]).maak(r);
     // Eén drumstel per recept: een tweede wordt een melodisch instrument.
     if (isDrums(sp) && sporen.some(isDrums)) sp = r.kies([SPOOR_SOORTEN[2], SPOOR_SOORTEN[3]]).maak(r);

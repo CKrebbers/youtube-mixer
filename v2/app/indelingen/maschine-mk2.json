@@ -3,7 +3,7 @@
   "naam": "opstelling",
   "apparaat": "maschine-mk2",
   "shift": "shift",
-  "uitleg": "De Maschine speelt de opstelling (opstellingen/*.json). Draaiknop 1–8 = de acht macro's van het alfabet (schaal … ruimte), één omwenteling is het hele bereik, SHIFT = fijn. Pads onder: stems van de track met focus (vasthouden = weg, SHIFT = vast). Pads midden: scene 1–8. Pads boven: nieuw zaad · muteer · kruis · terug. Wiel = recept kiezen, indrukken of ENTER = laden, PLAY = start op de 1, ERASE = patronen stil, AUTO = nieuw recept uit de bouwdoos, DUPLICATE = bewaren. Groep A–H = focus op track 1–8.",
+  "uitleg": "De Maschine speelt de opstelling (opstellingen/*.json). Draaiknop 1–8 = de acht macro's van het alfabet (schaal … ruimte), één omwenteling is het hele bereik, SHIFT = fijn. Pads onder: stems van de track met focus (vasthouden = weg, SHIFT = vast). Pads midden: scene 1–8. Pads boven: nieuw zaad · muteer · kruis · terug. Wiel = recept kiezen, indrukken of ENTER = laden, PLAY = start op de 1, ERASE = patronen stil, AUTO = nieuw recept uit de bouwdoos, DUPLICATE = bewaren. Groep A–H = focus op track 1–8. CONTROL vasthouden = de opdracht van de tocht op de schermen, SHIFT+CONTROL = hoofdstuk overslaan.",
   "regels": [
     {
       "control": "enc1",
@@ -461,6 +461,19 @@
         }
       },
       "label": "focus 8"
+    },
+    {
+      "control": "control",
+      "actie": "tocht.toon",
+      "gedrag": "trigger",
+      "label": "de opdracht (vasthouden)"
+    },
+    {
+      "control": "control",
+      "shift": true,
+      "actie": "tocht.overslaan",
+      "gedrag": "trigger",
+      "label": "hoofdstuk overslaan"
     }
   ]
 }

@@ -224,6 +224,8 @@ export function definieerOpstelling(engine) {
       return fouten;
     },
     recepten: () => recepten,
+    /** De opstelling van nu (de tocht leest er de kenmerken van voor je smaak). */
+    huidige: () => o,
     /** Direct klaarzetten (de tests en het scherm). */
     zet: (r, zaad) => zet(maak(typeof r === 'string' ? recepten.find((x) => x.id === r) : r, zaad ?? nieuwZaad())),
     /**
