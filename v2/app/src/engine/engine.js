@@ -204,6 +204,7 @@ export class Engine extends Emitter {
       if (nr !== this._laadNr[n]) return false;
       t.speler.laad(pcm);
       t._haal = nummer.haal;      // de sampler opent de bron opnieuw om te knippen
+      t._toon = nummer.toon ?? null;   // de toonsoort van de library: de korrelwolk stemt zijn bron erop
       const grid = nummer.grid ? (nummer.grid instanceof Beatgrid ? nummer.grid : new Beatgrid(nummer.grid)) : null;
       // Stems alleen als de bron ze echt heeft (4 of 8 kanalen); namen en schaal van de library, anders de standaard.
       const k = pcm.kanalen ?? 2;

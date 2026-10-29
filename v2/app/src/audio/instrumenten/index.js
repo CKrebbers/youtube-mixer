@@ -29,9 +29,10 @@ import { POLY } from './poly.js';
 import { FM } from './fm.js';
 import { SCHAAL } from './schaal.js';
 import { DRUMS } from './drums.js';
+import { KORREL } from './korrel.js';
 
 /** @type {{ soort: string, naam: string, maak: Function }[]} */
-export const INSTRUMENTEN = Object.freeze([POLY, FM, SCHAAL, DRUMS]);
+export const INSTRUMENTEN = Object.freeze([POLY, FM, SCHAAL, DRUMS, KORREL]);
 
 /** De definitie van een soort, of null. */
 export const instrumentDef = (soort) => INSTRUMENTEN.find((d) => d.soort === soort) ?? null;

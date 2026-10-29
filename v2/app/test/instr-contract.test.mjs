@@ -10,8 +10,8 @@ import { Klok } from '../src/kern/klok.js';
 installeer();
 const { INSTRUMENTEN, instrumentDef, CONTRACT } = await import('../src/audio/instrumenten/index.js');
 
-test('de lijst: poly, fm, schaal, drums; instrumentDef vindt ze', () => {
-  assert.deepEqual(INSTRUMENTEN.map((d) => d.soort), ['poly', 'fm', 'schaal', 'drums']);
+test('de lijst: poly, fm, schaal, drums, korrel; instrumentDef vindt ze', () => {
+  assert.deepEqual(INSTRUMENTEN.map((d) => d.soort), ['poly', 'fm', 'schaal', 'drums', 'korrel']);
   for (const d of INSTRUMENTEN) {
     assert.ok(/^[a-z0-9-]+$/.test(d.soort) && typeof d.naam === 'string' && typeof d.maak === 'function');
     assert.equal(instrumentDef(d.soort), d);
@@ -78,9 +78,9 @@ test('aansluiten op een track: een eigen GainNode op strip.in; weg() is eerst di
   const { sluitAan, instrumentSoorten, MARGE } = await import('../src/audio/instrumenten/aansluiting.js');
   const { startDrempel } = await import('../src/audio/overgang.js');
   const { KILL_FADE } = await import('../src/audio/strip.js');
-  assert.deepEqual(instrumentSoorten().map((d) => d.soort), ['poly', 'fm', 'schaal', 'drums']);
+  assert.deepEqual(instrumentSoorten().map((d) => d.soort), ['poly', 'fm', 'schaal', 'drums', 'korrel']);
   assert.ok(instrumentSoorten().every((d) => typeof d.naam === 'string' && Object.keys(d).length === 2));
-  for (const soort of ['poly', 'fm', 'schaal', 'drums']) {
+  for (const soort of ['poly', 'fm', 'schaal', 'drums', 'korrel']) {
     const omg = instrOmgeving();
     const ctx = omg.ctx;
     const strip = { in: ctx.createGain() };

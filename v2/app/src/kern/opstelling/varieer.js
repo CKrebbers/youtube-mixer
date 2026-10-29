@@ -117,6 +117,7 @@ const SPOOR_SOORTEN = [
   { kenmerk: 'spoor:nummer', gewicht: 3, maak: (r) => ({ soort: 'nummer', kies: { bpm: r.kans(0.5) ? [110, 130] : null, stems: r.kies(['liefst', 'maakt-niet-uit']), toon: 'past' }, rack: 'elk', mix: [0, 0.3], strip: { fader: [0.7, 0.9] } }) },
   { kenmerk: 'spoor:drums', gewicht: 2, maak: (r) => ({ soort: 'instrument', kies: { uit: ['drums'] }, patroon: { soort: 'drums', dichtheid: [0.25, 0.75], lengte: [16, 32] }, strip: { fader: [0.6, 0.85] } }) },
   { kenmerk: 'spoor:poly', gewicht: 2, maak: (r) => ({ soort: 'instrument', kies: { uit: ['poly', 'fm'] }, patroon: { soort: r.kies(['bas', 'lijn', 'akkoord']), dichtheid: [0.2, 0.7], lengte: [16, 32] }, rack: 'elk', mix: [0, 0.4], strip: { fader: [0.5, 0.8] }, knoppen: { 1: [0.2, 0.8], 2: [0.2, 0.8] } }) },
+  { kenmerk: 'spoor:korrel', gewicht: 1, maak: (r) => ({ soort: 'instrument', kies: { uit: ['korrel'] }, patroon: { soort: r.kies(['akkoord', 'lijn']), dichtheid: [0.15, 0.5], lengte: [32, 64] }, strip: { fader: [0.45, 0.7] }, knoppen: { 1: [0.4, 0.8], 3: [0.5, 0.7], 5: [0.1, 0.8] } }) },
   { kenmerk: 'spoor:schaal', gewicht: 1, maak: (r) => ({ soort: 'instrument', kies: { uit: ['schaal'] }, patroon: { soort: 'lijn', dichtheid: [0.1, 0.4], lengte: [32] }, strip: { fader: [0.4, 0.7] } }) },
 ];
 const NAMEN_A = ['Nacht', 'Stroom', 'Kristal', 'Stof', 'Puls', 'Diep', 'Glas', 'Motor', 'Mist', 'Koraal', 'Vonk', 'Getij'];

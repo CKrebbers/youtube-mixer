@@ -111,6 +111,8 @@ export function definieerOpstelling(engine) {
       for (const [actie, v] of Object.entries(sp.waarden)) zetWaarde(actie, v);
     }
     for (const p of o.patronen) engine.patronen?.zetPatroon(p.n, p.plek, p.patroon);
+    // Een korrelwolk met een bron vangt uit het nummer van dat spoor (vanaf zijn cue: er hoeft nog niets te spelen).
+    for (const sp of o.sporen) if (sp.instrument === 'korrel' && sp.bron && engine.gebaren?.vang) { try { await engine.gebaren.vang(sp.n, sp.bron); } catch { /* geen nummer */ } }
     if (o.beeld && bronnen.zetVorm) { try { bronnen.zetVorm(o.beeld.lagen[0], o.beeld.opacity); } catch { /* geen beeld */ } }
     o.macros.forEach((m, i) => zetMacro(i, basis[i]));
     uit.emit('verander');

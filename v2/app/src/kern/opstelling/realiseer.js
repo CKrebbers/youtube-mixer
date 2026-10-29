@@ -81,6 +81,7 @@ export function realiseer(recept, zaad, catalogus = {}, { focus = 1 } = {}) {
     } else {
       const mag = sp.kies.uit.filter((s) => !instrumenten.length || instrumenten.includes(s));
       uit.instrument = kiesMetSmaak(rs, mag.length ? mag : sp.kies.uit, smaak, (x) => `inst:${x}`);
+      if (uit.instrument === 'korrel' && sp.bron) uit.bron = sp.bron;
       for (const [k, b] of Object.entries(sp.knoppen ?? {})) uit.waarden[`track.${sp.n}.inst.knop.${k}`] = tussen(rs, b);
     }
     if (sp.rack && racks.length) {

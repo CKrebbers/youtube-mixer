@@ -8,6 +8,9 @@
  *   korrel.veld.{1..16}    waarde 0..1   de granular sampler (padstand korrels): de eerste druk bevriest wat de
  *                                        track met focus net speelde; pad k = plek k in dat stuk (1 = net, 16 ≈ 3 s
  *                                        terug), druk = hoe vol; loslaten van de laatste pad = terug
+ *   korrel.vang            trigger       de korrelwolk (instrument) vangt de laatste VANG_TELLEN tellen van wat er
+ *                                        speelt (de track met focus, anders het eerste nummer dat je hoort; met stems
+ *                                        wat je HOORT) en wordt daarmee op toonhoogte speelbaar
  *   gebaar.optel           trigger       loslaten op de tel aan/uit (standaard aan): wat je loslaat,
  *                                        gaat pas op de volgende tel terug, zodat de terugkeer strak valt
  *   speel.drum.{1..16}     waarde        pad k speelt drumnoot 35+k op het drumspoor, met aanslag; 0 = los
@@ -24,6 +27,19 @@
 import { kromme } from '../kern/opstelling/model.js';
 import { LADDERS } from '../kern/opstelling/patroon.js';
 import { GEBAREN, padGebaren } from '../kern/opstelling/gebaren.js';
+import { knipBereik, knipPcm } from './sampler.js';
+
+/** Zoveel tellen vangt de korrelwolk (korrel.vang); zonder zeker grid zoveel seconden. */
+export const VANG_TELLEN = 4;
+export const VANG_ZONDER_GRID_S = 2;
+const TOONKLASSE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+/** De grondnoot van een gevangen stuk uit de toonsoort van zijn nummer ('Am', 'F#', 'Bb'), dicht bij C4; anders C4. */
+export function grondVan(toon) {
+  const m = /^\s*([A-Ga-g])\s*(#|♯|b|♭)?/.exec(String(toon ?? ''));
+  if (!m) return 60;
+  const k = (TOONKLASSE[m[1].toLowerCase()] + (m[2] === '#' || m[2] === '♯' ? 1 : m[2] ? -1 : 0) + 12) % 12;
+  return 60 + (k > 6 ? k - 12 : k);
+}
 
 /**
  * Bevriezen heeft een verleden nodig: staat de Korrelwolk al op de track (zijn ring loopt mee), dan
@@ -241,6 +257,28 @@ export function definieerGebaren(engine) {
   bus.defineer({ id: 'gebaar.optel', soort: 'trigger', label: 'gebaren: loslaten op de tel aan/uit', meta: META,
     doe: (v) => { if (v) { optel = !optel; engine.meld?.(`gebaren: loslaten ${optel ? 'op de tel' : 'meteen'}`, 'info', 'gebaar'); } }, lees: () => (optel ? 1 : 0) });
 
+  // ---- de korrelwolk als instrument: vangen ---------------------------------------------------
+  /** Vang voor korrelspoor `doel` (of het eerste) uit track `bron` (of de focus, of wat je hoort). */
+  async function vang(doel = null, bron = null) {
+    const d = doel ?? (T(engine.focus)?.instrument?.soort === 'korrel' ? engine.focus : engine.tracks.find((t) => t.instrument?.soort === 'korrel')?.n ?? null);
+    const inst = d ? T(d)?.instrument?.inst : null;
+    if (!inst?.laadBron) return { geweigerd: 'geen Korrelwolk op een track: zet het instrument erop (track.n.inst)' };
+    const b = bron ?? (T(engine.focus)?.geladen ? engine.focus : engine.tracks.find((t) => t.geladen && engine.hoorbaar(t.n))?.n ?? engine.tracks.find((t) => t.geladen)?.n ?? null);
+    const t = b ? T(b) : null;
+    if (!t?.geladen || !t._haal) return { geweigerd: 'niets om te vangen: laad een nummer' };
+    const P = t.plek(engine.nu() - engine.vertraging());
+    const r = t.grid && t.telZeker?.(P) ? knipBereik(t.grid, P, VANG_TELLEN) : null;
+    const van = r ? r.van : Math.max(0, P - VANG_ZONDER_GRID_S), tot = r ? r.tot : Math.max(P, van + VANG_ZONDER_GRID_S);
+    const pcm = await knipPcm(await t._haal(), van, tot, t.stems ? t.stemGewichten() : null);
+    if (!pcm || !inst.laadBron(pcm, { grond: grondVan(t._toon ?? t.nummer?.toon), titel: t.nummer?.titel ?? null })) return { geweigerd: 'vangen mislukt' };
+    engine.meld?.(`korrelwolk ${d}: ${r ? `${r.tellen} tellen` : `${VANG_ZONDER_GRID_S} s`} van ${t.nummer?.titel ?? `track ${b}`}`, 'info', `korrel:${d}`);
+    engine.emit('track', d);
+    return undefined;
+  }
+  bus.defineer({ id: 'korrel.vang', soort: 'trigger', label: 'korrelwolk: vang de laatste tellen van wat er speelt', meta: META,
+    doe: (v) => { if (v) vang().then((x) => { if (x?.geweigerd) engine.meld?.(x.geweigerd, 'fout', 'korrel'); }); },
+    lees: () => (engine.tracks.some((t) => t.instrument?.soort === 'korrel') ? 0 : null) });
+
   // ---- zelf spelen: drums en noten ------------------------------------------------------
   const opstelling = () => engine.opstelling?.huidige?.() ?? null;
   const drumSpoor = () => {
@@ -295,5 +333,6 @@ export function definieerGebaren(engine) {
     padLabels: () => padNamen().map((n) => GEBAREN[n]?.kort ?? n),
     naamVanPad: (k) => opPad.get(k) ?? padNamen()[k - 1] ?? null,
     optel: () => optel,
+    vang,
   };
 }

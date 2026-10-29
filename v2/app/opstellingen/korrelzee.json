@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "id": "korrelzee",
+  "naam": "Korrelzee",
+  "uitleg": "Een nummer uit je library valt uiteen: twee korrelwolken vangen er een stuk uit en spelen het op toonhoogte, als akkoorden en als lijn, met drums eronder. SAMPLING vangt opnieuw uit wat er nu speelt.",
+  "kleur": "zeegroen",
+  "sporen": [
+    { "n": 1, "soort": "nummer", "kies": { "stems": "liefst" }, "rack": ["Korrelwolk", "Ademende galm", "Wegspoelen"], "mix": [0, 0.2], "strip": { "fader": [0.5, 0.75] } },
+    { "n": 2, "soort": "instrument", "kies": { "uit": ["korrel"] }, "bron": 1, "patroon": { "soort": "akkoord", "dichtheid": [0.5, 0.5], "lengte": [32, 64] }, "rack": ["Ademende galm", "Getij"], "mix": [0.1, 0.4], "strip": { "fader": [0.55, 0.75] }, "knoppen": { "1": [0.55, 0.8], "2": [0.4, 0.6], "3": [0.5, 0.6], "5": [0.1, 0.7] } },
+    { "n": 3, "soort": "instrument", "kies": { "uit": ["korrel"] }, "bron": 1, "patroon": { "soort": "lijn", "dichtheid": [0.2, 0.5], "lengte": [32] }, "rack": ["Dub-echo", "Koor"], "mix": [0.1, 0.4], "strip": { "fader": [0.45, 0.65] }, "knoppen": { "1": [0.2, 0.45], "6": [0.6, 0.85], "5": [0.2, 0.9] } },
+    { "n": 4, "soort": "instrument", "kies": { "uit": ["drums"] }, "patroon": { "soort": "drums", "dichtheid": [0.2, 0.55], "lengte": [16, 32] }, "strip": { "fader": [0.5, 0.7] } }
+  ],
+  "beeld": { "lagen": [{ "uit": ["ph", "dl", "gs", "fl"] }], "opacity": [0.6, 0.9] },
+  "macros": [
+    { "rol": "schaal", "naam": "korrel", "start": [0.4, 0.6], "links": [
+      { "actie": "track.{n}.inst.knop.1", "spoor": 2, "van": 0.15, "tot": 0.95 },
+      { "actie": "track.{n}.inst.knop.1", "spoor": 3, "van": 0.05, "tot": 0.7 } ] },
+    { "rol": "dichtheid", "naam": "wolk", "start": [0.4, 0.6], "links": [
+      { "actie": "track.{n}.inst.knop.2", "spoor": 2, "van": 0.1, "tot": 0.95 },
+      { "actie": "track.{n}.fader", "spoor": 4, "van": 0, "tot": 0.7, "kromme": "log" } ] },
+    { "rol": "beweging", "naam": "scan", "start": [0.5, 0.65], "links": [
+      { "actie": "track.{n}.inst.knop.3", "spoor": 2, "van": 0.2, "tot": 0.95 },
+      { "actie": "track.{n}.inst.knop.3", "spoor": 3, "van": 0.3, "tot": 0.9 } ] },
+    { "rol": "vervorming", "naam": "spreiding", "start": [0, 0.2], "links": [
+      { "actie": "track.{n}.inst.knop.4", "spoor": 2, "van": 0, "tot": 0.6, "kromme": "exp" },
+      { "actie": "track.{n}.inst.knop.4", "spoor": 3, "van": 0, "tot": 0.5, "kromme": "exp" } ] },
+    { "rol": "kleur", "naam": "plek", "start": [0.2, 0.8], "links": [
+      { "actie": "track.{n}.inst.knop.5", "spoor": 2, "van": 0, "tot": 1 },
+      { "actie": "track.{n}.inst.knop.5", "spoor": 3, "van": 1, "tot": 0 } ] },
+    { "rol": "helderheid", "naam": "nummer", "start": [0.2, 0.5], "links": [
+      { "actie": "track.{n}.fader", "spoor": 1, "van": 0, "tot": 0.85, "kromme": "log" },
+      { "actie": "video.layer.opacity", "van": 0.2, "tot": 1 } ] },
+    { "rol": "variatie", "naam": "variatie", "start": [0.3, 0.5], "links": [
+      { "actie": "track.{n}.inst.knop.7", "spoor": 2, "van": 0, "tot": 0.8 },
+      { "actie": "track.{n}.inst.knop.7", "spoor": 3, "van": 0, "tot": 0.6 } ] },
+    { "rol": "ruimte", "naam": "ruimte", "start": [0.3, 0.5], "links": [
+      { "actie": "track.{n}.send.b", "spoor": 2, "van": 0.1, "tot": 0.8, "kromme": "exp" },
+      { "actie": "track.{n}.send.b", "spoor": 3, "van": 0, "tot": 0.6, "kromme": "exp" },
+      { "actie": "track.{n}.inst.knop.8", "spoor": 2, "van": 0.3, "tot": 1 } ] }
+  ],
+  "scenes": [
+    { "naam": "stof", "macros": { "schaal": [0.05, 0.2], "dichtheid": [0.7, 0.9], "helderheid": [0, 0.15] } },
+    { "naam": "zee", "macros": { "schaal": [0.6, 0.85], "dichtheid": [0.3, 0.5], "ruimte": [0.6, 0.9] } },
+    { "naam": "storm", "macros": { "dichtheid": [0.85, 1], "vervorming": [0.5, 0.8], "beweging": [0.85, 1] } },
+    { "naam": "nummer", "macros": { "helderheid": [0.8, 1], "dichtheid": [0.1, 0.3], "vervorming": [0, 0.1] } },
+    { "naam": "stil", "macros": { "beweging": [0.48, 0.52], "dichtheid": [0.2, 0.35], "ruimte": [0.8, 1] } }
+  ],
+  "variatie": { "drift": 0.45 },
+  "gebaren": ["korrel", "korrelvast", "achteruit", "alles.dof", "breuk", "alles.galm", "echovast", "stilte"]
+}

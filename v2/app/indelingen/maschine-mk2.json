@@ -3,7 +3,7 @@
   "naam": "opstelling",
   "apparaat": "maschine-mk2",
   "shift": "shift",
-  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, G korrels (de granular sampler: de eerste druk bevriest wat de track met focus net speelde, pad 1 = net tot pad 16 = bijna 3 s terug, druk = hoe vol, van pad naar pad = door het sample), F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht.",
+  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, G korrels (de granular sampler: de eerste druk bevriest wat de track met focus net speelde, pad 1 = net tot pad 16 = bijna 3 s terug, druk = hoe vol, van pad naar pad = door het sample), F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht. SAMPLING = de korrelwolk (instrument) vangt de laatste 4 tellen van wat er speelt; speel hem dan met de noten (groep C).",
   "regels": [
     {
       "control": "enc1",
@@ -1739,6 +1739,12 @@
         }
       },
       "label": "2,9 s"
+    },
+    {
+      "control": "sampling",
+      "actie": "korrel.vang",
+      "gedrag": "trigger",
+      "label": "korrelwolk: vang wat er speelt"
     }
   ]
 }

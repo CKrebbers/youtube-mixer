@@ -7,11 +7,12 @@
  *     sporen: [ hooguit 8, n = de track (en dus de kolom op de APC) ]
  *       { n, soort: 'nummer' | 'instrument',
  *         kies:    nummer:     { bpm: [lo, hi], stems: 'nodig'|'liefst'|'maakt-niet-uit', toon: 'past' }
- *                  instrument: { uit: ['drums', 'poly', 'fm', 'schaal'] }
+ *                  instrument: { uit: ['drums', 'poly', 'fm', 'schaal', 'korrel'] }
  *         rack:    [namen] of 'elk' (uit racks/sjablonen.json), mix: [lo, hi]
  *         strip:   { fader | filter | laag | mid | hoog | trim: [lo, hi] }
  *         knoppen: { 1..8: [lo, hi] }                 de knoppen van het instrument
- *         patroon: { soort: 'drums'|'bas'|'lijn'|'akkoord', dichtheid: [lo, hi], lengte: [16, 32, …] } }
+ *         patroon: { soort: 'drums'|'bas'|'lijn'|'akkoord', dichtheid: [lo, hi], lengte: [16, 32, …] }
+ *         bron:    n (alleen bij de korrelwolk): bij het klaarzetten vangt hij uit het nummer op spoor n }
  *     beeld:  { lagen: [ { uit: [vorm-id's] } ], opacity: [lo, hi] }
  *     macros: [ hooguit 8, op volgorde van het alfabet (instrumenten/gedeeld/alfabet.js) ]
  *       { rol, naam, start: [lo, hi], links: [ { actie, van, tot, kromme? } ] }
@@ -34,7 +35,7 @@ export const MAX_SCENES = 8;
 /** Het alfabet (werkplek/bediening/SYSTEEM.md §3.3): dezelfde acht betekenissen op dezelfde plek. */
 export const ROLLEN = Object.freeze(['schaal', 'dichtheid', 'beweging', 'vervorming', 'kleur', 'helderheid', 'variatie', 'ruimte']);
 export const SOORTEN = Object.freeze(['nummer', 'instrument']);
-export const INSTRUMENTEN = Object.freeze(['drums', 'poly', 'fm', 'schaal']);
+export const INSTRUMENTEN = Object.freeze(['drums', 'poly', 'fm', 'schaal', 'korrel']);
 export const PATROON_SOORTEN = Object.freeze(['drums', 'bas', 'lijn', 'akkoord']);
 export const STRIP = Object.freeze(['fader', 'filter', 'laag', 'mid', 'hoog', 'trim']);
 export const KROMMEN = Object.freeze(['lin', 'exp', 'log', 's']);
@@ -70,6 +71,10 @@ function normaliseerSpoor(s, i, fouten) {
     const lijst = (Array.isArray(k.uit) ? k.uit : INSTRUMENTEN).filter((x) => INSTRUMENTEN.includes(x));
     if (!lijst.length) { fouten.push(`${waar}: geen bekend instrument in kies.uit`); return null; }
     uit.kies.uit = lijst;
+  }
+  if (s.soort === 'instrument' && s.bron !== undefined) {
+    const b = Math.round(s.bron);
+    if (b >= 1 && b <= MAX_SPOREN && b !== n) uit.bron = b; else fouten.push(`${waar}: bron ${s.bron} is geen ander spoor`);
   }
   if (s.rack === 'elk' || (Array.isArray(s.rack) && s.rack.every((x) => typeof x === 'string'))) uit.rack = s.rack;
   if (s.mix !== undefined) uit.mix = bereik(s.mix, null);
