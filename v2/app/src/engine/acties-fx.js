@@ -115,6 +115,16 @@ export function definieerFx(engine, { sjablonen = null } = {}) {
       return true;
     },
     sjablonen: () => lijst,
+    /** Sjabloon `naam` op track n (een opstelling kiest zo); ‹ › lopen daarna vanaf dat sjabloon verder. */
+    kiesRack(n, naam) {
+      const f = fxVan(n);
+      const i = lijst.findIndex((r) => r.name === naam);
+      if (!f || i < 0) return false;
+      f.zetRack(lijst[i], { herkomst: `s:${i}` });
+      keuze.set(n, i);
+      engine.emit?.('track', n);
+      return true;
+    },
     /** De naam van het rack op track n (voor het scherm). */
     rackNaam: (n) => fxVan(n)?.rackNaam ?? null,
     effectVan,

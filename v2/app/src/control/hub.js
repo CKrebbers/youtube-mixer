@@ -31,10 +31,14 @@
  *   de pickup van een LPD8-knop volgt de eerste app met die rol, en K1 (intensiteit) aan
  *   mixer.master gaf in v1 een hoorbare dip midden in een set. Master en crossfader staan
  *   zonder rol (en zonder slew) in de cockpit.
- * NIET overgenomen (nog niet in v2): de speelapparaten (Xboard49, Maschine MK2: `speelt`,
- * PROTOCOL §17; v2 heeft geen Maschine-koppeling) en de sectie naar de globale laag
- * (`levert: ['sectie']`, §18; v2 heeft geen SectieLezer). Het manifest noemt ze dus niet:
- * een `speelt` dat niets doet zou de hub de Maschine laten leasen aan een app die niets speelt.
+ * DE MASCHINE MK2 (PROTOCOL §17, v2 sinds 29 okt): het manifest zegt `speelt: ['maschine-mk2']`.
+ * Hij heeft een EIGEN nep-poort (`speelPoort('maschine-mk2')`: { in, uit, scherm }), niet in
+ * `toegang.inputs`: de MidiHub van de APC ziet hem nooit.
+ *   {t:'midi', dev:'maschine-mk2', bytes} -> speel.in.onmidimessage (geen focusfilter: wie speelt beslist de hub)
+ *   speel.uit.send(bytes)                 -> per beeld {t:'led', dev:'maschine-mk2', bytes:[[…],…]}
+ *   speel.scherm(nr, 2048 bytes)          -> hooguit één per scherm per SCHERM_MS {t:'scherm', dev, nr, data: base64}
+ * Valt de verbinding weg, dan gaat de poort op 'disconnected' (onstatechange): wie hem gekoppeld
+ * heeft laat los. NIET overgenomen: de Xboard49, binaire schermframes (AR15) en de sectie (§18).
  *
  * Geen DOM, geen navigator, geen fetch (regels.test): de WebSocket-klasse, de klok en de
  * timers komen van buiten (de test geeft een nep-WebSocket en een nep-klok).
@@ -66,6 +70,12 @@ export const TIK_MS = 200;
 export const BEELD_MS = 16;
 /** De naam van de nep-poort: past op de voorkeur van het APC-profiel (/apc40/i). */
 export const POORT_NAAM = 'APC40 mkII (hub)';
+/** De speelapparaten van v2 (PROTOCOL §17) en de naam van hun nep-poort. */
+export const SPEELPOORTEN = Object.freeze({ 'maschine-mk2': 'Maschine MK2 (hub)' });
+/** Eén scherm van de Maschine: 256 × 64 pixels, 1 bit, rij voor rij, hoogste bit links. */
+export const SCHERM_BYTES = 2048;
+/** Hooguit één beeld per scherm per zoveel ms naar de hub (v1: schermritme 40 ms). */
+export const SCHERM_MS = 40;
 
 /**
  * Wat de hub mag zetten: alleen wat de APC en de muis ook mogen, over de bus.
@@ -82,7 +92,7 @@ export const PARAMS = Object.freeze([
 
 export const MANIFEST = Object.freeze({
   v: 1, app: APP, naam: 'Varve DJ', kleur: '#4ad9c4', truth: 'app', hb_s: HB_S,
-  lease: true, rings: 'host',
+  lease: true, rings: 'host', speelt: Object.keys(SPEELPOORTEN),
   params: PARAMS.map(({ action: _a, ...p }) => p),
 });
 
@@ -92,6 +102,9 @@ const isBytes = (b) => Array.isArray(b) && b.length > 0 && b.length <= 512 && b.
 const isLos = (b) => (b[0] & 0xf0) === 0x80 || ((b[0] & 0xf0) === 0x90 && b[2] === 0);
 /** Wat de hub als lampje aanneemt (PROTOCOL §3): precies één note off/on of CC van 3 bytes. */
 const isLampje = (b) => b.length === 3 && [0x80, 0x90, 0xb0].includes(b[0] & 0xf0) && b[1] <= 0x7f && b[2] <= 0x7f;
+
+/** Bytes -> base64 (zonder Buffer: dit draait in de browser). */
+const base64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); };
 
 const standaardKlok = () => (globalThis.performance?.now ? globalThis.performance.now() : Date.now());
 const standaardTimers = () => ({
@@ -155,7 +168,23 @@ export class HubMidi extends MidiHub {
     this.ledsUit = 0;            // lampjes naar de hub
     this.geweigerd = 0;          // wat geen lampje was (de hub neemt het niet aan)
     this.gestopt = false;
+    // De speelapparaten: per apparaat een eigen ingang, uitgang en de schermen.
+    this.speel = {};
+    for (const [dev, naam] of Object.entries(SPEELPOORTEN)) {
+      const p = (type) => ({ id: `hub-${dev}-${type}`, name: naam, manufacturer: 'varve-hub', type, state: 'disconnected', connection: 'closed', onstatechange: null });
+      this.speel[dev] = {
+        dev,
+        in: { ...p('input'), onmidimessage: null },
+        uit: { ...p('output'), send: (b) => this._speelLed(dev, b) },
+        scherm: (nr, data) => this._scherm(dev, nr, data),
+        bundel: [], schermen: new Map(), schermTimer: null, schermUit: -Infinity,
+        rx: 0, leds: 0, beelden: 0, geweigerd: 0,
+      };
+    }
   }
+
+  /** De nep-poorten van een speelapparaat ({ in, uit, scherm(nr, bytes) }), of null. */
+  speelPoort(dev) { return this.speel[dev] ?? null; }
 
   /** Geen poortkeuze en geen MIDI-toegang: de poort komt er als de hub antwoordt. */
   start() {
@@ -171,6 +200,7 @@ export class HubMidi extends MidiHub {
     const t = this.timers;
     if (this.tikker !== null) t.clearInterval(this.tikker);
     for (const x of [this.herverbind, this.ledTimer, this.openTimer, this.stabielTimer]) if (x !== null) t.clearTimeout(x);
+    for (const s of Object.values(this.speel)) if (s.schermTimer !== null) { t.clearTimeout(s.schermTimer); s.schermTimer = null; }
     this.tikker = this.herverbind = this.ledTimer = this.openTimer = this.stabielTimer = null;
     const ws = this.ws;
     this.ws = null;
@@ -181,8 +211,10 @@ export class HubMidi extends MidiHub {
   get verbonden() { return this.poortIn.state === 'connected'; }
 
   status() {
+    const speelt = Object.fromEntries(Object.values(this.speel).map((s) => [s.dev,
+      { verbonden: s.in.state === 'connected', rx: s.rx, leds: s.leds, schermen: s.beelden, geweigerd: s.geweigerd }]));
     return { ...super.status(), hub: { url: this.url, verbonden: this.verbonden, focus: this.focus, vervangen: this.vervangen,
-      ingeslikt: this.ingeslikt, leds: this.ledsUit, geweigerd: this.geweigerd } };
+      ingeslikt: this.ingeslikt, leds: this.ledsUit, geweigerd: this.geweigerd, speelt } };
   }
 
   // ---- de bus ----------------------------------------------------------------
@@ -264,6 +296,12 @@ export class HubMidi extends MidiHub {
     const was = this.poortIn.state;
     for (const p of [this.poortIn, this.poortUit]) { p.state = state; p.connection = state === 'connected' ? 'open' : 'closed'; }
     this.toegang.onstatechange?.({ port: this.poortIn });
+    for (const s of Object.values(this.speel)) {
+      if (s.in.state === state) continue;
+      for (const p of [s.in, s.uit]) { p.state = state; p.connection = state === 'connected' ? 'open' : 'closed'; }
+      if (state !== 'connected') { s.bundel = []; s.schermen.clear(); if (s.schermTimer !== null) { this.timers.clearTimeout(s.schermTimer); s.schermTimer = null; } }
+      s.in.onstatechange?.({ port: s.in });
+    }
     if (was !== state) this.emit('hub', this.status().hub);
   }
 
@@ -279,8 +317,12 @@ export class HubMidi extends MidiHub {
     let b;
     try { b = JSON.parse(typeof tekst === 'string' ? tekst : String(tekst)); } catch (_) { return; }
     if (!b || typeof b !== 'object') return;
-    if (b.t === 'midi') {
-      // Alleen de APC: de speelapparaten (§17) speelt v2 nog niet; die stuurt de hub ons ook niet (geen `speelt`).
+    if (b.t === 'midi' && this.speel[b.dev]) {
+      const s = this.speel[b.dev];
+      if (!isBytes(b.bytes) || s.in.state !== 'connected') return;
+      s.rx++;
+      s.in.onmidimessage?.({ data: Uint8Array.from(b.bytes), timeStamp: this.klok() });
+    } else if (b.t === 'midi') {
       if (b.dev !== 'apc40' || !isBytes(b.bytes) || !this.verbonden) return;
       if (this.focus || isLos(b.bytes)) this.poortIn.onmidimessage?.({ data: Uint8Array.from(b.bytes), timeStamp: this.klok() });
     } else if (b.t === 'focus') {
@@ -350,11 +392,57 @@ export class HubMidi extends MidiHub {
 
   _bundel() {
     this.ledTimer = null;
-    if (!this.leds.length) return;
-    const bytes = this.leds;
-    this.leds = [];
-    this._stuurHub({ t: 'led', bytes });
-    this.ledsUit += bytes.length;
-    this.beeldUit = this.klok();
+    let iets = false;
+    if (this.leds.length) {
+      const bytes = this.leds;
+      this.leds = [];
+      this._stuurHub({ t: 'led', bytes });
+      this.ledsUit += bytes.length;
+      iets = true;
+    }
+    for (const s of Object.values(this.speel)) {
+      if (!s.bundel.length) continue;
+      this._stuurHub({ t: 'led', dev: s.dev, bytes: s.bundel });
+      s.leds += s.bundel.length;
+      s.bundel = [];
+      iets = true;
+    }
+    if (iets) this.beeldUit = this.klok();
+  }
+
+  // ---- de speelapparaten (PROTOCOL §17) -------------------------------------------
+
+  /** Een lampje voor een speelapparaat: per beeld gebundeld, net als die van de APC. */
+  _speelLed(dev, bytes) {
+    const s = this.speel[dev];
+    const b = [...bytes];
+    if (!s || s.uit.state !== 'connected' || !this.open) return false;
+    if (!isLampje(b)) { s.geweigerd++; return false; }
+    s.bundel.push(b);
+    this._beeld();
+    return true;
+  }
+
+  /**
+   * Een scherm (0 links, 1 rechts): precies 2048 bytes. Per scherm telt alleen het nieuwste
+   * beeld; hooguit één keer per SCHERM_MS gaan de wachtende beelden naar de hub.
+   */
+  _scherm(dev, nr, data) {
+    const s = this.speel[dev];
+    if (!s || s.uit.state !== 'connected' || (nr !== 0 && nr !== 1) || data?.length !== SCHERM_BYTES) { if (s) s.geweigerd++; return false; }
+    s.schermen.set(nr, Uint8Array.from(data));
+    if (s.schermTimer === null) {
+      const wacht = Math.max(0, SCHERM_MS - (this.klok() - s.schermUit));
+      s.schermTimer = this.timers.setTimeout(() => this._schermenUit(s), wacht);
+    }
+    return true;
+  }
+
+  _schermenUit(s) {
+    s.schermTimer = null;
+    if (!this.open) { s.schermen.clear(); return; }
+    for (const [nr, data] of s.schermen) { this._stuurHub({ t: 'scherm', dev: s.dev, nr, data: base64(data) }); s.beelden++; }
+    s.schermen.clear();
+    s.schermUit = this.klok();
   }
 }

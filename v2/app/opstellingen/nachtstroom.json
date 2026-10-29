@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "id": "nachtstroom",
+  "naam": "Nachtstroom",
+  "uitleg": "Twee nummers uit je library over elkaar, een drumstel en een baslijn eronder; filter, galm en drift maken elke avond anders.",
+  "kleur": "cyaan",
+  "sporen": [
+    { "n": 1, "soort": "nummer", "kies": { "bpm": [112, 130], "stems": "liefst" }, "rack": ["Dub-echo", "Getij", "Ademende galm", "Oplossen"], "mix": [0, 0.25], "strip": { "fader": [0.75, 0.9] } },
+    { "n": 2, "soort": "nummer", "kies": { "bpm": [112, 130], "toon": "past" }, "rack": ["Kleur: filter", "Stappenfilter", "Schaduw"], "mix": [0, 0.3], "strip": { "fader": [0.4, 0.7], "filter": [0.3, 0.45] } },
+    { "n": 3, "soort": "instrument", "kies": { "uit": ["drums"] }, "patroon": { "soort": "drums", "dichtheid": [0.3, 0.7], "lengte": [16, 32] }, "rack": ["Drum-punch", "Pomp", "Tel-gate 1/8"], "strip": { "fader": [0.6, 0.8] } },
+    { "n": 4, "soort": "instrument", "kies": { "uit": ["poly", "fm"] }, "patroon": { "soort": "bas", "dichtheid": [0.25, 0.6], "lengte": [16, 32] }, "rack": ["Reese", "Oude band"], "mix": [0, 0.4], "strip": { "fader": [0.5, 0.75] }, "knoppen": { "1": [0.2, 0.6], "2": [0.3, 0.7] } }
+  ],
+  "beeld": { "lagen": [{ "uit": ["fl", "ph", "gs", "lz"] }], "opacity": [0.5, 0.85] },
+  "macros": [
+    { "rol": "schaal", "naam": "filter", "start": [0.1, 0.3], "links": [
+      { "actie": "track.{n}.filter", "spoor": 1, "van": 0.5, "tot": 0.12, "kromme": "s" },
+      { "actie": "track.{n}.filter", "spoor": 2, "van": 0.4, "tot": 0.2, "kromme": "s" } ] },
+    { "rol": "dichtheid", "naam": "lagen", "start": [0.4, 0.6], "links": [
+      { "actie": "track.{n}.fader", "spoor": 3, "van": 0, "tot": 0.85, "kromme": "log" },
+      { "actie": "track.{n}.fader", "spoor": 4, "van": 0, "tot": 0.75, "kromme": "log" },
+      { "actie": "track.{n}.stem.drums", "spoor": 1, "van": 0.3, "tot": 1, "kromme": "lin" } ] },
+    { "rol": "beweging", "naam": "fx", "start": [0.3, 0.6], "links": [
+      { "actie": "track.{n}.fx.knop.1", "spoor": 1, "van": 0.1, "tot": 0.9 },
+      { "actie": "video.pulse", "van": 0, "tot": 0.8 } ] },
+    { "rol": "vervorming", "naam": "nat", "start": [0, 0.2], "links": [
+      { "actie": "track.{n}.fx.mix", "spoor": 1, "van": 0, "tot": 0.7, "kromme": "exp" },
+      { "actie": "track.{n}.fx.mix", "spoor": 4, "van": 0, "tot": 0.6, "kromme": "exp" } ] },
+    { "rol": "kleur", "naam": "toon", "start": [0.4, 0.6], "links": [
+      { "actie": "track.{n}.hoog", "spoor": 1, "van": 0.35, "tot": 0.65 },
+      { "actie": "track.{n}.inst.knop.1", "spoor": 4, "van": 0.15, "tot": 0.85 } ] },
+    { "rol": "helderheid", "naam": "beeld", "start": [0.5, 0.8], "links": [
+      { "actie": "video.layer.opacity", "van": 0.1, "tot": 1 } ] },
+    { "rol": "variatie", "naam": "variatie", "start": [0.3, 0.5], "links": [] },
+    { "rol": "ruimte", "naam": "galm", "start": [0.2, 0.4], "links": [
+      { "actie": "track.{n}.send.b", "spoor": 1, "van": 0, "tot": 0.6, "kromme": "exp" },
+      { "actie": "track.{n}.send.b", "spoor": 4, "van": 0, "tot": 0.5, "kromme": "exp" },
+      { "actie": "track.{n}.send.a", "spoor": 2, "van": 0, "tot": 0.5, "kromme": "exp" } ] }
+  ],
+  "scenes": [
+    { "naam": "rust", "macros": { "dichtheid": [0.05, 0.2], "ruimte": [0.6, 0.85], "schaal": [0.5, 0.8] } },
+    { "naam": "opbouw", "macros": { "dichtheid": [0.4, 0.6], "schaal": [0.3, 0.5], "beweging": [0.5, 0.7] } },
+    { "naam": "vol", "macros": { "dichtheid": [0.85, 1], "schaal": [0, 0.1], "ruimte": [0.1, 0.25], "helderheid": [0.85, 1] } },
+    { "naam": "breuk", "macros": { "dichtheid": [0, 0.15], "vervorming": [0.6, 0.9], "ruimte": [0.7, 0.95] } },
+    { "naam": "uitloop", "macros": { "dichtheid": [0.2, 0.35], "ruimte": [0.75, 1], "helderheid": [0.2, 0.4] } }
+  ],
+  "variatie": { "drift": 0.4 }
+}

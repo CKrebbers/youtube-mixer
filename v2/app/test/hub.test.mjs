@@ -7,6 +7,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  SCHERM_BYTES, SCHERM_MS,
   HubMidi, MANIFEST, PARAMS, WACHT_MS, VERVANGEN_MS, STABIEL_MS, OPEN_MS, BEELD_MS, HB_MS, POORT_NAAM,
 } from '../src/control/hub.js';
 import { hubAdres, hubGeweigerd, isLokaleHost } from '../src/control/hub-vlag.js';
@@ -216,7 +217,7 @@ test('manifest: lease, ringen van ons, varve-dj, hb_s 1, geen action-namen op de
   assert.equal(MANIFEST.hb_s, 1);
   assert.equal(MANIFEST.truth, 'app');
   assert.ok(MANIFEST.params.every((p) => !('action' in p)));
-  assert.ok(!('speelt' in MANIFEST), 'geen speelapparaten: v2 speelt de Xboard en de Maschine nog niet');
+  assert.deepEqual(MANIFEST.speelt, ['maschine-mk2'], 'v2 speelt de Maschine (sinds 29 okt), de Xboard nog niet');
   assert.ok(!('levert' in MANIFEST), 'geen sectie: v2 heeft nog geen SectieLezer');
 });
 
@@ -567,4 +568,65 @@ test('stop: dicht, geen nieuwe pogingen, geen timers meer', () => {
   assert.equal(o.NepWS.alle.length, n);
   assert.equal(o.NepWS.laatste.readyState, 3);
   assert.equal(o.klok.rij.length, 0, `nog ${o.klok.rij.length} timers`);
+});
+
+// ---- de Maschine MK2 (PROTOCOL §17) ---------------------------------------------------------
+
+test('Maschine: eigen poort, buiten de APC; invoer zonder focus door; weg = disconnected met statechange', () => {
+  const o = opzet();
+  const m = o.hm.speelPoort('maschine-mk2');
+  assert.ok(m && m.in && m.uit && m.scherm);
+  assert.equal(o.hm.speelPoort('xboard49'), null);
+  const binnen = [];
+  const staat = [];
+  m.in.onmidimessage = (e) => binnen.push([...e.data]);
+  m.in.onstatechange = (e) => staat.push(e.port.state);
+  o.hm.start();
+  const ws = o.NepWS.laatste;
+  ws.open();
+  assert.equal(m.in.state, 'connected');
+  assert.ok(![...o.hm.toegang.inputs.values()].includes(m.in), 'de MidiHub van de APC ziet de Maschine nooit');
+  ws.krijg({ t: 'midi', dev: 'maschine-mk2', bytes: [0x90, 36, 100] });   // zonder focus
+  ws.krijg({ t: 'midi', dev: 'maschine-mk2', bytes: [0xb0, 16, 3] });
+  ws.krijg({ t: 'midi', dev: 'maschine-mk2', bytes: [0x90, 300, 1] });   // kapot
+  assert.deepEqual(binnen, [[0x90, 36, 100], [0xb0, 16, 3]]);
+  assert.equal(o.ev.bericht.length, 0, 'niets ervan bij de APC-indeling');
+  ws.close(1006);
+  assert.deepEqual(staat, ['connected', 'disconnected']);
+  o.hm.stop();
+});
+
+test('Maschine: lampjes per beeld gebundeld met dev; schermen: alleen het nieuwste, hooguit één per 40 ms', () => {
+  const o = opzet();
+  const m = o.hm.speelPoort('maschine-mk2');
+  o.hm.start();
+  const ws = o.NepWS.laatste;
+  ws.open();
+  o.klok.loop(100);
+  ws.uit.length = 0;
+  m.uit.send([0x90, 36, 5]);
+  m.uit.send([0x91, 24, 21]);
+  m.uit.send([0xf0, 1, 0xf7]);   // geen lampje
+  o.klok.loop(20);
+  const leds = ws.soort('led').filter((b) => b.dev === 'maschine-mk2');
+  assert.deepEqual(leds, [{ t: 'led', dev: 'maschine-mk2', bytes: [[0x90, 36, 5], [0x91, 24, 21]] }]);
+  assert.equal(o.hm.status().hub.speelt['maschine-mk2'].geweigerd, 1);
+  const beeld = (v) => new Uint8Array(SCHERM_BYTES).fill(v);
+  assert.equal(m.scherm(0, beeld(1)), true);
+  assert.equal(m.scherm(0, beeld(2)), true);
+  assert.equal(m.scherm(1, beeld(3)), true);
+  assert.equal(m.scherm(2, beeld(0)), false, 'alleen scherm 0 en 1');
+  assert.equal(m.scherm(0, new Uint8Array(10)), false, 'precies 2048 bytes');
+  o.klok.loop(1);
+  let s = ws.soort('scherm');
+  assert.equal(s.length, 2, 'per scherm één beeld');
+  assert.equal(atob(s.find((x) => x.nr === 0).data).charCodeAt(0), 2, 'het nieuwste beeld');
+  m.scherm(0, beeld(4));
+  o.klok.loop(SCHERM_MS - 10);
+  assert.equal(ws.soort('scherm').length, 2, 'binnen 40 ms na het vorige: wachten');
+  o.klok.loop(20);
+  s = ws.soort('scherm');
+  assert.equal(s.length, 3);
+  assert.equal(s[2].dev, 'maschine-mk2');
+  o.hm.stop();
 });

@@ -11,6 +11,7 @@
  *   /api/library/<id>/audio   audio.wav van dat nummer, met Range (de app streamt hem per pagina)
  *   /api/library/<id>/stems   stems.wav (2 of 4 stems, interleaved, met Range), als het nummer stems heeft
  *   /api/library/<id>/peaks   peaks.bin naast audio.wav (v1: per vakje min en max als float32), voor het overzicht
+ *   /api/opstellingen    de namen van de recepten in opstellingen/ (de bestanden zelf: /opstellingen/<naam>.json)
  *   /api/v2/nummer/<id>       GET/PUT: wat bij een nummer hoort (hotcues, cue), in de eigen data van v2
  *   /api/v2/opname/<set>?frame=N   POST een stuk audio op zijn frame; …/klaar?frames=N; GET /api/v2/opnames
  *   /api/v2/log/<set>?van=B   POST een stuk handelingenlog op zijn byte
@@ -18,7 +19,7 @@
  * SharedArrayBuffer later. De eigen data staat in VARVE_V2_DATA (server/data.mjs).
  */
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, normalize, extname, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -40,7 +41,7 @@ const SOORTEN = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.wav': 'audio/wav',
 };
 // Alleen wat de app nodig heeft; nooit test/, tools/ of iets erbuiten.
-const WITTE_LIJST = [/^\/$/, /^\/index\.html$/, /^\/beeld\.html$/, /^\/src\/[\w/.-]+\.(js|css|svg)$/, /^\/styles\.css$/, /^\/indelingen\/[\w-]+\.json$/, /^\/racks\/[\w-]+\.json$/];
+const WITTE_LIJST = [/^\/$/, /^\/index\.html$/, /^\/beeld\.html$/, /^\/src\/[\w/.-]+\.(js|css|svg)$/, /^\/styles\.css$/, /^\/indelingen\/[\w-]+\.json$/, /^\/racks\/[\w-]+\.json$/, /^\/opstellingen\/[\w-]+\.json$/];
 
 function kop(res, status, soort, extra = {}) {
   res.writeHead(status, {
@@ -187,6 +188,13 @@ export function maakServer({ media = kiesMedia(), data = kiesData() } = {}) {
       if (pad.includes('..') || pad.includes('\\') || pad.includes('\0')) { kop(res, 400, 'text/plain'); return res.end(); }
 
       if (await videoRoute(req, res, { pad, audioPad: async (id) => (await library(media)).audio(id), kop })) return;
+      // De recepten in de repo (opstellingen/*.json): alleen de namen; de bestanden staan op de witte lijst.
+      if (pad === '/api/opstellingen') {
+        const map = join(HIER, 'opstellingen');
+        const namen = existsSync(map) ? readdirSync(map).filter((f) => /^[\w-]+\.json$/.test(f)).map((f) => f.slice(0, -5)).sort() : [];
+        kop(res, 200, SOORTEN['.json']);
+        return res.end(JSON.stringify({ namen }));
+      }
       if (pad === '/api/library') {
         const l = await library(media);
         kop(res, 200, SOORTEN['.json']);

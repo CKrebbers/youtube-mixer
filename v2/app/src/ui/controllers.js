@@ -24,9 +24,10 @@
  * (PROTOCOL §17) kent v2 nog niet.
  */
 import { Emitter } from '../kern/emitter.js';
-import { MidiHub } from '../control/midi.js';
+import { MidiHub, parseBericht } from '../control/midi.js';
 import { apc40mk2 } from '../control/apparaten/apc40mk2.js';
 import { toetsen as toetsenApparaat } from '../control/apparaten/toetsen.js';
+import { maschineMk2 } from '../control/apparaten/maschine-mk2.js';
 import { Indeling } from '../control/indeling.js';
 import { Lampjes } from '../control/lampjes.js';
 import { Toetsen, isTypenVeld } from '../control/toetsen.js';
@@ -53,6 +54,10 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
   const uit = new Emitter();
   const apc = new Indeling({ bus, apparaat: apc40mk2, vars, bron: 'apc' });
   const toetsInd = new Indeling({ bus, apparaat: toetsenApparaat, vars, bron: 'toetsen' });
+  // De Maschine MK2 speelt alleen via de hub (PROTOCOL §17): de hub leest hem via USB-HID.
+  const msc = new Indeling({ bus, apparaat: maschineMk2, vars, bron: 'maschine' });
+  let mscLampjes = null;
+  let mscPoort = null;
   const leren = { apc: new Leren({ indeling: apc }), toetsen: new Leren({ indeling: toetsInd }) };
   const hubUrl = hubAdres(zoek);
   const stand = { tabblad: 'wacht', midi: 'uit', controller: null, hub: null };
@@ -81,7 +86,7 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
   };
 
   // ---- meldingen van de indelingen -------------------------------------------------
-  for (const [naam, ind] of [['APC', apc], ['toetsen', toetsInd]]) {
+  for (const [naam, ind] of [['APC', apc], ['toetsen', toetsInd], ['Maschine', msc]]) {
     ind.on('onbekend', ({ doel }) => meld(`${naam}: "${doel}" bestaat (nog) niet`, 'info', `ctl:onbekend:${doel}`));
     ind.on('melding', ({ tekst, soort }) => meld(tekst, soort, `ctl:${naam}`));
     ind.on('fout', ({ doel, fout }) => meld(`${naam}: ${doel}: ${fout?.message ?? fout}`, 'fout', `ctl:fout:${doel}`));
@@ -113,7 +118,7 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
     return JSON.parse(tekst);
   };
   const geladen = (async () => {
-    for (const [ind, naam] of [[apc, 'apc40mk2'], [toetsInd, 'toetsen']]) {
+    for (const [ind, naam] of [[apc, 'apc40mk2'], [toetsInd, 'toetsen'], [msc, 'maschine-mk2']]) {
       try { laadIn(ind, indelingen?.[naam] ?? await haalDoc(naam)); } catch (fout) { meld(`indeling ${naam} niet geladen: ${fout.message ?? fout}`, 'fout', `ctl:indeling:${naam}`); }
     }
     meldStatus();
@@ -199,10 +204,27 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
     });
     stand.hub = bron.status().hub;
     stand.midi = 'verbinden';
+    koppelMaschine(bron.speelPoort?.('maschine-mk2'));
     lampjes.start();
     bron.start();
     meldStatus();
   };
+  // ---- de Maschine: zijn eigen nep-poort van de hub, met indeling en lampjes zoals de APC ----
+  const koppelMaschine = (poort) => {
+    if (!poort) return;
+    mscPoort = poort;
+    mscLampjes = new Lampjes({ indeling: msc, stuur: (b) => poort.uit.send(b), tel });
+    poort.in.onmidimessage = (e) => {
+      const g = maschineMk2.ontleed(parseBericht(e.data));
+      if (g) msc.verwerk(g);
+    };
+    poort.in.onstatechange = (e) => {
+      if (e.port.state === 'connected') { mscLampjes.init(); uit.emit('maschine', true); }
+      else { msc.losgekoppeld(); mscLampjes.klaar = false; uit.emit('maschine', false); }
+    };
+    mscLampjes.start();
+  };
+
   let gestopt = false;
   const geweigerd = hubGeweigerd(zoek);
   if (geweigerd) meld(`hub ${geweigerd} niet gebruikt: niet op deze machine, het LAN of de tailnet (met &hub_extern=1 wel); de APC via Web MIDI`, 'fout', 'ctl:hub');
@@ -223,7 +245,9 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
 
   // defineProperties, niet Object.assign: die leest een getter één keer uit (hub en lampjes bleven dan null).
   return Object.defineProperties(uit, Object.getOwnPropertyDescriptors({
-    apc, toetsen: toetsInd, leren, geladen,
+    apc, toetsen: toetsInd, maschine: msc, leren, geladen,
+    /** De schermen van de Maschine (0 links, 1 rechts; 2048 bytes), of null zonder hub. */
+    get maschineScherm() { return mscPoort?.in.state === 'connected' ? mscPoort.scherm : null; },
     get hub() { return hub; },
     get lampjes() { return lampjes; },
     status,
@@ -237,6 +261,7 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
       losToetsen();
       venster?.removeEventListener?.('pagehide', opPagehide);
       lampjes?.stop();
+      mscLampjes?.stop();
       notenLaag?.stop();
       hub?.stop();
     },

@@ -1,0 +1,466 @@
+{
+  "schema": 1,
+  "naam": "opstelling",
+  "apparaat": "maschine-mk2",
+  "shift": "shift",
+  "uitleg": "De Maschine speelt de opstelling (opstellingen/*.json). Draaiknop 1–8 = de acht macro's van het alfabet (schaal … ruimte), één omwenteling is het hele bereik, SHIFT = fijn. Pads onder: stems van de track met focus (vasthouden = weg, SHIFT = vast). Pads midden: scene 1–8. Pads boven: nieuw zaad · muteer · kruis · terug. Wiel = recept kiezen, indrukken of ENTER = laden, PLAY = start op de 1, ERASE = patronen stil, AUTO = nieuw recept uit de bouwdoos, DUPLICATE = bewaren. Groep A–H = focus op track 1–8.",
+  "regels": [
+    {
+      "control": "enc1",
+      "actie": "opstelling.macro.1",
+      "gedrag": "eindeloos",
+      "stap": 0.002,
+      "label": "schaal"
+    },
+    {
+      "control": "enc2",
+      "actie": "opstelling.macro.2",
+      "gedrag": "eindeloos",
+      "stap": 0.002,
+      "label": "dichtheid"
+    },
+    {
+      "control": "enc3",
+      "actie": "opstelling.macro.3",
+      "gedrag": "eindeloos",
+      "stap": 0.002,
+      "label": "beweging"
+    },
+    {
+      "control": "enc4",
+      "actie": "opstelling.macro.4",
+      "gedrag": "eindeloos",
+      "stap": 0.002,
+      "label": "vervorming"
+    },
+    {
+      "control": "enc5",
+      "actie": "opstelling.macro.5",
+      "gedrag": "eindeloos",
+      "stap": 0.002,
+      "label": "kleur"
+    },
+    {
+      "control": "enc6",
+      "actie": "opstelling.macro.6",
+      "gedrag": "eindeloos",
+      "stap": 0.002,
+      "label": "helderheid"
+    },
+    {
+      "control": "enc7",
+      "actie": "opstelling.macro.7",
+      "gedrag": "eindeloos",
+      "stap": 0.002,
+      "label": "variatie"
+    },
+    {
+      "control": "enc8",
+      "actie": "opstelling.macro.8",
+      "gedrag": "eindeloos",
+      "stap": 0.002,
+      "label": "ruimte"
+    },
+    {
+      "control": "pad1",
+      "actie": "track.{focus}.stem.vocals.kill.hold",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "rood",
+          "half": "magenta",
+          "uit": "magenta"
+        }
+      },
+      "label": "zang weg"
+    },
+    {
+      "control": "pad1",
+      "actie": "track.{focus}.stem.vocals.kill",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "zang weg/terug"
+    },
+    {
+      "control": "pad2",
+      "actie": "track.{focus}.stem.drums.kill.hold",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "rood",
+          "half": "oranje",
+          "uit": "oranje"
+        }
+      },
+      "label": "drums weg"
+    },
+    {
+      "control": "pad2",
+      "actie": "track.{focus}.stem.drums.kill",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "drums weg/terug"
+    },
+    {
+      "control": "pad3",
+      "actie": "track.{focus}.stem.bass.kill.hold",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "rood",
+          "half": "geel",
+          "uit": "geel"
+        }
+      },
+      "label": "bas weg"
+    },
+    {
+      "control": "pad3",
+      "actie": "track.{focus}.stem.bass.kill",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "bas weg/terug"
+    },
+    {
+      "control": "pad4",
+      "actie": "track.{focus}.stem.other.kill.hold",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "rood",
+          "half": "cyaan",
+          "uit": "cyaan"
+        }
+      },
+      "label": "overig weg"
+    },
+    {
+      "control": "pad4",
+      "actie": "track.{focus}.stem.other.kill",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "overig weg/terug"
+    },
+    {
+      "control": "pad5",
+      "actie": "opstelling.scene.1",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "hemelsblauw"
+        }
+      },
+      "label": "scene 1"
+    },
+    {
+      "control": "pad6",
+      "actie": "opstelling.scene.2",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "groen"
+        }
+      },
+      "label": "scene 2"
+    },
+    {
+      "control": "pad7",
+      "actie": "opstelling.scene.3",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "limoen"
+        }
+      },
+      "label": "scene 3"
+    },
+    {
+      "control": "pad8",
+      "actie": "opstelling.scene.4",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "geel"
+        }
+      },
+      "label": "scene 4"
+    },
+    {
+      "control": "pad9",
+      "actie": "opstelling.scene.5",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "oranje"
+        }
+      },
+      "label": "scene 5"
+    },
+    {
+      "control": "pad10",
+      "actie": "opstelling.scene.6",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "scene 6"
+    },
+    {
+      "control": "pad11",
+      "actie": "opstelling.scene.7",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "scene 7"
+    },
+    {
+      "control": "pad12",
+      "actie": "opstelling.scene.8",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "violet"
+        }
+      },
+      "label": "scene 8"
+    },
+    {
+      "control": "pad13",
+      "actie": "opstelling.herrol",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "wit"
+        }
+      },
+      "label": "nieuw zaad"
+    },
+    {
+      "control": "pad14",
+      "actie": "opstelling.muteer",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "zeegroen"
+        }
+      },
+      "label": "muteer"
+    },
+    {
+      "control": "pad15",
+      "actie": "opstelling.kruis",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "violet"
+        }
+      },
+      "label": "kruis"
+    },
+    {
+      "control": "pad16",
+      "actie": "opstelling.terug",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "grijs"
+        }
+      },
+      "label": "terug"
+    },
+    {
+      "control": "play",
+      "actie": "opstelling.start",
+      "gedrag": "trigger",
+      "label": "start op de 1"
+    },
+    {
+      "control": "erase",
+      "actie": "opstelling.stop",
+      "gedrag": "trigger",
+      "label": "patronen stil"
+    },
+    {
+      "control": "auto",
+      "actie": "opstelling.genereer",
+      "gedrag": "trigger",
+      "label": "nieuw recept"
+    },
+    {
+      "control": "duplicate",
+      "actie": "opstelling.bewaar",
+      "gedrag": "trigger",
+      "label": "bewaar als recept"
+    },
+    {
+      "control": "restart",
+      "actie": "opstelling.herrol",
+      "gedrag": "trigger",
+      "label": "nieuw zaad"
+    },
+    {
+      "control": "masterwiel",
+      "actie": "opstelling.volgende",
+      "gedrag": "trigger",
+      "terug": "opstelling.vorige",
+      "label": "recept kiezen"
+    },
+    {
+      "control": "wiel",
+      "actie": "opstelling.laad",
+      "gedrag": "trigger",
+      "label": "recept laden"
+    },
+    {
+      "control": "enter",
+      "actie": "opstelling.laad",
+      "gedrag": "trigger",
+      "label": "recept laden"
+    },
+    {
+      "control": "navL",
+      "actie": "opstelling.vorige",
+      "gedrag": "trigger",
+      "label": "vorig recept"
+    },
+    {
+      "control": "navR",
+      "actie": "opstelling.volgende",
+      "gedrag": "trigger",
+      "label": "volgend recept"
+    },
+    {
+      "control": "stapL",
+      "actie": "opstelling.terug",
+      "gedrag": "trigger",
+      "label": "terug"
+    },
+    {
+      "control": "stapR",
+      "actie": "opstelling.muteer",
+      "gedrag": "trigger",
+      "label": "muteer"
+    },
+    {
+      "control": "groepA",
+      "actie": "track.1.focus",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "grijs",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "focus 1"
+    },
+    {
+      "control": "groepB",
+      "actie": "track.2.focus",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "grijs",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "focus 2"
+    },
+    {
+      "control": "groepC",
+      "actie": "track.3.focus",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "grijs",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "focus 3"
+    },
+    {
+      "control": "groepD",
+      "actie": "track.4.focus",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "grijs",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "focus 4"
+    },
+    {
+      "control": "groepE",
+      "actie": "track.5.focus",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "grijs",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "focus 5"
+    },
+    {
+      "control": "groepF",
+      "actie": "track.6.focus",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "grijs",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "focus 6"
+    },
+    {
+      "control": "groepG",
+      "actie": "track.7.focus",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "grijs",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "focus 7"
+    },
+    {
+      "control": "groepH",
+      "actie": "track.8.focus",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "grijs",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "focus 8"
+    }
+  ]
+}
