@@ -163,3 +163,36 @@ moeite:
 - Meer dan één vormlaag per recept.
 
 Dit zijn allemaal bouwwensen in de tocht: Clay stemt, en de volgorde volgt de stemmen.
+
+## Live (29 okt, later): gebaren, padstanden, partituur, glijden, morph
+
+**Maschine.** Groep A–F kiest wat de pads doen: tik = wisselen, vasthouden = even kijken. SHIFT + groep A–H = focus.
+In een padstand toont het rechterscherm de 16 pads met hun naam.
+
+| Groep | Pads |
+|---|---|
+| A gebaren | vasthouden = effect, hoe harder hoe dieper (aanslag + aftertouch), loslaten = precies terug. Onder (1–4): echo · galm · dof · dun. Rij 2: stotter · zonder bas · weg · effect (de track met focus). Rij 3: alles dof · alles galm · alles echo · breuk (alles behalve de focus weg). Boven: alles dun · flits · zwart · stilte |
+| B drums | zelf drummen op het drumspoor, met aanslag |
+| C noten | 16 trappen van de toonladder van de opstelling, op het melodiespoor |
+| D stems | 1–4 weg zolang je drukt, 5–8 weg/terug |
+| E sampler | 1–8 sampler, SHIFT = leeg, 13/14 = korter/langer knippen |
+| F basis | stems · scenes · zaad; SHIFT + scene-pad = in vier maten glijden |
+
+**APC. USER = de partituur** (nog eens USER = je DJ-indeling terug).
+
+| Knop | Doet |
+|---|---|
+| raster | kolom = spoor, rij 1 (onder) rustig tot 5 (boven) vol. Wit = speelt (pulseert op de tel), geel = wacht op de maat |
+| scene-knoppen | een hele rij |
+| SHIFT + scene | glijden naar recept-scene 1–5 |
+| A\|B k | scene k is het eindpunt van de crossfader. De crossfader mengt van waar je was naar die scene |
+| Clip Stop | spoor uit of aan op de maat |
+| device-knoppen | de acht macro's (met ring) |
+| PLAY | start |
+
+Faders en filters blijven zoals altijd.
+
+Code: `engine/acties-gebaren.js`, de partituur in `engine/acties-opstelling.js`, de varianten in
+`kern/opstelling/realiseer.js`, en de gedragen `aanslag`/`druk` in `control/indeling.js`.
+
+**Wat het waard is, beslist Clay na het spelen.** Wat niet werkt gaat eruit, wat werkt krijgt meer.
