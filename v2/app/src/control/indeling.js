@@ -43,7 +43,9 @@
 import { Emitter } from '../kern/emitter.js';
 
 export const SCHEMA = 1;
-export const GEDRAGEN = Object.freeze(['absoluut', 'eindeloos', 'trigger', 'schakelaar']);
+export const GEDRAGEN = Object.freeze(['absoluut', 'eindeloos', 'trigger', 'schakelaar', 'aanslag', 'druk']);
+/** Aanslag en druk (Maschine-pads): zo laag gaat een ingedrukte pad nooit (anders valt het gebaar weg bij lichte druk). */
+export const DRUK_MIN = 0.1;
 /** Soft-takeover: binnen 0,02 is dichtbij (~2,5 stappen van 127; kleiner was frustrerend fijn, v1). */
 export const TAKEOVER_EPS = 0.02;
 /** Een vorige faderstand ouder dan 1 s is geen bewijs meer dat hij erdoorheen ging (v1 LAST_TTL). */
@@ -130,7 +132,7 @@ export function controleerRegel(r, apparaat, soortVan = null) {
       const s = soortVan(alsVoorbeeld(actie));
       if (!s) continue;
       if (s === 'commando') return `${rol} "${actie}" is een commando, niet voor een knop`;
-      if ((r.gedrag === 'absoluut' || r.gedrag === 'eindeloos') && s !== 'waarde') return `${r.gedrag} vraagt een waarde-actie, "${actie}" is een ${s}`;
+      if (['absoluut', 'eindeloos', 'aanslag', 'druk'].includes(r.gedrag) && s !== 'waarde') return `${r.gedrag} vraagt een waarde-actie, "${actie}" is een ${s}`;
     }
   }
   return null;
@@ -386,6 +388,14 @@ export class Indeling extends Emitter {
    */
   verwerk(g) {
     const { control } = g;
+    // Druk (polyfone aftertouch) op een pad die je vasthoudt: de waarde volgt de druk.
+    if (g.soort === 'aanraak') {
+      const v = this.vast.get(control);
+      if (!v?.druk || v.gedrag !== 'druk') return null;
+      const w = Math.max(DRUK_MIN, Math.min(1, g.waarde));
+      this._doe(v.doel, w);
+      return { doel: v.doel, gedaan: true, waarde: w };
+    }
     if (g.soort === 'druk' || g.soort === 'los') {
       const shiftKnop = this.actief?.shift ?? this.apparaat.shift;
       if (control === this._shiftVan || (g.soort === 'druk' && shiftKnop && control === shiftKnop)) {
@@ -415,6 +425,15 @@ export class Indeling extends Emitter {
     switch (regel.gedrag) {
       case 'absoluut': return g.soort === 'waarde' ? this._absoluut(control, regel, doel, g) : null;
       case 'eindeloos': return this._eindeloos(control, regel, doel, g, fijn);
+      case 'aanslag': case 'druk': {
+        if (g.soort !== 'druk') return null;
+        if (!this.soortVan(doel)) { this._meldOnbekend(doel); this.vast.set(control, { niets: true }); return { regel, doel, gedaan: false }; }
+        // De aanslag (velocity, 1..127) is de beginwaarde; loslaten = 0 (via vast, ook na een wissel van laag).
+        const w = Math.max(DRUK_MIN, Math.min(1, (g.ruw ?? 127) / 127));
+        this._doe(doel, w);
+        this.vast.set(control, { doel, druk: true, gedrag: regel.gedrag });
+        return { regel, doel, gedaan: true, waarde: w };
+      }
       default: return g.soort === 'druk' ? this._druk(control, regel, doel) : null;
     }
   }
@@ -455,6 +474,7 @@ export class Indeling extends Emitter {
   _los(v) {
     if (v.laag) return this._laagLos(v);
     if (v.niets) return null;
+    if (v.druk) { this._doe(v.doel, 0); return { doel: v.doel, los: true }; }
     if (v.soort === 'waarde') { this._doe(v.doel, v.oud); return { doel: v.doel, los: true }; }
     this._doe(v.doel, false);
     return { doel: v.doel, los: true };

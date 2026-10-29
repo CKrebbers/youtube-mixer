@@ -13,6 +13,8 @@
  *   recept, zaad, naam, toon,
  *   sporen: [{ n, soort, nummer?: { id, titel }, instrument?, rack?: { naam, index }, waarden: { actie: v } }],
  *   patronen: [{ n, plek, patroon, uitleg }],
+ *   varianten: { n: [5 × { naam, patroon? , waarden? }] }   rij 1 rustig … 5 vol (de partituur op de APC);
+ *                                                          rij 3 = wat het recept zelf koos
  *   beeld: { lagen: [vorm-id], opacity } | null,
  *   macros: [{ rol, naam, waarde, links: [{ actie (uitgeschreven), van, tot, kromme }] }],
  *   scenes, drift
@@ -25,6 +27,18 @@ import { kiesMetSmaak } from '../tocht/smaak.js';
 
 /** De plek waar een opstelling zijn patronen zet: 1–4 blijven van jou (kern/patronen: vijf plekken). */
 export const PATROON_PLEK = 5;
+/** De partituur: vijf varianten per spoor, van rustig naar vol. */
+export const RIJEN = 5;
+export const MIDDEN = 3;
+const DICHTHEID_RIJ = [0.08, 0.25, null, 0.7, 0.92];
+/** Klankstanden van een nummer per rij (stems alleen als het nummer ze heeft; de rest slaat over wat er niet is). */
+const KLANK_RIJ = [
+  { naam: 'kaal', w: { filter: 0.24, 'stem.drums': 0, 'stem.bass': 0.35, 'fx.mix': 0 } },
+  { naam: 'zacht', w: { filter: 0.36, 'stem.drums': 0.45, 'stem.bass': 0.8, 'fx.mix': 0 } },
+  { naam: 'vol', w: { filter: 0.5, 'stem.drums': 1, 'stem.bass': 1, laag: 0.5, hoog: 0.5 } },
+  { naam: 'druk', w: { filter: 0.5, 'fx.mix': 0.35, 'send.a': 0.2, laag: 0.56 } },
+  { naam: 'top', w: { filter: 0.58, 'fx.mix': 0.5, laag: 0.62, hoog: 0.64 } },
+];
 
 const tussen = (r, [a, b]) => a + (b - a) * r.r();
 
@@ -88,6 +102,19 @@ export function realiseer(recept, zaad, catalogus = {}, { focus = 1 } = {}) {
     patronen.push({ n: sp.n, plek: PATROON_PLEK, patroon, uitleg });
   }
   sporen.sort((a, b) => a.n - b.n);
+  const varianten = {};
+  for (const sp of sporen) {
+    const p = patronen.find((x) => x.n === sp.n);
+    if (p) {
+      const bron = recept.sporen.find((x) => x.n === sp.n).patroon;
+      const soort = sp.instrument === 'drums' ? 'drums' : bron.soort === 'drums' ? 'lijn' : bron.soort;
+      varianten[sp.n] = DICHTHEID_RIJ.map((d, i) => (d === null
+        ? { naam: p.uitleg, patroon: p.patroon }
+        : (() => { const m = maakPatroon({ ...bron, soort, dichtheid: [d, d] }, (zaad + 7919 * (i + 1)) >>> 0, { n: sp.n, toon }); return { naam: m.uitleg, patroon: m.patroon }; })()));
+    } else if (sp.soort === 'nummer' && sp.nummer) {
+      varianten[sp.n] = KLANK_RIJ.map((k) => ({ naam: k.naam, waarden: Object.fromEntries(Object.entries(k.w).map(([a, v]) => [`track.${sp.n}.${a}`, v])) }));
+    }
+  }
   let beeld = null;
   if (recept.beeld) {
     const rb = stroom(zaad, recept.id, 'beeld');
@@ -101,7 +128,7 @@ export function realiseer(recept, zaad, catalogus = {}, { focus = 1 } = {}) {
       links: m.links.map((l) => ({ actie: vul(l.actie, l.spoor, focus), van: l.van, tot: l.tot, kromme: l.kromme })),
     };
   });
-  return { recept: recept.id, naam: recept.naam, zaad, toon, sporen, patronen, beeld, macros, scenes: recept.scenes, drift: recept.variatie.drift };
+  return { recept: recept.id, naam: recept.naam, zaad, toon, sporen, patronen, varianten, beeld, macros, scenes: recept.scenes, drift: recept.variatie.drift };
 }
 
 /** Wat macro `m` op waarde v op de bus zet: [[actie, waarde], …]. */

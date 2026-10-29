@@ -18,12 +18,20 @@
  *   opstelling.stop        trigger patronen stoppen
  *   opstelling.bewaar      trigger deze opstelling als nieuw recept bewaren (zo groeit de verzameling)
  *
+ * De partituur (de APC: kolom = spoor, rij = variant van rustig naar vol; wisselt op de volgende maat):
+ *   opstelling.variant.{k}.{r}   trigger  spoor k naar variant r (1..5); leest 1 = speelt, 0,5 = wacht op de maat, 0 = kan
+ *   opstelling.rij.{r}           trigger  elk spoor naar variant r
+ *   opstelling.stop.{k}          trigger  spoor k uit/aan op de maat (zijn fader)
+ *   opstelling.glij.{s}          trigger  in vier maten naar scene s glijden (een opbouw)
+ *   opstelling.b.{s}             trigger  scene s als eindpunt van de crossfader (de morph begint bij wat er nu staat)
+ *   opstelling.morph             waarde   0 = waar je was, 1 = de gekozen scene; alles ertussen = een mengsel
+ *
  * Klaarzetten start nooit geluid (zoals een stand of set in v1): pas `opstelling.start` speelt.
  * Een macro zet zijn links via de bus (bron 'opstelling'), dus alles staat in het handelingenlog.
  * De drift (de opstelling beweegt uit zichzelf, macro "variatie") loopt in `tik(t)`, op de maatklok.
  */
 import { normaliseerRecept, ROLLEN } from '../kern/opstelling/model.js';
-import { realiseer, macroActies, sceneWaarden, PATROON_PLEK } from '../kern/opstelling/realiseer.js';
+import { realiseer, macroActies, sceneWaarden, PATROON_PLEK, RIJEN, MIDDEN } from '../kern/opstelling/realiseer.js';
 import { muteer, kruis, drift, genereer } from '../kern/opstelling/varieer.js';
 import { volgendZaad } from '../kern/opstelling/zaad.js';
 import { Emitter } from '../kern/emitter.js';
@@ -46,6 +54,11 @@ export function definieerOpstelling(engine) {
   let laatsteDrift = -Infinity;
   const vorige = [];        // geschiedenis voor terug en kruis
   let melding = '';
+  let actief = {};          // spoor -> variant die speelt
+  let wacht = new Map();    // spoor -> variant die op de volgende maat komt (of 'stop'/'aan')
+  let uitGezet = new Map();      // spoor -> fader van voor het uitzetten
+  let glij = null;          // { van: [...], naar: Map(i -> v), t0, duur }
+  let morph = { a: null, b: null, m: 0, naam: null };
 
   const zeg = (t) => { melding = t; engine.meld?.(`opstelling: ${t}`, 'info', 'opstelling'); uit.emit('verander'); };
   const catalogus = () => { try { return bronnen.catalogus() ?? {}; } catch { return {}; } };
@@ -77,16 +90,21 @@ export function definieerOpstelling(engine) {
       if (sp.soort === 'instrument' && engine.track(sp.n)?.instrument?.soort === sp.instrument) engine.zetInstrument(sp.n, null);
     }
     o = nieuw;
+    actief = Object.fromEntries(Object.keys(o.varianten ?? {}).map((n) => [n, MIDDEN]));
+    wacht = new Map();
+    uitGezet = new Map();
+    glij = null;
+    morph = { a: null, b: null, m: 0, naam: null };
     basis = o.macros.map((m) => m.waarde);
     nu = basis.slice();
     uit.emit('verander');
-    const wacht = [];
+    const laden = [];
     for (const sp of o.sporen) {
-      if (sp.soort === 'nummer' && sp.nummer && bronnen.laadNummer) wacht.push(Promise.resolve(bronnen.laadNummer(sp.n, sp.nummer.id)).catch(() => {}));
+      if (sp.soort === 'nummer' && sp.nummer && bronnen.laadNummer) laden.push(Promise.resolve(bronnen.laadNummer(sp.n, sp.nummer.id)).catch(() => {}));
       // Hetzelfde instrument staat er al: laten staan (herrollen tijdens het spelen zonder gat).
-      if (sp.soort === 'instrument' && sp.instrument && engine.track(sp.n)?.instrument?.soort !== sp.instrument) wacht.push(engine.zetInstrument(sp.n, sp.instrument));
+      if (sp.soort === 'instrument' && sp.instrument && engine.track(sp.n)?.instrument?.soort !== sp.instrument) laden.push(engine.zetInstrument(sp.n, sp.instrument));
     }
-    await Promise.all(wacht);
+    await Promise.all(laden);
     if (o !== nieuw) return;   // een nieuwere opstelling won
     for (const sp of o.sporen) {
       if (sp.rack) engine.fx?.kiesRack?.(sp.n, sp.rack.naam);
@@ -109,7 +127,7 @@ export function definieerOpstelling(engine) {
     const rol = ROLLEN[k - 1];
     bus.defineer({
       id: `opstelling.macro.${k}`, soort: 'waarde', label: `opstelling: macro ${k} (${rol})`,
-      doe: (v) => { const i = macroVanRol(rol); if (i >= 0) { zetMacro(i, v); uit.emit('verander'); } },
+      doe: (v) => { const i = macroVanRol(rol); if (i >= 0) { glij?.naar.delete(i); zetMacro(i, v); uit.emit('verander'); } },
       lees: () => { const i = macroVanRol(rol); return i >= 0 ? basis[i] : null; },
     });
   }
@@ -212,6 +230,90 @@ export function definieerOpstelling(engine) {
     return undefined;
   });
 
+  // ---- de partituur ---------------------------------------------------------------------
+  function pasVariantToe(n, r) {
+    const v = o?.varianten?.[n]?.[r - 1];
+    if (!v) return;
+    if (v.patroon) engine.patronen?.zetPatroon(Number(n), PATROON_PLEK, v.patroon);
+    for (const [actie, w] of Object.entries(v.waarden ?? {})) zetWaarde(actie, w);
+    actief[n] = r;
+  }
+  function pasStopToe(n) {
+    if (uitGezet.has(n)) { zetWaarde(`track.${n}.fader`, uitGezet.get(n)); uitGezet.delete(n); }
+    else { const f = bus.lees(`track.${n}.fader`); if (typeof f === 'number') { uitGezet.set(n, f); zetWaarde(`track.${n}.fader`, 0); } }
+  }
+  /** Wat op de maat wacht nu doen (of meteen, als de klok stilstaat). */
+  function opDeMaat(t) {
+    if (!wacht.size) return;
+    if (engine.klok?.loopt && engine.klok.volgendeEen(t) - t > 0.15) return;
+    for (const [n, x] of wacht) { if (x === 'stop') pasStopToe(n); else pasVariantToe(n, x); }
+    wacht = new Map();
+    uit.emit('verander');
+  }
+  for (let k = 1; k <= 8; k++) {
+    for (let r = 1; r <= RIJEN; r++) {
+      bus.defineer({
+        id: `opstelling.variant.${k}.${r}`, soort: 'trigger', label: `partituur: spoor ${k} variant ${r}`, meta: TRIG,
+        doe: (v) => { if (!v || !o?.varianten?.[k]) return undefined; wacht.set(String(k), r); opDeMaat(engine.nu()); uit.emit('verander'); return undefined; },
+        lees: () => {
+          if (!o?.varianten?.[k]?.[r - 1]) return null;
+          if (wacht.get(String(k)) === r) return 0.5;
+          return actief[k] === r && !uitGezet.has(String(k)) ? 1 : 0;
+        },
+      });
+    }
+    bus.defineer({
+      id: `opstelling.stop.${k}`, soort: 'trigger', label: `partituur: spoor ${k} uit/aan op de maat`, meta: TRIG,
+      doe: (v) => { if (!v || !o?.sporen.some((s) => s.n === k)) return undefined; wacht.set(String(k), 'stop'); opDeMaat(engine.nu()); uit.emit('verander'); return undefined; },
+      lees: () => (o?.sporen.some((s) => s.n === k) ? (uitGezet.has(String(k)) ? 0 : 1) : null),
+    });
+  }
+  for (let r = 1; r <= RIJEN; r++) {
+    bus.defineer({
+      id: `opstelling.rij.${r}`, soort: 'trigger', label: `partituur: alles naar rij ${r}`, meta: TRIG,
+      doe: (v) => { if (!v || !o) return undefined; for (const n of Object.keys(o.varianten ?? {})) wacht.set(n, r); opDeMaat(engine.nu()); zeg(`rij ${r} op de maat`); return undefined; },
+      lees: () => (o && Object.keys(o.varianten ?? {}).length ? (Object.values(actief).every((x) => x === r) ? 1 : 0) : null),
+    });
+  }
+  for (let k = 1; k <= 8; k++) {
+    bus.defineer({
+      id: `opstelling.glij.${k}`, soort: 'trigger', label: `opstelling: in vier maten naar scene ${k}`, meta: TRIG,
+      doe: (v) => {
+        if (!v || !o) return undefined;
+        const w = sceneWaarden(o, k, volgendZaad(o.zaad, 200 + teller++));
+        if (!w) return { geweigerd: `scene ${k} bestaat niet` };
+        const naar = new Map(Object.entries(w).map(([rol, x]) => [macroVanRol(rol), x]).filter(([i]) => i >= 0));
+        if (!engine.klok?.loopt) { for (const [i, x] of naar) zetMacro(i, x); zeg(`scene ${o.scenes[k - 1].naam}`); return undefined; }
+        glij = { van: basis.slice(), naar, t0: engine.klok.tel(engine.nu()), duur: 16, naam: o.scenes[k - 1].naam };
+        zeg(`glijdt naar ${glij.naam} (4 maten)`);
+        return undefined;
+      },
+      lees: () => (o?.scenes?.[k - 1] ? (glij?.naam === o.scenes[k - 1].naam ? 1 : 0) : null),
+    });
+    bus.defineer({
+      id: `opstelling.b.${k}`, soort: 'trigger', label: `crossfader: scene ${k} als eindpunt`, meta: TRIG,
+      doe: (v) => {
+        if (!v || !o) return undefined;
+        const w = sceneWaarden(o, k, volgendZaad(o.zaad, 300 + teller++));
+        if (!w) return { geweigerd: `scene ${k} bestaat niet` };
+        morph = { a: basis.slice(), b: new Map(Object.entries(w).map(([rol, x]) => [macroVanRol(rol), x]).filter(([i]) => i >= 0)), m: 0, naam: o.scenes[k - 1].naam };
+        zeg(`crossfader: naar ${morph.naam}`);
+        return undefined;
+      },
+      lees: () => (o?.scenes?.[k - 1] ? (morph.naam === o.scenes[k - 1].naam ? 1 : 0) : null),
+    });
+  }
+  bus.defineer({
+    id: 'opstelling.morph', soort: 'waarde', label: 'crossfader: van waar je was naar de gekozen scene',
+    doe: (v) => {
+      morph.m = v;
+      if (!o || !morph.b) return;
+      for (const [i, x] of morph.b) zetMacro(i, morph.a[i] + (x - morph.a[i]) * v);
+      uit.emit('verander');
+    },
+    lees: () => (o ? morph.m : null),
+  });
+
   return Object.assign(uit, {
     /** Wat buiten de engine ligt: catalogus(), laadNummer(n, id), zetVorm(id, dekking), bewaar(recept). */
     zetBronnen(b) { bronnen = { ...bronnen, ...b }; },
@@ -233,8 +335,16 @@ export function definieerOpstelling(engine) {
      * elke tik) zegt alleen WANNEER; WAT de tijd is zegt de klok (ARCHITECTUUR, uitgangspunt 2).
      */
     tik(t = engine.nu()) {
-      if (!o || !engine.klok?.loopt) return;
+      if (!o) return;
+      opDeMaat(t);
+      if (!engine.klok?.loopt) return;
       const tel = engine.klok.tel(t);
+      if (glij) {
+        const f = Math.min(1, Math.max(0, (tel - glij.t0) / glij.duur));
+        const g = f * f * (3 - 2 * f);
+        for (const [i, x] of glij.naar) zetMacro(i, glij.van[i] + (x - glij.van[i]) * g);
+        if (f >= 1) { zeg(`scene ${glij.naam}`); glij = null; } else uit.emit('verander');
+      }
       if (!(tel - laatsteDrift >= 1 / DRIFT_PER_TEL)) return;
       laatsteDrift = tel;
       const vi = macroVanRol('variatie');
@@ -249,6 +359,8 @@ export function definieerOpstelling(engine) {
         toon: o?.toon ?? null,
         macros: ROLLEN.map((rol) => { const i = macroVanRol(rol); return i >= 0 ? { rol, naam: o.macros[i].naam, waarde: basis[i], nu: nu[i] } : null; }),
         scenes: (o?.scenes ?? []).map((s) => s.naam),
+        partituur: Object.fromEntries(Object.entries(o?.varianten ?? {}).map(([n, v]) => [n, { actief: actief[n], wacht: wacht.get(n) ?? null, uit: uitGezet.has(n), namen: v.map((x) => x.naam) }])),
+        glij: glij ? glij.naam : null, morph: morph.naam ? { naar: morph.naam, m: morph.m } : null,
         sporen: (o?.sporen ?? []).map((s) => ({ n: s.n, soort: s.soort, wat: s.nummer?.titel ?? s.instrument ?? '—', rack: s.rack?.naam ?? null,
           patroon: o.patronen.find((p) => p.n === s.n)?.uitleg ?? null })),
       };

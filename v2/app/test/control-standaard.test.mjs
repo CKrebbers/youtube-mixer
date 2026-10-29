@@ -76,8 +76,9 @@ test('apc40mk2: de kanaalstrip zit nooit in een laag of achter shift (63% van de
     ['trim', 'hoog', 'mid', 'laag', 'send.a', 'send.b', 'fx.mix']);
   assert.equal(basis('master').actie, 'mixer.master');
   assert.equal(basis('xf').actie, 'mixer.xfader');
-  // Weinig lagen (telling punt 11): twee groepen.
-  assert.deepEqual([...new Set(indeling.lagen.map((l) => l.split('.')[0]))].sort(), ['device', 'grid']);
+  // Weinig lagen (telling punt 11): twee groepen, plus de partituur van de opstelling achter USER (29 okt, één knop).
+  assert.deepEqual([...new Set(indeling.lagen.map((l) => l.split('.')[0]))].sort(), ['device', 'grid', 'modus']);
+  assert.deepEqual(indeling.lagen.filter((l) => l.startsWith('modus.')), ['modus.partituur']);
   // Wat gevaarlijk is, alleen met shift.
   assert.equal(basis('stopall'), undefined);
   assert.equal(indeling.op.get('stopall#shift').actie, 'klok.stop');

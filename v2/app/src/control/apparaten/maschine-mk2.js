@@ -51,10 +51,12 @@ const LABEL = {
 
 /**
  * Soorten control en het gedrag dat ze in een indeling mogen hebben (zoals apc40mk2.js):
- *   pad, knop   indrukken/loslaten            -> trigger, schakelaar
+ *   pad         indrukken/loslaten            -> trigger, schakelaar; met een waarde-actie ook
+ *               aanslag (velocity = de waarde, loslaten = 0) of druk (daarna volgt de aftertouch)
+ *   knop        indrukken/loslaten            -> trigger, schakelaar
  *   rel         relatieve encoder / het wiel   -> eindeloos, of trigger met `terug` (per tik)
  */
-export const GEDRAG_VOOR = Object.freeze({ pad: ['trigger', 'schakelaar'], knop: ['trigger', 'schakelaar'], rel: ['eindeloos', 'trigger'] });
+export const GEDRAG_VOOR = Object.freeze({ pad: ['trigger', 'schakelaar', 'aanslag', 'druk'], knop: ['trigger', 'schakelaar'], rel: ['eindeloos', 'trigger'] });
 
 /** @type {{ id, soort, t: 'noot'|'cc', n, ch, led: 'rgb'|'aan'|'geen', label }[]} */
 const LIJST = [];
@@ -76,14 +78,18 @@ export const relatief = (ruw) => (ruw >= 64 ? ruw - 128 : ruw);
 
 /**
  * Een geparsed bericht (midi.js parseBericht) -> gebeurtenis, of null:
- *   { control, soort: 'druk'|'los'|'delta', waarde, ruw, delta? }
- * `ruw` is bij een pad de aanslag (velocity). Polyfone aftertouch ontleedt dit apparaat nog niet.
+ *   { control, soort: 'druk'|'los'|'delta'|'aanraak', waarde, ruw, delta? }
+ * `ruw` is bij een pad de aanslag (velocity). Polyfone aftertouch (0xA0) op een pad = 'aanraak' met de druk 0..1.
  */
 export function ontleed(m) {
   if (m.type === 'noot') {
     const c = OP_MIDI.get(`noot:${m.kanaal}:${m.nummer}`);
     if (!c) return null;
     return { control: c.id, soort: m.aan ? 'druk' : 'los', waarde: m.aan ? 1 : 0, ruw: m.waarde };
+  }
+  if (m.type === 'poly') {
+    const c = OP_MIDI.get(`noot:${m.kanaal}:${m.nummer}`);
+    return c?.soort === 'pad' ? { control: c.id, soort: 'aanraak', waarde: m.waarde / 127, ruw: m.waarde } : null;
   }
   if (m.type === 'cc') {
     const c = OP_MIDI.get(`cc:${m.kanaal}:${m.nummer}`);

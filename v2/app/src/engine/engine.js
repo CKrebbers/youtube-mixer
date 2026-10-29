@@ -22,6 +22,7 @@ import { definieerActies } from './acties.js';
 import { definieerFx } from './acties-fx.js';
 import { definieerOpstelling } from './acties-opstelling.js';
 import { definieerTocht } from './acties-tocht.js';
+import { definieerGebaren } from './acties-gebaren.js';
 import { Handelingenlog, setId } from './log.js';
 import { Sampler } from './sampler.js';
 import { Patronen } from './patronen.js';
@@ -92,6 +93,7 @@ export class Engine extends Emitter {
     definieerPatronen(this);
     this.opstelling = definieerOpstelling(this);
     this.tocht = definieerTocht(this);
+    this.gebaren = definieerGebaren(this);
     this.klaar = Promise.all(this.tracks.map(async (t) => {
       t.speler = await audio.speler(ctx);
       t.speler.onfout = (bericht, kapot = true) => this.meld(kapot

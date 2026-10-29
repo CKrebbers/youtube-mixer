@@ -46,6 +46,21 @@ export function tekenTocht(t, nr) {
   return buf;
 }
 
+/**
+ * Rechts, in een padstand (gebaren, drums, noten, stems, sampler): de 16 pads zoals ze liggen
+ * (pad 13–16 bovenaan, 1–4 onderaan), met hun naam uit de indeling.
+ */
+export function tekenPads(stand, namen) {
+  const buf = leegScherm();
+  tekst(buf, 2, 1, pasIn(`PADS: ${stand.toUpperCase()}`, REGEL));
+  lijn(buf, 0, BREED - 1, 10);
+  for (let rij = 0; rij < 4; rij++) for (let k = 0; k < 4; k++) {
+    const pad = (3 - rij) * 4 + k + 1;
+    tekst(buf, k * KOLOM + 2, 13 + rij * 13, pasIn(namen[pad - 1] ?? '-'));
+  }
+  return buf;
+}
+
 /** Het linker- of rechterscherm van de Maschine uit de stand van de opstelling. */
 export function tekenOpstelling(st, nr) {
   const buf = leegScherm();
@@ -141,6 +156,7 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
       <div class="opst-knoppen">${KNOPPEN.map(([a, t, uitleg]) => `<button data-opst="${a}" title="${uitleg}">${t}</button>`).join('')}</div>
       <div class="opst-macros"></div>
       <div class="opst-scenes"></div>
+      <div class="opst-partituur" title="De partituur (APC: USER): kolom = spoor, onder rustig, boven vol. Wit = speelt, geel = wacht op de maat."></div>
       <div class="opst-sporen"></div>
       <p class="opst-uitleg">Een recept + een zaad = een opstelling. Maschine: draaiknop 1–8 = de macro's, pads midden = scenes, pads boven = nieuw zaad · muteer · kruis · terug, wiel = recept kiezen, indrukken = laden, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren. Macro 7 (variatie) laat de opstelling uit zichzelf bewegen.</p>
     </div>`;
@@ -181,6 +197,25 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
     }
     tochtEl.innerHTML = `<div class="tocht-balk">${balkjes}</div>${midden}${smaak}`;
   }
+  const partEl = $('.opst-partituur');
+  let partSleutel = '';
+  function tekenPartituur(st) {
+    const p = st.partituur ?? {};
+    const sleutel = JSON.stringify([p, st.glij, st.morph]);
+    if (sleutel === partSleutel) return;
+    partSleutel = sleutel;
+    const sporen = Object.keys(p).map(Number).sort((a, b) => a - b);
+    if (!sporen.length) { partEl.innerHTML = ''; return; }
+    const cel = (n, r) => {
+      const x = p[n];
+      const klas = x.wacht === r ? 'wacht' : x.actief === r && !x.uit ? 'speelt' : '';
+      return `<button class="${klas}" data-variant="${n}.${r}" title="spoor ${n}, rij ${r}: ${esc(x.namen[r - 1])}">${esc(x.namen[r - 1]).slice(0, 14)}</button>`;
+    };
+    partEl.innerHTML = `<div class="opst-part-kop">partituur${st.glij ? ` · glijdt naar ${esc(st.glij)}` : ''}${st.morph ? ` · crossfader naar ${esc(st.morph.naar)} ${Math.round(st.morph.m * 100)}%` : ''}</div>`
+      + [5, 4, 3, 2, 1].map((r) => `<div class="rij"><b>${r}</b>${sporen.map((n) => cel(n, r)).join('')}</div>`).join('')
+      + `<div class="rij"><b></b>${sporen.map((n) => `<span>${p[n].uit ? `${n} uit` : n}</span>`).join('')}</div>`;
+  }
+  partEl.addEventListener('click', (e) => { const b = e.target.closest('[data-variant]'); if (b) druk(`opstelling.variant.${b.dataset.variant}`); });
   let vorm = '';
   const vorigBeeld = [null, null];
   function teken() {
@@ -212,9 +247,12 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
       vorigHoofdstuk = t.hoofdstuk;
     }
     const toonTocht = t && (t.toont || performance.now() < tochtTot);
+    const padstand = (ctl?.maschine?.open ?? []).find((l) => l.startsWith('pads.'))?.slice(5) ?? null;
+    const padNamen = padstand ? Array.from({ length: 16 }, (_, i) => { const r = ctl.maschine.regelVoor(`pad${i + 1}`, { shift: false }); return r?.label ?? null; }) : null;
+    tekenPartituur(st);
     const scherm = ctl?.maschineScherm;
     if (scherm) for (const nr of [0, 1]) {
-      const buf = toonTocht ? tekenTocht(t, nr) : tekenOpstelling(st, nr);
+      const buf = toonTocht ? tekenTocht(t, nr) : (nr === 1 && padstand ? tekenPads(padstand, padNamen) : tekenOpstelling(st, nr));
       // Alleen een beeld dat anders is dan het vorige gaat naar de hub.
       if (vorigBeeld[nr] && vorigBeeld[nr].every((x, i) => x === buf[i])) continue;
       vorigBeeld[nr] = buf;

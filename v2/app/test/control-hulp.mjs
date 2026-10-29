@@ -9,7 +9,18 @@ import { Bus } from '../src/kern/bus.js';
  * de indeling gebruikt daar 'schakelaar', dat met allebei werkt.
  */
 const K8 = [1, 2, 3, 4, 5, 6, 7, 8];
+// De opstelling en de partituur (engine/acties-opstelling.js, 29 okt): uitgeschreven, want {n} is hier een track.
+const OPSTELLING = {
+  'opstelling.start': 'trigger', 'opstelling.morph': 'waarde',
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => i + 1).flatMap((k) => [
+    [`opstelling.macro.${k}`, 'waarde'], [`opstelling.stop.${k}`, 'trigger'], [`opstelling.b.${k}`, 'trigger'], [`opstelling.glij.${k}`, 'trigger'],
+    ...[1, 2, 3, 4, 5].map((r) => [`opstelling.variant.${k}.${r}`, 'trigger']),
+  ])),
+  ...Object.fromEntries([1, 2, 3, 4, 5].map((r) => [`opstelling.rij.${r}`, 'trigger'])),
+};
+
 export const BEKEND = Object.freeze({
+  ...OPSTELLING,
   // bestaand
   'track.{n}.play': 'trigger', 'track.{n}.play.quant': 'trigger', 'track.{n}.cue': 'trigger',
   'track.{n}.sync': 'trigger', 'track.{n}.sync.klok': 'trigger', 'track.{n}.pitch': 'waarde',

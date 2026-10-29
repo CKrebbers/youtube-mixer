@@ -292,3 +292,11 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .tocht-einde, .tocht-verzameling { display: flex; flex-wrap: wrap; gap: 4px; }
 .tocht-smaak { color: var(--zwak); font-size: 11px; }
 .tocht-smaak b { color: var(--dim); font-weight: 500; }
+.opst-partituur { display: grid; gap: 2px; font-size: 11px; }
+.opst-part-kop { color: var(--zwak); }
+.opst-partituur .rij { display: grid; grid-template-columns: 14px repeat(8, minmax(0, 1fr)); gap: 2px; }
+.opst-partituur .rij b { color: var(--zwak); font-weight: 400; }
+.opst-partituur button { background: var(--bg); color: var(--dim); border: 1px solid var(--lijn); border-radius: 3px; padding: 1px 4px; font: inherit; text-align: left; white-space: nowrap; overflow: hidden; cursor: pointer; }
+.opst-partituur button.speelt { color: var(--bg); background: var(--klok); }
+.opst-partituur button.wacht { border-color: var(--cue); color: var(--cue); }
+.opst-partituur span { color: var(--zwak); text-align: center; }
