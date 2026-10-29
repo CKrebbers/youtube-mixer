@@ -128,7 +128,7 @@ export function realiseer(recept, zaad, catalogus = {}, { focus = 1 } = {}) {
       links: m.links.map((l) => ({ actie: vul(l.actie, l.spoor, focus), van: l.van, tot: l.tot, kromme: l.kromme })),
     };
   });
-  return { recept: recept.id, naam: recept.naam, zaad, toon, sporen, patronen, varianten, beeld, macros, scenes: recept.scenes, drift: recept.variatie.drift };
+  return { recept: recept.id, naam: recept.naam, zaad, toon, sporen, patronen, varianten, beeld, gebaren: recept.gebaren ?? null, macros, scenes: recept.scenes, drift: recept.variatie.drift };
 }
 
 /** Wat macro `m` op waarde v op de bus zet: [[actie, waarde], …]. */

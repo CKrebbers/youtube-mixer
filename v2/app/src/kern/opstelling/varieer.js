@@ -15,6 +15,7 @@ import { ROLLEN, normaliseerRecept } from './model.js';
 import { realiseer, kiesNummer } from './realiseer.js';
 import { maakPatroon, toonVan } from './patroon.js';
 import { kiesMetSmaak } from '../tocht/smaak.js';
+import { SPECIALE_POOL } from './gebaren.js';
 
 const klem01 = (v) => Math.min(1, Math.max(0, v));
 
@@ -171,11 +172,19 @@ export function genereer(catalogus = {}, zaad = 1, { beeld = true } = {}) {
   ];
   const vormen = catalogus.vormen ?? [];
   const naam = `${r.kies(NAMEN_A)}${r.kies(NAMEN_B)}`;
+  // De speciale gebaren (pad 9–16): acht uit de pool, gewogen op wat je vaak gebruikt; beeld alleen met beeld.
+  const pool = SPECIALE_POOL.filter((g) => beeld || !['flits', 'zwart'].includes(g));
+  const gebaren = [];
+  while (gebaren.length < 8 && gebaren.length < pool.length) {
+    const g = kiesMetSmaak(r, pool.filter((x) => !gebaren.includes(x)), catalogus.smaak, (x) => `gebaar:${x}`);
+    gebaren.push(g);
+  }
   const { recept } = normaliseerRecept({
     schema: 1, id: `gen-${zaad}`, naam, uitleg: `gemaakt uit de bouwdoos (zaad ${zaad})`, kleur: r.kies(['cyaan', 'magenta', 'oranje', 'limoen', 'violet', 'geel']),
     sporen, macros, scenes,
     beeld: beeld && vormen.length ? { lagen: [{ uit: r.schud(vormen).slice(0, 4) }], opacity: [0.5, 0.9] } : null,
     variatie: { drift: r.tussen(0.2, 0.6) },
+    gebaren,
   });
   return recept;
 }

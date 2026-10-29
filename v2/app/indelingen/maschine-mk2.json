@@ -3,7 +3,7 @@
   "naam": "opstelling",
   "apparaat": "maschine-mk2",
   "shift": "shift",
-  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug), B drums, C noten in de toonsoort, D stems, E sampler, F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht.",
+  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht.",
   "regels": [
     {
       "control": "enc1",
@@ -497,228 +497,6 @@
       "gedrag": "trigger",
       "shift": true,
       "label": "focus 8"
-    },
-    {
-      "control": "pad1",
-      "actie": "gebaar.echo",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "magenta"
-        }
-      },
-      "label": "echo"
-    },
-    {
-      "control": "pad2",
-      "actie": "gebaar.galm",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "magenta"
-        }
-      },
-      "label": "galm"
-    },
-    {
-      "control": "pad3",
-      "actie": "gebaar.dof",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "magenta"
-        }
-      },
-      "label": "dof"
-    },
-    {
-      "control": "pad4",
-      "actie": "gebaar.dun",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "magenta"
-        }
-      },
-      "label": "dun"
-    },
-    {
-      "control": "pad5",
-      "actie": "gebaar.stotter",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "magenta"
-        }
-      },
-      "label": "stotter"
-    },
-    {
-      "control": "pad6",
-      "actie": "gebaar.bas",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "magenta"
-        }
-      },
-      "label": "zonder bas"
-    },
-    {
-      "control": "pad7",
-      "actie": "gebaar.weg",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "magenta"
-        }
-      },
-      "label": "weg"
-    },
-    {
-      "control": "pad8",
-      "actie": "gebaar.fx",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "magenta"
-        }
-      },
-      "label": "effect"
-    },
-    {
-      "control": "pad9",
-      "actie": "gebaar.alles.dof",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "rood"
-        }
-      },
-      "label": "alles dof"
-    },
-    {
-      "control": "pad10",
-      "actie": "gebaar.alles.galm",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "rood"
-        }
-      },
-      "label": "alles galm"
-    },
-    {
-      "control": "pad11",
-      "actie": "gebaar.alles.echo",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "rood"
-        }
-      },
-      "label": "alles echo"
-    },
-    {
-      "control": "pad12",
-      "actie": "gebaar.breuk",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "rood"
-        }
-      },
-      "label": "breuk"
-    },
-    {
-      "control": "pad13",
-      "actie": "gebaar.alles.dun",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "rood"
-        }
-      },
-      "label": "alles dun"
-    },
-    {
-      "control": "pad16",
-      "actie": "gebaar.alles.weg",
-      "gedrag": "druk",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "half": "wit",
-          "uit": "rood"
-        }
-      },
-      "label": "stilte"
-    },
-    {
-      "control": "pad14",
-      "actie": "video.flash",
-      "gedrag": "trigger",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "uit": "geel"
-        }
-      },
-      "label": "flits"
-    },
-    {
-      "control": "pad15",
-      "actie": "video.black.hold",
-      "gedrag": "trigger",
-      "laag": "pads.gebaren",
-      "led": {
-        "kleur": {
-          "aan": "wit",
-          "uit": "grijs"
-        }
-      },
-      "label": "zwart"
     },
     {
       "control": "pad1",
@@ -1493,6 +1271,237 @@
       "gedrag": "trigger",
       "shift": true,
       "label": "glij naar scene 8"
+    },
+    {
+      "control": "pad1",
+      "actie": "gebaar.pad.1",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "gebaar 1"
+    },
+    {
+      "control": "pad2",
+      "actie": "gebaar.pad.2",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "gebaar 2"
+    },
+    {
+      "control": "pad3",
+      "actie": "gebaar.pad.3",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "gebaar 3"
+    },
+    {
+      "control": "pad4",
+      "actie": "gebaar.pad.4",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "gebaar 4"
+    },
+    {
+      "control": "pad5",
+      "actie": "gebaar.pad.5",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "gebaar 5"
+    },
+    {
+      "control": "pad6",
+      "actie": "gebaar.pad.6",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "gebaar 6"
+    },
+    {
+      "control": "pad7",
+      "actie": "gebaar.pad.7",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "gebaar 7"
+    },
+    {
+      "control": "pad8",
+      "actie": "gebaar.pad.8",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "gebaar 8"
+    },
+    {
+      "control": "pad9",
+      "actie": "gebaar.pad.9",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "gebaar 9"
+    },
+    {
+      "control": "pad10",
+      "actie": "gebaar.pad.10",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "gebaar 10"
+    },
+    {
+      "control": "pad11",
+      "actie": "gebaar.pad.11",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "gebaar 11"
+    },
+    {
+      "control": "pad12",
+      "actie": "gebaar.pad.12",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "gebaar 12"
+    },
+    {
+      "control": "pad13",
+      "actie": "gebaar.pad.13",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "gebaar 13"
+    },
+    {
+      "control": "pad14",
+      "actie": "gebaar.pad.14",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "gebaar 14"
+    },
+    {
+      "control": "pad15",
+      "actie": "gebaar.pad.15",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "gebaar 15"
+    },
+    {
+      "control": "pad16",
+      "actie": "gebaar.pad.16",
+      "gedrag": "druk",
+      "laag": "pads.gebaren",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "half": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "gebaar 16"
+    },
+    {
+      "control": "grid",
+      "actie": "gebaar.optel",
+      "gedrag": "trigger",
+      "led": {},
+      "label": "gebaren loslaten op de tel aan/uit"
     }
   ]
 }

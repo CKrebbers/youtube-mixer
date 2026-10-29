@@ -5,33 +5,367 @@
   "uitleg": "Eén nummer met stems als bron: de macro's trekken drums, bas en zang uit elkaar, met een klankschaal erboven.",
   "kleur": "violet",
   "sporen": [
-    { "n": 1, "soort": "nummer", "kies": { "stems": "nodig" }, "rack": ["Zangband", "Ruimte bevriezen", "Ademende galm", "Kleur: dub"], "mix": [0, 0.2], "strip": { "fader": [0.8, 0.9] } },
-    { "n": 2, "soort": "instrument", "kies": { "uit": ["schaal"] }, "patroon": { "soort": "lijn", "dichtheid": [0.1, 0.35], "lengte": [32, 64] }, "rack": ["Ademende galm", "Getij"], "mix": [0.2, 0.5], "strip": { "fader": [0.3, 0.55] } },
-    { "n": 3, "soort": "instrument", "kies": { "uit": ["drums"] }, "patroon": { "soort": "drums", "dichtheid": [0.2, 0.5], "lengte": [16, 32] }, "strip": { "fader": [0.4, 0.65] } }
+    {
+      "n": 1,
+      "soort": "nummer",
+      "kies": {
+        "stems": "nodig"
+      },
+      "rack": [
+        "Zangband",
+        "Ruimte bevriezen",
+        "Ademende galm",
+        "Kleur: dub"
+      ],
+      "mix": [
+        0,
+        0.2
+      ],
+      "strip": {
+        "fader": [
+          0.8,
+          0.9
+        ]
+      }
+    },
+    {
+      "n": 2,
+      "soort": "instrument",
+      "kies": {
+        "uit": [
+          "schaal"
+        ]
+      },
+      "patroon": {
+        "soort": "lijn",
+        "dichtheid": [
+          0.1,
+          0.35
+        ],
+        "lengte": [
+          32,
+          64
+        ]
+      },
+      "rack": [
+        "Ademende galm",
+        "Getij"
+      ],
+      "mix": [
+        0.2,
+        0.5
+      ],
+      "strip": {
+        "fader": [
+          0.3,
+          0.55
+        ]
+      }
+    },
+    {
+      "n": 3,
+      "soort": "instrument",
+      "kies": {
+        "uit": [
+          "drums"
+        ]
+      },
+      "patroon": {
+        "soort": "drums",
+        "dichtheid": [
+          0.2,
+          0.5
+        ],
+        "lengte": [
+          16,
+          32
+        ]
+      },
+      "strip": {
+        "fader": [
+          0.4,
+          0.65
+        ]
+      }
+    }
   ],
-  "beeld": { "lagen": [{ "uit": ["sn", "tv", "ep", "dw", "ch"] }], "opacity": [0.6, 0.9] },
+  "beeld": {
+    "lagen": [
+      {
+        "uit": [
+          "sn",
+          "tv",
+          "ep",
+          "dw",
+          "ch"
+        ]
+      }
+    ],
+    "opacity": [
+      0.6,
+      0.9
+    ]
+  },
   "macros": [
-    { "rol": "schaal", "naam": "filter", "start": [0.45, 0.55], "links": [ { "actie": "track.{n}.filter", "spoor": 1, "van": 0.1, "tot": 0.9, "kromme": "lin" } ] },
-    { "rol": "dichtheid", "naam": "drums", "start": [0.5, 0.8], "links": [
-      { "actie": "track.{n}.stem.drums", "spoor": 1, "van": 0, "tot": 1 },
-      { "actie": "track.{n}.fader", "spoor": 3, "van": 0.7, "tot": 0, "kromme": "lin" } ] },
-    { "rol": "beweging", "naam": "bas", "start": [0.6, 0.9], "links": [ { "actie": "track.{n}.stem.bass", "spoor": 1, "van": 0, "tot": 1 } ] },
-    { "rol": "vervorming", "naam": "nat", "start": [0, 0.2], "links": [ { "actie": "track.{n}.fx.mix", "spoor": 1, "van": 0, "tot": 0.8, "kromme": "exp" } ] },
-    { "rol": "kleur", "naam": "zang", "start": [0.6, 0.9], "links": [ { "actie": "track.{n}.stem.vocals", "spoor": 1, "van": 0, "tot": 1 } ] },
-    { "rol": "helderheid", "naam": "schaal", "start": [0.3, 0.6], "links": [
-      { "actie": "track.{n}.fader", "spoor": 2, "van": 0, "tot": 0.7, "kromme": "log" },
-      { "actie": "video.layer.opacity", "van": 0.2, "tot": 1 } ] },
-    { "rol": "variatie", "naam": "variatie", "start": [0.3, 0.5], "links": [] },
-    { "rol": "ruimte", "naam": "galm", "start": [0.2, 0.4], "links": [
-      { "actie": "track.{n}.send.b", "spoor": 1, "van": 0, "tot": 0.6, "kromme": "exp" },
-      { "actie": "track.{n}.send.b", "spoor": 2, "van": 0.2, "tot": 0.8, "kromme": "exp" } ] }
+    {
+      "rol": "schaal",
+      "naam": "filter",
+      "start": [
+        0.45,
+        0.55
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.filter",
+          "spoor": 1,
+          "van": 0.1,
+          "tot": 0.9,
+          "kromme": "lin"
+        }
+      ]
+    },
+    {
+      "rol": "dichtheid",
+      "naam": "drums",
+      "start": [
+        0.5,
+        0.8
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.stem.drums",
+          "spoor": 1,
+          "van": 0,
+          "tot": 1
+        },
+        {
+          "actie": "track.{n}.fader",
+          "spoor": 3,
+          "van": 0.7,
+          "tot": 0,
+          "kromme": "lin"
+        }
+      ]
+    },
+    {
+      "rol": "beweging",
+      "naam": "bas",
+      "start": [
+        0.6,
+        0.9
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.stem.bass",
+          "spoor": 1,
+          "van": 0,
+          "tot": 1
+        }
+      ]
+    },
+    {
+      "rol": "vervorming",
+      "naam": "nat",
+      "start": [
+        0,
+        0.2
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.fx.mix",
+          "spoor": 1,
+          "van": 0,
+          "tot": 0.8,
+          "kromme": "exp"
+        }
+      ]
+    },
+    {
+      "rol": "kleur",
+      "naam": "zang",
+      "start": [
+        0.6,
+        0.9
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.stem.vocals",
+          "spoor": 1,
+          "van": 0,
+          "tot": 1
+        }
+      ]
+    },
+    {
+      "rol": "helderheid",
+      "naam": "schaal",
+      "start": [
+        0.3,
+        0.6
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.fader",
+          "spoor": 2,
+          "van": 0,
+          "tot": 0.7,
+          "kromme": "log"
+        },
+        {
+          "actie": "video.layer.opacity",
+          "van": 0.2,
+          "tot": 1
+        }
+      ]
+    },
+    {
+      "rol": "variatie",
+      "naam": "variatie",
+      "start": [
+        0.3,
+        0.5
+      ],
+      "links": []
+    },
+    {
+      "rol": "ruimte",
+      "naam": "galm",
+      "start": [
+        0.2,
+        0.4
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.send.b",
+          "spoor": 1,
+          "van": 0,
+          "tot": 0.6,
+          "kromme": "exp"
+        },
+        {
+          "actie": "track.{n}.send.b",
+          "spoor": 2,
+          "van": 0.2,
+          "tot": 0.8,
+          "kromme": "exp"
+        }
+      ]
+    }
   ],
   "scenes": [
-    { "naam": "a capella", "macros": { "dichtheid": [0, 0.05], "beweging": [0, 0.1], "kleur": [0.9, 1], "ruimte": [0.5, 0.8] } },
-    { "naam": "ritme", "macros": { "dichtheid": [0.9, 1], "beweging": [0.8, 1], "kleur": [0, 0.15] } },
-    { "naam": "alles", "macros": { "dichtheid": [0.8, 1], "beweging": [0.8, 1], "kleur": [0.8, 1], "ruimte": [0.1, 0.3] } },
-    { "naam": "onder water", "macros": { "schaal": [0.08, 0.2], "ruimte": [0.7, 1], "helderheid": [0.6, 0.9] } },
-    { "naam": "geest", "macros": { "dichtheid": [0, 0.1], "beweging": [0, 0.1], "kleur": [0.3, 0.6], "vervorming": [0.6, 0.9], "helderheid": [0.8, 1] } }
+    {
+      "naam": "a capella",
+      "macros": {
+        "dichtheid": [
+          0,
+          0.05
+        ],
+        "beweging": [
+          0,
+          0.1
+        ],
+        "kleur": [
+          0.9,
+          1
+        ],
+        "ruimte": [
+          0.5,
+          0.8
+        ]
+      }
+    },
+    {
+      "naam": "ritme",
+      "macros": {
+        "dichtheid": [
+          0.9,
+          1
+        ],
+        "beweging": [
+          0.8,
+          1
+        ],
+        "kleur": [
+          0,
+          0.15
+        ]
+      }
+    },
+    {
+      "naam": "alles",
+      "macros": {
+        "dichtheid": [
+          0.8,
+          1
+        ],
+        "beweging": [
+          0.8,
+          1
+        ],
+        "kleur": [
+          0.8,
+          1
+        ],
+        "ruimte": [
+          0.1,
+          0.3
+        ]
+      }
+    },
+    {
+      "naam": "onder water",
+      "macros": {
+        "schaal": [
+          0.08,
+          0.2
+        ],
+        "ruimte": [
+          0.7,
+          1
+        ],
+        "helderheid": [
+          0.6,
+          0.9
+        ]
+      }
+    },
+    {
+      "naam": "geest",
+      "macros": {
+        "dichtheid": [
+          0,
+          0.1
+        ],
+        "beweging": [
+          0,
+          0.1
+        ],
+        "kleur": [
+          0.3,
+          0.6
+        ],
+        "vervorming": [
+          0.6,
+          0.9
+        ],
+        "helderheid": [
+          0.8,
+          1
+        ]
+      }
+    }
   ],
-  "variatie": { "drift": 0.3 }
+  "variatie": {
+    "drift": 0.3
+  },
+  "gebaren": [
+    "bevries",
+    "galmvast",
+    "alles.galm",
+    "breuk",
+    "oplossen",
+    "wegspoelen",
+    "echovast",
+    "flits"
+  ]
 }

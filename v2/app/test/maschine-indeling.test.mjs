@@ -98,7 +98,7 @@ test('druk: een pad met gedrag druk zet de aanslag, volgt de aftertouch en gaat 
   const ind = new Indeling({ bus: e.bus, apparaat: maschine, vars: { focus: () => e.focus } });
   ind.voegToe(doc);
   const g = [];
-  e.bus.on('actie', (a) => { if (a.id === 'gebaar.dof') g.push(a.v); });
+  e.bus.on('actie', (a) => { if (a.id === 'gebaar.pad.3') g.push(a.v); });
   ind.verwerk({ control: 'groepA', soort: 'druk' }); ind.verwerk({ control: 'groepA', soort: 'los' });   // tik: padstand gebaren
   assert.deepEqual(ind.open, ['pads.gebaren']);
   ind.verwerk(bericht([0x90, 38, 64]));     // pad 3 = dof, aanslag 64

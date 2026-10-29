@@ -16,12 +16,15 @@
  *     macros: [ hooguit 8, op volgorde van het alfabet (instrumenten/gedeeld/alfabet.js) ]
  *       { rol, naam, start: [lo, hi], links: [ { actie, van, tot, kromme? } ] }
  *     scenes: [ hooguit 8 ] { naam, macros: { <rol>: v | [lo, hi] } }
- *     variatie: { drift: 0..1 }  hoeveel de opstelling uit zichzelf beweegt (macro "variatie" schaalt het) }
+ *     variatie: { drift: 0..1 }  hoeveel de opstelling uit zichzelf beweegt (macro "variatie" schaalt het)
+ *     gebaren: [hooguit 8 namen]  de speciale gebaren op pad 9–16 (kern/opstelling/gebaren.js) }
  *
  * Een actie in een link mag `{n}` dragen: dat wordt de track van het spoor waar de link bij hoort
  * (`spoor` in de link), of de track met focus als er geen spoor is.
  * normaliseer() gooit nooit: wat niet klopt valt weg met een regel in `fouten`.
  */
+
+import { specialeVan } from './gebaren.js';
 
 export const SCHEMA = 1;
 export const MAX_SPOREN = 8;
@@ -146,7 +149,7 @@ export function normaliseerRecept(invoer) {
   return {
     recept: { schema: SCHEMA, id: id ?? 'zonder-id', naam: typeof r.naam === 'string' && r.naam ? r.naam : (id ?? 'recept'),
       uitleg: typeof r.uitleg === 'string' ? r.uitleg : '', kleur: typeof r.kleur === 'string' ? r.kleur : 'wit',
-      sporen, macros, scenes, beeld, variatie: { drift } },
+      sporen, macros, scenes, beeld, variatie: { drift }, gebaren: specialeVan(r.gebaren) },
     fouten,
   };
 }

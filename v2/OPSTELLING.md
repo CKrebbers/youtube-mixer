@@ -196,3 +196,26 @@ Code: `engine/acties-gebaren.js`, de partituur in `engine/acties-opstelling.js`,
 `kern/opstelling/realiseer.js`, en de gedragen `aanslag`/`druk` in `control/indeling.js`.
 
 **Wat het waard is, beslist Clay na het spelen.** Wat niet werkt gaat eruit, wat werkt krijgt meer.
+
+## Gebaren, ronde 2 (30 okt)
+
+Clay vond de gebaren het interessantste deel. Daarom zijn ze uitgebouwd (`kern/opstelling/gebaren.js`,
+`engine/acties-gebaren.js`):
+
+- **Pad 1–8 zijn altijd gelijk:** echo · galm · dof · dun · stotter · zonder bas · weg · effect, voor het
+  spiergeheugen. **Pad 9–16 zijn per recept** (`gebaren` in het recept). De generator kiest ze, gewogen op
+  welke gebaren je vaak speelt (smaak `gebaar:<naam>`).
+- **Nieuwe worpen:**
+  - **opbouw**: rack Opbouw op alles, een riser;
+  - **band** / **alles band**: Band zakt weg;
+  - **wegspoelen**;
+  - **oplossen**: dit doet de korrelwolk tot de granular sampler er is;
+  - **bevries**: dieper drukken bevriest de wolk;
+  - **echo vast** en **galm vast**: de worp gaat er meteen in, het droge geluid valt op de volgende tel weg;
+  - **stilte**, **alles bas**, **flits** en **zwart**.
+- **Combineren:** per parameter een stapel. Twee pads tegelijk geeft één gecombineerd gebaar, en de
+  parameter gaat precies terug als de laatste los is.
+- **Loslaten op de tel** staat standaard aan. GRID op de Maschine zet het aan of uit.
+
+Nog niet mogelijk: een echte tape-stop en achteruit spelen. Daarvoor moet de afspeelmotor de snelheid tot 0
+of negatief kunnen sturen.

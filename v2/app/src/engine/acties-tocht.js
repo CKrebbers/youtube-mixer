@@ -33,7 +33,8 @@ export function definieerTocht(engine) {
   let matenOpstelling = 0;      // maten sinds de opstelling van nu begon
   let vorigeO = null;
   let laatsteNieuw = null;      // { tekst, stap } voor het scherm
-  let naTerug = false;          // de volgende opstelling is er een die je terughaalde
+  let naTerug = false;
+  const gedrukt = new Set();    // gebaar-pads die nu vastgehouden worden (één beloning per druk)          // de volgende opstelling is er een die je terughaalde
 
   const veranderd = (bewaren = true) => { uit.emit('verander'); if (bewaren) uit.emit('bewaar', { tocht: staat, smaak }); };
   const zet = (s) => { staat = s; veranderd(); };
@@ -61,7 +62,15 @@ export function definieerTocht(engine) {
   bus.on('actie', (a) => {
     if (a.id.startsWith('tocht.')) return;
     gebeurt({ soort: 'actie', id: a.id, v: a.v, bron: a.bron });
-    if (a.v !== true || !['apc', 'maschine', 'toetsen', 'scherm', 'hub'].includes(a.bron)) return;
+    if (!['apc', 'maschine', 'toetsen', 'scherm', 'hub'].includes(a.bron)) return;
+    // Een gebaar dat je speelt (bij het indrukken): je smaak voor dat gebaar (de generator legt het vaker op de pads).
+    const gp = /^gebaar\.pad\.(\d+)$/.exec(a.id);
+    if (gp && a.v > 0 && !gedrukt.has(a.id)) {
+      gedrukt.add(a.id);
+      const naam = engine.gebaren?.naamVanPad?.(Number(gp[1]));
+      if (naam) smaak = beloon(smaak, [`gebaar:${naam}`], BELONING.gekozen);
+    } else if (gp && a.v === 0) gedrukt.delete(a.id);
+    if (a.v !== true) return;
     const o = engine.opstelling?.huidige?.();
     if (a.id === 'opstelling.bewaar') smaakErbij(o, BELONING.bewaar);
     else if (a.id === 'opstelling.terug') naTerug = true;

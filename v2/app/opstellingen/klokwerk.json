@@ -5,41 +5,431 @@
   "uitleg": "Alleen instrumenten, geen library nodig: drums, bas, een lijn en akkoorden in één toonsoort. Elk zaad een ander stuk.",
   "kleur": "oranje",
   "sporen": [
-    { "n": 1, "soort": "instrument", "kies": { "uit": ["drums"] }, "patroon": { "soort": "drums", "dichtheid": [0.35, 0.8], "lengte": [16] }, "rack": ["Drum-punch", "Break-kraker", "Tel-gate 1/8"], "mix": [0, 0.3], "strip": { "fader": [0.7, 0.85] } },
-    { "n": 2, "soort": "instrument", "kies": { "uit": ["fm", "poly"] }, "patroon": { "soort": "bas", "dichtheid": [0.3, 0.7], "lengte": [16, 32] }, "rack": ["Reese", "Pomp"], "mix": [0, 0.3], "strip": { "fader": [0.55, 0.75] }, "knoppen": { "1": [0.2, 0.7] } },
-    { "n": 3, "soort": "instrument", "kies": { "uit": ["poly", "fm", "schaal"] }, "patroon": { "soort": "lijn", "dichtheid": [0.2, 0.6], "lengte": [32] }, "rack": ["Dub-echo", "Koor", "Oude band"], "mix": [0.1, 0.4], "strip": { "fader": [0.45, 0.7] } },
-    { "n": 4, "soort": "instrument", "kies": { "uit": ["poly"] }, "patroon": { "soort": "akkoord", "dichtheid": [0.5, 0.5], "lengte": [32, 64] }, "rack": ["Ademende galm", "Getij"], "mix": [0.2, 0.5], "strip": { "fader": [0.35, 0.6] } }
+    {
+      "n": 1,
+      "soort": "instrument",
+      "kies": {
+        "uit": [
+          "drums"
+        ]
+      },
+      "patroon": {
+        "soort": "drums",
+        "dichtheid": [
+          0.35,
+          0.8
+        ],
+        "lengte": [
+          16
+        ]
+      },
+      "rack": [
+        "Drum-punch",
+        "Break-kraker",
+        "Tel-gate 1/8"
+      ],
+      "mix": [
+        0,
+        0.3
+      ],
+      "strip": {
+        "fader": [
+          0.7,
+          0.85
+        ]
+      }
+    },
+    {
+      "n": 2,
+      "soort": "instrument",
+      "kies": {
+        "uit": [
+          "fm",
+          "poly"
+        ]
+      },
+      "patroon": {
+        "soort": "bas",
+        "dichtheid": [
+          0.3,
+          0.7
+        ],
+        "lengte": [
+          16,
+          32
+        ]
+      },
+      "rack": [
+        "Reese",
+        "Pomp"
+      ],
+      "mix": [
+        0,
+        0.3
+      ],
+      "strip": {
+        "fader": [
+          0.55,
+          0.75
+        ]
+      },
+      "knoppen": {
+        "1": [
+          0.2,
+          0.7
+        ]
+      }
+    },
+    {
+      "n": 3,
+      "soort": "instrument",
+      "kies": {
+        "uit": [
+          "poly",
+          "fm",
+          "schaal"
+        ]
+      },
+      "patroon": {
+        "soort": "lijn",
+        "dichtheid": [
+          0.2,
+          0.6
+        ],
+        "lengte": [
+          32
+        ]
+      },
+      "rack": [
+        "Dub-echo",
+        "Koor",
+        "Oude band"
+      ],
+      "mix": [
+        0.1,
+        0.4
+      ],
+      "strip": {
+        "fader": [
+          0.45,
+          0.7
+        ]
+      }
+    },
+    {
+      "n": 4,
+      "soort": "instrument",
+      "kies": {
+        "uit": [
+          "poly"
+        ]
+      },
+      "patroon": {
+        "soort": "akkoord",
+        "dichtheid": [
+          0.5,
+          0.5
+        ],
+        "lengte": [
+          32,
+          64
+        ]
+      },
+      "rack": [
+        "Ademende galm",
+        "Getij"
+      ],
+      "mix": [
+        0.2,
+        0.5
+      ],
+      "strip": {
+        "fader": [
+          0.35,
+          0.6
+        ]
+      }
+    }
   ],
-  "beeld": { "lagen": [{ "uit": ["hg", "ch", "jl", "wv"] }], "opacity": [0.6, 0.9] },
+  "beeld": {
+    "lagen": [
+      {
+        "uit": [
+          "hg",
+          "ch",
+          "jl",
+          "wv"
+        ]
+      }
+    ],
+    "opacity": [
+      0.6,
+      0.9
+    ]
+  },
   "macros": [
-    { "rol": "schaal", "naam": "filter", "start": [0.45, 0.55], "links": [
-      { "actie": "track.{n}.filter", "spoor": 3, "van": 0.15, "tot": 0.85, "kromme": "lin" },
-      { "actie": "track.{n}.filter", "spoor": 4, "van": 0.2, "tot": 0.8, "kromme": "lin" } ] },
-    { "rol": "dichtheid", "naam": "lagen", "start": [0.5, 0.7], "links": [
-      { "actie": "track.{n}.fader", "spoor": 3, "van": 0, "tot": 0.7, "kromme": "log" },
-      { "actie": "track.{n}.fader", "spoor": 4, "van": 0, "tot": 0.6, "kromme": "log" } ] },
-    { "rol": "beweging", "naam": "fx", "start": [0.3, 0.6], "links": [
-      { "actie": "track.{n}.fx.knop.1", "spoor": 1, "van": 0.1, "tot": 0.9 },
-      { "actie": "track.{n}.fx.knop.1", "spoor": 3, "van": 0.1, "tot": 0.9 } ] },
-    { "rol": "vervorming", "naam": "drive", "start": [0, 0.2], "links": [
-      { "actie": "track.{n}.fx.mix", "spoor": 1, "van": 0, "tot": 0.8, "kromme": "exp" },
-      { "actie": "track.{n}.fx.mix", "spoor": 2, "van": 0, "tot": 0.7, "kromme": "exp" } ] },
-    { "rol": "kleur", "naam": "klank", "start": [0.3, 0.7], "links": [
-      { "actie": "track.{n}.inst.knop.1", "spoor": 2, "van": 0.1, "tot": 0.9 },
-      { "actie": "track.{n}.inst.knop.1", "spoor": 3, "van": 0.1, "tot": 0.9 } ] },
-    { "rol": "helderheid", "naam": "beeld", "start": [0.6, 0.9], "links": [ { "actie": "video.layer.opacity", "van": 0.1, "tot": 1 } ] },
-    { "rol": "variatie", "naam": "variatie", "start": [0.4, 0.6], "links": [] },
-    { "rol": "ruimte", "naam": "ruimte", "start": [0.2, 0.4], "links": [
-      { "actie": "track.{n}.send.b", "spoor": 3, "van": 0, "tot": 0.6, "kromme": "exp" },
-      { "actie": "track.{n}.send.b", "spoor": 4, "van": 0, "tot": 0.7, "kromme": "exp" },
-      { "actie": "track.{n}.send.a", "spoor": 1, "van": 0, "tot": 0.35, "kromme": "exp" } ] }
+    {
+      "rol": "schaal",
+      "naam": "filter",
+      "start": [
+        0.45,
+        0.55
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.filter",
+          "spoor": 3,
+          "van": 0.15,
+          "tot": 0.85,
+          "kromme": "lin"
+        },
+        {
+          "actie": "track.{n}.filter",
+          "spoor": 4,
+          "van": 0.2,
+          "tot": 0.8,
+          "kromme": "lin"
+        }
+      ]
+    },
+    {
+      "rol": "dichtheid",
+      "naam": "lagen",
+      "start": [
+        0.5,
+        0.7
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.fader",
+          "spoor": 3,
+          "van": 0,
+          "tot": 0.7,
+          "kromme": "log"
+        },
+        {
+          "actie": "track.{n}.fader",
+          "spoor": 4,
+          "van": 0,
+          "tot": 0.6,
+          "kromme": "log"
+        }
+      ]
+    },
+    {
+      "rol": "beweging",
+      "naam": "fx",
+      "start": [
+        0.3,
+        0.6
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.fx.knop.1",
+          "spoor": 1,
+          "van": 0.1,
+          "tot": 0.9
+        },
+        {
+          "actie": "track.{n}.fx.knop.1",
+          "spoor": 3,
+          "van": 0.1,
+          "tot": 0.9
+        }
+      ]
+    },
+    {
+      "rol": "vervorming",
+      "naam": "drive",
+      "start": [
+        0,
+        0.2
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.fx.mix",
+          "spoor": 1,
+          "van": 0,
+          "tot": 0.8,
+          "kromme": "exp"
+        },
+        {
+          "actie": "track.{n}.fx.mix",
+          "spoor": 2,
+          "van": 0,
+          "tot": 0.7,
+          "kromme": "exp"
+        }
+      ]
+    },
+    {
+      "rol": "kleur",
+      "naam": "klank",
+      "start": [
+        0.3,
+        0.7
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.inst.knop.1",
+          "spoor": 2,
+          "van": 0.1,
+          "tot": 0.9
+        },
+        {
+          "actie": "track.{n}.inst.knop.1",
+          "spoor": 3,
+          "van": 0.1,
+          "tot": 0.9
+        }
+      ]
+    },
+    {
+      "rol": "helderheid",
+      "naam": "beeld",
+      "start": [
+        0.6,
+        0.9
+      ],
+      "links": [
+        {
+          "actie": "video.layer.opacity",
+          "van": 0.1,
+          "tot": 1
+        }
+      ]
+    },
+    {
+      "rol": "variatie",
+      "naam": "variatie",
+      "start": [
+        0.4,
+        0.6
+      ],
+      "links": []
+    },
+    {
+      "rol": "ruimte",
+      "naam": "ruimte",
+      "start": [
+        0.2,
+        0.4
+      ],
+      "links": [
+        {
+          "actie": "track.{n}.send.b",
+          "spoor": 3,
+          "van": 0,
+          "tot": 0.6,
+          "kromme": "exp"
+        },
+        {
+          "actie": "track.{n}.send.b",
+          "spoor": 4,
+          "van": 0,
+          "tot": 0.7,
+          "kromme": "exp"
+        },
+        {
+          "actie": "track.{n}.send.a",
+          "spoor": 1,
+          "van": 0,
+          "tot": 0.35,
+          "kromme": "exp"
+        }
+      ]
+    }
   ],
   "scenes": [
-    { "naam": "kaal", "macros": { "dichtheid": [0, 0.15], "vervorming": [0, 0.1] } },
-    { "naam": "groef", "macros": { "dichtheid": [0.4, 0.6], "beweging": [0.4, 0.6] } },
-    { "naam": "vol", "macros": { "dichtheid": [0.85, 1], "vervorming": [0.3, 0.5], "ruimte": [0.1, 0.3] } },
-    { "naam": "zweef", "macros": { "dichtheid": [0.6, 0.8], "schaal": [0.1, 0.25], "ruimte": [0.7, 1] } },
-    { "naam": "kapot", "macros": { "vervorming": [0.7, 1], "beweging": [0.7, 1], "schaal": [0.75, 0.95] } }
+    {
+      "naam": "kaal",
+      "macros": {
+        "dichtheid": [
+          0,
+          0.15
+        ],
+        "vervorming": [
+          0,
+          0.1
+        ]
+      }
+    },
+    {
+      "naam": "groef",
+      "macros": {
+        "dichtheid": [
+          0.4,
+          0.6
+        ],
+        "beweging": [
+          0.4,
+          0.6
+        ]
+      }
+    },
+    {
+      "naam": "vol",
+      "macros": {
+        "dichtheid": [
+          0.85,
+          1
+        ],
+        "vervorming": [
+          0.3,
+          0.5
+        ],
+        "ruimte": [
+          0.1,
+          0.3
+        ]
+      }
+    },
+    {
+      "naam": "zweef",
+      "macros": {
+        "dichtheid": [
+          0.6,
+          0.8
+        ],
+        "schaal": [
+          0.1,
+          0.25
+        ],
+        "ruimte": [
+          0.7,
+          1
+        ]
+      }
+    },
+    {
+      "naam": "kapot",
+      "macros": {
+        "vervorming": [
+          0.7,
+          1
+        ],
+        "beweging": [
+          0.7,
+          1
+        ],
+        "schaal": [
+          0.75,
+          0.95
+        ]
+      }
+    }
   ],
-  "variatie": { "drift": 0.5 }
+  "variatie": {
+    "drift": 0.5
+  },
+  "gebaren": [
+    "alles.dof",
+    "breuk",
+    "opbouw",
+    "stilte",
+    "alles.band",
+    "echovast",
+    "alles.echo",
+    "oplossen"
+  ]
 }

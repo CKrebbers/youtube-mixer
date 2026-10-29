@@ -137,7 +137,7 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
   laadRecepten();
 
   // De drift: elke 50 ms kijken; WAT er gebeurt zegt de maatklok (acties-opstelling.js tik).
-  setInterval(() => { o.tik(); engine.tocht?.tik(); }, 50);
+  setInterval(() => { o.tik(); engine.tocht?.tik(); engine.gebaren?.tik(); }, 50);
 
   // De tocht en je smaak: laden, en bewaren (een halve seconde na de laatste verandering).
   const tocht = engine.tocht;
@@ -248,7 +248,8 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
     }
     const toonTocht = t && (t.toont || performance.now() < tochtTot);
     const padstand = (ctl?.maschine?.open ?? []).find((l) => l.startsWith('pads.'))?.slice(5) ?? null;
-    const padNamen = padstand ? Array.from({ length: 16 }, (_, i) => { const r = ctl.maschine.regelVoor(`pad${i + 1}`, { shift: false }); return r?.label ?? null; }) : null;
+    const padNamen = padstand === 'gebaren' && engine.gebaren ? engine.gebaren.padLabels()
+      : padstand ? Array.from({ length: 16 }, (_, i) => { const r = ctl.maschine.regelVoor(`pad${i + 1}`, { shift: false }); return r?.label ?? null; }) : null;
     tekenPartituur(st);
     const scherm = ctl?.maschineScherm;
     if (scherm) for (const nr of [0, 1]) {
