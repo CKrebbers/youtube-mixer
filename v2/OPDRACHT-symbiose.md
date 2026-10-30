@@ -11,7 +11,7 @@ Correcties van Claude Code, alle vijf geaccepteerd:
 2. **De Maschine loopt via de hub**, ook op Linux en inclusief de schermen. Geen eigen driver en geen WebHID nodig. De Mac-route is niet getest.
 3. **De APC draait in modus 0x42** (uit het protocoldocument). "Modus 1" in §5 is verouderd.
 4. **Indelingen gebruiken het eigen JSON-formaat van v2.** Een importer voor Bedienplan is niet nodig, tenzij Clay erom vraagt.
-5. **De crossfader doet nog niets.** Dat wordt F5.
+5. **De crossfader-tijd is gebouwd** (F5, 30 okt): een ring van momentopnames, zie de stand hieronder.
 
 Besluiten van Clay:
 - **USER = THUIS alleen in Hybride.** De DJ-indeling blijft ongewijzigd.
@@ -20,7 +20,7 @@ Besluiten van Clay:
 
 Stand (30 okt, 01:52):
 - F0–F5 en de Maschine-etiketten zijn gebouwd.
-- W1–W5 slagen in software (590 tests groen). W1, W2 en W5 zijn ook nagelopen in Chrome.
+- W1–W5 slagen in software (590 tests groen). W1, W2, W3 (beeldruimte) en W5 zijn ook nagelopen in Chrome. W4 is alleen in de tests gedaan.
 - De crossfader-tijd is een ring van momentopnames: elke seconde, 10 minuten terug. Alleen waarden; welk patroon of nummer liep, zit er niet in.
 - Hybride blijft gekozen bij een focuswissel (bug gefixt).
 - **Op de hardware is nog niets getest.** Dat is nu de enige poort.
