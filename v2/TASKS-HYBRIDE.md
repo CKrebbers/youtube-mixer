@@ -26,13 +26,18 @@ Zie HYBRIDE.md. Afvinken bij klaar, vondsten erbij.
 
 ## F4 · Beeld (W3)
 - [x] Basis: beeldknoppen op het grid, trackknoppen = beeldparameters
-- [ ] W3 als test, beeldbronnen als patch-doel
+- [x] Hele kaart oranje, met de echte acties uit beeld/acties.js (test vergelijkt ze met de bron)
+- [x] W3 als test
+- [ ] Beeldbronnen als patch-doel
 
 ## F5 · Tijd (W4)
-- [ ] Crossfader = scrubben door het handelingenlog (`engine/log.js`) tot −10 min, met de takes als bron
+- [x] Crossfader = tijd (ring van momentopnames, 10 min; midden = nu) en W4 als test
+- [ ] Ook de structuur terug (patronen, geladen nummers), als dat nodig blijkt
 - [ ] SHIFT in Thuis: 40 cellen = 10 minuten tijdlijn
 
 ## F6 · Later
 - [ ] Bedienplan-blauwdruk importeren als indeling
-- [ ] Maschine-schermen als etiket per ruimte (nu toont hij de opstelling)
+- [x] Maschine-schermen als etiket: de ruimte links, wat je vastpakt rechts (naam, waarde, bereik)
+- [x] Hybride is de standaard als je hem kiest (een focuswissel zette de APC eerst terug naar de DJ-indeling)
+- [ ] Schermen als oscilloscoop (de hub doet pixels: goedkoop)
 - [ ] Ideeën die Clay op "erin" zet (levend grid, morph-faders, encoders met fysica, …)

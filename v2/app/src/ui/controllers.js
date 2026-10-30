@@ -48,6 +48,9 @@ import { hubAdres, hubGeweigerd } from '../control/hub-vlag.js';
  * @param WS         de WebSocket-klasse voor de hub (standaard die van het venster)
  * @param laadHub    () -> import van control/hub.js (alleen met de vlag aangeroepen)
  */
+/** De indelingen die het hele systeem zijn (de rest is per nummer of eigen): kiezen = de standaard worden. */
+export const SYSTEEM_INDELINGEN = Object.freeze(['standaard', 'hybride']);
+
 export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () => {}, indelingen = null, basis = '/indelingen/', noten = null,
   statusEl = null, nav = globalThis.navigator, venster = globalThis.window, doc = globalThis.document, haal = globalThis.fetch?.bind(globalThis),
   zoek = venster?.location?.search ?? '', WS = globalThis.WebSocket, laadHub = () => import('../control/hub.js') } = {}) {
@@ -124,8 +127,11 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
     // De Hybride-indeling (v2/HYBRIDE.md) naast de standaard; kiezen in het indelingspaneel of met ?indeling=hybride.
     if (!indelingen) {
       try { laadIn(apc, await haalDoc('apc40mk2-hybride')); } catch (fout) { meld(`indeling hybride niet geladen: ${fout.message ?? fout}`, 'fout', 'ctl:indeling:hybride'); }
-      const gevraagd = new URLSearchParams(zoek).get('indeling');
-      if (gevraagd && apc.namen().includes(gevraagd)) apc.kies(gevraagd);
+      // Een systeemindeling (standaard of hybride) wordt de STANDAARD: de indeling per nummer valt daarop terug
+      // (anders zou elke focuswissel, in Hybride Track Select = vastpakken, de APC terugzetten naar de DJ-indeling).
+      let gevraagd = new URLSearchParams(zoek).get('indeling');
+      if (!gevraagd) { try { gevraagd = venster?.localStorage?.getItem('varve.v2.indeling'); } catch { gevraagd = null; } }
+      if (gevraagd && SYSTEEM_INDELINGEN.includes(gevraagd) && apc.namen().includes(gevraagd)) { apc.zetStandaard(gevraagd); apc.kies(gevraagd); }
     }
     meldStatus();
   })();

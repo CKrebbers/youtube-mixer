@@ -65,6 +65,36 @@ export function tekenPads(stand, namen) {
   return buf;
 }
 
+/**
+ * Etiketten (Hybride, v2/HYBRIDE.md: de schermen zijn etiketten, nooit nodig om te navigeren).
+ * Links: de ruimte en wat de device-knoppen daar doen. Rechts: wat je net vastpakte (naam, waarde, bereik).
+ */
+export function tekenRuimte({ ruimte, tijd, knoppen }) {
+  const buf = leegScherm();
+  tekst(buf, 2, 1, pasIn(ruimte.toUpperCase(), Math.floor((BREED - 4) / 12)), 2);
+  if (tijd) tekst(buf, BREED - 2 - tijd.length * 6, 4, tijd);
+  lijn(buf, 0, BREED - 1, 17);
+  (knoppen ?? []).slice(0, 8).forEach((k, i) => {
+    const x = (i % 4) * KOLOM, y = 21 + Math.floor(i / 4) * 17;
+    tekst(buf, x + 2, y, pasIn(k?.label ?? '-'));
+    if (k && typeof k.v === 'number') balk(buf, x + 2, y + 9, KOLOM - 6, 4, k.v);
+  });
+  lijn(buf, 0, BREED - 1, 53, true);
+  tekst(buf, 2, 56, pasIn('USER = THUIS', REGEL));
+  return buf;
+}
+
+export function tekenGepakt({ naam, tekst: t, v, bereik, waar }) {
+  const buf = leegScherm();
+  tekst(buf, 2, 1, pasIn(naam ?? '?', Math.floor((BREED - 4) / 12)), 2);
+  lijn(buf, 0, BREED - 1, 17);
+  tekst(buf, 2, 22, pasIn(t ?? '', Math.floor((BREED - 4) / 12)), 2);
+  if (typeof v === 'number') balk(buf, 2, 38, BREED - 6, 5, v);
+  tekst(buf, 2, 46, pasIn(bereik ?? '', REGEL));
+  tekst(buf, 2, 56, pasIn(waar ?? '', REGEL));
+  return buf;
+}
+
 /** Het linker- of rechterscherm van de Maschine uit de stand van de opstelling. */
 export function tekenOpstelling(st, nr) {
   const buf = leegScherm();
@@ -226,6 +256,61 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
     const st = o.stand().take, doel = Number(b.dataset.take), nu = st.lijst.findIndex((x) => x.gekozen);
     for (let i = 0; i < (doel - nu + st.lijst.length) % st.lijst.length; i++) druk('opstelling.take.volgende');
   });
+  // ---- etiketten: wat je net vastpakte ------------------------------------------------------
+  const GEPAKT_MS = 4000;
+  let gepakt = null;          // { id, t, bron }
+  bus.on('actie', (a) => {
+    if (a.bron !== 'apc' && a.bron !== 'maschine') return;
+    const z = bus.zoek(a.id);
+    if (!z || (z.def.soort === 'trigger' && a.v === false) || /^laag:/.test(a.id)) return;
+    gepakt = { id: a.id, t: performance.now(), bron: a.bron, soort: z.def.soort };
+  });
+  /** De naam uit de indeling (wat er op het knopje staat), anders het label van de bus. */
+  function labelVoor(id) {
+    for (const ind of [ctl?.apc, ctl?.maschine]) {
+      if (!ind?.actieveRegels) continue;
+      for (const [control, r] of ind.actieveRegels()) if (ind.vul(r.actie) === id) return { label: r.label ?? null, control };
+    }
+    return { label: bus.zoek(id)?.def?.label ?? id, control: null };
+  }
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  function etiket(g) {
+    let v = null;
+    try { v = bus.lees(g.id); } catch { v = null; }
+    const { label, control } = labelVoor(g.id);
+    const waar = `${g.bron === 'apc' ? 'APC' : 'Maschine'}${control ? ` ${control}` : ''}`;
+    if (g.soort === 'trigger' || typeof v !== 'number') return { naam: label, tekst: v === null ? '' : v >= 0.5 ? 'aan' : 'uit', v: null, bereik: '', waar };
+    let m = /^track\.(\d+)\.inst\.knop\.(\d)$/.exec(g.id);
+    if (m) {
+      const inst = engine.track(Number(m[1]))?.instrument?.inst, p = inst?.params?.[Number(m[2]) - 1];
+      if (p?.eenheid) return { naam: `${m[1]} ${p.label}`, tekst: p.eenheid(v), v, bereik: `${p.eenheid(0)} … ${p.eenheid(1)}`, waar };
+    }
+    m = /^opstelling\.macro\.(\d)$/.exec(g.id);
+    if (m) { const mac = o.stand().macros[Number(m[1]) - 1]; return { naam: mac?.naam ?? label, tekst: pct(v), v, bereik: `${mac?.rol ?? ''} 0 … 100%`, waar }; }
+    if (/^track\.\d+\.filter$/.test(g.id)) return { naam: label, tekst: Math.abs(v - 0.5) < 0.01 ? 'open' : v < 0.5 ? `laag ${pct((0.5 - v) * 2)}` : `hoog ${pct((v - 0.5) * 2)}`, v, bereik: 'laagdoorlaat … open … hoogdoorlaat', waar };
+    if (g.id === 'patch.sterkte' || g.id === 'patch.snelheid') {
+      const h = engine.hybride?.stand(), c = h?.gekozen;
+      const wat = c ? `${h.bronnen[c[0] - 1]} × ${h.doelen[c[1] - 1]}` : 'geen cel gekozen';
+      return { naam: g.id === 'patch.sterkte' ? 'sterkte' : 'snelheid', tekst: g.id === 'patch.sterkte' ? pct(v) : `×${(Math.pow(16, v - 0.5)).toFixed(2).replace('.', ',')}`, v, bereik: wat, waar };
+    }
+    if (g.id === 'tijd.scrub') { const t = engine.hybride?.tijdStand(); return { naam: 'tijd', tekst: t?.terug ? `-${tijdTekst(t.terug)}` : 'nu', v, bereik: `nu … -${tijdTekst(Math.min(600, t?.bereik ?? 0))}`, waar }; }
+    return { naam: label, tekst: pct(v), v, bereik: '0 … 100%', waar };
+  }
+  const tijdTekst = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  function ruimteEtiket() {
+    const open = ctl?.apc?.open ?? [];
+    const ruimte = open.find((l) => l.startsWith('ruimte.'))?.slice(7) ?? 'thuis';
+    const t = engine.hybride?.tijdStand();
+    const knoppen = Array.from({ length: 8 }, (_, i) => {
+      const r = ctl.apc.regelVoor(`dk${i + 1}`, { shift: false });
+      if (!r) return null;
+      let v = null;
+      try { v = ctl.apc.lees(ctl.apc.vul(r.actie)); } catch { v = null; }
+      return { label: r.label ?? '', v: typeof v === 'number' ? v : null };
+    });
+    return { ruimte, tijd: t?.terug ? `TIJD -${tijdTekst(t.terug)}` : null, knoppen };
+  }
+
   const partEl = $('.opst-partituur');
   let partSleutel = '';
   function tekenPartituur(st) {
@@ -283,7 +368,14 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
     tekenTakes(st);
     const scherm = ctl?.maschineScherm;
     if (scherm) for (const nr of [0, 1]) {
-      const buf = toonTocht ? tekenTocht(t, nr) : (nr === 1 && padstand ? tekenPads(padstand, padNamen) : tekenOpstelling(st, nr));
+      // Volgorde: de opdracht (CONTROL) · wat je net vastpakte · de padstand · Hybride: de ruimte · de opstelling.
+      const hybride = ctl?.apc?.actief?.naam === 'hybride';
+      const vers = gepakt && performance.now() - gepakt.t < GEPAKT_MS;
+      const buf = toonTocht ? tekenTocht(t, nr)
+        : nr === 1 && vers ? tekenGepakt(etiket(gepakt))
+          : nr === 1 && padstand ? tekenPads(padstand, padNamen)
+            : nr === 0 && hybride ? tekenRuimte(ruimteEtiket())
+              : tekenOpstelling(st, nr);
       // Alleen een beeld dat anders is dan het vorige gaat naar de hub.
       if (vorigBeeld[nr] && vorigBeeld[nr].every((x, i) => x === buf[i])) continue;
       vorigBeeld[nr] = buf;

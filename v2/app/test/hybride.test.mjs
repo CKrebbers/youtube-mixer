@@ -190,3 +190,25 @@ test('beeld: elke video-actie in de Hybride-indeling bestaat echt in src/beeld/a
     assert.equal(soort.get(r.actie), moet, `${r.control}: ${r.actie} is een ${soort.get(r.actie)}, gedrag ${r.gedrag}`);
   }
 });
+
+test('etiketten: de schermtekening past in 256 × 64 en toont de ruimte en wat je vastpakt', async () => {
+  const { tekenRuimte, tekenGepakt } = await import('../src/ui/opstelling.js');
+  const { BYTES } = await import('../src/control/maschine-scherm.js');
+  const a = tekenRuimte({ ruimte: 'patch', tijd: 'TIJD -2:00', knoppen: [{ label: 'sterkte', v: 0.6 }, null] });
+  const b = tekenGepakt({ naam: 'sterkte', tekst: '60%', v: 0.6, bereik: 'lfo 1 maat × helderheid', waar: 'APC dk1' });
+  for (const x of [a, b]) { assert.equal(x.length, BYTES); assert.ok(x.some((y) => y !== 0)); }
+  // De onderste rij pixels (63) blijft leeg: de onderregel valt er niet af.
+  assert.ok([a, b].every((x) => x.subarray(63 * 32, 64 * 32).every((y) => y === 0)));
+});
+
+test('Hybride als standaard: een focuswissel (Track Select = vastpakken) houdt de APC in Hybride', async () => {
+  const { e } = await opzet();
+  const dj = JSON.parse(readFileSync(join(HIER, '..', 'indelingen', 'apc40mk2.json'), 'utf8'));
+  const ind = new Indeling({ bus: e.bus, apparaat: apc, vars: { focus: () => e.focus } });
+  ind.voegToe(dj);
+  ind.voegToe(doc);
+  assert.equal(ind.actief.naam, 'standaard');
+  ind.zetStandaard('hybride'); ind.kies('hybride');
+  assert.equal(ind.kiesVoorNummer(null), 'hybride', 'zonder eigen indeling voor het nummer: Hybride');
+  assert.equal(ind.actief.naam, 'hybride');
+});

@@ -35,7 +35,15 @@ export function opzetIndelingPaneel({ ctl, engine, knop, paneel, bewaarEigen, be
   }
 
   knop.addEventListener('click', () => { paneel.hidden = !paneel.hidden; teken(); });
-  kiezer.addEventListener('change', () => { apc.kies(kiezer.value); teken(); });
+  kiezer.addEventListener('change', () => {
+    // Standaard of Hybride is het hele systeem: die wordt de standaard (en dit tabblad onthoudt hem).
+    if (['standaard', 'hybride'].includes(kiezer.value)) {
+      apc.zetStandaard(kiezer.value);
+      try { localStorage.setItem('varve.v2.indeling', kiezer.value); } catch { /* geen opslag: niet erg */ }
+    }
+    apc.kies(kiezer.value);
+    teken();
+  });
   kopie.addEventListener('click', () => {
     const bron = apc.naarJSON();
     if (!bron) return;
