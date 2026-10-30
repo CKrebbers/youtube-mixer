@@ -16,6 +16,15 @@ Wat hij erbij zei:
 | Duur | "zo lang het leuk en interessant blijft, voor mij of voor de anderen" |
 | Plek | de MacBook, met iPad, controllers en misschien effectapparaten, Nord en gitaren; ook stand-alone |
 
+## Besluit 30 okt: functiestop tot het optreden
+
+Clay, 30 okt (keuzemenu): **ja, functiestop**. Tot het optreden (eind nov) komt er in v2 niets nieuws bij;
+alleen wat bij het spelen stuk of onhandig blijkt, wordt gefixt. De indeling (Hybride + Maschine-padstanden)
+blijft staan, zodat het spiergeheugen kan groeien. Andere AV-apps zijn alleen donor (de Stroommachine voor het
+beeld blijft); av-kern, TouchDesigner, Logic, VCV en browser-av-synth wachten tot na het optreden.
+De Mac-check (hub + Maschine via node-hid op macOS, de echte library met stems) gaat naar week 1.
+Eerste stap: een proefsessie op de pc met de echte APC en Maschine (gebaren en korrelwolk eerst, dan W1–W5).
+
 ## Het idee in drie lagen
 
 1. **Thuis: je stijl als data.** Recepten (bereiken, macro's, scenes, gebaren), takes (stukken die je inspeelt),
