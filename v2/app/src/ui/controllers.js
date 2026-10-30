@@ -35,6 +35,7 @@ import { Leren } from '../control/leren.js';
 import { bewaakTabblad, LOCK_NAAM } from '../control/tabblad.js';
 import { Noten } from '../control/noten.js';
 import { hubAdres, hubGeweigerd } from '../control/hub-vlag.js';
+import { Speeltuin } from '../control/speeltuin.js';
 
 /**
  * @param bus        de bus van de engine
@@ -49,7 +50,7 @@ import { hubAdres, hubGeweigerd } from '../control/hub-vlag.js';
  * @param laadHub    () -> import van control/hub.js (alleen met de vlag aangeroepen)
  */
 /** De indelingen die het hele systeem zijn (de rest is per nummer of eigen): kiezen = de standaard worden. */
-export const SYSTEEM_INDELINGEN = Object.freeze(['standaard', 'hybride']);
+export const SYSTEEM_INDELINGEN = Object.freeze(['standaard', 'hybride', 'speeltuin']);
 
 export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () => {}, indelingen = null, basis = '/indelingen/', noten = null,
   statusEl = null, nav = globalThis.navigator, venster = globalThis.window, doc = globalThis.document, haal = globalThis.fetch?.bind(globalThis),
@@ -62,6 +63,10 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
   let mscLampjes = null;
   let mscPoort = null;
   const leren = { apc: new Leren({ indeling: apc }), toetsen: new Leren({ indeling: toetsInd }) };
+  // De speeltuin (?indeling=speeltuin): lege toestellen die je spelend vult (src/control/speeltuin.js).
+  const speeltuin = new Speeltuin({ bus, indelingen: { apc, maschine: msc } });
+  speeltuin.on('melding', ({ tekst, soort }) => meld(tekst, soort, 'ctl:speeltuin'));
+  const naarApc = (g) => { if (!speeltuin.voer('apc', g)) apc.verwerk(g); };
   const hubUrl = hubAdres(zoek);
   const stand = { tabblad: 'wacht', midi: 'uit', controller: null, hub: null };
   let hub = null;
@@ -131,7 +136,8 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
       // (anders zou elke focuswissel, in Hybride Track Select = vastpakken, de APC terugzetten naar de DJ-indeling).
       let gevraagd = new URLSearchParams(zoek).get('indeling');
       if (!gevraagd) { try { gevraagd = venster?.localStorage?.getItem('varve.v2.indeling'); } catch { gevraagd = null; } }
-      if (gevraagd && SYSTEEM_INDELINGEN.includes(gevraagd) && apc.namen().includes(gevraagd)) { apc.zetStandaard(gevraagd); apc.kies(gevraagd); }
+      if (gevraagd === 'speeltuin') speeltuin.start();
+      else if (gevraagd && SYSTEEM_INDELINGEN.includes(gevraagd) && apc.namen().includes(gevraagd)) { apc.zetStandaard(gevraagd); apc.kies(gevraagd); }
     }
     meldStatus();
   })();
@@ -157,7 +163,7 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
     hub.on('bericht', (m) => {
       const g = apc40mk2.ontleed(m);
       if (!g) return;
-      if (leren.apc.bezig) leren.apc.voer(g); else apc.verwerk(g);
+      if (leren.apc.bezig) leren.apc.voer(g); else naarApc(g);
     });
   };
 
@@ -228,7 +234,7 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
     mscLampjes = new Lampjes({ indeling: msc, stuur: (b) => poort.uit.send(b), tel });
     poort.in.onmidimessage = (e) => {
       const g = maschineMk2.ontleed(parseBericht(e.data));
-      if (g) msc.verwerk(g);
+      if (g && !speeltuin.voer('maschine', g)) msc.verwerk(g);
     };
     poort.in.onstatechange = (e) => {
       if (e.port.state === 'connected') { mscLampjes.init(); uit.emit('maschine', true); }
@@ -257,7 +263,7 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
 
   // defineProperties, niet Object.assign: die leest een getter één keer uit (hub en lampjes bleven dan null).
   return Object.defineProperties(uit, Object.getOwnPropertyDescriptors({
-    apc, toetsen: toetsInd, maschine: msc, leren, geladen,
+    apc, toetsen: toetsInd, maschine: msc, leren, geladen, speeltuin,
     /** De schermen van de Maschine (0 links, 1 rechts; 2048 bytes), of null zonder hub. */
     get maschineScherm() { return mscPoort?.in.state === 'connected' ? mscPoort.scherm : null; },
     get hub() { return hub; },

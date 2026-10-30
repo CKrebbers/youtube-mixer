@@ -11,6 +11,7 @@ import { maakSamplerUitgang } from '../audio/sampler-uitgang.js';
 import { setId } from '../engine/log.js';
 import { schrijversVoor } from './schrijver.js';
 import { opzetLibrary } from './library.js';
+import { opzetSpeeltuinPaneel } from './speeltuin-paneel.js';
 import { opzetControllers } from './controllers.js';
 import { opzetIndelingPaneel } from './indeling-paneel.js';
 import { opzetTrackPaneel, instrumentSectie, effectSectie, stemsSectie, patroonSectie } from './track-paneel.js';
@@ -199,7 +200,8 @@ const bewaarInstelling = (naam, v) => fetch(`/api/v2/instelling/${naam}`, { meth
   .catch(() => engine.meld(`${naam} bewaren: server niet bereikbaar`, 'fout', `instelling:${naam}`));
 ctl.geladen.then(async () => {
   const eigen = (await instelling('indelingen-eigen')) ?? {};
-  for (const [app, docs] of Object.entries(eigen)) for (const d of docs ?? []) { try { (app === 'apc' ? ctl.apc : ctl.toetsen).voegToe(d); } catch { /* oud formaat: overslaan */ } }
+  const indVan = { apc: ctl.apc, toetsen: ctl.toetsen, maschine: ctl.maschine };
+  for (const [app, docs] of Object.entries(eigen)) for (const d of docs ?? []) { try { indVan[app]?.voegToe(d); } catch { /* oud formaat: overslaan */ } }
   const per = await instelling('indeling-per-nummer');
   if (per?.apc) ctl.apc.laadPerNummer(per.apc);
   if (per?.toetsen) ctl.toetsen.laadPerNummer(per.toetsen);
@@ -219,6 +221,34 @@ ctl.geladen.then(() => opzetIndelingPaneel({
   },
   bewaarPerNummer: async (deel) => bewaarInstelling('indeling-per-nummer', { ...((await instelling('indeling-per-nummer')) ?? {}), ...deel }),
 }));
+// De speeltuin (?indeling=speeltuin): elke keuze meteen bewaren (per apparaat, een halve seconde na de laatste),
+// en een logboek van wat er geprobeerd, gekozen en weer leeggemaakt is (instellingen/speeltuin-log.json).
+{
+  // Eén schrijver tegelijk: APC en Maschine lezen en schrijven hetzelfde bestand.
+  let rij = Promise.resolve();
+  const wacht = {};
+  ctl.speeltuin.on('bewaar', ({ app, doc }) => {
+    clearTimeout(wacht[app]);
+    wacht[app] = setTimeout(() => {
+      rij = rij.then(async () => {
+        const eigen = (await instelling('indelingen-eigen')) ?? {};
+        eigen[app] = [...(eigen[app] ?? []).filter((d) => d.naam !== doc.naam), doc];
+        await bewaarInstelling('indelingen-eigen', eigen);
+      });
+    }, 500);
+  });
+  // Het logboek één keer ophalen (een belofte, anders overschrijven gelijktijdige regels elkaar).
+  const logboek = instelling('speeltuin-log').then((l) => (Array.isArray(l) ? l : []));
+  let logTimer = null;
+  ctl.speeltuin.on('log', (regel) => {
+    logboek.then((l) => {
+      l.push(regel);
+      clearTimeout(logTimer);
+      logTimer = setTimeout(() => bewaarInstelling('speeltuin-log', l), 1000);
+    });
+  });
+}
+ctl.geladen.then(() => opzetSpeeltuinPaneel({ ctl, engine, bus, library, wortel: document.body }));
 // De indeling volgt het nummer op de focus-track (WENSEN: "per nummer een andere layout").
 engine.on('focus', (n) => ctl.kiesVoorNummer(engine.track(n).nummer?.id));
 engine.on('laad', ({ n, stand }) => { if (stand === 'klaar' && n === engine.focus) ctl.kiesVoorNummer(engine.track(n).nummer?.id); });

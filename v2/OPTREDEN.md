@@ -16,6 +16,12 @@ Wat hij erbij zei:
 | Duur | "zo lang het leuk en interessant blijft, voor mij of voor de anderen" |
 | Plek | de MacBook, met iPad, controllers en misschien effectapparaten, Nord en gitaren; ook stand-alone |
 
+## 30 okt later: opnieuw beginnen (gaat voor de functiestop hieronder)
+
+Na de eerste proef op de echte toestellen: "het voelt helemaal verkeerd". Het hele idee en de knoppen gaan
+van tafel; we beginnen met lege toestellen en vullen ze spelend. Zie `SPEELTUIN.md` (tak `claude/speeltuin`).
+De functiestop geldt nu voor de oude indelingen: daar wordt niet meer aan gebouwd.
+
 ## Besluit 30 okt: functiestop tot het optreden
 
 Clay, 30 okt (keuzemenu): **ja, functiestop**. Tot het optreden (eind nov) komt er in v2 niets nieuws bij;

@@ -393,7 +393,9 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
       // Volgorde: de opdracht (CONTROL) · wat je net vastpakte · de padstand · Hybride: de ruimte · de opstelling.
       const hybride = ctl?.apc?.actief?.naam === 'hybride';
       const vers = gepakt && performance.now() - gepakt.t < GEPAKT_MS;
-      const buf = toonTocht ? tekenTocht(t, nr)
+      // De speeltuin heeft de schermen helemaal (F1–F8 kiezen daar).
+      const buf = ctl?.speeltuin?.aan ? ctl.speeltuin.scherm(nr)
+        : toonTocht ? tekenTocht(t, nr)
         : nr === 1 && vers ? tekenGepakt(etiket(gepakt))
           : nr === 1 && padstand ? tekenPads(padstand, padNamen)
             : nr === 0 && hybride ? tekenRuimte(ruimteEtiket())
