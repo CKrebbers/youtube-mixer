@@ -23,6 +23,7 @@ import { Luisteraar } from '../beeld/analyse/luisteraar.js';
 import { definieerAuto } from '../engine/acties-auto.js';
 import { opzetAutoPaneel, maakLaad } from './auto-paneel.js';
 import { opzetOpstelling } from './opstelling.js';
+import { opzetZaal } from './zaal.js';
 
 const $ = (s, w = document) => w.querySelector(s);
 const tijd = (s) => { if (!Number.isFinite(s)) return '—'; const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; };
@@ -244,6 +245,9 @@ engine.on('patronen-set', (set) => { clearTimeout(patronenTimer); patronenTimer 
 // Beeld (plak 4, src/beeld/): video per track als slaaf van wat je hoort, vormlagen, het losse venster.
 const beeld = opzetBeeld({ engine, bus, paneel: $('#paneel-beeld'), analyser: engine.mixer.analyser });
 // Opstellingen (src/kern/opstelling): recepten + zaad, bespeeld met de Maschine, de APC of dit paneel.
+// De zaal als meespeler (camera + microfoon, alleen twee getallen; aan via zaal.mee).
+const zaal = opzetZaal({ engine, bus });
+window.varveZaal = zaal;
 const opstelling = opzetOpstelling({ engine, bus, library, beeld, ctl, paneel: $('#paneel-opstelling'), instelling, bewaarInstelling });
 window.varveOpstelling = opstelling;   // voor de headless proeven
 opzetKoppelPaneel({ koppeling: stroom, bus, wortel: $('#paneel-beeld'), meld: (t, so, k) => engine.meld(t, so, k) });

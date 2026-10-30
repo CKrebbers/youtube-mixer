@@ -108,3 +108,77 @@ test('takes: vastleggen op hele maten, afspelen zet het terug, weg = prullenbak,
   assert.equal(e.opstelling.takes().length, 1);
   assert.equal(bewaard.at(-1).takes.length, 1);
 });
+
+test('processen: groei maakt voller en bakt in, verval houdt, zwerven blijft binnen 0..1, evolutie verandert de partituur', async () => {
+  const ctx = nepCtx();
+  const e = new Engine({ ctx, audio: { ...nepAudio(), instrumenten: CAT.instrumenten.map((s) => ({ soort: s, naam: s })),
+    instrument: (c, soort) => { const p = Array(8).fill(0.5); const inst = { soort, start: async () => {}, noteOn() {}, noteOff() {}, stil() {}, zetParam: (k, v) => { p[k - 1] = v; }, leesParam: (k) => p[k - 1] ?? null, vernietig() {} }; return { inst, weg: async () => {} }; } },
+    timer: false, patronenTimers: { zet: () => 0, weg: () => {} } });
+  await e.klaar;
+  e.opstelling.zetRecepten([ruw('klokwerk')]);
+  await e.opstelling.zet('klokwerk', 4);
+  for (let i = 0; i < 5; i++) await new Promise((x) => setTimeout(x, 0));
+  e.zetKlokTempo(120, 0);                                    // 2 s per maat
+  let t = 0;
+  const loop = (s) => { for (const eind = t + s; t < eind; t += 0.05) { ctx.currentTime = t; e.opstelling.tik(t); } };
+  const dicht = () => e.bus.lees('opstelling.macro.2');
+  const voor = dicht();
+  e.bus.doe('opstelling.proces.1.kort', true, { bron: 'maschine' });   // groei, 32 maten
+  assert.deepEqual(e.opstelling.stand().processen.map((p) => p.id), ['groei']);
+  loop(2);
+  const vroeg = e.opstelling.stand().macros[1].nu;
+  loop(62);
+  const laat = e.opstelling.stand().macros[1].nu;
+  assert.ok(laat > vroeg + 0.4, `groei: dichtheid ${vroeg.toFixed(2)} -> ${laat.toFixed(2)}`);
+  assert.ok(Object.values(e.opstelling.stand().partituur).every((x) => x.actief >= 4), 'groei eindigt vol');
+  loop(4);
+  assert.equal(e.opstelling.stand().processen.length, 0, 'groei is klaar');
+  assert.ok(dicht() > voor, 'en zijn eindstand is jouw stand geworden (ingebakken)');
+  // Verval houdt zijn eindstand tot je hem stopt.
+  e.bus.doe('opstelling.proces.2.kort', true, { bron: 'maschine' });
+  loop(70);
+  assert.equal(e.opstelling.stand().processen[0]?.id, 'verval', 'verval loopt nog (houdt)');
+  assert.ok(e.opstelling.stand().macros[1].nu < 0.3, 'en is dun');
+  e.bus.doe('opstelling.proces.2', true, { bron: 'maschine' });          // nog eens = stoppen
+  assert.equal(e.opstelling.stand().processen.length, 0);
+  // Zwerven + ademen tegelijk: alles blijft binnen 0..1.
+  e.bus.doe('opstelling.proces.3', true, { bron: 'maschine' });
+  e.bus.doe('opstelling.proces.4', true, { bron: 'maschine' });
+  for (let i = 0; i < 400; i++) { loop(0.25); assert.ok(e.opstelling.stand().macros.every((m) => !m || (m.nu >= 0 && m.nu <= 1))); }
+  e.bus.doe('opstelling.proces.stop', true, { bron: 'maschine' });
+  assert.equal(e.opstelling.stand().processen.length, 0);
+  // Evolutie: na een paar keer 8 maten staat de partituur anders.
+  const rijen = () => JSON.stringify(Object.values(e.opstelling.stand().partituur).map((x) => x.actief));
+  const r0 = rijen();
+  e.bus.doe('opstelling.proces.8', true, { bron: 'maschine' });
+  loop(16 * 2 * 4);
+  assert.notEqual(rijen(), r0, 'evolutie veranderde de partituur');
+});
+
+test('avond: station na station, elk zijn verloop, na de laatste weer de eerste met een nieuw zaad', async () => {
+  const ctx = nepCtx();
+  const e = new Engine({ ctx, audio: { ...nepAudio(), instrumenten: CAT.instrumenten.map((s) => ({ soort: s, naam: s })),
+    instrument: (c, soort) => { const p = Array(8).fill(0.5); const inst = { soort, start: async () => {}, noteOn() {}, noteOff() {}, stil() {}, zetParam: (k, v) => { p[k - 1] = v; }, leesParam: (k) => p[k - 1] ?? null, vernietig() {} }; return { inst, weg: async () => {} }; } },
+    timer: false, patronenTimers: { zet: () => 0, weg: () => {} } });
+  await e.klaar;
+  e.opstelling.zetRecepten([ruw('klokwerk'), ruw('korrelzee')]);
+  e.zetKlokTempo(120, 0);
+  e.bus.doe('avond.lopen', true, { bron: 'maschine' });
+  for (let i = 0; i < 8; i++) await new Promise((x) => setTimeout(x, 0));
+  assert.equal(e.opstelling.stand().recept, 'klokwerk');
+  assert.ok(e.opstelling.stand().loop, 'het eerste station loopt');
+  const gezien = [];
+  let t = 0;
+  for (let ronde = 0; ronde < 400 && gezien.length < 3; ronde++) {
+    for (const eind = t + 2; t < eind; t += 0.05) { ctx.currentTime = t; e.opstelling.tik(t); }
+    for (let i = 0; i < 4; i++) await new Promise((x) => setTimeout(x, 0));
+    const st = e.opstelling.stand();
+    const sleutel = `${st.recept}#${st.zaad}`;
+    if (gezien.at(-1) !== sleutel) gezien.push(sleutel);
+  }
+  assert.equal(gezien.length, 3, gezien.join(' → '));
+  assert.ok(gezien[1].startsWith('korrelzee'), 'tweede station');
+  assert.ok(gezien[2].startsWith('klokwerk') && gezien[2] !== gezien[0], 'weer het eerste, met een ander zaad');
+  e.bus.doe('avond.lopen', true, { bron: 'maschine' });
+  assert.equal(e.opstelling.stand().avond, null, 'uit');
+});

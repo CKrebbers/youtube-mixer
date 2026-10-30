@@ -31,6 +31,22 @@
  *                                         de scenes glijden mee; wat JIJ aanraakt gaat voor tot het volgende deel
  *   opstelling.laadloop          trigger  het gekozen recept klaarzetten en meteen laten lopen
  *
+ * Processen (kern/opstelling/proces.js): één knop, en de opstelling verandert over minuten.
+ *   opstelling.proces.{k}        trigger  proces k (1..8: groei, verval, zwerven, ademen, storm, oplossen, naar huis,
+ *                                         evolutie) starten, of stoppen als hij loopt; duur STANDAARD_MATEN maten
+ *   opstelling.proces.{k}.kort   trigger  hetzelfde, half zo lang (SHIFT)
+ *   opstelling.proces.stop       trigger  alle processen stoppen (wat ze deden glijdt terug naar jouw stand)
+ *   Ze tellen op bij wat jij zet (zoals de drift); groei en naar huis bakken hun eindstand in, verval en oplossen
+ *   houden hun eindstand tot je ze stopt, storm eindigt met een breuk.
+ *
+ * De avond: thuis klaarzetten, live laten lopen zolang het interessant is.
+ *   avond.lopen                  trigger  aan/uit: station na station (recept + zaad, of zijn take), elk met zijn verloop;
+ *                                         na de uitloop het volgende, met een nieuw zaad: elke ronde anders
+ *   avond.volgende               trigger  meteen naar het volgende station (op de maat)
+ *   avond.vrij                   trigger  volgorde of vrij (vrij = gekozen op je smaak, nooit twee keer hetzelfde)
+ *   zaal.mee                     trigger  de zaal speelt mee: zaal.beweging en zaal.geluid (de schermlaag meet ze met
+ *                                         camera en microfoon) duwen dichtheid en beweging een stukje mee
+ *
  * Vastleggen (kern/opstelling/take.js): wat je speelt als automation bewaren, en weer weg als het niets is.
  *   opstelling.neem              trigger  opnemen aan/uit (begint en eindigt op hele maten; ook het verloop als het liep)
  *   opstelling.take.speel        trigger  de gekozen take afspelen (zet zijn opstelling terug), nog eens = stop
@@ -48,6 +64,8 @@ import { muteer, kruis, drift, genereer } from '../kern/opstelling/varieer.js';
 import { volgendZaad } from '../kern/opstelling/zaad.js';
 import { maakVerloop, standOp } from '../kern/opstelling/verloop.js';
 import { dun, legtVast, normaliseerTake, nogVast } from '../kern/opstelling/take.js';
+import { PROCESSEN, procesVan, stand as procesStand, STANDAARD_MATEN } from '../kern/opstelling/proces.js';
+import { stroom } from '../kern/opstelling/zaad.js';
 import { Emitter } from '../kern/emitter.js';
 
 export const GESCHIEDENIS = 32;
@@ -79,6 +97,10 @@ export function definieerOpstelling(engine) {
   let takeKeuze = -1;       // index in takes
   let opname = null;        // { start: tel of null, acties, recept, zaad, loop: { van } | null }
   let afspelen = null;      // { take, start: tel of null, i, laatst: Map }
+  let avond = null;            // { stations: [{ recept, zaad?, take? }], i, vrij, ronde } of null
+  let avondVrij = false;
+  let zaalMee = false;
+  const processen = new Map();  // id -> { start: tel | null, maten, zaad, rij, gebaren: Map, gemuteerd }
 
   const zeg = (t) => { melding = t; engine.meld?.(`opstelling: ${t}`, 'info', 'opstelling'); uit.emit('verander'); };
   const catalogus = () => { try { return bronnen.catalogus() ?? {}; } catch { return {}; } };
@@ -110,6 +132,7 @@ export function definieerOpstelling(engine) {
       if (sp.soort === 'instrument' && engine.track(sp.n)?.instrument?.soort === sp.instrument) engine.zetInstrument(sp.n, null);
     }
     if (afspelen && afspelen.take.recept !== nieuw.recept) stopAfspelen(false);
+    stopProcessen(false);
     o = nieuw;
     actief = Object.fromEntries(Object.keys(o.varianten ?? {}).map((n) => [n, MIDDEN]));
     wacht = new Map();
@@ -354,8 +377,9 @@ export function definieerOpstelling(engine) {
     loop.gepland = rel;
     const st = standOp(loop.v, rel);
     if (!st) {
-      engine.patronen?.stopAlles();
       loop = null;
+      if (avond) { volgendStation(); return; }
+      engine.patronen?.stopAlles();
       zeg('lopen: klaar');
       return;
     }
@@ -388,6 +412,143 @@ export function definieerOpstelling(engine) {
     zet(maak(r, nieuwZaad())).then(() => zetLoop(true));
     return undefined;
   });
+
+  // ---- de avond ----------------------------------------------------------------------------------
+  const stationsNu = () => recepten.map((r) => ({ recept: r.id }));
+  async function speelStation(i) {
+    if (!avond) return;
+    avond.i = i;
+    const s = avond.stations[i];
+    const r = recepten.find((x) => x.id === s.recept);
+    if (!r) { volgendStation(); return; }
+    const t = s.take ? takes.find((x) => x.id === s.take) : null;
+    if (t) { takeKeuze = takes.indexOf(t); await speelTake(); }
+    else { await zet(maak(r, s.zaad ?? volgendZaad(o?.zaad ?? 7, 600 + avond.ronde * 31 + i))); zetLoop(true); }
+    zeg(`avond: ${r.naam} (${i + 1}/${avond.stations.length}${avond.vrij ? ', vrij' : ''})`);
+  }
+  function volgendStation() {
+    if (!avond) return;
+    const n = avond.stations.length;
+    let j = (avond.i + 1) % n;
+    if (avond.vrij && n > 1) {
+      // Vrij: gewogen op je smaak (wat je bewaarde en lang speelde komt vaker), nooit hetzelfde als net.
+      const sm = bronnen.catalogus?.()?.smaak ?? null;
+      const r = stroom(o?.zaad ?? 7, 'avond', avond.ronde, avond.i);
+      const kandidaten = avond.stations.map((_, k) => k).filter((k) => k !== avond.i);
+      const w = kandidaten.map((k) => 1 + Math.max(0, sm?.kenmerken?.[`recept:${avond.stations[k].recept}`] ?? 0) * 0.3);
+      let x = r.r() * w.reduce((a, b) => a + b, 0);
+      j = kandidaten.find((_, q) => (x -= w[q]) <= 0) ?? kandidaten.at(-1);
+    }
+    if (j === 0) avond.ronde++;
+    speelStation(j);
+  }
+  bus.defineer({ id: 'avond.lopen', soort: 'trigger', label: 'avond: station na station laten lopen (aan/uit)', meta: TRIG,
+    doe: (v) => {
+      if (!v) return undefined;
+      if (avond) { avond = null; zeg('avond: uit (wat nu loopt, loopt door tot het eind)'); return undefined; }
+      const stations = stationsNu();
+      if (!stations.length) return { geweigerd: 'geen recepten' };
+      avond = { stations, i: 0, vrij: avondVrij, ronde: 0 };
+      // Speelt er al een opstelling: die is het eerste station (niets onderbreken); anders het eerste recept.
+      const nu = o ? stations.findIndex((s) => s.recept === o.recept) : -1;
+      if (nu >= 0) { avond.i = nu; if (!loop) zetLoop(true); zeg(`avond: loopt, vanaf ${o.naam}`); }
+      else speelStation(0);
+      return undefined;
+    },
+    lees: () => (recepten.length ? (avond ? 1 : 0) : null) });
+  trig('avond.volgende', 'avond: naar het volgende station', () => { if (!avond) return { geweigerd: 'de avond loopt niet (avond.lopen)' }; loop = null; volgendStation(); return undefined; });
+  bus.defineer({ id: 'avond.vrij', soort: 'trigger', label: 'avond: op volgorde of vrij', meta: TRIG,
+    doe: (v) => { if (!v) return undefined; avondVrij = !avondVrij; if (avond) avond.vrij = avondVrij; zeg(`avond: ${avondVrij ? 'vrij (op je smaak)' : 'op volgorde'}`); return undefined; },
+    lees: () => (avondVrij ? 1 : 0) });
+  bus.defineer({ id: 'zaal.mee', soort: 'trigger', label: 'de zaal speelt mee (camera en microfoon)', meta: TRIG,
+    doe: (v) => { if (!v) return undefined; zaalMee = !zaalMee; zeg(zaalMee ? 'de zaal speelt mee' : 'de zaal kijkt alleen'); return undefined; },
+    lees: () => (zaalMee ? 1 : 0) });
+
+  // ---- processen ---------------------------------------------------------------------------------
+  function stopProces(id, { bak = false } = {}) {
+    const pr = processen.get(id);
+    if (!pr) return;
+    processen.delete(id);
+    for (const [g, v] of pr.gebaren) if (v > 0) { try { bus.doe(`gebaar.${g}`, 0, { bron: 'proces' }); } catch { /* weg */ } }
+    // Inbakken: wat het proces met de macro's deed, wordt jouw stand (er springt niets terug).
+    if (bak) basis = nu.slice();
+    uit.emit('verander');
+  }
+  function stopProcessen(melding = true) {
+    if (!processen.size) return;
+    for (const id of [...processen.keys()]) stopProces(id);
+    if (melding) zeg('processen: alles gestopt');
+  }
+  PROCESSEN.forEach((def, i) => {
+    const k = i + 1;
+    const start = (maten) => {
+      if (!o) return { geweigerd: 'nog geen opstelling' };
+      if (processen.has(def.id)) { stopProces(def.id, { bak: def.id === 'groei' || def.id === 'thuis' }); zeg(`${def.naam}: gestopt`); return undefined; }
+      processen.set(def.id, { start: null, maten, zaad: volgendZaad(o.zaad, 500 + teller++), rij: null, gebaren: new Map(), gemuteerd: -1,
+        thuis: def.id === 'thuis' ? o.macros.map((m, j) => ({ van: basis[j], naar: recepten.find((r) => r.id === o.recept)?.macros[j] ? (recepten.find((r) => r.id === o.recept).macros[j].start[0] + recepten.find((r) => r.id === o.recept).macros[j].start[1]) / 2 : basis[j] })) : null });
+      if (!speeltIets()) startAlles();
+      zeg(`${def.naam}: ${def.eindeloos ? 'loopt tot je hem stopt' : `${maten} maten`} (${def.uitleg})`);
+      return undefined;
+    };
+    bus.defineer({ id: `opstelling.proces.${k}`, soort: 'trigger', label: `proces: ${def.naam}`, meta: TRIG,
+      doe: (v) => (v ? start(STANDAARD_MATEN) : undefined), lees: () => (o ? (processen.has(def.id) ? 1 : 0) : null) });
+    bus.defineer({ id: `opstelling.proces.${k}.kort`, soort: 'trigger', label: `proces: ${def.naam} (kort)`, meta: TRIG,
+      doe: (v) => (v ? start(STANDAARD_MATEN / 2) : undefined), lees: () => (o ? (processen.has(def.id) ? 1 : 0) : null) });
+  });
+  trig('opstelling.proces.stop', 'processen: alles stoppen', () => { stopProcessen(); return undefined; });
+
+  /** Elke drift-stap: wat alle processen nu willen, opgeteld (offsets per macro), plus partituur, gebaren, mutaties. */
+  function procesStap(tel, doel) {
+    if (zaalMee) {
+      // De zaal: beweging duwt de dichtheid, geluid de beweging (rond 0,4 = neutraal), hooguit ±0,3.
+      const lees = (id) => { try { const v = bus.lees(id); return typeof v === 'number' ? v : null; } catch { return null; } };
+      const zb = lees('zaal.beweging'), zg = lees('zaal.geluid');
+      const d = macroVanRol('dichtheid'), b = macroVanRol('beweging');
+      doel = doel.slice();
+      if (zb !== null && d >= 0) doel[d] = Math.min(1, Math.max(0, doel[d] + Math.max(-0.3, Math.min(0.3, (zb - 0.4) * 0.75))));
+      if (zg !== null && b >= 0) doel[b] = Math.min(1, Math.max(0, doel[b] + Math.max(-0.3, Math.min(0.3, (zg - 0.4) * 0.6))));
+    }
+    if (!processen.size) return doel;
+    const pm = perMaat();
+    const extra = new Array(doel.length).fill(0);
+    for (const [id, pr] of [...processen]) {
+      const def = procesVan(id);
+      if (pr.start === null) pr.start = tel;
+      const ruw = (tel - pr.start) / (pr.maten * pm);
+      const p = def.eindeloos ? ruw % 1 : Math.min(1, ruw);
+      const st = procesStand(id, p, tel - pr.start, pr.zaad, pr.maten);
+      for (const [rol, x] of Object.entries(st.macros)) { const i = macroVanRol(rol); if (i >= 0) extra[i] += x; }
+      if (pr.thuis) pr.thuis.forEach((t, i) => { if (i < doel.length) extra[i] += (t.van + (t.naar - t.van) * (st.terug ?? 0)) - basis[i]; });
+      // De partituur: alleen bij een wissel van rij, op de maat; wat jij zelf aanraakte laat het verloop met rust.
+      if (st.rij && st.rij !== pr.rij && o?.varianten) {
+        pr.rij = st.rij;
+        for (const n of Object.keys(o.varianten)) if (!loop?.hand.has(n) && !uitGezet.has(n) && actief[n] !== st.rij) wacht.set(n, st.rij);
+      }
+      // Gebaren: alleen wat verandert.
+      for (const [g, v] of Object.entries(st.gebaren)) {
+        if (Math.abs((pr.gebaren.get(g) ?? 0) - v) < 0.02) continue;
+        pr.gebaren.set(g, v);
+        try { bus.doe(`gebaar.${g}`, v, { bron: 'proces' }); } catch { /* dat gebaar kan hier niet */ }
+      }
+      // Evolutie: elke 8 maten een spoor naar een andere rij en de knoppen een stap opzij (zonder opnieuw te laden).
+      if (st.muteer) {
+        const gen = Math.floor((tel - pr.start) / (8 * pm));
+        if (gen > pr.gemuteerd) {
+          pr.gemuteerd = gen;
+          const r = stroom(pr.zaad, 'evolutie', gen);
+          const sporen = Object.keys(o?.varianten ?? {});
+          if (gen > 0 && sporen.length) { const n = r.kies(sporen); if (!loop?.hand.has(n)) wacht.set(n, r.geheel(1, 5)); }
+          if (gen > 0) basis = basis.map((b, i) => (o.macros[i]?.rol === 'variatie' ? b : r.rond(b, 0.12)));
+        }
+      }
+      // Einde: groei en naar huis bakken in, storm laat zijn breuk los, verval en oplossen houden hun eindstand.
+      if (!def.eindeloos && ruw >= 1) {
+        if (id === 'groei' || id === 'thuis') { doel.forEach((v, i) => { nu[i] = Math.min(1, Math.max(0, v + extra[i])); }); stopProces(id, { bak: true }); zeg(`${def.naam}: klaar`); }
+        else if (id === 'storm' && ruw >= 1 + 1 / pr.maten) { stopProces(id); zeg('storm: voorbij'); }
+      }
+    }
+    return doel.map((v, i) => Math.min(1, Math.max(0, v + extra[i])));
+  }
 
   // ---- vastleggen: takes ----------------------------------------------------------------------
   const SPELER = new Set(['apc', 'maschine', 'toetsen', 'scherm', 'hub']);
@@ -546,7 +707,7 @@ export function definieerOpstelling(engine) {
       laatsteDrift = tel;
       const vi = macroVanRol('variatie');
       const vari = vi >= 0 ? basis[vi] : 0;
-      const doel = drift(o, tel, vari, basis);
+      const doel = procesStap(tel, drift(o, tel, vari, basis));
       doel.forEach((v, i) => { if (Math.abs(v - nu[i]) > 0.002) zetMacro(i, v, { metBasis: false }); });
     },
     stand() {
@@ -558,6 +719,13 @@ export function definieerOpstelling(engine) {
         scenes: (o?.scenes ?? []).map((s) => s.naam),
         partituur: Object.fromEntries(Object.entries(o?.varianten ?? {}).map(([n, v]) => [n, { actief: actief[n], wacht: wacht.get(n) ?? null, uit: uitGezet.has(n), namen: v.map((x) => x.naam) }])),
         glij: glij ? glij.naam : null, morph: morph.naam ? { naar: morph.naam, m: morph.m } : null,
+        avond: avond ? { station: avond.i + 1, van: avond.stations.length, ronde: avond.ronde + 1, vrij: avond.vrij } : null,
+        zaalMee,
+        processen: [...processen].map(([id, pr]) => {
+          const def = procesVan(id), tel = engine.klok?.loopt ? engine.klok.tel(engine.nu()) : null;
+          const p = pr.start === null || tel === null ? 0 : (tel - pr.start) / (pr.maten * perMaat());
+          return { id, naam: def.naam, eindeloos: !!def.eindeloos, p: def.eindeloos ? null : Math.min(1, p), maten: pr.maten };
+        }),
         take: { neemt: !!opname, maten: opname?.start != null && engine.klok?.loopt ? Math.max(0, Math.floor((engine.klok.tel(engine.nu()) - opname.start) / perMaat()) + 1) : 0,
           aantal: takes.length, prullenbak: prullenbak.length, keuze: takes[takeKeuze]?.naam ?? null, speelt: afspelen?.take.naam ?? null,
           lijst: takes.map((x, i) => ({ naam: x.naam, maten: x.maten, gekozen: i === takeKeuze, loop: !!x.loop })) },

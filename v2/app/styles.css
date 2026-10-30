@@ -306,3 +306,7 @@ body:not(.koptelefoon) .t-onder { grid-template-columns: 1fr; }
 .opst-takelijst { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
 .opst-takelijst button { background: var(--bg); color: var(--dim); border: 1px solid var(--lijn); border-radius: 3px; padding: 1px 6px; font: inherit; cursor: pointer; }
 .opst-takelijst button.aan { color: var(--tekst); border-color: var(--klok); }
+.opst-processen { display: grid; gap: 3px; color: var(--dim); font-size: 11px; }
+.opst-processen button { background: var(--bg); color: var(--dim); border: 1px solid var(--lijn); border-radius: 3px; padding: 1px 6px; margin-right: 3px; font: inherit; cursor: pointer; }
+.opst-processen button.aan { color: var(--tekst); border-color: var(--lus); }
+.opst-avond b { color: var(--tekst); font-weight: 500; }

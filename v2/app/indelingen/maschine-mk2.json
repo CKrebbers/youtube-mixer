@@ -3,7 +3,7 @@
   "naam": "opstelling",
   "apparaat": "maschine-mk2",
   "shift": "shift",
-  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, G korrels (de granular sampler: de eerste druk bevriest wat de track met focus net speelde, pad 1 = net tot pad 16 = bijna 3 s terug, druk = hoe vol, van pad naar pad = door het sample), F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht. SAMPLING = de korrelwolk (instrument) vangt de laatste 4 tellen van wat er speelt; speel hem dan met de noten (groep C). Laten lopen: SHIFT+PLAY (of SHIFT+wiel = recept laden en meteen lopen). Vastleggen: REC = aan/uit, SHIFT+REC = afspelen, SHIFT+ERASE = weg (prullenbak), SHIFT+DUPLICATE = terug, SHIFT+◄ ► = andere take.",
+  "uitleg": "De Maschine speelt de opstelling. Groep A–F kiest wat de pads doen (tik = wisselen, vasthouden = even kijken): A gebaren (vasthouden = effect, hoe harder hoe dieper, loslaten = terug op de tel; pad 1–8 altijd gelijk, 9–16 per recept; twee tegelijk = gecombineerd; GRID = loslaten op de tel aan/uit), B drums, C noten in de toonsoort, D stems, E sampler, G korrels (de granular sampler: de eerste druk bevriest wat de track met focus net speelde, pad 1 = net tot pad 16 = bijna 3 s terug, druk = hoe vol, van pad naar pad = door het sample), F de basis (stems onder, scenes midden, zaad boven; SHIFT+scene = glijden in 4 maten). SHIFT+groep A–H = focus op track 1–8. Draaiknop 1–8 = de macro's, wiel = recept, PLAY = start, AUTO = nieuw recept, DUPLICATE = bewaren, CONTROL = de opdracht van de tocht. SAMPLING = de korrelwolk (instrument) vangt de laatste 4 tellen van wat er speelt; speel hem dan met de noten (groep C). Laten lopen: SHIFT+PLAY (of SHIFT+wiel = recept laden en meteen lopen). Vastleggen: REC = aan/uit, SHIFT+REC = afspelen, SHIFT+ERASE = weg (prullenbak), SHIFT+DUPLICATE = terug, SHIFT+◄ ► = andere take. Groep H = processen: pad 1-8 groei, verval, zwerven, ademen, storm, oplossen, naar huis, evolutie (één druk = minuten, SHIFT = kort, nog eens = stop), 9 avond, 10 volgend station, 11 vrij, 12 zaal speelt mee, 13 laat lopen, 14 start, 15 vastleggen, 16 processen stop. SHIFT+AUTO = de avond, SHIFT+► transport = volgend station.",
   "regels": [
     {
       "control": "enc1",
@@ -1808,6 +1808,305 @@
       "actie": "opstelling.laadloop",
       "gedrag": "trigger",
       "label": "recept laden en laten lopen"
+    },
+    {
+      "control": "groepH",
+      "actie": "laag:pads.processen",
+      "gedrag": "trigger",
+      "led": {
+        "lees": "laag:pads.processen",
+        "kleur": {
+          "aan": "limoen",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "pads: processen"
+    },
+    {
+      "control": "pad1",
+      "actie": "opstelling.proces.1",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "limoen"
+        }
+      },
+      "label": "groei"
+    },
+    {
+      "control": "pad1",
+      "actie": "opstelling.proces.1.kort",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "shift": true,
+      "label": "groei kort"
+    },
+    {
+      "control": "pad2",
+      "actie": "opstelling.proces.2",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "limoen"
+        }
+      },
+      "label": "verval"
+    },
+    {
+      "control": "pad2",
+      "actie": "opstelling.proces.2.kort",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "shift": true,
+      "label": "verval kort"
+    },
+    {
+      "control": "pad3",
+      "actie": "opstelling.proces.3",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "limoen"
+        }
+      },
+      "label": "zwerven"
+    },
+    {
+      "control": "pad3",
+      "actie": "opstelling.proces.3.kort",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "shift": true,
+      "label": "zwerven kort"
+    },
+    {
+      "control": "pad4",
+      "actie": "opstelling.proces.4",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "limoen"
+        }
+      },
+      "label": "ademen"
+    },
+    {
+      "control": "pad4",
+      "actie": "opstelling.proces.4.kort",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "shift": true,
+      "label": "ademen kort"
+    },
+    {
+      "control": "pad5",
+      "actie": "opstelling.proces.5",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "groen"
+        }
+      },
+      "label": "storm"
+    },
+    {
+      "control": "pad5",
+      "actie": "opstelling.proces.5.kort",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "shift": true,
+      "label": "storm kort"
+    },
+    {
+      "control": "pad6",
+      "actie": "opstelling.proces.6",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "groen"
+        }
+      },
+      "label": "oplossen"
+    },
+    {
+      "control": "pad6",
+      "actie": "opstelling.proces.6.kort",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "shift": true,
+      "label": "oplossen kort"
+    },
+    {
+      "control": "pad7",
+      "actie": "opstelling.proces.7",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "groen"
+        }
+      },
+      "label": "naar huis"
+    },
+    {
+      "control": "pad7",
+      "actie": "opstelling.proces.7.kort",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "shift": true,
+      "label": "naar huis kort"
+    },
+    {
+      "control": "pad8",
+      "actie": "opstelling.proces.8",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "groen"
+        }
+      },
+      "label": "evolutie"
+    },
+    {
+      "control": "pad8",
+      "actie": "opstelling.proces.8.kort",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "shift": true,
+      "label": "evolutie kort"
+    },
+    {
+      "control": "pad9",
+      "actie": "avond.lopen",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "cyaan"
+        }
+      },
+      "label": "avond"
+    },
+    {
+      "control": "pad10",
+      "actie": "avond.volgende",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "cyaan"
+        }
+      },
+      "label": "volgend station"
+    },
+    {
+      "control": "pad11",
+      "actie": "avond.vrij",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "cyaan"
+        }
+      },
+      "label": "vrij/volgorde"
+    },
+    {
+      "control": "pad12",
+      "actie": "zaal.mee",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "magenta"
+        }
+      },
+      "label": "zaal speelt mee"
+    },
+    {
+      "control": "pad13",
+      "actie": "opstelling.loop",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "wit"
+        }
+      },
+      "label": "laat lopen"
+    },
+    {
+      "control": "pad14",
+      "actie": "opstelling.start",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "groen"
+        }
+      },
+      "label": "start"
+    },
+    {
+      "control": "pad15",
+      "actie": "opstelling.neem",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "rood"
+        }
+      },
+      "label": "vastleggen"
+    },
+    {
+      "control": "pad16",
+      "actie": "opstelling.proces.stop",
+      "gedrag": "trigger",
+      "laag": "pads.processen",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "grijs"
+        }
+      },
+      "label": "processen stop"
+    },
+    {
+      "control": "auto",
+      "actie": "avond.lopen",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "de avond laten lopen"
+    },
+    {
+      "control": "stapR",
+      "actie": "avond.volgende",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "volgend station"
     }
   ]
 }

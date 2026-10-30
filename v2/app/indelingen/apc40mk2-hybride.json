@@ -3,7 +3,7 @@
   "naam": "hybride",
   "apparaat": "apc40mk2",
   "shift": "shift",
-  "uitleg": "Hybride (v2/HYBRIDE.md). Ankers in elke ruimte: faders = mix, master = master, Track Select = vastpakken, USER = THUIS, crossfader = tijd (midden = nu, links = terug tot 10 minuten). Ruimtes: scene 1-3 of het Bank-kruis ◀ ▶ (Thuis · Patch · Beeld), hooguit één laag diep. Kleurtaal: blauw = klank, oranje = beeld, wit = tijd, paars = navigatie/patch. Thuis: rij 1 bronnen, rij 2 beweging, rij 3-4 beeld (effect vol zolang je drukt, vormlaag, mengvorm), rij 5 momenten (SHIFT = leeg). Patch: rij = bron (lfo 1 maat, lfo 4 maten, stap, dwaal, lorenz), kolom = doel (schaal ... ruimte), helderheid = sterkte, device-knop 1 = sterkte, 2 = snelheid. Beeld (alles oranje): rij 1 effecten vol zolang je drukt + vormlaag aan + bevries, rij 2 vormlaag kiezen, vorm, mengvorm, videomodus, passend, clips, rij 3 flits, zwart, puls, reageren; trackknoppen = vorm 1-6, dekking, beeld; device-knoppen = hoeveel van elk effect, reageer-sterkte, puls.",
+  "uitleg": "Hybride (v2/HYBRIDE.md). Ankers in elke ruimte: faders = mix, master = master, Track Select = vastpakken, USER = THUIS, crossfader = tijd (midden = nu, links = terug tot 10 minuten). Ruimtes: scene 1-3 of het Bank-kruis ◀ ▶ (Thuis · Patch · Beeld), hooguit één laag diep. Kleurtaal: blauw = klank, oranje = beeld, wit = tijd, paars = navigatie/patch. Thuis: rij 1 bronnen, rij 2 beweging, rij 3-4 beeld (effect vol zolang je drukt, vormlaag, mengvorm), rij 5 momenten (SHIFT = leeg). Patch: rij = bron (lfo 1 maat, lfo 4 maten, stap, dwaal, lorenz), kolom = doel (schaal ... ruimte), helderheid = sterkte, device-knop 1 = sterkte, 2 = snelheid. Beeld (alles oranje): rij 1 effecten vol zolang je drukt + vormlaag aan + bevries, rij 2 vormlaag kiezen, vorm, mengvorm, videomodus, passend, clips, rij 3 flits, zwart, puls, reageren; trackknoppen = vorm 1-6, dekking, beeld; device-knoppen = hoeveel van elk effect, reageer-sterkte, puls. SESSION = de avond laten lopen (station na station), SHIFT+SESSION = volgend station.",
   "regels": [
     {
       "control": "fader1",
@@ -1934,6 +1934,20 @@
         "ring": "volume"
       },
       "label": "puls op de tel"
+    },
+    {
+      "control": "session",
+      "actie": "avond.lopen",
+      "gedrag": "trigger",
+      "led": {},
+      "label": "de avond laten lopen"
+    },
+    {
+      "control": "session",
+      "shift": true,
+      "actie": "avond.volgende",
+      "gedrag": "trigger",
+      "label": "volgend station"
     }
   ]
 }
