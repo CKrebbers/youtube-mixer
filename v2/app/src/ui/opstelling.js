@@ -144,7 +144,7 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
   instelling('takes').then((x) => { if (x) o.laadTakes(x); });
 
   // De drift: elke 50 ms kijken; WAT er gebeurt zegt de maatklok (acties-opstelling.js tik).
-  setInterval(() => { o.tik(); engine.tocht?.tik(); engine.gebaren?.tik(); }, 50);
+  setInterval(() => { o.tik(); engine.tocht?.tik(); engine.gebaren?.tik(); engine.hybride?.tik(); }, 50);
 
   // De tocht en je smaak: laden, en bewaren (een halve seconde na de laatste verandering).
   const tocht = engine.tocht;
@@ -294,6 +294,12 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
   tocht?.on('verander', teken);
   // Draaien en drift veranderen de waarden zonder 'verander': elke 100 ms tekenen is genoeg.
   setInterval(teken, 100);
+  // Hybride: geluid is bevestiging. Elke ruimtewissel op de APC een zacht klankje (thuis = de grondtoon).
+  let ruimteNu = 'thuis';
+  ctl?.apc?.on?.('laag', () => {
+    const r = (ctl.apc.open ?? []).find((l) => l.startsWith('ruimte.'))?.slice(7) ?? 'thuis';
+    if (r !== ruimteNu) { ruimteNu = r; engine.hybride?.klankje(r); }
+  });
   ctl?.on?.('maschine', (aan) => { if (aan) { vorm = ''; vorigBeeld[0] = vorigBeeld[1] = null; teken(); } });
   teken();
   return { teken, laadRecepten };

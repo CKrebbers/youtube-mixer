@@ -1,0 +1,1790 @@
+{
+  "schema": 1,
+  "naam": "hybride",
+  "apparaat": "apc40mk2",
+  "shift": "shift",
+  "uitleg": "Hybride (v2/HYBRIDE.md). Ankers in elke ruimte: faders = mix, master = master, Track Select = vastpakken, USER = THUIS (de crossfader wordt tijd in F5). Ruimtes: scene 1-3 of het Bank-kruis ◀ ▶ (Thuis · Patch · Beeld), hooguit één laag diep. Kleurtaal: blauw = klank, oranje = beeld, wit = tijd, paars = navigatie/patch. Thuis: rij 1 bronnen, rij 2 beweging, rij 3-4 beeld, rij 5 momenten (SHIFT = leeg). Patch: rij = bron (lfo 1 maat, lfo 4 maten, stap, dwaal, lorenz), kolom = doel (schaal ... ruimte), helderheid = sterkte, device-knop 1 = sterkte, 2 = snelheid. Beeld: trackknoppen = vorm 1-6, dekking, beeld.",
+  "regels": [
+    {
+      "control": "fader1",
+      "actie": "track.1.fader",
+      "gedrag": "absoluut",
+      "label": "mix 1"
+    },
+    {
+      "control": "sel1",
+      "actie": "track.1.focus",
+      "gedrag": "trigger",
+      "label": "vastpakken: track 1"
+    },
+    {
+      "control": "fader2",
+      "actie": "track.2.fader",
+      "gedrag": "absoluut",
+      "label": "mix 2"
+    },
+    {
+      "control": "sel2",
+      "actie": "track.2.focus",
+      "gedrag": "trigger",
+      "label": "vastpakken: track 2"
+    },
+    {
+      "control": "fader3",
+      "actie": "track.3.fader",
+      "gedrag": "absoluut",
+      "label": "mix 3"
+    },
+    {
+      "control": "sel3",
+      "actie": "track.3.focus",
+      "gedrag": "trigger",
+      "label": "vastpakken: track 3"
+    },
+    {
+      "control": "fader4",
+      "actie": "track.4.fader",
+      "gedrag": "absoluut",
+      "label": "mix 4"
+    },
+    {
+      "control": "sel4",
+      "actie": "track.4.focus",
+      "gedrag": "trigger",
+      "label": "vastpakken: track 4"
+    },
+    {
+      "control": "fader5",
+      "actie": "track.5.fader",
+      "gedrag": "absoluut",
+      "label": "mix 5"
+    },
+    {
+      "control": "sel5",
+      "actie": "track.5.focus",
+      "gedrag": "trigger",
+      "label": "vastpakken: track 5"
+    },
+    {
+      "control": "fader6",
+      "actie": "track.6.fader",
+      "gedrag": "absoluut",
+      "label": "mix 6"
+    },
+    {
+      "control": "sel6",
+      "actie": "track.6.focus",
+      "gedrag": "trigger",
+      "label": "vastpakken: track 6"
+    },
+    {
+      "control": "fader7",
+      "actie": "track.7.fader",
+      "gedrag": "absoluut",
+      "label": "mix 7"
+    },
+    {
+      "control": "sel7",
+      "actie": "track.7.focus",
+      "gedrag": "trigger",
+      "label": "vastpakken: track 7"
+    },
+    {
+      "control": "fader8",
+      "actie": "track.8.fader",
+      "gedrag": "absoluut",
+      "label": "mix 8"
+    },
+    {
+      "control": "sel8",
+      "actie": "track.8.focus",
+      "gedrag": "trigger",
+      "label": "vastpakken: track 8"
+    },
+    {
+      "control": "master",
+      "actie": "mixer.master",
+      "gedrag": "absoluut",
+      "label": "master"
+    },
+    {
+      "control": "user",
+      "actie": "laag:ruimte",
+      "gedrag": "trigger",
+      "led": {
+        "lees": "laag:ruimte"
+      },
+      "label": "THUIS"
+    },
+    {
+      "control": "scene1",
+      "actie": "laag:ruimte",
+      "gedrag": "trigger",
+      "led": {
+        "lees": "laag:ruimte",
+        "kleur": {
+          "aan": "violet",
+          "uit": "violetdonker"
+        }
+      },
+      "label": "ruimte thuis"
+    },
+    {
+      "control": "scene2",
+      "actie": "laag:ruimte.patch",
+      "gedrag": "trigger",
+      "led": {
+        "lees": "laag:ruimte.patch",
+        "kleur": {
+          "aan": "violet",
+          "uit": "violetdonker"
+        }
+      },
+      "label": "ruimte patch"
+    },
+    {
+      "control": "scene3",
+      "actie": "laag:ruimte.beeld",
+      "gedrag": "trigger",
+      "led": {
+        "lees": "laag:ruimte.beeld",
+        "kleur": {
+          "aan": "violet",
+          "uit": "violetdonker"
+        }
+      },
+      "label": "ruimte beeld"
+    },
+    {
+      "control": "right",
+      "actie": "laag:ruimte.patch",
+      "gedrag": "trigger",
+      "label": "ruimte: patch"
+    },
+    {
+      "control": "right",
+      "actie": "laag:ruimte.beeld",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "label": "ruimte: beeld"
+    },
+    {
+      "control": "left",
+      "actie": "laag:ruimte",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "label": "ruimte: thuis"
+    },
+    {
+      "control": "left",
+      "actie": "laag:ruimte.patch",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "label": "ruimte: patch"
+    },
+    {
+      "control": "pad5-1",
+      "actie": "bron.1",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "bron 1"
+    },
+    {
+      "control": "pad4-1",
+      "actie": "beweging.1",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "beweging 1"
+    },
+    {
+      "control": "pad1-1",
+      "actie": "moment.1",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "moment 1"
+    },
+    {
+      "control": "pad1-1",
+      "actie": "moment.1.wis",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "moment 1 leeg"
+    },
+    {
+      "control": "tk1",
+      "actie": "track.1.filter",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "pan"
+      },
+      "label": "filter 1"
+    },
+    {
+      "control": "dk1",
+      "actie": "track.{focus}.inst.knop.1",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "klank 1 (vastgepakt)"
+    },
+    {
+      "control": "pad5-2",
+      "actie": "bron.2",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "bron 2"
+    },
+    {
+      "control": "pad4-2",
+      "actie": "beweging.2",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "beweging 2"
+    },
+    {
+      "control": "pad1-2",
+      "actie": "moment.2",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "moment 2"
+    },
+    {
+      "control": "pad1-2",
+      "actie": "moment.2.wis",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "moment 2 leeg"
+    },
+    {
+      "control": "tk2",
+      "actie": "track.2.filter",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "pan"
+      },
+      "label": "filter 2"
+    },
+    {
+      "control": "dk2",
+      "actie": "track.{focus}.inst.knop.2",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "klank 2 (vastgepakt)"
+    },
+    {
+      "control": "pad5-3",
+      "actie": "bron.3",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "bron 3"
+    },
+    {
+      "control": "pad4-3",
+      "actie": "beweging.3",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "beweging 3"
+    },
+    {
+      "control": "pad1-3",
+      "actie": "moment.3",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "moment 3"
+    },
+    {
+      "control": "pad1-3",
+      "actie": "moment.3.wis",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "moment 3 leeg"
+    },
+    {
+      "control": "tk3",
+      "actie": "track.3.filter",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "pan"
+      },
+      "label": "filter 3"
+    },
+    {
+      "control": "dk3",
+      "actie": "track.{focus}.inst.knop.3",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "klank 3 (vastgepakt)"
+    },
+    {
+      "control": "pad5-4",
+      "actie": "bron.4",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "bron 4"
+    },
+    {
+      "control": "pad4-4",
+      "actie": "beweging.4",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "beweging 4"
+    },
+    {
+      "control": "pad1-4",
+      "actie": "moment.4",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "moment 4"
+    },
+    {
+      "control": "pad1-4",
+      "actie": "moment.4.wis",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "moment 4 leeg"
+    },
+    {
+      "control": "tk4",
+      "actie": "track.4.filter",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "pan"
+      },
+      "label": "filter 4"
+    },
+    {
+      "control": "dk4",
+      "actie": "track.{focus}.inst.knop.4",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "klank 4 (vastgepakt)"
+    },
+    {
+      "control": "pad5-5",
+      "actie": "bron.5",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "bron 5"
+    },
+    {
+      "control": "pad4-5",
+      "actie": "beweging.5",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "beweging 5"
+    },
+    {
+      "control": "pad1-5",
+      "actie": "moment.5",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "moment 5"
+    },
+    {
+      "control": "pad1-5",
+      "actie": "moment.5.wis",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "moment 5 leeg"
+    },
+    {
+      "control": "tk5",
+      "actie": "track.5.filter",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "pan"
+      },
+      "label": "filter 5"
+    },
+    {
+      "control": "dk5",
+      "actie": "track.{focus}.inst.knop.5",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "klank 5 (vastgepakt)"
+    },
+    {
+      "control": "pad5-6",
+      "actie": "bron.6",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "bron 6"
+    },
+    {
+      "control": "pad4-6",
+      "actie": "beweging.6",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "beweging 6"
+    },
+    {
+      "control": "pad1-6",
+      "actie": "moment.6",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "moment 6"
+    },
+    {
+      "control": "pad1-6",
+      "actie": "moment.6.wis",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "moment 6 leeg"
+    },
+    {
+      "control": "tk6",
+      "actie": "track.6.filter",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "pan"
+      },
+      "label": "filter 6"
+    },
+    {
+      "control": "dk6",
+      "actie": "track.{focus}.inst.knop.6",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "klank 6 (vastgepakt)"
+    },
+    {
+      "control": "pad5-7",
+      "actie": "bron.7",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "bron 7"
+    },
+    {
+      "control": "pad4-7",
+      "actie": "beweging.7",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "beweging 7"
+    },
+    {
+      "control": "pad1-7",
+      "actie": "moment.7",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "moment 7"
+    },
+    {
+      "control": "pad1-7",
+      "actie": "moment.7.wis",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "moment 7 leeg"
+    },
+    {
+      "control": "tk7",
+      "actie": "track.7.filter",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "pan"
+      },
+      "label": "filter 7"
+    },
+    {
+      "control": "dk7",
+      "actie": "track.{focus}.inst.knop.7",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "klank 7 (vastgepakt)"
+    },
+    {
+      "control": "pad5-8",
+      "actie": "bron.8",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "bron 8"
+    },
+    {
+      "control": "pad4-8",
+      "actie": "beweging.8",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "blauw",
+          "half": "hemelsblauw",
+          "uit": "blauwdonker"
+        }
+      },
+      "label": "beweging 8"
+    },
+    {
+      "control": "pad1-8",
+      "actie": "moment.8",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "wit",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "moment 8"
+    },
+    {
+      "control": "pad1-8",
+      "actie": "moment.8.wis",
+      "gedrag": "trigger",
+      "shift": true,
+      "label": "moment 8 leeg"
+    },
+    {
+      "control": "tk8",
+      "actie": "track.8.filter",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "pan"
+      },
+      "label": "filter 8"
+    },
+    {
+      "control": "dk8",
+      "actie": "track.{focus}.inst.knop.8",
+      "gedrag": "eindeloos",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "klank 8 (vastgepakt)"
+    },
+    {
+      "control": "pad3-1",
+      "actie": "video.fx.pixel",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.pixel"
+    },
+    {
+      "control": "pad3-2",
+      "actie": "video.fx.spiegel",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.spiegel"
+    },
+    {
+      "control": "pad3-3",
+      "actie": "video.fx.rgb",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.rgb"
+    },
+    {
+      "control": "pad3-4",
+      "actie": "video.fx.kleur",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.kleur"
+    },
+    {
+      "control": "pad3-5",
+      "actie": "video.fx.sporen",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.sporen"
+    },
+    {
+      "control": "pad3-6",
+      "actie": "video.fx.korrel",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.korrel"
+    },
+    {
+      "control": "pad3-7",
+      "actie": "video.layer.on",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.on"
+    },
+    {
+      "control": "pad3-8",
+      "actie": "video.freeze",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "freeze"
+    },
+    {
+      "control": "pad2-1",
+      "actie": "video.layer.select.1",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.select.1"
+    },
+    {
+      "control": "pad2-2",
+      "actie": "video.layer.select.2",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.select.2"
+    },
+    {
+      "control": "pad2-3",
+      "actie": "video.layer.prev",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.prev"
+    },
+    {
+      "control": "pad2-4",
+      "actie": "video.layer.next",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.next"
+    },
+    {
+      "control": "pad2-5",
+      "actie": "video.layer.blend",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.blend"
+    },
+    {
+      "control": "pad2-6",
+      "actie": "video.flash",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "flash"
+    },
+    {
+      "control": "pad2-7",
+      "actie": "video.black.hold",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "black.hold"
+    },
+    {
+      "control": "pad2-8",
+      "actie": "video.clips",
+      "gedrag": "trigger",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "clips"
+    },
+    {
+      "control": "pad5-1",
+      "actie": "video.fx.pixel",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.pixel"
+    },
+    {
+      "control": "pad5-2",
+      "actie": "video.fx.spiegel",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.spiegel"
+    },
+    {
+      "control": "pad5-3",
+      "actie": "video.fx.rgb",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.rgb"
+    },
+    {
+      "control": "pad5-4",
+      "actie": "video.fx.kleur",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.kleur"
+    },
+    {
+      "control": "pad5-5",
+      "actie": "video.fx.sporen",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.sporen"
+    },
+    {
+      "control": "pad5-6",
+      "actie": "video.fx.korrel",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "fx.korrel"
+    },
+    {
+      "control": "pad5-7",
+      "actie": "video.layer.on",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.on"
+    },
+    {
+      "control": "pad5-8",
+      "actie": "video.freeze",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "freeze"
+    },
+    {
+      "control": "pad4-1",
+      "actie": "video.layer.select.1",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.select.1"
+    },
+    {
+      "control": "pad4-2",
+      "actie": "video.layer.select.2",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.select.2"
+    },
+    {
+      "control": "pad4-3",
+      "actie": "video.layer.prev",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.prev"
+    },
+    {
+      "control": "pad4-4",
+      "actie": "video.layer.next",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.next"
+    },
+    {
+      "control": "pad4-5",
+      "actie": "video.layer.blend",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "layer.blend"
+    },
+    {
+      "control": "pad4-6",
+      "actie": "video.flash",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "flash"
+    },
+    {
+      "control": "pad4-7",
+      "actie": "video.black.hold",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "black.hold"
+    },
+    {
+      "control": "pad4-8",
+      "actie": "video.clips",
+      "gedrag": "trigger",
+      "laag": "ruimte.beeld",
+      "led": {
+        "kleur": {
+          "aan": "oranje",
+          "half": "geel",
+          "uit": "oranjedonker"
+        }
+      },
+      "label": "clips"
+    },
+    {
+      "control": "pad5-1",
+      "actie": "patch.cel.1.1",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 1×1"
+    },
+    {
+      "control": "pad5-2",
+      "actie": "patch.cel.1.2",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 1×2"
+    },
+    {
+      "control": "pad5-3",
+      "actie": "patch.cel.1.3",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 1×3"
+    },
+    {
+      "control": "pad5-4",
+      "actie": "patch.cel.1.4",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 1×4"
+    },
+    {
+      "control": "pad5-5",
+      "actie": "patch.cel.1.5",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 1×5"
+    },
+    {
+      "control": "pad5-6",
+      "actie": "patch.cel.1.6",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 1×6"
+    },
+    {
+      "control": "pad5-7",
+      "actie": "patch.cel.1.7",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 1×7"
+    },
+    {
+      "control": "pad5-8",
+      "actie": "patch.cel.1.8",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 1×8"
+    },
+    {
+      "control": "pad4-1",
+      "actie": "patch.cel.2.1",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 2×1"
+    },
+    {
+      "control": "pad4-2",
+      "actie": "patch.cel.2.2",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 2×2"
+    },
+    {
+      "control": "pad4-3",
+      "actie": "patch.cel.2.3",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 2×3"
+    },
+    {
+      "control": "pad4-4",
+      "actie": "patch.cel.2.4",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 2×4"
+    },
+    {
+      "control": "pad4-5",
+      "actie": "patch.cel.2.5",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 2×5"
+    },
+    {
+      "control": "pad4-6",
+      "actie": "patch.cel.2.6",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 2×6"
+    },
+    {
+      "control": "pad4-7",
+      "actie": "patch.cel.2.7",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 2×7"
+    },
+    {
+      "control": "pad4-8",
+      "actie": "patch.cel.2.8",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 2×8"
+    },
+    {
+      "control": "pad3-1",
+      "actie": "patch.cel.3.1",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 3×1"
+    },
+    {
+      "control": "pad3-2",
+      "actie": "patch.cel.3.2",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 3×2"
+    },
+    {
+      "control": "pad3-3",
+      "actie": "patch.cel.3.3",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 3×3"
+    },
+    {
+      "control": "pad3-4",
+      "actie": "patch.cel.3.4",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 3×4"
+    },
+    {
+      "control": "pad3-5",
+      "actie": "patch.cel.3.5",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 3×5"
+    },
+    {
+      "control": "pad3-6",
+      "actie": "patch.cel.3.6",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 3×6"
+    },
+    {
+      "control": "pad3-7",
+      "actie": "patch.cel.3.7",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 3×7"
+    },
+    {
+      "control": "pad3-8",
+      "actie": "patch.cel.3.8",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 3×8"
+    },
+    {
+      "control": "pad2-1",
+      "actie": "patch.cel.4.1",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 4×1"
+    },
+    {
+      "control": "pad2-2",
+      "actie": "patch.cel.4.2",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 4×2"
+    },
+    {
+      "control": "pad2-3",
+      "actie": "patch.cel.4.3",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 4×3"
+    },
+    {
+      "control": "pad2-4",
+      "actie": "patch.cel.4.4",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 4×4"
+    },
+    {
+      "control": "pad2-5",
+      "actie": "patch.cel.4.5",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 4×5"
+    },
+    {
+      "control": "pad2-6",
+      "actie": "patch.cel.4.6",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 4×6"
+    },
+    {
+      "control": "pad2-7",
+      "actie": "patch.cel.4.7",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 4×7"
+    },
+    {
+      "control": "pad2-8",
+      "actie": "patch.cel.4.8",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 4×8"
+    },
+    {
+      "control": "pad1-1",
+      "actie": "patch.cel.5.1",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 5×1"
+    },
+    {
+      "control": "pad1-2",
+      "actie": "patch.cel.5.2",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 5×2"
+    },
+    {
+      "control": "pad1-3",
+      "actie": "patch.cel.5.3",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 5×3"
+    },
+    {
+      "control": "pad1-4",
+      "actie": "patch.cel.5.4",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 5×4"
+    },
+    {
+      "control": "pad1-5",
+      "actie": "patch.cel.5.5",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 5×5"
+    },
+    {
+      "control": "pad1-6",
+      "actie": "patch.cel.5.6",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 5×6"
+    },
+    {
+      "control": "pad1-7",
+      "actie": "patch.cel.5.7",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 5×7"
+    },
+    {
+      "control": "pad1-8",
+      "actie": "patch.cel.5.8",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "led": {
+        "kleur": {
+          "aan": "violet",
+          "half": "violetdonker",
+          "uit": "donkergrijs"
+        }
+      },
+      "label": "patch 5×8"
+    },
+    {
+      "control": "dk1",
+      "actie": "patch.sterkte",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.patch",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "sterkte"
+    },
+    {
+      "control": "dk2",
+      "actie": "patch.snelheid",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.patch",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "snelheid"
+    },
+    {
+      "control": "stopall",
+      "actie": "patch.leeg",
+      "gedrag": "trigger",
+      "laag": "ruimte.patch",
+      "shift": true,
+      "label": "alle koppelingen uit"
+    },
+    {
+      "control": "tk1",
+      "actie": "video.layer.knob.1",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.beeld",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "vorm 1"
+    },
+    {
+      "control": "tk2",
+      "actie": "video.layer.knob.2",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.beeld",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "vorm 2"
+    },
+    {
+      "control": "tk3",
+      "actie": "video.layer.knob.3",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.beeld",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "vorm 3"
+    },
+    {
+      "control": "tk4",
+      "actie": "video.layer.knob.4",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.beeld",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "vorm 4"
+    },
+    {
+      "control": "tk5",
+      "actie": "video.layer.knob.5",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.beeld",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "vorm 5"
+    },
+    {
+      "control": "tk6",
+      "actie": "video.layer.knob.6",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.beeld",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "vorm 6"
+    },
+    {
+      "control": "tk7",
+      "actie": "video.layer.opacity",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.beeld",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "dekking"
+    },
+    {
+      "control": "tk8",
+      "actie": "video.master",
+      "gedrag": "eindeloos",
+      "laag": "ruimte.beeld",
+      "led": {
+        "ring": "volume"
+      },
+      "label": "beeld"
+    }
+  ]
+}

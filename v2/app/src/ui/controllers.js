@@ -121,6 +121,12 @@ export function opzetControllers({ bus, vars = {}, tel = () => null, meld = () =
     for (const [ind, naam] of [[apc, 'apc40mk2'], [toetsInd, 'toetsen'], [msc, 'maschine-mk2']]) {
       try { laadIn(ind, indelingen?.[naam] ?? await haalDoc(naam)); } catch (fout) { meld(`indeling ${naam} niet geladen: ${fout.message ?? fout}`, 'fout', `ctl:indeling:${naam}`); }
     }
+    // De Hybride-indeling (v2/HYBRIDE.md) naast de standaard; kiezen in het indelingspaneel of met ?indeling=hybride.
+    if (!indelingen) {
+      try { laadIn(apc, await haalDoc('apc40mk2-hybride')); } catch (fout) { meld(`indeling hybride niet geladen: ${fout.message ?? fout}`, 'fout', 'ctl:indeling:hybride'); }
+      const gevraagd = new URLSearchParams(zoek).get('indeling');
+      if (gevraagd && apc.namen().includes(gevraagd)) apc.kies(gevraagd);
+    }
     meldStatus();
   })();
 
