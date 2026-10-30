@@ -1,0 +1,68 @@
+/* De meekijkvensters (kaart.html, leren.html): dezelfde kleuren als het hoofdvenster (styles.css). */
+:root {
+  color-scheme: dark;
+  --bg: #0d0e10; --vlak: #15171a; --vlak2: #1c1f23; --lijn: #2a2e34;
+  --tekst: #e8eaed; --dim: #8a9099; --zwak: #5a6069; --klok: #f4efe6; --cue: #f2a51a; --kill: #ef4b4f;
+  --f-tekst: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --f-cijfer: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--tekst); font: 13px/1.35 var(--f-tekst); }
+.hint { position: fixed; inset: auto 0 16px 0; text-align: center; color: var(--dim); margin: 0; }
+.dim { color: var(--dim); }
+h2 { font: 600 11px var(--f-tekst); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px; }
+h2 span { text-transform: none; letter-spacing: 0; color: var(--tekst); font-weight: 400; margin-left: 8px; }
+
+/* ---- kaart ---- */
+.kaart { display: flex; flex-wrap: wrap; gap: 28px; padding: 16px; align-items: flex-start; }
+.apparaat { display: grid; gap: 4px; grid-auto-rows: 34px; }
+#apc { grid-template-columns: repeat(9, 58px) 14px repeat(4, 58px); }
+#maschine { grid-template-columns: repeat(12, 58px); }
+.ctl {
+  position: relative; border: 1px solid var(--lijn); border-radius: 4px; background: var(--vlak);
+  overflow: hidden; display: flex; align-items: flex-end; padding: 2px 3px;
+  transition: box-shadow .25s, border-color .25s;
+}
+.ctl b { position: relative; font: 500 9.5px/1.1 var(--f-tekst); color: var(--tekst); word-break: break-word; max-height: 100%; overflow: hidden; }
+.ctl i { position: absolute; inset: 0; pointer-events: none; }
+.ctl.leeg { opacity: .35; }
+.ctl.leeg b { display: none; }
+/* een rgb-lampje: de kleur zelf, de tekst eroverheen */
+.led-rgb i, .led-ab i { background: var(--kleur); opacity: .85; }
+.led-rgb b, .led-ab b { text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.ctl.licht b { color: #000; text-shadow: none; }
+.ctl.aan { border-color: var(--cue); }
+.ctl.aan i { background: color-mix(in srgb, var(--cue) 22%, transparent); }
+.ctl.laag { border-style: dashed; }
+/* draaiknoppen: een ring met de stand */
+.s-draai, .s-rel { border-radius: 50%; justify-content: center; align-items: center; text-align: center; }
+.s-draai i, .s-rel i { inset: 2px; border-radius: 50%; background: conic-gradient(from 220deg, var(--klok) calc(var(--v) * 280deg), #2a2e34 0 280deg, transparent 0); -webkit-mask: radial-gradient(circle, transparent 58%, #000 60%); mask: radial-gradient(circle, transparent 58%, #000 60%); }
+.s-draai b, .s-rel b { font-size: 8.5px; }
+/* faders: gevuld tot de stand */
+.s-fader i { top: auto; height: calc(var(--v) * 100%); background: color-mix(in srgb, var(--klok) 28%, transparent); }
+.ctl.liggend i { height: 100%; width: calc(var(--v) * 100%); }
+.ctl.geraakt { border-color: var(--klok); box-shadow: 0 0 0 2px var(--klok), 0 0 14px color-mix(in srgb, var(--klok) 60%, transparent); }
+.scherm { grid-row: 2 / span 2; image-rendering: pixelated; width: 100%; height: 100%; border-radius: 3px; background: #0e1014; }
+#scherm0 { grid-column: 3 / span 4; }
+#scherm1 { grid-column: 7 / span 4; }
+
+/* ---- leren ---- */
+.leren { display: grid; gap: 18px; padding: 18px; max-width: 720px; }
+.leren section { background: var(--vlak); border: 1px solid var(--lijn); border-radius: 6px; padding: 12px 14px; }
+#nu .waar { color: var(--dim); font-size: 12px; }
+#nu .naam { font-size: 30px; font-weight: 600; line-height: 1.1; margin-top: 2px; }
+#nu .waarde { font: 600 22px var(--f-cijfer); color: var(--klok); margin-top: 4px; }
+#nu .bereik { color: var(--dim); font-size: 12px; margin-top: 4px; }
+#nu .uitleg { font-size: 15px; margin: 10px 0 6px; }
+#nu code { color: var(--zwak); font: 11px var(--f-cijfer); }
+.balk { height: 6px; background: var(--vlak2); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.balk i { display: block; height: 100%; background: var(--klok); }
+.balk.klein { display: inline-block; width: 90px; height: 5px; vertical-align: middle; margin: 0 6px; }
+.opst { font-weight: 600; margin-bottom: 4px; }
+.leren ul { margin: 4px 0 0; padding-left: 18px; }
+.leren li.af { color: var(--dim); text-decoration: line-through; }
+#log { list-style: none; padding: 0; margin: 0; font-size: 12px; max-height: 40vh; overflow: auto; }
+#log li { padding: 2px 0; border-bottom: 1px solid var(--vlak2); }
+#log time { color: var(--zwak); font: 11px var(--f-cijfer); margin-right: 6px; }
+#log li.fout { color: var(--kill); }
+#log li.melding { color: var(--dim); }

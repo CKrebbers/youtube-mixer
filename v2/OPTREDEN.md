@@ -37,6 +37,27 @@ Wat hij erbij zei:
 | **De zaal speelt mee** (`ui/zaal.js`): twee getallen, niets wordt bewaard | groep H pad 12 |
 | Laten lopen, takes, gebaren, korrelwolk, partituur, crossfader = tijd, Hybride, de tocht | zie `OPSTELLING.md` en `HYBRIDE.md` |
 
+## Vier vensters (thuis leren en bouwen)
+
+Clay, 30 okt: "nu 4 vensters tegelijk om het te leren en te bouwen, en later alleen het middelste scherm,
+verdeeld over MacBook, iPad en iPhone". Keuze: eerst proberen, dan kijken wat werkt.
+
+| Venster | Wat | Openen |
+|---|---|---|
+| **hoofdvenster** (midden) | VarveDJ zelf; het enige dat met de hub en de controllers praat | `http://localhost:8780/` |
+| **Kaart** (`kaart.html`) | de APC40 en de Maschine zoals ze voor je liggen: op elke knop wat hij NU doet, in de kleur die hij nu heeft; wat je aanraakt licht op; de twee Maschine-schermen erbij (ook zonder Maschine) | knop KAART bovenin |
+| **Leren** (`leren.html`, staand) | wat je net aanraakte (naam, stand, bereik, uitleg), wat er vanzelf loopt, de tocht, een logboek | knop LEREN bovenin |
+| **Beeld** (`beeld.html`) | de beamer, zoals altijd | knop in het beeldpaneel |
+
+Kaart en Leren lezen alleen het hoofdvenster (`window.opener`, zoals het beeldvenster): geen tweede
+verbinding met de hub. Herlaad je het hoofdvenster, dan koppelen ze zich binnen een seconde opnieuw. Sluit je
+het hoofdvenster, dan staan ze stil. De kleuren rekent `src/control/kaart.js` met dezelfde regels als de
+lampjes (getest in `test/meekijk.test.mjs`). Chrome kan op Wayland niet zelf kiezen op welk scherm een venster
+komt: sleep ze één keer naar links en rechts (of later een vensterregel in Hyprland, alleen op verzoek).
+
+Later (de Mac): het middelste scherm verdelen over de MacBook, de iPad en de iPhone. Wat Kaart en Leren
+laten zien wat je echt gebruikt, bepaalt wat daar komt.
+
 ## Wat er nog moet: de vier weken
 
 **Week 1 (t/m 6 nov): op de echte toestellen, thuis op de pc**

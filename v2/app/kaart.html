@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VarveDJ — kaart</title>
+<link rel="stylesheet" href="/src/ui/meekijk/meekijk.css">
+</head>
+<body>
+<main class="kaart">
+  <section>
+    <h2>APC40 mkII <span id="kop-apc"></span></h2>
+    <div class="apparaat" id="apc"></div>
+  </section>
+  <section>
+    <h2>Maschine MK2 <span id="kop-maschine"></span></h2>
+    <div class="apparaat" id="maschine">
+      <canvas class="scherm" id="scherm0"></canvas>
+      <canvas class="scherm" id="scherm1"></canvas>
+    </div>
+  </section>
+</main>
+<p class="hint" id="hint">Open dit venster vanuit VarveDJ (de knop KAART bovenin): het leest het hoofdvenster.</p>
+<!-- Leest alleen het hoofdvenster (window.opener): zie src/ui/meekijk/verbind.js. -->
+<script type="module" src="/src/ui/meekijk/kaart.js"></script>
+</body>
+</html>

@@ -250,6 +250,16 @@ const zaal = opzetZaal({ engine, bus });
 window.varveZaal = zaal;
 const opstelling = opzetOpstelling({ engine, bus, library, beeld, ctl, paneel: $('#paneel-opstelling'), instelling, bewaarInstelling });
 window.varveOpstelling = opstelling;   // voor de headless proeven
+// Meekijkvensters (src/ui/meekijk/): kaart en leren lezen dit venster, ze praten zelf met niemand.
+// window.open met dezelfde naam zou een open venster herladen: daarom eerst het bestaande naar voren.
+const meekijk = {};
+for (const [naam, maat] of [['kaart', 'width=1700,height=760'], ['leren', 'width=720,height=1100']]) {
+  $(`#open-${naam}`)?.addEventListener('click', () => {
+    const v = meekijk[naam];
+    if (v && !v.closed) { v.focus(); return; }
+    meekijk[naam] = window.open(`/${naam}.html`, `varve-${naam}`, maat);
+  });
+}
 opzetKoppelPaneel({ koppeling: stroom, bus, wortel: $('#paneel-beeld'), meld: (t, so, k) => engine.meld(t, so, k) });
 
 // ---- tekenen ------------------------------------------------------------------------------

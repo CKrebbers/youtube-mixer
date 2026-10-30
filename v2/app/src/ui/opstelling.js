@@ -351,6 +351,7 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
   partEl.addEventListener('click', (e) => { const b = e.target.closest('[data-variant]'); if (b) druk(`opstelling.variant.${b.dataset.variant}`); });
   let vorm = '';
   const vorigBeeld = [null, null];
+  const laatsteBeeld = [null, null];   // wat er nu op de schermen hoort, ook zonder Maschine (kaart.html)
   function teken() {
     const st = o.stand();
     $('.opst-naam').textContent = st.naam ?? (st.aantal ? `kies een recept (${st.kandidaat})` : 'geen recepten');
@@ -386,8 +387,9 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
     tekenPartituur(st);
     tekenTakes(st);
     tekenProcessen(st);
+    // Ook zonder Maschine getekend: het meekijkvenster (kaart.html) toont dezelfde twee schermen.
     const scherm = ctl?.maschineScherm;
-    if (scherm) for (const nr of [0, 1]) {
+    for (const nr of [0, 1]) {
       // Volgorde: de opdracht (CONTROL) · wat je net vastpakte · de padstand · Hybride: de ruimte · de opstelling.
       const hybride = ctl?.apc?.actief?.naam === 'hybride';
       const vers = gepakt && performance.now() - gepakt.t < GEPAKT_MS;
@@ -396,6 +398,8 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
           : nr === 1 && padstand ? tekenPads(padstand, padNamen)
             : nr === 0 && hybride ? tekenRuimte(ruimteEtiket())
               : tekenOpstelling(st, nr);
+      laatsteBeeld[nr] = buf;
+      if (!scherm) continue;
       // Alleen een beeld dat anders is dan het vorige gaat naar de hub.
       if (vorigBeeld[nr] && vorigBeeld[nr].every((x, i) => x === buf[i])) continue;
       vorigBeeld[nr] = buf;
@@ -414,5 +418,11 @@ export function opzetOpstelling({ engine, bus, library, beeld, ctl, paneel, inst
   });
   ctl?.on?.('maschine', (aan) => { if (aan) { vorm = ''; vorigBeeld[0] = vorigBeeld[1] = null; teken(); } });
   teken();
-  return { teken, laadRecepten };
+  return {
+    teken, laadRecepten,
+    // Voor de meekijkvensters (src/ui/meekijk/): de twee schermen zoals de Maschine ze krijgt, en wat je
+    // net vastpakte (met zijn etiket), zolang het vers is.
+    schermen: () => laatsteBeeld,
+    gepakt: () => (gepakt ? { ...gepakt, etiket: etiket(gepakt) } : null),
+  };
 }

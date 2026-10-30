@@ -256,7 +256,7 @@ export class Lampjes {
  * donkergrijs) of { aan, half, uit }. Een laagknop is dicht in zijn eigen donkere
  * tint, niet donkergrijs: zo zie je welke lagen er zijn en welke open is (v1).
  */
-function kleurVan(regel, c, dev) {
+export function kleurVan(regel, c, dev) {
   const k = regel?.led?.kleur;
   if (k && typeof k === 'object') return { aan: k.aan ?? 'wit', half: k.half ?? k.aan ?? 'wit', uit: k.uit ?? 'donkergrijs' };
   if (c.led === 'ab') return { aan: 'oranje', half: 'geel', uit: 'uit' };

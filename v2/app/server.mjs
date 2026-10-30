@@ -41,7 +41,7 @@ const SOORTEN = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.wav': 'audio/wav',
 };
 // Alleen wat de app nodig heeft; nooit test/, tools/ of iets erbuiten.
-const WITTE_LIJST = [/^\/$/, /^\/index\.html$/, /^\/beeld\.html$/, /^\/src\/[\w/.-]+\.(js|css|svg)$/, /^\/styles\.css$/, /^\/indelingen\/[\w-]+\.json$/, /^\/racks\/[\w-]+\.json$/, /^\/opstellingen\/[\w-]+\.json$/];
+const WITTE_LIJST = [/^\/$/, /^\/index\.html$/, /^\/beeld\.html$/, /^\/kaart\.html$/, /^\/leren\.html$/, /^\/src\/[\w/.-]+\.(js|css|svg)$/, /^\/styles\.css$/, /^\/indelingen\/[\w-]+\.json$/, /^\/racks\/[\w-]+\.json$/, /^\/opstellingen\/[\w-]+\.json$/];
 
 function kop(res, status, soort, extra = {}) {
   res.writeHead(status, {
