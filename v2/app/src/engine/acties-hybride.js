@@ -14,6 +14,12 @@
  *   patch.sterkte        waarde   de sterkte van de gekozen cel (device-knop 1: W2)
  *   patch.snelheid       waarde   hoe snel de bron van de gekozen rij gaat (device-knop 2)
  *   patch.leeg           trigger  alle koppelingen uit (alles terug zoals het stond)
+ * Tijd (F5, W4: de crossfader is altijd tijd):
+ *   tijd.scrub           waarde   0,5 = nu, links = terug tot TIJD_S seconden (kwadratisch: dicht bij nu fijn);
+ *                                 terug naar het midden = de stand van vóór het scrubben; raak je iets anders aan
+ *                                 terwijl je terug bent, dan pak je het verleden op en speel je van daar verder
+ *   Elke seconde een momentopname van alle waarde-acties (wat het handelingenlog als beginstand neemt), TIJD_S lang.
+ *   Wat geen waarde is (welk patroon loopt, welk nummer geladen is) zit er niet in.
  * Overal:
  *   klankje(ruimte)      zacht toontje bij een ruimtewissel, op de toonsoort (thuis = grondtoon)
  *
@@ -35,6 +41,13 @@ export const DOEL_ZONDER = Object.freeze(['track.{f}.filter', 'track.{f}.inst.kn
 export const DIEPTE = 0.5;
 /** Klankjes: halve tonen boven de grondtoon per ruimte. */
 export const RUIMTE_TOON = Object.freeze({ thuis: 0, patch: 7, beeld: 4, tijd: 12 });
+/** Zo ver terug kan de crossfader (s), en zo vaak een momentopname (s). */
+export const TIJD_S = 600;
+export const OPNAME_S = 1;
+/** Midden-zone van de crossfader die "nu" is (een fader staat nooit precies op 0,5). */
+export const NU_ZONE = 0.02;
+/** Crossfader 0..1 -> seconden terug (0 = nu). */
+export const terugVan = (v) => (v >= 0.5 - NU_ZONE ? 0 : Math.pow((0.5 - NU_ZONE - v) / (0.5 - NU_ZONE), 2) * TIJD_S);
 
 const TOONKLASSE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
 const klem01 = (v) => Math.min(1, Math.max(0, v));
@@ -219,9 +232,65 @@ export function definieerHybride(engine) {
   bus.defineer({ id: 'patch.leeg', soort: 'trigger', label: 'patch: alle koppelingen uit', meta: META,
     doe: (v) => { if (!v) return; patch.cellen = BRONNEN.map(() => Array(8).fill(0)); patch.gekozen = null; patchVeranderd(); }, lees: () => 0 });
 
+  // ---- Tijd: momentopnames en scrubben --------------------------------------------------
+  const ring = [];            // [{ t, w: { id: v } }], oudste eerst
+  let tijdNu = null;          // { w } de stand van vóór het scrubben, of null
+  let tijdV = 0.5;
+  let laatsteOpname = -Infinity;
+  const NIET = new Set(['tijd.scrub']);
+  function opname() {
+    const w = {};
+    for (const id of bus.ids()) {
+      if (NIET.has(id)) continue;
+      const z = bus.zoek(id);
+      if (!z || z.def.soort !== 'waarde' || z.def.meta?.beginstand === false || z.def.meta?.log === 'overslaan') continue;
+      let v = null;
+      try { v = bus.lees(id); } catch { v = null; }
+      if (typeof v === 'number') w[id] = v;
+    }
+    return w;
+  }
+  function zetStand(w) {
+    for (const [id, v] of Object.entries(w)) {
+      let nu = null;
+      try { nu = bus.lees(id); } catch { nu = null; }
+      if (typeof nu === 'number' && Math.abs(nu - v) > 1e-6) zet(id, v, 'tijd');
+    }
+  }
+  bus.defineer({
+    id: 'tijd.scrub', soort: 'waarde', label: 'tijd: terug (links) of nu (midden)', meta: { beginstand: false },
+    doe: (v) => {
+      tijdV = v;
+      const s = terugVan(v);
+      if (s === 0) { if (tijdNu) { zetStand(tijdNu.w); tijdNu = null; engine.meld?.('tijd: nu', 'info', 'tijd'); } return undefined; }
+      if (!ring.length) return { geweigerd: 'tijd: er is nog niets om naar terug te gaan' };
+      if (!tijdNu) tijdNu = { w: opname() };
+      const doel = engine.nu() - s;
+      let beste = ring[0];
+      for (const x of ring) if (Math.abs(x.t - doel) < Math.abs(beste.t - doel)) beste = x;
+      zetStand(beste.w);
+      return undefined;
+    },
+    lees: () => tijdV,
+  });
+  // Iets anders aanraken terwijl je terug bent: het verleden is nu (de crossfader terug naar het midden doet dan niets meer).
+  bus.on('actie', (a) => {
+    if (!tijdNu || ['tijd', 'patch', 'hybride', 'gebaar', 'opstelling', 'take'].includes(a.bron) || a.id === 'tijd.scrub') return;
+    if (bus.zoek(a.id)?.def?.soort === 'waarde') { tijdNu = null; engine.meld?.('tijd: je speelt verder vanaf het verleden', 'info', 'tijd'); }
+  });
+
   return {
+    /** Een momentopname per OPNAME_S (niet tijdens het scrubben: dan blijft de geschiedenis zoals hij was). */
+    tijdTik(t = engine.nu()) {
+      if (tijdNu || t - laatsteOpname < OPNAME_S) return;
+      laatsteOpname = t;
+      ring.push({ t, w: opname() });
+      while (ring.length && ring[0].t < t - TIJD_S - OPNAME_S) ring.shift();
+    },
+    tijdStand: () => ({ terug: terugVan(tijdV), actief: !!tijdNu, opnames: ring.length, bereik: ring.length ? engine.nu() - ring[0].t : 0 }),
     /** Elke tik: de patch op zijn doelen (alleen wat iets doet). De tijd zegt de klok, of de audioklok. */
     tik(t = engine.nu()) {
+      this.tijdTik(t);
       if (!patch.doelen.size) { patch.tLaatst = t; return; }
       const dt = patch.tLaatst === null ? 0 : Math.max(0, Math.min(0.2, t - patch.tLaatst));
       patch.tLaatst = t;
