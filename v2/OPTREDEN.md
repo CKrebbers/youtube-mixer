@@ -44,7 +44,7 @@ verdeeld over MacBook, iPad en iPhone". Keuze: eerst proberen, dan kijken wat we
 
 | Venster | Wat | Openen |
 |---|---|---|
-| **hoofdvenster** (midden) | VarveDJ zelf; het enige dat met de hub en de controllers praat | `http://localhost:8780/` |
+| **hoofdvenster** (midden) | VarveDJ zelf; het enige dat met de hub en de controllers praat | `http://localhost:8780/?hub=ws://127.0.0.1:7700/app&indeling=hybride` (zonder `?hub=` geen Maschine) |
 | **Kaart** (`kaart.html`) | de APC40 en de Maschine zoals ze voor je liggen: op elke knop wat hij NU doet, in de kleur die hij nu heeft; wat je aanraakt licht op; de twee Maschine-schermen erbij (ook zonder Maschine) | knop KAART bovenin |
 | **Leren** (`leren.html`, staand) | wat je net aanraakte (naam, stand, bereik, uitleg), wat er vanzelf loopt, de tocht, een logboek | knop LEREN bovenin |
 | **Beeld** (`beeld.html`) | de beamer, zoals altijd | knop in het beeldpaneel |
