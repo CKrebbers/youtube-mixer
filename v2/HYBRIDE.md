@@ -32,6 +32,7 @@ Wordt bewaakt door `app/test/hybride.test.mjs`.
 |---|---|
 | Scene 1–3 (rechterpaneel) en Bank-kruis ◀ ▶ | Navigatie: Thuis · Patch · Beeld. ◀ ▶ lopen door de ruimtes. |
 | USER | THUIS |
+| RECORD | Opnemen aan/uit (de master naar `~/.varve/v2/opnames`), rood als hij loopt. In elke ruimte, zoals in de DJ-indeling (2 nov) |
 | Grid 8×5 | De kaart van de ruimte (zie onder) |
 | Faders 1–8 en master | Mix, altijd |
 | Device-knoppen | Thuis: instrumentknop 1–8 van de track die je vastpakt. Patch: knop 1 = sterkte, knop 2 = snelheid van de bron. |

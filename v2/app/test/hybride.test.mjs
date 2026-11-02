@@ -212,3 +212,13 @@ test('Hybride als standaard: een focuswissel (Track Select = vastpakken) houdt d
   assert.equal(ind.kiesVoorNummer(null), 'hybride', 'zonder eigen indeling voor het nummer: Hybride');
   assert.equal(ind.actief.naam, 'hybride');
 });
+
+test('RECORD = opname, in Hybride net als in de DJ-indeling (besluit Clay 2 nov), basis, geen laag of shift', () => {
+  const dj = JSON.parse(readFileSync(join(HIER, '..', 'indelingen', 'apc40mk2.json'), 'utf8'));
+  const rec = (d) => d.regels.filter((r) => r.control === 'record');
+  const h = rec(doc);
+  assert.equal(h.length, 1, 'RECORD heeft in Hybride precies één taak');
+  assert.equal(h[0].actie, 'opname');
+  assert.ok(!h[0].laag && !h[0].shift, 'opnemen werkt in elke ruimte');
+  assert.deepEqual(h[0], rec(dj)[0], 'zelfde knop, zelfde taak, zelfde lampje als in DJ');
+});
