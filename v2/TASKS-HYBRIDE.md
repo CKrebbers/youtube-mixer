@@ -41,3 +41,10 @@ Zie HYBRIDE.md. Afvinken bij klaar, vondsten erbij.
 - [x] Hybride is de standaard als je hem kiest (een focuswissel zette de APC eerst terug naar de DJ-indeling)
 - [ ] Schermen als oscilloscoop (de hub doet pixels: goedkoop)
 - [ ] Ideeën die Clay op "erin" zet (levend grid, morph-faders, encoders met fysica, …)
+
+## Check 2 nov (functiestop: alleen kijken, niets gebouwd)
+Vraag: werken Waterschaal, Vormmachines en opname al vanaf de knoppen in Hybride?
+- [x] Tests: 594 groen, 1 overgeslagen (`hub.test`: geen AV-app-hub in de sessie), 0 rood. Gedraaid op Node 22.23, niet op 26.8.2 (de Mac)
+- [x] **Waterschaal**: ja. `schaal` is bron 2 en 7 van de klankrij (`BRON_INSTRUMENT` in `acties-hybride.js`); gedekt door `hybride.test`
+- [x] **Vormmachines**: ja. Grid rij 2–3 (Thuis) en rij 3–5 (ruimte Beeld): vormlaag aan, kies laag 1/2, vorige/volgende vorm, meng; trackknoppen 1–6 = vormknoppen, dekking, reageert op/met
+- [ ] **Opname (audio)**: alleen met de muis (● REC bovenin). In Hybride zit `opname` op geen enkele knop; de APC-RECORD-knop is vrij (in de DJ-indeling doet die knop `opname`). Maschine REC = take, geen audio. Besluit Clay nodig (functiestop): RECORD in Hybride op `opname`, zoals in DJ?
